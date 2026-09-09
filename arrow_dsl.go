@@ -4,155 +4,126 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/xerr"
 )
 
-// ParseArrowDSL converts a compact arrow pipeline expression into a standard GraphDefinition.
+// ParseArrowDSL converts a compact arrow pipeline expression into a standard declarative
+// GraphDefinition using the unified AST parser.
 func ParseArrowDSL(name, dsl string) (GraphDefinition, error) {
-	dsl = strings.TrimSpace(dsl)
-	if dsl == "" {
+	if strings.TrimSpace(dsl) == "" {
 		return GraphDefinition{}, xerr.BadRequest("graph: arrow DSL expression cannot be empty")
 	}
 	if name == "" {
 		name = "dsl_pipeline"
 	}
 
-	stages := splitTopLevelAll(dsl, "->")
-	if len(stages) == 0 {
-		return GraphDefinition{}, xerr.BadRequest("graph: invalid pipeline syntax")
+	parser := compiler.NewParser(dsl)
+	ast, err := parser.ParseExpression()
+	if err != nil {
+		return GraphDefinition{}, err
 	}
 
-	nodes := make([]NodeSpec, 0, len(stages))
-	edges := make([]EdgeSpec, 0, len(stages)*2)
-	var prevStageNodeIDs []string
-
-	for stageIdx, stageRaw := range stages {
-		stage := strings.TrimSpace(stageRaw)
-		if stage == "" {
-			return GraphDefinition{}, xerr.BadRequest(fmt.Sprintf("graph: empty stage at index %d", stageIdx))
-		}
-
-		var currentStageNodeIDs []string
-		cleanStage := stripOuterParens(stage)
-		parallelBranches := splitTopLevel(cleanStage, '&')
-
-		if len(parallelBranches) > 1 {
-			for branchIdx, branchRaw := range parallelBranches {
-				branch := strings.TrimSpace(branchRaw)
-				if branch == "" {
-					continue
-				}
-				nodeID := fmt.Sprintf("step_%d_%d", stageIdx+1, branchIdx+1)
-				nodeSpec := parseNodeSpec(nodeID, branch)
-				nodes = append(nodes, nodeSpec)
-				currentStageNodeIDs = append(currentStageNodeIDs, nodeID)
-			}
-		} else {
-			nodeID := fmt.Sprintf("step_%d", stageIdx+1)
-			nodeSpec := parseNodeSpec(nodeID, cleanStage)
-			nodes = append(nodes, nodeSpec)
-			currentStageNodeIDs = append(currentStageNodeIDs, nodeID)
-		}
-
-		if len(prevStageNodeIDs) > 0 {
-			for _, fromID := range prevStageNodeIDs {
-				for _, toID := range currentStageNodeIDs {
-					edges = append(edges, EdgeSpec{
-						From: fromID,
-						To:   toID,
-					})
-				}
-			}
-		}
-
-		prevStageNodeIDs = currentStageNodeIDs
-	}
-
-	return GraphDefinition{
+	def := GraphDefinition{
 		APIVersion: APIVersion,
 		Kind:       "Graph",
 		Metadata: Metadata{
 			Name:    name,
 			Version: "1.0.0",
 		},
-		Nodes: nodes,
-		Edges: edges,
-	}, nil
-}
-
-func parseNodeSpec(id, token string) NodeSpec {
-	token = stripOuterParens(token)
-	capability, params, bindings := parseTokenParamsAndBindings(token)
-
-	return NodeSpec{
-		ID:            id,
-		Kind:          NodeTool,
-		Capability:    capability,
-		Params:        params,
-		InputBindings: bindings,
+		Nodes: []NodeSpec{},
+		Edges: []EdgeSpec{},
 	}
-}
 
-// parseTokenParamsAndBindings extracts parameters, modifiers (: # ~ @), and explicit
-// field bindings (key=upstream.field) using fast-path indexing without regex allocations.
-func parseTokenParamsAndBindings(token string) (string, map[string]any, map[string]string) {
-	params := make(map[string]any)
-	bindings := make(map[string]string)
+	nodeCounter := 0
 
-	// 1. Extract explicit bindings: "node(code=pack.content, val=123)"
-	if start := strings.IndexByte(token, '('); start != -1 {
-		if end := strings.LastIndexByte(token, ')'); end > start {
-			rawBindings := token[start+1 : end]
-			token = strings.TrimSpace(token[:start] + token[end+1:])
+	var walk func(expr compiler.Expr, prevIDs []string) ([]string, error)
+	walk = func(expr compiler.Expr, prevIDs []string) ([]string, error) {
+		switch n := expr.(type) {
 
-			for _, pair := range strings.Split(rawBindings, ",") {
-				pair = strings.TrimSpace(pair)
-				if key, val, ok := strings.Cut(pair, "="); ok {
-					key = strings.TrimSpace(key)
-					val = strings.TrimSpace(val)
-					if strings.Contains(val, ".") {
-						bindings[key] = val
-					} else {
-						params[key] = val
-					}
+		case *compiler.PipelineExpr:
+			leftIDs, walkErr := walk(n.Left, prevIDs)
+			if walkErr != nil {
+				return nil, walkErr
+			}
+			return walk(n.Right, leftIDs)
+
+		case *compiler.ParallelExpr:
+			var outIDs []string
+			for _, child := range n.Children {
+				childIDs, walkErr := walk(child, prevIDs)
+				if walkErr != nil {
+					return nil, walkErr
 				}
+				outIDs = append(outIDs, childIDs...)
 			}
-		}
-	}
+			return outIDs, nil
 
-	// 2. Extract prompt (@)
-	if idx := strings.IndexByte(token, '@'); idx != -1 {
-		params["prompt"] = strings.TrimSpace(token[idx+1:])
-		token = token[:idx]
-	}
+		case *compiler.AtomExpr:
+			nodeCounter++
+			nodeID := fmt.Sprintf("step_%d", nodeCounter)
 
-	// 3. Extract exclusions (~)
-	if idx := strings.IndexByte(token, '~'); idx != -1 {
-		exPart := token[idx+1:]
-		token = token[:idx]
-		parts := strings.Split(exPart, ",")
-		excludes := make([]string, 0, len(parts))
-		for _, ex := range parts {
-			if t := strings.TrimSpace(ex); t != "" {
-				excludes = append(excludes, t)
+			params := make(map[string]any)
+			for k, v := range n.Params {
+				params[k] = v
 			}
+			if n.Prompt != "" {
+				params["prompt"] = n.Prompt
+			}
+			if len(n.Excludes) > 0 {
+				params["excludes"] = n.Excludes
+			}
+			if len(n.Targets) > 0 {
+				params["targets"] = n.Targets
+			}
+			if n.Profile != "" {
+				params["profile"] = n.Profile
+			}
+
+			spec := NodeSpec{
+				ID:            nodeID,
+				Kind:          NodeTool,
+				Capability:    n.Name,
+				Params:        params,
+				InputBindings: n.Inputs,
+			}
+			def.Nodes = append(def.Nodes, spec)
+
+			for _, pID := range prevIDs {
+				def.Edges = append(def.Edges, EdgeSpec{
+					From: pID,
+					To:   nodeID,
+				})
+			}
+			return []string{nodeID}, nil
+
+		case *compiler.ProjectionExpr:
+			nodeCounter++
+			nodeID := fmt.Sprintf("step_%d", nodeCounter)
+			spec := NodeSpec{
+				ID:         nodeID,
+				Kind:       NodeTool,
+				Capability: "{ " + n.Raw + " }",
+			}
+			def.Nodes = append(def.Nodes, spec)
+
+			for _, pID := range prevIDs {
+				def.Edges = append(def.Edges, EdgeSpec{
+					From: pID,
+					To:   nodeID,
+				})
+			}
+			return []string{nodeID}, nil
+
+		default:
+			return nil, xerr.BadRequest(fmt.Sprintf("graph: AST node type %T not supported in static DAG manifest", n))
 		}
-		if len(excludes) > 0 {
-			params["excludes"] = excludes
-		}
 	}
 
-	// 4. Extract target (#)
-	if idx := strings.IndexByte(token, '#'); idx != -1 {
-		params["targets"] = []string{strings.TrimSpace(token[idx+1:])}
-		token = token[:idx]
+	_, err = walk(ast, nil)
+	if err != nil {
+		return GraphDefinition{}, err
 	}
 
-	// 5. Extract profile (:)
-	if idx := strings.IndexByte(token, ':'); idx != -1 {
-		params["profile"] = strings.TrimSpace(token[idx+1:])
-		token = token[:idx]
-	}
-
-	return strings.TrimSpace(token), params, bindings
+	return def, nil
 }

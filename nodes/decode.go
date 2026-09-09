@@ -12,6 +12,7 @@ func decodePayload(input any, target any) error {
 		return nil
 	}
 
+	// ⚡ 1. Direct any pointer assignment (0 allocs)
 	if ptr, ok := target.(*any); ok {
 		*ptr = input
 		return nil
@@ -22,18 +23,24 @@ func decodePayload(input any, target any) error {
 		return fmt.Errorf("flow: decode target must be a non-nil pointer")
 	}
 
-	iv := reflect.ValueOf(input)
-	if iv.IsValid() && iv.Type().AssignableTo(rv.Type().Elem()) {
-		rv.Elem().Set(iv)
-		return nil
+	targetElem := rv.Elem()
+
+	// ⚡ 2. Fast type assignment without serialization (0 allocs)
+	if input != nil {
+		iv := reflect.ValueOf(input)
+		if iv.Type().AssignableTo(targetElem.Type()) {
+			targetElem.Set(iv)
+			return nil
+		}
 	}
 
+	// 3. Fallback to serialization only across distinct struct schemas
 	data, err := codec.Default.Marshal(input)
 	if err != nil {
-		return fmt.Errorf("flow: marshal loop input: %w", err)
+		return fmt.Errorf("flow: marshal input: %w", err)
 	}
 	if err := codec.Default.Unmarshal(data, target); err != nil {
-		return fmt.Errorf("flow: unmarshal loop target: %w", err)
+		return fmt.Errorf("flow: unmarshal target: %w", err)
 	}
 
 	return nil

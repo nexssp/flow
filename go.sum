@@ -30,6 +30,8 @@ github.com/ncruces/go-strftime v1.0.0 h1:HMFp8mLCTPp341M/ZnA4qaf7ZlsbTc+miZjCLOF
 github.com/ncruces/go-strftime v1.0.0/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
 github.com/nexssp/kernel v0.5.0 h1:vKRSkrT6sz3mPiX3D/K2APuLv4EyOR7aYArGBw5S6wQ=
 github.com/nexssp/kernel v0.5.0/go.mod h1:4+7o1mgE9Ie6BhyG/SbrwFhPkQ0zpJxLQbtHrDVgqAE=
+github.com/nexssp/kernel v0.6.0 h1:txLwIXnHlVlOYCuMPGDWbPsFOUNXPsfDCQWVZyNPgTw=
+github.com/nexssp/kernel v0.6.0/go.mod h1:4+7o1mgE9Ie6BhyG/SbrwFhPkQ0zpJxLQbtHrDVgqAE=
 github.com/nexssp/testkit v0.2.0 h1:j3Xt+20HG08nPHo5+Nf9ClMx11hEfP9iJ+dMCUTOJOk=
 github.com/nexssp/testkit v0.2.0/go.mod h1:EoWmWN3NFOmZlvrCSOeFSb+kpiB2Cj7ycSzkadOtbzs=
 github.com/nexssp/transport v0.2.0 h1:+FiMDgyl7kEl5PmHAxlk7WVmq/huFGSYoF0sbFSV4Q4=

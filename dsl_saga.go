@@ -1,4 +1,3 @@
-// nexssp/flow/dsl_saga.go
 package flow
 
 import (
@@ -6,75 +5,116 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/nodes"
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
 )
 
-// CompileSaga parses Arrow DSL with embedded transaction rollbacks.
+// CompileSaga parses Arrow DSL with embedded transaction rollbacks into a Saga Node.
 func CompileSaga(expr string, reg Registry) (*action.Builder[any, any], error) {
-	expr = stripOuterParens(strings.TrimSpace(expr))
-
-	// 1. Parallel: "(A & B)" -> Compile each child and execute concurrently
-	if strings.Contains(expr, "&") {
-		parts := splitTopLevel(expr, '&')
-		if len(parts) > 1 {
-			routes := make(map[string]action.AnyAction, len(parts))
-			for i, p := range parts {
-				bld, err := CompileSaga(p, reg)
-				if err != nil {
-					return nil, err
-				}
-				routes[fmt.Sprintf("branch_%d", i+1)] = bld.Build()
-			}
-
-			parallel := action.ParallelNamed[any]("parallel_sagas", routes)
-			return action.New("parallel_sagas_wrap", func(ctx context.Context, req any) (any, error) {
-				return parallel.Build().Do(ctx, req)
-			}), nil
-		}
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return nil, xerr.BadRequest("flow: saga expression cannot be empty")
 	}
 
-	// 2. Sequential Pipe: "A -> B" -> Convert to an atomic Saga Node
-	if parts := splitTopLevelAll(expr, "->"); len(parts) > 1 {
-		steps := make([]nodes.SagaStep, 0, len(parts))
-		for _, part := range parts {
-			name, params := parseTokenParamsAndRollback(part)
+	parser := compiler.NewParser(expr)
+	ast, err := parser.ParseExpression()
+	if err != nil {
+		return nil, err
+	}
 
-			forwardAct, ok := reg.Get(name)
+	return compileSagaAST(ast, reg)
+}
+
+func compileSagaAST(node compiler.Expr, reg Registry) (*action.Builder[any, any], error) {
+	switch n := node.(type) {
+
+	case *compiler.ParallelExpr:
+		routes := make(map[string]action.AnyAction, len(n.Children))
+		for i, child := range n.Children {
+			bld, err := compileSagaAST(child, reg)
+			if err != nil {
+				return nil, err
+			}
+			routes[fmt.Sprintf("saga_branch_%d", i+1)] = bld.Build()
+		}
+
+		parallel := action.ParallelNamed[any]("parallel_sagas", routes)
+		return action.New("parallel_sagas_wrap", func(ctx context.Context, req any) (any, error) {
+			return parallel.Build().Do(ctx, req)
+		}), nil
+
+	case *compiler.PipelineExpr:
+		// Collect atoms into a sequence of Saga steps
+		atoms, err := flattenPipeline(n)
+		if err != nil {
+			return nil, err
+		}
+
+		steps := make([]nodes.SagaStep, 0, len(atoms))
+		for _, atom := range atoms {
+			forwardAct, ok := reg.Get(atom.Name)
 			if !ok {
-				return nil, fmt.Errorf("flow: capability %q not found", name)
+				return nil, fmt.Errorf("flow: saga capability %q not found", atom.Name)
 			}
 
 			var compensateAct action.AnyAction
-			if rollbackName, ok := params["rollback"].(string); ok {
+			if rollbackName, ok := atom.Params["rollback"]; ok {
 				compensateAct, _ = reg.Get(rollbackName)
+			} else if rollbackInput, ok := atom.Inputs["rollback"]; ok {
+				compensateAct, _ = reg.Get(rollbackInput)
 			}
 
 			steps = append(steps, nodes.SagaStep{
-				NodeID:     name,
+				NodeID:     atom.Name,
 				Forward:    forwardAct,
 				Compensate: compensateAct,
 			})
 		}
 		return nodes.NewDynamicSaga("saga_pipe", steps), nil
-	}
 
-	// 3. Fallback to standard Node resolution
-	return resolveActionNode(expr, reg)
+	case *compiler.AtomExpr:
+		// Single atom saga
+		forwardAct, ok := reg.Get(n.Name)
+		if !ok {
+			return nil, fmt.Errorf("flow: saga capability %q not found", n.Name)
+		}
+		var compensateAct action.AnyAction
+		if rollbackName, ok := n.Params["rollback"]; ok {
+			compensateAct, _ = reg.Get(rollbackName)
+		} else if rollbackInput, ok := n.Inputs["rollback"]; ok {
+			compensateAct, _ = reg.Get(rollbackInput)
+		}
+		step := nodes.SagaStep{
+			NodeID:     n.Name,
+			Forward:    forwardAct,
+			Compensate: compensateAct,
+		}
+		return nodes.NewDynamicSaga("saga_single", []nodes.SagaStep{step}), nil
+
+	default:
+		// If it's not a pipe, parallel, or atom, try to compile it normally and wrap it
+		return compileAST(node, reg)
+	}
 }
 
-func parseTokenParamsAndRollback(token string) (string, map[string]any) {
-	params := make(map[string]any)
-	if start := strings.IndexByte(token, '('); start != -1 {
-		if end := strings.LastIndexByte(token, ')'); end > start {
-			raw := token[start+1 : end]
-			token = strings.TrimSpace(token[:start])
-			for _, pair := range strings.Split(raw, ",") {
-				if key, val, ok := strings.Cut(strings.TrimSpace(pair), "="); ok {
-					params[strings.TrimSpace(key)] = strings.TrimSpace(val)
-				}
-			}
+// flattenPipeline unrolls a deeply nested PipelineExpr tree into a flat list of Atoms
+func flattenPipeline(node compiler.Expr) ([]*compiler.AtomExpr, error) {
+	switch n := node.(type) {
+	case *compiler.PipelineExpr:
+		left, err := flattenPipeline(n.Left)
+		if err != nil {
+			return nil, err
 		}
+		right, err := flattenPipeline(n.Right)
+		if err != nil {
+			return nil, err
+		}
+		return append(left, right...), nil
+	case *compiler.AtomExpr:
+		return []*compiler.AtomExpr{n}, nil
+	default:
+		return nil, fmt.Errorf("flow: nested node %T inside saga pipeline must be an atom", node)
 	}
-	return token, params
 }

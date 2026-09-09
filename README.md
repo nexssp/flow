@@ -1,6 +1,6 @@
 # Nexss Flow (`nexssp/flow`)
 
-[![Go Version](https://img.shields.io/badge/go-1.26-blue.svg)](https://go.dev)
+[![Go Version](https://img.shields.io/badge/go-1.25-blue.svg)](https://go.dev)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://github.com/nexssp/flow/actions/workflows/ci.yml/badge.svg)](https://github.com/nexssp/flow/actions/workflows/ci.yml)
 

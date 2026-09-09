@@ -59,16 +59,17 @@ func (c *Compiler) resolveCapability(capName string) (action.AnyAction, bool) {
 	if c.registry == nil {
 		return nil, false
 	}
+	// Try a direct registry match first
 	if act, ok := c.registry.Get(capName); ok {
 		return act, true
 	}
-	clean := stripOuterParens(capName)
-	if act, ok := c.registry.Get(clean); ok {
-		return act, true
-	}
-	if bld, err := CompilePipeline(clean, c.registry); err == nil && bld != nil {
+
+	// If it isn't in the registry, see if it's an inline DSL block (e.g. `{ prompt: ... }`)
+	// We dynamically compile it and inject it back into the DAG
+	if bld, err := CompilePipeline(capName, c.registry); err == nil && bld != nil {
 		return bld.Build(), true
 	}
+
 	return nil, false
 }
 
