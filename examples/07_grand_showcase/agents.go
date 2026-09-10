@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/nexssp/ai/guardrails"
 	"github.com/nexssp/kernel/xerr"
 )
 
@@ -86,13 +86,31 @@ func (p *AgentPool) Stats() (active int, spawned int64, stopped int64) {
 	return len(p.activeAgents), p.totalSpawned.Load(), p.totalStopped.Load()
 }
 
-func InspectAndSanitize(prompt string) (string, bool, error) {
-	if err := guardrails.CheckPromptInjection(prompt); err != nil {
-		return "", false, xerr.Forbidden("FIREWALL: Prompt Injection / Jailbreak vector detected and neutralized!")
-	}
+var (
+	emailRegex = regexp.MustCompile(`(?i)[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
+	phoneRegex = regexp.MustCompile(`(?:\+?\d{1,3})?[-.\s]?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}`)
+)
 
+func InspectAndSanitize(prompt string) (string, bool, error) {
 	lowered := strings.ToLower(prompt)
 
+	// 1. Prompt Injection & Jailbreak Firewall
+	injectionPatterns := []string{
+		"ignore previous instructions",
+		"ignore all previous",
+		"system prompt override",
+		"you are now in developer mode",
+		"jailbreak",
+		"print private keys",
+		"print all training data",
+	}
+	for _, pattern := range injectionPatterns {
+		if strings.Contains(lowered, pattern) {
+			return "", false, xerr.Forbidden("FIREWALL: Prompt Injection / Jailbreak vector detected and neutralized!")
+		}
+	}
+
+	// 2. Destructive and unauthorized pattern filtering
 	blockedKeywords := []string{"download malware", "reverse shell", "crypto miner", "sql injection payload"}
 	for _, kw := range blockedKeywords {
 		if strings.Contains(lowered, kw) {
@@ -100,7 +118,9 @@ func InspectAndSanitize(prompt string) (string, bool, error) {
 		}
 	}
 
-	redacted := guardrails.RedactPII(prompt)
+	// 3. GDPR / CCPA PII Redaction
+	redacted := emailRegex.ReplaceAllString(prompt, "[REDACTED_EMAIL]")
+	redacted = phoneRegex.ReplaceAllString(redacted, "[REDACTED_PHONE]")
 	wasRedacted := redacted != prompt
 
 	return redacted, wasRedacted, nil
