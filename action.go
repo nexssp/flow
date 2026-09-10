@@ -32,8 +32,10 @@ func NewExecuteAction(compiler *Compiler) *action.BuiltAction[GraphExecReq, Grap
 	return action.New("graph.execute", func(ctx context.Context, req GraphExecReq) (GraphExecRes, error) {
 		start := time.Now()
 
-		var def GraphDefinition
-		var err error
+		var (
+			def GraphDefinition
+			err error
+		)
 
 		switch {
 		case req.YAML != "":
@@ -41,6 +43,7 @@ func NewExecuteAction(compiler *Compiler) *action.BuiltAction[GraphExecReq, Grap
 			if loadErr != nil {
 				return GraphExecRes{}, loadErr
 			}
+
 			def = compiled.Definition
 
 		case req.DSL != "":
@@ -59,6 +62,7 @@ func NewExecuteAction(compiler *Compiler) *action.BuiltAction[GraphExecReq, Grap
 		}
 
 		state := NewState(req.InitialPayload)
+
 		dagState := AcquireStateFromGraphState(state)
 		defer dagState.Release()
 

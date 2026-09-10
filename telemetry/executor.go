@@ -44,12 +44,14 @@ func (e *HotPathExecutor) ExecuteNode(
 	select {
 	case <-ctx.Done():
 		status = 504
+
 		return nil, ctx.Err()
 	default:
 	}
 
 	if invoker == nil {
 		status = 400
+
 		return nil, xerr.BadRequest("hotpath: nil action invoker")
 	}
 
@@ -57,10 +59,12 @@ func (e *HotPathExecutor) ExecuteNode(
 		if target == nil || len(payloadInput) == 0 {
 			return nil
 		}
+
 		return codec.Default.Unmarshal(payloadInput, target)
 	})
 	if execErr != nil {
 		status = 500
+
 		return nil, execErr
 	}
 

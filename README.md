@@ -13,11 +13,11 @@ It enables developers and AI agents to weave isolated, typed Go actions (`github
 ## ⚡ Key Invariants
 
 * **Universal Action Engine:** Orchestrates standard Go functions, microservices, DB queries, and AI Agents indiscriminately.
-* **Inline Data Projections (`{ ... }`):** Reshapes data between nodes on the fly using `expr-lang/expr`. No manual DTO adapters needed.
-* **Compact Arrow DSL:** Express complex execution topographies using concise inline text strings (`->`, `|`, `&`, `||`, `?`).
+* **Inline Data Projections (`{ ... }`):** Reshapes data between nodes on the fly using `expr-lang/expr`. Supports both Go and JQ-style `.field` syntax. No manual DTO adapters needed.
+* **Compact Arrow DSL:** Express complex execution topographies using concise inline text strings (`->`, `|`, `&`, `||`, `?`, `loop ... until`).
 * **Zero-Allocation Hot Paths:** Memory-pooled state management and pre-compiled expression bytecode execution.
 * **Durable Branch Journaling:** SQLite/SQL-backed branch recording for deterministic execution replay.
-* **Cost & Budget Governance:** Exact microdollar ledger tracking with hard-stop budget boundaries.
+* **Cost & Budget Governance:** Exact microdollar ledger tracking with hard-stop budget boundaries via `nexssp/cost`.
 
 ---
 
@@ -41,7 +41,7 @@ It enables developers and AI agents to weave isolated, typed Go actions (`github
                                  │
                                  ▼
                   ┌──────────────────────────────┐
-                  │   ai.summarizer              │
+                  │   ai.triage                  │
                   └──────────────┬───────────────┘
                                  │
                                  ▼
@@ -89,7 +89,7 @@ func main() {
 		}, nil
 	}).Build()
 
-	summarize := action.New("ai.summarizer", func(_ context.Context, req map[string]any) (map[string]any, error) {
+	triage := action.New("ai.triage", func(_ context.Context, req map[string]any) (map[string]any, error) {
 		return map[string]any{"summary": "Critical panic in scheduler", "urgency": "HIGH"}, nil
 	}).Build()
 
@@ -98,13 +98,13 @@ func main() {
 	}).Build()
 
 	// 2. Register Actions
-	registry := flow.NewRegistry(getIssue, summarize, sendSlack)
+	registry := flow.NewRegistry(getIssue, triage, sendSlack)
 
 	// 3. Express Workflow in Arrow DSL with Inline Shaping
 	dsl := `
 		github.get_issue
 		-> { prompt: "Summarize: " + issue.title + " - " + issue.body }
-		-> ai.summarizer
+		-> ai.triage
 		-> { channel: "#alerts", text: "🚨 [" + urgency + "] " + summary }
 		-> slack.send
 	`
@@ -132,10 +132,27 @@ func main() {
 | Operator | Syntax | Description |
 |---|---|---|
 | **Sequential Pipe** | `A -> B` or `A \| B` | Passes output of `A` as input to `B`. |
-| **Inline Projection** | `{ x: .y, z: "val" }` | Reshapes incoming data on the fly using `expr`. |
-| **Parallel Scatter-Gather** | `(A & B & C)` | Executes `A`, `B`, and `C` concurrently; aggregates output. |
+| **Inline Projection** | `{ x: .y, z: "val" }` | Reshapes incoming data on the fly (supports both Go and JQ-style `.`). |
+| **Parallel Scatter-Gather** | `(A & B & C)` | Executes `A`, `B`, and `C` concurrently; aggregates output into a map. |
 | **Fallback Chain** | `A \|\| B` | Tries `A`. If `A` returns an error, executes `B` (`FirstSuccess`). |
-| **Conditional Branch** | `gate ? target` | Evaluates boolean input from `gate`. If true, runs `target`. |
+| **Conditional Branch** | `gate ? target` | Evaluates boolean input from `gate`. If truthy, runs `target`. |
+| **Autonomous Loop** | `loop( A ) until( cond )` | Repeats `A` passing output to input until `cond` evaluates to true. |
+
+---
+
+## 💰 Financial Cost Governance (`nexssp/cost`)
+
+Attach hard-cap budget constraints to any pipeline or node using `flow.GuardCost`:
+
+```go
+ledger := cost.NewLedger(1_000_000, cost.USD) // $1.00 USD budget
+
+actionWithCost := action.New("ai.completion", handler).
+	AnyHook(flow.GuardCost(ledger, 50_000)). // 50,000 micros = $0.05
+	Build()
+```
+
+If the budget is exceeded, execution is halted immediately before invoking upstream providers.
 
 ---
 

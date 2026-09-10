@@ -26,6 +26,7 @@ func NewRegistry(actions ...action.AnyAction) *MapRegistry {
 			m[a.Describe().Name] = a
 		}
 	}
+
 	return &MapRegistry{actions: m}
 }
 
@@ -34,6 +35,7 @@ func (r *MapRegistry) Get(capability string) (action.AnyAction, bool) {
 	defer r.mu.RUnlock()
 
 	a, ok := r.actions[capability]
+
 	return a, ok
 }
 
@@ -44,6 +46,7 @@ func (r *MapRegistry) Register(capability string, a action.AnyAction) {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	r.actions[capability] = a
 }
 
@@ -55,6 +58,7 @@ func (r *MapRegistry) Actions() []action.AnyAction {
 	for _, a := range r.actions {
 		out = append(out, a)
 	}
+
 	return out
 }
 

@@ -15,6 +15,7 @@ type mockRegistry struct {
 
 func (r *mockRegistry) Get(name string) (action.AnyAction, bool) {
 	a, ok := r.m[name]
+
 	return a, ok
 }
 
@@ -23,6 +24,7 @@ func (r *mockRegistry) Actions() []action.AnyAction {
 	for _, a := range r.m {
 		out = append(out, a)
 	}
+
 	return out
 }
 
@@ -34,16 +36,19 @@ func TestDSL_PipeAndParallelScatterGather(t *testing.T) {
 
 	actPack := action.New("pack", func(_ context.Context, _ any) (string, error) {
 		packCalls.Add(1)
+
 		return "package auth\nfunc Verify() {}", nil
 	}).Build()
 
 	actSec := action.New("security.audit", func(_ context.Context, code string) (string, error) {
 		secCalls.Add(1)
+
 		return "Security: Verified", nil
 	}).Build()
 
 	actArch := action.New("architecture.review", func(_ context.Context, code string) (string, error) {
 		archCalls.Add(1)
+
 		return "Architecture: Decoupled", nil
 	}).Build()
 
@@ -52,6 +57,7 @@ func TestDSL_PipeAndParallelScatterGather(t *testing.T) {
 		if reports["security.audit"] == nil || reports["architecture.review"] == nil {
 			t.Fatal("gate missing expected parallel branch outputs")
 		}
+
 		return "Approved for deployment", nil
 	}).Build()
 

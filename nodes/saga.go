@@ -3,7 +3,6 @@ package nodes
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/nexssp/kernel/action"
 )
@@ -16,15 +15,10 @@ type SagaStep struct {
 
 func NewDynamicSaga(name string, steps []SagaStep) *action.Builder[any, any] {
 	return action.New(name, func(ctx context.Context, input any) (any, error) {
-		var executedSteps []SagaStep
-		var mu sync.Mutex
+		executedSteps := make([]SagaStep, 0, len(steps))
 		currentOutput := input
 
 		for _, step := range steps {
-			mu.Lock()
-			executedSteps = append(executedSteps, step)
-			mu.Unlock()
-
 			exec, ok := step.Forward.(action.Executable)
 			if !ok {
 				return nil, fmt.Errorf("flow: saga node %s is not executable", step.NodeID)
@@ -33,8 +27,8 @@ func NewDynamicSaga(name string, steps []SagaStep) *action.Builder[any, any] {
 			out, err := exec.ExecuteDecoded(ctx, func(target any) error {
 				return decodePayload(currentOutput, target)
 			})
-
 			if err != nil {
+				// Compensate only steps that previously completed successfully in LIFO order
 				for i := len(executedSteps) - 1; i >= 0; i-- {
 					compStep := executedSteps[i]
 					if compStep.Compensate != nil {
@@ -45,10 +39,14 @@ func NewDynamicSaga(name string, steps []SagaStep) *action.Builder[any, any] {
 						}
 					}
 				}
+
 				return nil, fmt.Errorf("saga aborted at %s: %w", step.NodeID, err)
 			}
+
+			executedSteps = append(executedSteps, step)
 			currentOutput = out
 		}
+
 		return currentOutput, nil
 	})
 }

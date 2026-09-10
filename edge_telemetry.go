@@ -36,6 +36,7 @@ func NewEdgeTelemetryRing() *EdgeTelemetryRing {
 	for i := range r.sequence {
 		r.sequence[i].val.Store(uint64(i))
 	}
+
 	return r
 }
 
@@ -61,6 +62,7 @@ func (r *EdgeTelemetryRing) Push(edgeID [16]byte, latencyNs int64, statusCode ui
 	slot.EdgeID = edgeID
 
 	r.sequence[head&edgeRingMask].val.Store(head + 1)
+
 	return true
 }
 
@@ -84,8 +86,10 @@ func (r *EdgeTelemetryRing) BatchDrain(dst []EdgeEventSlot) int {
 
 		dst[drained] = r.buffer[tail&edgeRingMask]
 		r.sequence[tail&edgeRingMask].val.Store(tail + edgeRingMask + 1)
+
 		drained++
 	}
+
 	return drained
 }
 

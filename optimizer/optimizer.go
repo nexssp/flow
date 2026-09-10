@@ -33,6 +33,7 @@ func Evolve(
 	if opts.Generations <= 0 {
 		opts.Generations = 3
 	}
+
 	if opts.Population <= 0 {
 		opts.Population = 4
 	}
@@ -50,6 +51,7 @@ func Evolve(
 	best := Candidate{DSL: baselineDSL, Score: bestScore}
 
 	actions := reg.Actions()
+
 	actionNames := make([]string, 0, len(actions))
 	for _, act := range actions {
 		actionNames = append(actionNames, act.Describe().Name)
@@ -93,6 +95,7 @@ func mutate(dsl string, availableActions []string) string {
 
 	//nolint:gosec // Fast non-cryptographic PRNG is intentional for genetic exploration
 	fn := mutations[rand.IntN(len(mutations))]
+
 	return fn(dsl, availableActions)
 }
 
@@ -108,6 +111,7 @@ func mutateAddRetry(dsl string, _ []string) string {
 	if !strings.Contains(target, "retry=") && !strings.Contains(target, "{") && !strings.Contains(target, "(") {
 		nodes[targetIdx] = target + ":retry=2"
 	}
+
 	return strings.Join(nodes, " -> ")
 }
 
@@ -130,10 +134,12 @@ func mutateParallelize(dsl string, _ []string) string {
 		for i := 0; i < idx; i++ {
 			newParts = append(newParts, parts[i])
 		}
+
 		newParts = append(newParts, parallelGroup)
 		for i := idx + 2; i < len(parts); i++ {
 			newParts = append(newParts, parts[i])
 		}
+
 		return strings.Join(newParts, " -> ")
 	}
 
@@ -155,5 +161,6 @@ func mutateAddFallback(dsl string, available []string) string {
 	if !strings.Contains(target, "||") && !strings.Contains(target, "{") && !strings.Contains(target, "(") {
 		parts[targetIdx] = fmt.Sprintf("( %s || %s )", target, fallback)
 	}
+
 	return strings.Join(parts, " -> ")
 }

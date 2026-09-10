@@ -2,7 +2,10 @@ package flow
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -10,16 +13,23 @@ import (
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
+	"github.com/nexssp/validation"
 )
 
 type DynamicPolicy struct {
 	RetryCount int
 	Timeout    time.Duration
+	CacheTTL   time.Duration
 	Idempotent bool
 	Breaker    bool
+	Debug      bool
+	Validate   bool
+	Coalesce   bool
+	Dedup      bool
 }
 
-// resolveDynamicNode applies AST attributes (Profile, Targets, Params, Modifiers) to a retrieved capability.
+var globalCoalescer = action.NewCoalescer()
+
 func resolveDynamicNode(atom *compiler.AtomExpr, reg Registry) (*action.Builder[any, any], error) {
 	act, ok := reg.Get(atom.Name)
 	if !ok {
@@ -29,40 +39,83 @@ func resolveDynamicNode(atom *compiler.AtomExpr, reg Registry) (*action.Builder[
 	dyn := action.Dynamic(act)
 	policy := parseModifiers(atom.Modifiers)
 
-	// Apply compile-time policy decorations onto the builder
 	if policy.Timeout > 0 {
 		dyn.Timeout(policy.Timeout)
 	}
+
 	if policy.RetryCount > 0 {
 		dyn.Retry(policy.RetryCount, action.ExponentialJitter(20*time.Millisecond, 500*time.Millisecond))
 	}
+
 	if policy.Idempotent {
 		dyn.Idempotent()
 	}
 
-	// Consolidate parameters, inputs, and standard prompt/targets routing
-	hasHooks := len(atom.Params) > 0 || len(atom.Inputs) > 0 || atom.Prompt != "" || len(atom.Targets) > 0 || len(atom.Excludes) > 0 || atom.Profile != ""
+	hashFn := func(req any) string {
+		if req == nil {
+			return atom.Name + ":nil"
+		}
+
+		b, _ := json.Marshal(req)
+		hash := sha256.Sum256(b)
+
+		return atom.Name + ":" + fmt.Sprintf("%x", hash)
+	}
+
+	if policy.CacheTTL > 0 {
+		dyn.Cache(policy.CacheTTL, hashFn)
+	}
+
+	if policy.Coalesce {
+		dyn.Coalesce(globalCoalescer, hashFn)
+	}
+
+	if policy.Dedup {
+		dyn.Dedup(hashFn)
+	}
+
+	if policy.Debug {
+		dyn.LogCalls(slog.Default())
+	}
+
+	if policy.Validate {
+		dyn.Validate(func(ctx context.Context, req any) error {
+			if req != nil {
+				return validation.Struct(ctx, req)
+			}
+
+			return nil
+		})
+	}
+
+	hasHooks := len(atom.Params) > 0 || len(atom.Inputs) > 0 ||
+		atom.Prompt != "" || len(atom.Targets) > 0 ||
+		len(atom.Excludes) > 0 || atom.Profile != ""
 
 	if hasHooks {
 		dyn.HookBefore(func(ctx context.Context, req any, meta *action.Meta) (context.Context, error) {
 			if m, ok := req.(map[string]any); ok {
 				for k, v := range atom.Params {
-					m[k] = v // explicit literal bounds (e.g. env="staging")
+					m[k] = v
 				}
-				// In a full implementation, atom.Inputs paths would be resolved here via state.Get()
+
 				if atom.Prompt != "" {
 					m["prompt"] = atom.Prompt
 				}
+
 				if len(atom.Targets) > 0 {
 					m["targets"] = atom.Targets
 				}
+
 				if len(atom.Excludes) > 0 {
 					m["excludes"] = atom.Excludes
 				}
+
 				if atom.Profile != "" {
 					m["profile"] = atom.Profile
 				}
 			}
+
 			return ctx, nil
 		})
 	}
@@ -74,7 +127,7 @@ func parseModifiers(modifiers []string) DynamicPolicy {
 	var policy DynamicPolicy
 
 	for _, p := range modifiers {
-		p = strings.TrimSpace(p)
+		p = strings.TrimSpace(strings.ToLower(p))
 		switch {
 		case strings.HasPrefix(p, "retry="):
 			if val, err := strconv.Atoi(strings.TrimPrefix(p, "retry=")); err == nil && val > 0 {
@@ -84,10 +137,22 @@ func parseModifiers(modifiers []string) DynamicPolicy {
 			if dur, err := time.ParseDuration(strings.TrimPrefix(p, "timeout=")); err == nil && dur > 0 {
 				policy.Timeout = dur
 			}
+		case strings.HasPrefix(p, "cache="):
+			if dur, err := time.ParseDuration(strings.TrimPrefix(p, "cache=")); err == nil && dur > 0 {
+				policy.CacheTTL = dur
+			}
 		case p == "idempotent":
 			policy.Idempotent = true
 		case p == "breaker":
 			policy.Breaker = true
+		case p == "debug":
+			policy.Debug = true
+		case p == "validate":
+			policy.Validate = true
+		case p == "coalesce":
+			policy.Coalesce = true
+		case p == "dedup":
+			policy.Dedup = true
 		}
 	}
 

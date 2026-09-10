@@ -93,6 +93,7 @@ func TestEvolve_DiscoversHigherScore(t *testing.T) {
 	countingEvaluator := func(evalCtx context.Context, candidate action.AnyAction) (float64, error) {
 		evalCalls.Add(1)
 		score, _ := evaluator(evalCtx, candidate)
+
 		return score, nil
 	}
 
@@ -128,6 +129,7 @@ func TestEvolve_ParallelScoreBonus(t *testing.T) {
 		if err != nil {
 			return -100.0, nil
 		}
+
 		return 50.0, nil
 	}
 

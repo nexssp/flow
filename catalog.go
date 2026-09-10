@@ -42,10 +42,12 @@ func ExtractCapabilities(reg Registry) []CapabilitySpec {
 		}
 
 		method, route := "", ""
+
 		for _, b := range act.GetBindings() {
 			if r, ok := b.(thttp.HTTPRoute); ok {
 				method = r.Method
 				route = r.Path
+
 				break
 			}
 		}
@@ -80,6 +82,7 @@ func BuildCatalogAction(reg Registry) action.AnyAction {
 		if reg == nil {
 			return nil, xerr.NotFound("flow: registry is nil")
 		}
+
 		return ExtractCapabilities(reg), nil
 	}).
 		System().
@@ -93,14 +96,17 @@ func reflectToSchema(t reflect.Type) map[string]any {
 	if t == nil {
 		return map[string]any{"type": "null"}
 	}
+
 	for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice {
 		t = t.Elem()
 	}
+
 	if t.Kind() != reflect.Struct {
 		return map[string]any{"type": strings.ToLower(t.Kind().String())}
 	}
 
 	props := make(map[string]any)
+
 	var required []string
 
 	for i := 0; i < t.NumField(); i++ {
@@ -120,6 +126,7 @@ func reflectToSchema(t reflect.Type) map[string]any {
 		}
 
 		kindStr := "string"
+
 		switch f.Type.Kind() {
 		case reflect.Int, reflect.Int64, reflect.Float64:
 			kindStr = "number"
@@ -139,5 +146,6 @@ func reflectToSchema(t reflect.Type) map[string]any {
 	if len(required) > 0 {
 		out["required"] = required
 	}
+
 	return out
 }

@@ -40,6 +40,7 @@ func (j *SQLBranchJournal) EnsureSchema(ctx context.Context) error {
 	if err != nil {
 		return xerr.Internal("journal: create schema failed", err)
 	}
+
 	return nil
 }
 
@@ -48,7 +49,8 @@ func (j *SQLBranchJournal) Get(ctx context.Context, runID, sourceNode string) ([
 		return nil, false, xerr.Internal("journal: database connection is nil")
 	}
 
-	query := `SELECT run_id, source_node, from_node, to_node, when_expr, otherwise_flag, status, reason, decision_seq, created_at
+	query := `SELECT run_id, source_node, from_node, to_node, when_expr, otherwise_flag,
+		status, reason, decision_seq, created_at
 		FROM graph_branch_decisions
 		WHERE run_id = ? AND source_node = ?
 		ORDER BY decision_seq ASC;`
@@ -60,12 +62,20 @@ func (j *SQLBranchJournal) Get(ctx context.Context, runID, sourceNode string) ([
 	defer rows.Close()
 
 	var records []BranchRecord
-	for rows.Next() {
-		var rec BranchRecord
-		var otherwiseInt int
-		var createdAtStr string
 
-		if err := rows.Scan(&rec.RunID, &rec.SourceNode, &rec.From, &rec.To, &rec.When, &otherwiseInt, &rec.Status, &rec.Reason, &rec.DecisionSeq, &createdAtStr); err != nil {
+	for rows.Next() {
+		var (
+			rec          BranchRecord
+			otherwiseInt int
+			createdAtStr string
+		)
+
+		err := rows.Scan(
+			&rec.RunID, &rec.SourceNode, &rec.From, &rec.To,
+			&rec.When, &otherwiseInt, &rec.Status, &rec.Reason,
+			&rec.DecisionSeq, &createdAtStr,
+		)
+		if err != nil {
 			return nil, false, xerr.Internal("journal: scan branch decision failed", err)
 		}
 
@@ -73,6 +83,7 @@ func (j *SQLBranchJournal) Get(ctx context.Context, runID, sourceNode string) ([
 		if t, err := time.Parse(time.RFC3339, createdAtStr); err == nil {
 			rec.CreatedAt = t
 		}
+
 		records = append(records, rec)
 	}
 
@@ -83,6 +94,7 @@ func (j *SQLBranchJournal) Get(ctx context.Context, runID, sourceNode string) ([
 	if len(records) == 0 {
 		return nil, false, nil
 	}
+
 	return records, true, nil
 }
 
@@ -90,6 +102,7 @@ func (j *SQLBranchJournal) Put(ctx context.Context, runID, sourceNode string, re
 	if j == nil || j.db == nil {
 		return xerr.Internal("journal: database connection is nil")
 	}
+
 	if len(records) == 0 {
 		return nil
 	}
@@ -116,6 +129,7 @@ func (j *SQLBranchJournal) Put(ctx context.Context, runID, sourceNode string, re
 		if rec.Otherwise {
 			otherwiseInt = 1
 		}
+
 		createdAtStr := rec.CreatedAt.UTC().Format(time.RFC3339)
 
 		if _, execErr := stmt.ExecContext(
@@ -138,5 +152,6 @@ func (j *SQLBranchJournal) Put(ctx context.Context, runID, sourceNode string, re
 	if err = tx.Commit(); err != nil {
 		return xerr.Internal("journal: commit transaction failed", err)
 	}
+
 	return nil
 }

@@ -34,18 +34,22 @@ func BuildEdgeMeshAction(region LocationRegion, nodeID string, ring *EdgeTelemet
 	var rawID [16]byte
 	copy(rawID[:], nodeID)
 
-	return action.New(fmt.Sprintf("edge.%s", string(region)), func(ctx context.Context, req map[string]any) (EdgeNodeRes, error) {
+	actionName := fmt.Sprintf("edge.%s", string(region))
+
+	return action.New(actionName, func(ctx context.Context, req map[string]any) (EdgeNodeRes, error) {
 		start := time.Now()
 
 		select {
 		case <-ctx.Done():
 			ring.Push(rawID, time.Since(start).Nanoseconds(), 504)
+
 			return EdgeNodeRes{}, ctx.Err()
 		default:
 		}
 
 		if req == nil {
 			ring.Push(rawID, time.Since(start).Nanoseconds(), 400)
+
 			return EdgeNodeRes{}, xerr.BadRequest("edge: request payload cannot be empty")
 		}
 

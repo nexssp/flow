@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/nexssp/flow"
+	"github.com/nexssp/flow/journal"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 )
@@ -35,6 +36,7 @@ func (m *mockApprovalGate) Check(_ context.Context, _ string, _ string, token st
 	if token != "" && m.approvals[token] {
 		return nil
 	}
+
 	return xerr.Forbidden("approval required or token invalid")
 }
 
@@ -74,21 +76,25 @@ func TestGraph_CompilerAndExecutionTopology(t *testing.T) {
 
 	actPack := action.New("mock.pack", func(_ context.Context, _ map[string]any) (map[string]any, error) {
 		packCalls.Add(1)
+
 		return map[string]any{"content": "package auth\nfunc Login() {}"}, nil
 	}).Build()
 
 	actSec := action.New("mock.sec", func(_ context.Context, _ map[string]any) (string, error) {
 		secCalls.Add(1)
+
 		return "Security: OK", nil
 	}).Build()
 
 	actArch := action.New("mock.arch", func(_ context.Context, _ map[string]any) (string, error) {
 		archCalls.Add(1)
+
 		return "Arch: Clean", nil
 	}).Build()
 
 	actGate := action.New("mock.gate", func(_ context.Context, _ map[string]any) (bool, error) {
 		gateCalls.Add(1)
+
 		return true, nil
 	}).Build()
 
@@ -124,16 +130,18 @@ func TestGraph_MultiBranchConditionalJournaling(t *testing.T) {
 
 	codeAct := action.New("code_cap", func(_ context.Context, _ map[string]any) (string, error) {
 		codeCalls.Add(1)
+
 		return "code executed", nil
 	}).Build()
 
 	fallbackAct := action.New("fallback_cap", func(_ context.Context, _ map[string]any) (string, error) {
 		fallbackCalls.Add(1)
+
 		return "fallback executed", nil
 	}).Build()
 
 	registry := flow.NewRegistry(classifyAct, codeAct, fallbackAct)
-	journal := flow.NewMemoryBranchJournal()
+	journal := journal.NewMemoryBranchJournal()
 	compiler := flow.NewCompiler(registry, flow.WithJournal(journal))
 
 	def := flow.GraphDefinition{

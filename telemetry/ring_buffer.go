@@ -40,6 +40,7 @@ func NewLockFreeRingBuffer() *LockFreeRingBuffer {
 	for i := uint64(0); i < RingCapacity; i++ {
 		rb.sequence[i].val.Store(i)
 	}
+
 	return rb
 }
 
@@ -66,6 +67,7 @@ func (rb *LockFreeRingBuffer) Push(nodeID [16]byte, duration, cost int64, status
 	slot.NodeID = nodeID
 
 	rb.sequence[head&ringMask].val.Store(head + 1)
+
 	return true
 }
 
@@ -87,6 +89,7 @@ func (rb *LockFreeRingBuffer) Pop(dst *EventSlot) bool {
 
 	*dst = rb.slots[tail&ringMask]
 	rb.sequence[tail&ringMask].val.Store(tail + ringMask + 1)
+
 	return true
 }
 

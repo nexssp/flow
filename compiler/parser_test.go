@@ -233,6 +233,7 @@ func TestParser(t *testing.T) {
 				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
 					t.Errorf("error = %q, want to contain %q", err.Error(), tt.errMsg)
 				}
+
 				return
 			}
 			if err != nil {

@@ -12,5 +12,6 @@ func ApprovalTokenFrom(ctx context.Context) string {
 	if v, ok := ctx.Value(approvalTokenCtxKey{}).(string); ok {
 		return v
 	}
+
 	return ""
 }

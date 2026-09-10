@@ -8,10 +8,16 @@ import (
 	"github.com/nexssp/flow/journal"
 )
 
-func (g *CompiledGraph) SelectOutgoingDurable(ctx context.Context, j journal.BranchJournal, runID, source string, state *State) ([]CompiledEdge, error) {
+func (g *CompiledGraph) SelectOutgoingDurable(
+	ctx context.Context,
+	j journal.BranchJournal,
+	runID, source string,
+	state *State,
+) ([]CompiledEdge, error) {
 	if j == nil {
 		return nil, fmt.Errorf("graph: branch journal is required")
 	}
+
 	if runID == "" {
 		return nil, fmt.Errorf("graph: run ID is required")
 	}
@@ -25,6 +31,7 @@ func (g *CompiledGraph) SelectOutgoingDurable(ctx context.Context, j journal.Bra
 	if err != nil {
 		return nil, fmt.Errorf("graph: read branch decision: %w", err)
 	}
+
 	if found {
 		return replaySelectedEdges(edges, stored)
 	}
@@ -52,6 +59,7 @@ func (g *CompiledGraph) SelectOutgoingDurable(ctx context.Context, j journal.Bra
 			status = journal.BranchSelected
 			reason = "condition_matched"
 		}
+
 		if edge.Otherwise {
 			reason = "fallback"
 		}
@@ -114,10 +122,12 @@ func replaySelectedEdges(edges []CompiledEdge, records []journal.BranchRecord) (
 	}
 
 	result := make([]CompiledEdge, 0)
+
 	for _, edge := range edges {
 		if selected[edge.From+"\x00"+edge.To] {
 			result = append(result, edge)
 		}
 	}
+
 	return result, nil
 }

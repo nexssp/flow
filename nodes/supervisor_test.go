@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/nexssp/flow"
+	"github.com/nexssp/flow/nodes"
 	"github.com/nexssp/kernel/action"
 )
 
@@ -13,7 +14,7 @@ func TestSupervisor_DynamicChildSpawning(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Predefined Prompt Node
-	summarizePrompt := flow.NewPromptNode(flow.PromptConfig{
+	summarizePrompt := nodes.NewPromptNode(nodes.PromptConfig{
 		Name:         "ai.summarize",
 		Description:  "Summarizes raw text into executive bullet points",
 		SystemPrompt: "You are a concise executive summarizer.",
@@ -28,13 +29,13 @@ func TestSupervisor_DynamicChildSpawning(t *testing.T) {
 	registry := flow.NewRegistry(summarizePrompt, slackTool)
 
 	// 3. Supervisor Node
-	supervisorNode := flow.NewSupervisorNode("main.supervisor", registry)
+	supervisorNode := nodes.NewSupervisorNode("main.supervisor", registry)
 
 	// Execute supervisor directly
 	execAct := action.Dynamic(supervisorNode)
 
-	req := flow.SupervisorReq{
-		Tasks: []flow.ChildTask{
+	req := nodes.SupervisorReq{
+		Tasks: []nodes.ChildTask{
 			{
 				ID:      "task_1",
 				DSL:     "ai.summarize -> { channel: '#general', text: rendered_user } -> slack.post",
@@ -53,7 +54,7 @@ func TestSupervisor_DynamicChildSpawning(t *testing.T) {
 		t.Fatalf("supervisor execution failed: %v", err)
 	}
 
-	supRes, ok := res.(flow.SupervisorRes)
+	supRes, ok := res.(nodes.SupervisorRes)
 	if !ok {
 		t.Fatalf("unexpected output type: %T", res)
 	}

@@ -10,8 +10,10 @@ func AcquireStateFromGraphState(s *State) *dag.State {
 	if s == nil || s.data == nil {
 		return target
 	}
+
 	for k, v := range s.data {
 		target.Set(k, v)
 	}
+
 	return target
 }

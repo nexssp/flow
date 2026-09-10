@@ -1,3 +1,4 @@
+// path: flow/parallel.go
 package flow
 
 import (
@@ -19,7 +20,6 @@ type NodeResult[Res any] struct {
 	Spawned SpawnedNode `json:"spawned"`
 	Value   Res         `json:"value"`
 	Err     error       `json:"error,omitempty"`
-	Usage   CostUsage   `json:"usage"`
 }
 
 type FanInPolicy struct {
@@ -49,6 +49,7 @@ func SpawnSelected(runID, source string, selected []CompiledEdge, input *State) 
 	if runID == "" || source == "" {
 		return nil, fmt.Errorf("graph: run ID and source node are required")
 	}
+
 	if len(selected) == 0 {
 		return nil, nil
 	}
@@ -64,6 +65,7 @@ func SpawnSelected(runID, source string, selected []CompiledEdge, input *State) 
 			SpawnIndex: i,
 		}
 	}
+
 	return out, nil
 }
 

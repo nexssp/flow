@@ -13,8 +13,11 @@ import (
 
 var loopCounter atomic.Int64
 
-// NewLoopAction creates a bounded autonomous loop that executes body until condition evaluates to true.
-func NewLoopAction(bodyAction action.AnyAction, untilCondition string, maxTurns int) (*action.BuiltAction[any, any], error) {
+func NewLoopAction(
+	bodyAction action.AnyAction,
+	untilCondition string,
+	maxTurns int,
+) (*action.BuiltAction[any, any], error) {
 	if maxTurns <= 0 {
 		maxTurns = 15
 	}
@@ -25,6 +28,7 @@ func NewLoopAction(bodyAction action.AnyAction, untilCondition string, maxTurns 
 	}
 
 	nodeID := fmt.Sprintf("loop_%d", loopCounter.Add(1))
+
 	executable, ok := bodyAction.(action.Executable)
 	if !ok {
 		return nil, fmt.Errorf("flow: loop body action %q is not executable", bodyAction.Describe().Name)
@@ -40,25 +44,24 @@ func NewLoopAction(bodyAction action.AnyAction, untilCondition string, maxTurns 
 			default:
 			}
 
-			// Execute loop body
-			output, err := executable.ExecuteDecoded(ctx, func(target any) error {
+			output, execErr := executable.ExecuteDecoded(ctx, func(target any) error {
 				return decodePayload(currentInput, target)
 			})
-			if err != nil {
-				return nil, err
+			if execErr != nil {
+				return nil, execErr
 			}
 
-			// Evaluate break condition against output
-			satisfied, err := evalLoopCondition(program, output)
-			if err != nil {
-				return nil, err
+			env := normalizeProjectionEnv(output)
+
+			satisfied, evalErr := evalLoopCondition(program, env)
+			if evalErr != nil {
+				return nil, evalErr
 			}
 
 			if satisfied {
 				return output, nil
 			}
 
-			// Pass output as input to the next turn
 			currentInput = output
 		}
 
@@ -73,8 +76,10 @@ func evalLoopCondition(program *vm.Program, env any) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("flow: loop condition run failed: %w", err)
 	}
+
 	if b, ok := out.(bool); ok {
 		return b, nil
 	}
+
 	return false, nil
 }

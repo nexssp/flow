@@ -14,11 +14,13 @@ func ParseArrowDSL(name, dsl string) (GraphDefinition, error) {
 	if strings.TrimSpace(dsl) == "" {
 		return GraphDefinition{}, xerr.BadRequest("graph: arrow DSL expression cannot be empty")
 	}
+
 	if name == "" {
 		name = "dsl_pipeline"
 	}
 
 	parser := compiler.NewParser(dsl)
+
 	ast, err := parser.ParseExpression()
 	if err != nil {
 		return GraphDefinition{}, err
@@ -38,25 +40,29 @@ func ParseArrowDSL(name, dsl string) (GraphDefinition, error) {
 	nodeCounter := 0
 
 	var walk func(expr compiler.Expr, prevIDs []string) ([]string, error)
+
 	walk = func(expr compiler.Expr, prevIDs []string) ([]string, error) {
 		switch n := expr.(type) {
-
 		case *compiler.PipelineExpr:
 			leftIDs, walkErr := walk(n.Left, prevIDs)
 			if walkErr != nil {
 				return nil, walkErr
 			}
+
 			return walk(n.Right, leftIDs)
 
 		case *compiler.ParallelExpr:
 			var outIDs []string
+
 			for _, child := range n.Children {
 				childIDs, walkErr := walk(child, prevIDs)
 				if walkErr != nil {
 					return nil, walkErr
 				}
+
 				outIDs = append(outIDs, childIDs...)
 			}
+
 			return outIDs, nil
 
 		case *compiler.AtomExpr:
@@ -67,15 +73,19 @@ func ParseArrowDSL(name, dsl string) (GraphDefinition, error) {
 			for k, v := range n.Params {
 				params[k] = v
 			}
+
 			if n.Prompt != "" {
 				params["prompt"] = n.Prompt
 			}
+
 			if len(n.Excludes) > 0 {
 				params["excludes"] = n.Excludes
 			}
+
 			if len(n.Targets) > 0 {
 				params["targets"] = n.Targets
 			}
+
 			if n.Profile != "" {
 				params["profile"] = n.Profile
 			}
@@ -95,6 +105,7 @@ func ParseArrowDSL(name, dsl string) (GraphDefinition, error) {
 					To:   nodeID,
 				})
 			}
+
 			return []string{nodeID}, nil
 
 		case *compiler.ProjectionExpr:
@@ -113,6 +124,7 @@ func ParseArrowDSL(name, dsl string) (GraphDefinition, error) {
 					To:   nodeID,
 				})
 			}
+
 			return []string{nodeID}, nil
 
 		default:

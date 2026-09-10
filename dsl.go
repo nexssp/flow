@@ -19,6 +19,7 @@ func CompilePipeline(expr string, reg Registry) (*action.Builder[any, any], erro
 	}
 
 	parser := compiler.NewParser(expr)
+
 	ast, err := parser.ParseExpression()
 	if err != nil {
 		return nil, err
@@ -29,16 +30,17 @@ func CompilePipeline(expr string, reg Registry) (*action.Builder[any, any], erro
 
 func compileAST(node compiler.Expr, reg Registry) (*action.Builder[any, any], error) {
 	switch n := node.(type) {
-
 	case *compiler.PipelineExpr:
 		left, err := compileAST(n.Left, reg)
 		if err != nil {
 			return nil, err
 		}
+
 		right, err := compileAST(n.Right, reg)
 		if err != nil {
 			return nil, err
 		}
+
 		return action.Pipe[any, any, any]("pipe", left.Build(), right.Build()), nil
 
 	case *compiler.ParallelExpr:
@@ -48,14 +50,19 @@ func compileAST(node compiler.Expr, reg Registry) (*action.Builder[any, any], er
 			if err != nil {
 				return nil, err
 			}
+
 			built := childBld.Build()
+
 			name := built.Describe().Name
 			if name == "" || strings.HasPrefix(name, "unknown") {
 				name = fmt.Sprintf("branch_%d", i+1)
 			}
+
 			routes[name] = built
 		}
+
 		parallel := action.ParallelNamed[any]("parallel_group", routes)
+
 		return action.New("parallel_wrap", func(ctx context.Context, req any) (any, error) {
 			return parallel.Build().Do(ctx, req)
 		}), nil
@@ -65,17 +72,25 @@ func compileAST(node compiler.Expr, reg Registry) (*action.Builder[any, any], er
 		if err != nil {
 			return nil, err
 		}
+
 		right, err := compileAST(n.Right, reg)
 		if err != nil {
 			return nil, err
 		}
-		return action.FirstSuccess("fallback_chain", left, right), nil
+
+		name := left.Build().Describe().Name
+		if name == "" {
+			name = "fallback_chain"
+		}
+
+		return action.FirstSuccess(name, left, right), nil
 
 	case *compiler.ConditionalExpr:
 		gateBld, err := compileAST(n.Gate, reg)
 		if err != nil {
 			return nil, err
 		}
+
 		targetBld, err := compileAST(n.Target, reg)
 		if err != nil {
 			return nil, err
@@ -92,6 +107,7 @@ func compileAST(node compiler.Expr, reg Registry) (*action.Builder[any, any], er
 			if isTruthy(input) {
 				return "proceed", nil
 			}
+
 			return "skip", nil
 		})
 
@@ -102,6 +118,7 @@ func compileAST(node compiler.Expr, reg Registry) (*action.Builder[any, any], er
 		if err != nil {
 			return nil, err
 		}
+
 		return action.Dynamic(projAct), nil
 
 	case *compiler.LoopExpr:
@@ -109,10 +126,12 @@ func compileAST(node compiler.Expr, reg Registry) (*action.Builder[any, any], er
 		if err != nil {
 			return nil, err
 		}
+
 		loopAct, err := nodes.NewLoopAction(bodyBld.Build(), n.Until, 15)
 		if err != nil {
 			return nil, err
 		}
+
 		return action.Dynamic(loopAct), nil
 
 	case *compiler.AtomExpr:
@@ -127,6 +146,7 @@ func isTruthy(v any) bool {
 	if v == nil {
 		return false
 	}
+
 	switch val := v.(type) {
 	case bool:
 		return val
@@ -134,11 +154,13 @@ func isTruthy(v any) bool {
 		return val != 0
 	case string:
 		lower := strings.ToLower(val)
+
 		return lower == "true" || lower == "ok" || lower == "approved"
 	case map[string]any:
 		if approved, ok := val["approved"].(bool); ok {
 			return approved
 		}
 	}
+
 	return true
 }

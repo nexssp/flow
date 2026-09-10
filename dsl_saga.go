@@ -19,6 +19,7 @@ func CompileSaga(expr string, reg Registry) (*action.Builder[any, any], error) {
 	}
 
 	parser := compiler.NewParser(expr)
+
 	ast, err := parser.ParseExpression()
 	if err != nil {
 		return nil, err
@@ -29,7 +30,6 @@ func CompileSaga(expr string, reg Registry) (*action.Builder[any, any], error) {
 
 func compileSagaAST(node compiler.Expr, reg Registry) (*action.Builder[any, any], error) {
 	switch n := node.(type) {
-
 	case *compiler.ParallelExpr:
 		routes := make(map[string]action.AnyAction, len(n.Children))
 		for i, child := range n.Children {
@@ -37,10 +37,12 @@ func compileSagaAST(node compiler.Expr, reg Registry) (*action.Builder[any, any]
 			if err != nil {
 				return nil, err
 			}
+
 			routes[fmt.Sprintf("saga_branch_%d", i+1)] = bld.Build()
 		}
 
 		parallel := action.ParallelNamed[any]("parallel_sagas", routes)
+
 		return action.New("parallel_sagas_wrap", func(ctx context.Context, req any) (any, error) {
 			return parallel.Build().Do(ctx, req)
 		}), nil
@@ -72,6 +74,7 @@ func compileSagaAST(node compiler.Expr, reg Registry) (*action.Builder[any, any]
 				Compensate: compensateAct,
 			})
 		}
+
 		return nodes.NewDynamicSaga("saga_pipe", steps), nil
 
 	case *compiler.AtomExpr:
@@ -80,17 +83,20 @@ func compileSagaAST(node compiler.Expr, reg Registry) (*action.Builder[any, any]
 		if !ok {
 			return nil, fmt.Errorf("flow: saga capability %q not found", n.Name)
 		}
+
 		var compensateAct action.AnyAction
 		if rollbackName, ok := n.Params["rollback"]; ok {
 			compensateAct, _ = reg.Get(rollbackName)
 		} else if rollbackInput, ok := n.Inputs["rollback"]; ok {
 			compensateAct, _ = reg.Get(rollbackInput)
 		}
+
 		step := nodes.SagaStep{
 			NodeID:     n.Name,
 			Forward:    forwardAct,
 			Compensate: compensateAct,
 		}
+
 		return nodes.NewDynamicSaga("saga_single", []nodes.SagaStep{step}), nil
 
 	default:
@@ -107,10 +113,12 @@ func flattenPipeline(node compiler.Expr) ([]*compiler.AtomExpr, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		right, err := flattenPipeline(n.Right)
 		if err != nil {
 			return nil, err
 		}
+
 		return append(left, right...), nil
 	case *compiler.AtomExpr:
 		return []*compiler.AtomExpr{n}, nil

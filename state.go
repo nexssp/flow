@@ -18,6 +18,7 @@ func NewState(values map[string]any) *State {
 	for k, v := range values {
 		copyValues[k] = v
 	}
+
 	return &State{data: copyValues}
 }
 
@@ -25,6 +26,7 @@ func NewStateFromDAG(dagState *dag.State) *State {
 	if dagState == nil {
 		return NewState(nil)
 	}
+
 	return NewState(dagState.Data())
 }
 
@@ -36,10 +38,12 @@ func (s *State) Get(path string) (any, bool) {
 	path = strings.TrimPrefix(path, "state.")
 
 	var current any = s.data
+
 	remaining := path
 
 	for remaining != "" {
 		var part string
+
 		dotIdx := strings.IndexByte(remaining, '.')
 		if dotIdx == -1 {
 			part = remaining
@@ -56,42 +60,55 @@ func (s *State) Get(path string) (any, bool) {
 				if val.IsNil() {
 					return nil, false
 				}
+
 				val = val.Elem()
 			}
+
 			if val.Kind() == reflect.Struct {
 				field := val.FieldByName(part)
 				if !field.IsValid() {
 					t := val.Type()
 					found := false
+
 					for i := 0; i < t.NumField(); i++ {
 						f := t.Field(i)
+
 						tag := f.Tag.Get("json")
 						if tag != "" {
 							if comma := strings.IndexByte(tag, ','); comma != -1 {
 								tag = tag[:comma]
 							}
+
 							if strings.EqualFold(tag, part) {
 								field = val.Field(i)
 								found = true
+
 								break
 							}
 						}
 					}
+
 					if !found {
 						return nil, false
 					}
 				}
+
 				current = field.Interface()
+
 				continue
 			}
+
 			return nil, false
 		}
+
 		val, exists := m[part]
 		if !exists {
 			return nil, false
 		}
+
 		current = val
 	}
+
 	return current, true
 }
 
@@ -114,11 +131,15 @@ func EvaluateCondition(condition string, state *State) (bool, error) {
 	rest := strings.TrimSpace(condition[spaceIdx:])
 	if rest == "exists" {
 		_, exists := state.Get(path)
+
 		return exists, nil
 	}
 
-	var op string
-	var literalStr string
+	var (
+		op         string
+		literalStr string
+	)
+
 	switch {
 	case strings.HasPrefix(rest, "=="):
 		op = "=="
@@ -152,6 +173,7 @@ func EvaluateCondition(condition string, state *State) (bool, error) {
 	}
 
 	var want any
+
 	switch {
 	case len(literalStr) >= 2 &&
 		((literalStr[0] == '"' && literalStr[len(literalStr)-1] == '"') ||
@@ -166,6 +188,7 @@ func EvaluateCondition(condition string, state *State) (bool, error) {
 		if err != nil {
 			return false, fmt.Errorf("graph: invalid numeric literal %q: %w", literalStr, err)
 		}
+
 		want = f
 	}
 
@@ -197,9 +220,11 @@ func compareValues(actual, expected any, operator string) (bool, error) {
 				equal = af == ef
 			}
 		}
+
 		if operator == "!=" {
 			return !equal, nil
 		}
+
 		return equal, nil
 	}
 
@@ -207,6 +232,7 @@ func compareValues(actual, expected any, operator string) (bool, error) {
 	if !ok {
 		return false, fmt.Errorf("graph: relational operator %q requires numeric state value, got %T", operator, actual)
 	}
+
 	b, ok := number(expected)
 	if !ok {
 		return false, fmt.Errorf("graph: relational operator %q requires numeric literal", operator)
@@ -230,6 +256,7 @@ func normalizeScalar(v any) any {
 	if s, ok := v.(fmt.Stringer); ok {
 		return s.String()
 	}
+
 	return v
 }
 
@@ -255,6 +282,7 @@ func number(v any) (float64, bool) {
 	if !rv.IsValid() {
 		return 0, false
 	}
+
 	switch rv.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return float64(rv.Int()), true

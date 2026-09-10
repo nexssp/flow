@@ -56,11 +56,13 @@ func NewPromptNode(cfg PromptConfig) action.AnyAction {
 			if input, ok := v["input"]; ok {
 				pReq.Input = input
 			}
+
 			if rawParams, ok := v["params"]; ok {
 				if params, ok := rawParams.(map[string]any); ok {
 					pReq.Params = params
 				}
 			}
+
 			if prompt, ok := v["prompt"]; ok {
 				if s, ok := prompt.(string); ok {
 					pReq.Prompt = s
@@ -74,6 +76,7 @@ func NewPromptNode(cfg PromptConfig) action.AnyAction {
 		for k, v := range cfg.DefaultParams {
 			params[k] = v
 		}
+
 		for k, v := range pReq.Params {
 			params[k] = v
 		}

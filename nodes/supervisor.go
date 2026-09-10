@@ -78,6 +78,7 @@ func NewSupervisorNode(name string, compiler PipelineCompiler) action.AnyAction 
 				if compileErr != nil {
 					resSlot.Error = fmt.Sprintf("compile error: %v", compileErr)
 					resSlot.Duration = time.Since(start).Milliseconds()
+
 					return nil
 				}
 
@@ -99,6 +100,7 @@ func NewSupervisorNode(name string, compiler PipelineCompiler) action.AnyAction 
 		_ = g.Wait()
 
 		var succeeded, failed int
+
 		for _, r := range results {
 			if r.Error != "" {
 				failed++
