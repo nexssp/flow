@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/glebarez/go-sqlite"
+	_ "github.com/ncruces/go-sqlite3"
 	"github.com/nexssp/flow/journal"
 )
 
 func TestSQLBranchJournal_DurableRecordAndReplay(t *testing.T) {
 	t.Parallel()
 
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatalf("open in-memory sqlite failed: %v", err)
 	}

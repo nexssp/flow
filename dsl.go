@@ -41,7 +41,29 @@ func compileAST(node compiler.Expr, reg Registry) (*action.Builder[any, any], er
 			return nil, err
 		}
 
-		return action.Pipe[any, any, any]("pipe", left.Build(), right.Build()), nil
+		builtRight := right.Build()
+		pipeBld := action.Pipe[any, any, any]("pipe", left.Build(), builtRight)
+
+		// Hoist routes, status, description, and name from the terminal node to the composite pipeline
+		for _, b := range builtRight.GetBindings() {
+			pipeBld.Route(b)
+		}
+
+		if meta := builtRight.Describe(); meta != nil {
+			if meta.Name != "" && meta.Name != "pipe" {
+				pipeBld.Name(meta.Name)
+			}
+
+			if meta.Description != "" {
+				pipeBld.Description(meta.Description)
+			}
+
+			if meta.SuccessStatus > 0 {
+				pipeBld.SuccessStatus(meta.SuccessStatus)
+			}
+		}
+
+		return pipeBld, nil
 
 	case *compiler.ParallelExpr:
 		routes := make(map[string]action.AnyAction, len(n.Children))
