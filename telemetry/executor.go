@@ -1,3 +1,4 @@
+// path: nexssp/flow/telemetry/executor.go
 package telemetry
 
 import (
@@ -5,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/nexssp/kernel/ringbuf"
 	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/transport/codec"
 )
@@ -14,10 +16,10 @@ type ActionInvoker interface {
 }
 
 type HotPathExecutor struct {
-	ring *LockFreeRingBuffer
+	ring *ringbuf.Ring
 }
 
-func NewHotPathExecutor(ring *LockFreeRingBuffer) *HotPathExecutor {
+func NewHotPathExecutor(ring *ringbuf.Ring) *HotPathExecutor {
 	return &HotPathExecutor{ring: ring}
 }
 
@@ -37,7 +39,14 @@ func (e *HotPathExecutor) ExecuteNode(
 		}
 
 		if e.ring != nil {
-			e.ring.Push(nodeID, time.Now().UnixNano()-start, 0, status)
+			var s ringbuf.Slot
+
+			s.Timestamp = start
+			s.A = time.Now().UnixNano() - start // duration ns
+			s.B = 0                             // cost micros (unused here)
+			s.ID = nodeID
+			s.Status = status
+			e.ring.Push(&s)
 		}
 	}()
 
