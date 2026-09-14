@@ -11,6 +11,7 @@ import (
 	"github.com/nexssp/flow/journal"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/ai/dag"
+	"github.com/nexssp/kernel/xctx"
 	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/transport/codec"
 )
@@ -192,7 +193,7 @@ func (c *Compiler) Compile(ctx context.Context, def GraphDefinition) (*dag.DAG, 
 					execCtx,
 					"flow."+nodeSpec.ID,
 					string(payloadData),
-					ApprovalTokenFrom(execCtx),
+					xctx.ApprovalTokenFrom(execCtx),
 				); gateErr != nil {
 					return nil, gateErr
 				}

@@ -10,6 +10,7 @@ import (
 	"github.com/nexssp/flow"
 	"github.com/nexssp/flow/journal"
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xctx"
 	"github.com/nexssp/kernel/xerr"
 )
 
@@ -255,7 +256,7 @@ func TestGraph_ScopedApprovalEnforcement(t *testing.T) {
 	gate.Allow("tok_deploy")
 
 	state2 := flow.AcquireStateFromGraphState(flow.NewState(nil))
-	ctx := flow.WithApprovalToken(context.Background(), "tok_deploy")
+	ctx := xctx.WithApprovalToken(context.Background(), "tok_deploy")
 	out, err := dagInst.Execute(ctx, state2)
 	if err != nil {
 		t.Fatalf("expected execution to succeed with approved token, got: %v", err)

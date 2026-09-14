@@ -4,20 +4,27 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/nexssp/flow/contracts"
 	"github.com/nexssp/kernel/action"
 )
 
-type Registry interface {
-	Get(name string) (action.AnyAction, bool)
-	Actions() []action.AnyAction
-}
+// Aliases — istniejące sygnatury (flow.Registry, flow.PipelineCompiler)
+// działają bez zmian; to ten sam typ.
+type (
+	Registry         = contracts.Registry
+	PipelineCompiler = contracts.PipelineCompiler
+)
 
 type MapRegistry struct {
 	mu      sync.RWMutex
 	actions map[string]action.AnyAction
 }
 
-var _ Registry = (*MapRegistry)(nil)
+// MapRegistry niejawnie spełnia oba kontrakty.
+var (
+	_ contracts.Registry         = (*MapRegistry)(nil)
+	_ contracts.PipelineCompiler = (*MapRegistry)(nil)
+)
 
 func NewRegistry(actions ...action.AnyAction) *MapRegistry {
 	m := make(map[string]action.AnyAction, len(actions))

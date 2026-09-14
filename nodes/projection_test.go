@@ -28,6 +28,7 @@ func TestProjection_StandardSyntax(t *testing.T) {
 	}
 
 	input := map[string]any{"name": "Alice", "age": 25}
+
 	out, err := proj.Do(context.Background(), input)
 	if err != nil {
 		t.Fatalf("projection execution failed: %v", err)
@@ -41,6 +42,7 @@ func TestProjection_StandardSyntax(t *testing.T) {
 	if res["welcome"] != "Hello Alice" {
 		t.Errorf("expected 'Hello Alice', got %v", res["welcome"])
 	}
+
 	if res["is_adult"] != true {
 		t.Errorf("expected is_adult=true, got %v", res["is_adult"])
 	}
@@ -55,6 +57,7 @@ func TestProjection_JQSyntaxPrefix(t *testing.T) {
 	}
 
 	input := sampleUser{Name: "Bob", Tier: "pro", Age: 30}
+
 	out, err := proj.Do(context.Background(), input)
 	if err != nil {
 		t.Fatalf("projection execution failed: %v", err)

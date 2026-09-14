@@ -1,3 +1,4 @@
+// path: nexssp/flow/nodes/saga.go
 package nodes
 
 import (
@@ -5,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
 )
 
 type SagaStep struct {
@@ -13,40 +15,82 @@ type SagaStep struct {
 	Compensate action.AnyAction
 }
 
+// NewDynamicSaga chains steps: each step's output feeds the next step's
+// input. If a step fails, completed steps are compensated in LIFO order.
+//
+// This is deliberately distinct from kernel/action.NewSaga, which runs
+// every step against the same input. Here we need transformation
+// chaining with rollback, which the flow DSL authors expect from
+// `A -> B -> C` syntax.
 func NewDynamicSaga(name string, steps []SagaStep) *action.Builder[any, any] {
-	return action.New(name, func(ctx context.Context, input any) (any, error) {
-		executedSteps := make([]SagaStep, 0, len(steps))
-		currentOutput := input
+	// Validate once at construction, not per call.
+	execs := make([]action.Executable, len(steps))
 
-		for _, step := range steps {
-			exec, ok := step.Forward.(action.Executable)
+	undos := make([]action.Executable, len(steps))
+	for i, s := range steps {
+		if s.Forward == nil {
+			panic(fmt.Sprintf("saga %q: step %q has nil Forward", name, s.NodeID))
+		}
+
+		ex, ok := s.Forward.(action.Executable)
+		if !ok {
+			panic(fmt.Sprintf("saga %q: step %q Forward is not executable", name, s.NodeID))
+		}
+
+		execs[i] = ex
+
+		if s.Compensate != nil {
+			cx, ok := s.Compensate.(action.Executable)
 			if !ok {
-				return nil, fmt.Errorf("flow: saga node %s is not executable", step.NodeID)
+				panic(fmt.Sprintf("saga %q: step %q Compensate is not executable", name, s.NodeID))
 			}
 
-			out, err := exec.ExecuteDecoded(ctx, func(target any) error {
-				return decodePayload(currentOutput, target)
+			undos[i] = cx
+		}
+	}
+
+	return action.New(name, func(ctx context.Context, input any) (any, error) {
+		completed := make([]int, 0, len(steps))
+		current := input
+
+		for i, s := range steps {
+			out, err := execs[i].ExecuteDecoded(ctx, func(target any) error {
+				return decodePayload(current, target)
 			})
 			if err != nil {
-				// Compensate only steps that previously completed successfully in LIFO order
-				for i := len(executedSteps) - 1; i >= 0; i-- {
-					compStep := executedSteps[i]
-					if compStep.Compensate != nil {
-						if compExec, compOk := compStep.Compensate.(action.Executable); compOk {
-							_, _ = compExec.ExecuteDecoded(ctx, func(target any) error {
-								return decodePayload(input, target)
-							})
-						}
+				// Roll back completed steps in reverse order. Each
+				// compensation receives the original saga input, which
+				// is what the compensating action (e.g. cancel_flight)
+				// typically needs to identify the resource.
+				var rollbackErr error
+
+				for j := len(completed) - 1; j >= 0; j-- {
+					idx := completed[j]
+					if undos[idx] == nil {
+						continue
+					}
+
+					if _, cerr := undos[idx].ExecuteDecoded(ctx, func(target any) error {
+						return decodePayload(input, target)
+					}); cerr != nil && rollbackErr == nil {
+						rollbackErr = cerr
 					}
 				}
 
-				return nil, fmt.Errorf("saga aborted at %s: %w", step.NodeID, err)
+				if rollbackErr != nil {
+					return nil, xerr.Internal(
+						fmt.Sprintf("saga %q failed at step %q; rollback also failed", name, s.NodeID),
+						err,
+					)
+				}
+
+				return nil, fmt.Errorf("saga %q failed at step %q: %w", name, s.NodeID, err)
 			}
 
-			executedSteps = append(executedSteps, step)
-			currentOutput = out
+			completed = append(completed, i)
+			current = out
 		}
 
-		return currentOutput, nil
-	})
+		return current, nil
+	}).Tag("saga", "dynamic")
 }

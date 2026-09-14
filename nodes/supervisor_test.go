@@ -11,6 +11,7 @@ import (
 
 func TestSupervisor_DynamicChildSpawning(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 
 	// 1. Predefined Prompt Node

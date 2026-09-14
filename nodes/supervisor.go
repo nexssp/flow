@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/nexssp/flow/contracts"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 	"golang.org/x/sync/errgroup"
@@ -35,13 +36,9 @@ type SupervisorRes struct {
 	Results   []ChildResult `json:"results"`
 }
 
-type PipelineCompiler interface {
-	CompilePipeline(expr string) (action.Executable, error)
-}
-
 // NewSupervisorNode creates a main orchestrator node that compiles and
 // controls child pipelines dynamically with panic isolation and leak protection.
-func NewSupervisorNode(name string, compiler PipelineCompiler) action.AnyAction {
+func NewSupervisorNode(name string, compiler contracts.PipelineCompiler) action.AnyAction {
 	return action.New(name, func(ctx context.Context, req SupervisorReq) (SupervisorRes, error) {
 		if len(req.Tasks) == 0 {
 			return SupervisorRes{}, xerr.BadRequest("supervisor: no child tasks provided")
