@@ -10,6 +10,7 @@ func TestParseArrowDSL_ComplexTopology(t *testing.T) {
 	t.Parallel()
 
 	dsl := "srcpack.pack:arch#internal/auth~testdata@security -> (sec.audit & arch.review & perf.bench) -> review.gate"
+
 	def, err := flow.ParseArrowDSL("security_pipeline", dsl)
 	if err != nil {
 		t.Fatalf("ParseArrowDSL failed: %v", err)
@@ -34,15 +35,19 @@ func TestParseArrowDSL_ComplexTopology(t *testing.T) {
 	if firstNode.Capability != "srcpack.pack" {
 		t.Errorf("expected capability 'srcpack.pack', got %q", firstNode.Capability)
 	}
+
 	if firstNode.Params["profile"] != "arch" {
 		t.Errorf("expected profile 'arch', got %v", firstNode.Params["profile"])
 	}
+
 	if targets, ok := firstNode.Params["targets"].([]string); !ok || len(targets) != 1 || targets[0] != "internal/auth" {
 		t.Errorf("expected targets ['internal/auth'], got %v", firstNode.Params["targets"])
 	}
+
 	if excludes, ok := firstNode.Params["excludes"].([]string); !ok || len(excludes) != 1 || excludes[0] != "testdata" {
 		t.Errorf("expected excludes ['testdata'], got %v", firstNode.Params["excludes"])
 	}
+
 	if firstNode.Params["prompt"] != "security" {
 		t.Errorf("expected prompt 'security', got %v", firstNode.Params["prompt"])
 	}
@@ -74,6 +79,7 @@ func TestParseArrowDSL_ExplicitFieldBindings(t *testing.T) {
 	t.Parallel()
 
 	dsl := "srcpack.pack:arch#pkg -> security.audit(code=srcpack.pack.content, env=staging) -> review.gate"
+
 	def, err := flow.ParseArrowDSL("binding_pipeline", dsl)
 	if err != nil {
 		t.Fatalf("ParseArrowDSL failed: %v", err)

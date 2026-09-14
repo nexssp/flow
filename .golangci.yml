@@ -8,11 +8,16 @@ linters:
     - bodyclose
     - contextcheck
     - gocritic
+    - govet
+    - staticcheck
     - prealloc
     - revive
     - gosec
     - noctx
     - unconvert
+    - rowserrcheck
+    - sqlclosecheck
+    - wastedassign
   settings:
     gocritic:
       enabled-tags:
@@ -27,16 +32,11 @@ linters:
       enable-all: true
       disable:
         - fieldalignment
+        - shadow
     revive:
       rules:
         - name: exported
           disabled: true
-        - name: line-length-limit
-          arguments: [120]
-    wsl_v5:
-      allow-first-in-block: true
-      allow-whole-block: false
-      branch-max-lines: 2
   exclusions:
     generated: lax
     presets:
@@ -50,9 +50,6 @@ linters:
           - gocritic
           - prealloc
           - revive
-          - wsl
-          - wsl_v5
-          - govet
         path: _test\.go
     paths:
       - vendor

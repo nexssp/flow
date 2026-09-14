@@ -3,9 +3,10 @@ package flow
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
+	"github.com/nexssp/transport/codec"
 	"github.com/nexssp/transport/tcli"
 	"github.com/nexssp/transport/thttp"
 	"github.com/nexssp/transportai/ta2a"
@@ -39,12 +41,24 @@ type DynamicPolicy struct {
 	Description string
 }
 
-var globalCoalescer = action.NewCoalescer()
-
 func resolveDynamicNode(atom *compiler.AtomExpr, reg Registry) (*action.Builder[any, any], error) {
 	act, ok := reg.Get(atom.Name)
 	if !ok {
-		return nil, xerr.NotFound(fmt.Sprintf("flow: capability %q not found in registry", atom.Name))
+		// ── PREFLIGHT FAILURE: List all available capabilities ────────────────
+		var available []string
+
+		for _, a := range reg.Actions() {
+			if a != nil && a.Describe() != nil {
+				available = append(available, a.Describe().Name)
+			}
+		}
+
+		slices.Sort(available)
+
+		return nil, xerr.NotFound(fmt.Sprintf(
+			"PREFLIGHT CHECK FAILED: capability %q does not exist in registry.\n👉 Available capabilities (%d): %v",
+			atom.Name, len(available), available,
+		))
 	}
 
 	dyn := action.Dynamic(act)
@@ -76,25 +90,26 @@ func resolveDynamicNode(atom *compiler.AtomExpr, reg Registry) (*action.Builder[
 		dyn.Idempotent()
 	}
 
-	// Only add an HTTP route from DSL if the action does NOT already have an existing route in Go
 	if policy.HTTPPath != "" {
-		existingHasRoute := false
+		method := strings.ToUpper(policy.HTTPMethod)
+		if method == "" {
+			method = "POST"
+		}
+
+		newRoute := thttp.HTTPRoute{Method: method, Path: policy.HTTPPath}
 
 		for _, b := range act.GetBindings() {
-			switch b.(type) {
-			case thttp.HTTPRoute, thttp.SSERoute, thttp.RawHTTPHandler:
-				existingHasRoute = true
+			if r, ok := b.(thttp.HTTPRoute); ok {
+				if r.Path != newRoute.Path || r.Method != newRoute.Method {
+					return nil, xerr.Conflict(fmt.Sprintf(
+						"flow: ambiguous route for %q: Go defines (%s %s), but .flow defines (%s %s). Define it in only one place!",
+						atom.Name, r.Method, r.Path, newRoute.Method, newRoute.Path,
+					))
+				}
 			}
 		}
 
-		if !existingHasRoute {
-			method := strings.ToUpper(policy.HTTPMethod)
-			if method == "" {
-				method = "POST"
-			}
-
-			dyn.Route(thttp.HTTPRoute{Method: method, Path: policy.HTTPPath})
-		}
+		dyn.Route(newRoute)
 	}
 
 	if policy.CLICommand != "" {
@@ -107,13 +122,20 @@ func resolveDynamicNode(atom *compiler.AtomExpr, reg Registry) (*action.Builder[
 
 	hashFn := func(req any) string {
 		if req == nil {
-			return atom.Name + ":nil"
+			return atom.Name + ":<nil>"
 		}
 
-		b, _ := json.Marshal(req)
-		hash := sha256.Sum256(b)
+		b, err := codec.Default.Marshal(req)
+		if err != nil {
+			return atom.Name + ":err"
+		}
 
-		return atom.Name + ":" + fmt.Sprintf("%x", hash)
+		h := sha256.Sum256(b)
+
+		var buf [sha256.Size * 2]byte
+		hex.Encode(buf[:], h[:])
+
+		return atom.Name + ":" + string(buf[:])
 	}
 
 	if policy.CacheTTL > 0 {
@@ -121,7 +143,7 @@ func resolveDynamicNode(atom *compiler.AtomExpr, reg Registry) (*action.Builder[
 	}
 
 	if policy.Coalesce {
-		dyn.Coalesce(globalCoalescer, hashFn)
+		dyn.Coalesce(action.NewCoalescer(), hashFn)
 	}
 
 	if policy.Dedup {
@@ -188,17 +210,14 @@ func parseModifiers(modifiers []string) DynamicPolicy {
 		switch {
 		case strings.HasPrefix(pLower, "name="):
 			policy.CustomName = strings.Trim(strings.TrimPrefix(pClean, "name="), `"' `)
-
 		case strings.HasPrefix(pLower, "desc=") || strings.HasPrefix(pLower, "description="):
 			val := strings.TrimPrefix(pClean, "desc=")
 			val = strings.TrimPrefix(val, "description=")
 			policy.Description = strings.Trim(val, `"' `)
-
 		case strings.HasPrefix(pLower, "status="):
 			if code, err := strconv.Atoi(strings.TrimPrefix(pLower, "status=")); err == nil {
 				policy.StatusCode = code
 			}
-
 		case strings.HasPrefix(pLower, "route=") || strings.HasPrefix(pLower, "http="):
 			val := strings.TrimPrefix(pClean, "route=")
 			val = strings.TrimPrefix(val, "http=")
@@ -214,7 +233,6 @@ func parseModifiers(modifiers []string) DynamicPolicy {
 				policy.HTTPMethod = "POST"
 				policy.HTTPPath = parts[0]
 			}
-
 		case strings.HasPrefix(pLower, "cli="):
 			val := strings.TrimPrefix(pClean, "cli=")
 			val = strings.Trim(val, `"' `)
@@ -224,10 +242,8 @@ func parseModifiers(modifiers []string) DynamicPolicy {
 			if len(parts) > 1 {
 				policy.CLIDesc = parts[1]
 			}
-
 		case strings.HasPrefix(pLower, "role="):
 			policy.A2ARole = strings.Trim(strings.TrimPrefix(pClean, "role="), `"' `)
-
 		case strings.HasPrefix(pLower, "retry="):
 			if val, err := strconv.Atoi(strings.TrimPrefix(pLower, "retry=")); err == nil && val > 0 {
 				policy.RetryCount = val

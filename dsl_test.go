@@ -30,6 +30,7 @@ func (r *mockRegistry) Actions() []action.AnyAction {
 
 func TestDSL_PipeAndParallelScatterGather(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 
 	var packCalls, secCalls, archCalls, gateCalls atomic.Int32
@@ -54,6 +55,7 @@ func TestDSL_PipeAndParallelScatterGather(t *testing.T) {
 
 	actGate := action.New("review.gate", func(_ context.Context, reports map[string]any) (string, error) {
 		gateCalls.Add(1)
+
 		if reports["security.audit"] == nil || reports["architecture.review"] == nil {
 			t.Fatal("gate missing expected parallel branch outputs")
 		}

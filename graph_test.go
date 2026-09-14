@@ -28,12 +28,14 @@ func newMockApprovalGate() *mockApprovalGate {
 func (m *mockApprovalGate) Allow(token string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.approvals[token] = true
 }
 
 func (m *mockApprovalGate) Check(_ context.Context, _ string, _ string, token string) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if token != "" && m.approvals[token] {
 		return nil
 	}
@@ -45,6 +47,7 @@ func TestGraph_ArrowDSL_Parsing(t *testing.T) {
 	t.Parallel()
 
 	dsl := "srcpack.pack:arch#pkg~mocks@security -> (sec.audit & arch.review) -> gate.synthesizer"
+
 	def, err := flow.ParseArrowDSL("test_pipeline", dsl)
 	if err != nil {
 		t.Fatalf("ParseArrowDSL failed: %v", err)
@@ -53,6 +56,7 @@ func TestGraph_ArrowDSL_Parsing(t *testing.T) {
 	if len(def.Nodes) != 4 {
 		t.Fatalf("expected 4 nodes, got %d", len(def.Nodes))
 	}
+
 	if len(def.Edges) != 4 {
 		t.Fatalf("expected 4 edges (1 -> 2 fan-out, 2 -> 1 fan-in), got %d", len(def.Edges))
 	}
@@ -61,9 +65,11 @@ func TestGraph_ArrowDSL_Parsing(t *testing.T) {
 	if first.Capability != "srcpack.pack" {
 		t.Errorf("expected capability 'srcpack.pack', got %q", first.Capability)
 	}
+
 	if first.Params["profile"] != "arch" {
 		t.Errorf("expected profile 'arch', got %v", first.Params["profile"])
 	}
+
 	if first.Params["prompt"] != "security" {
 		t.Errorf("expected prompt 'security', got %v", first.Params["prompt"])
 	}
@@ -71,6 +77,7 @@ func TestGraph_ArrowDSL_Parsing(t *testing.T) {
 
 func TestGraph_CompilerAndExecutionTopology(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 
 	var packCalls, secCalls, archCalls, gateCalls atomic.Int32
@@ -113,6 +120,7 @@ func TestGraph_CompilerAndExecutionTopology(t *testing.T) {
 	if res.LayersRun != 3 {
 		t.Errorf("expected 3 topological layers (pack -> parallel fan-out -> gate), got %d", res.LayersRun)
 	}
+
 	if packCalls.Load() != 1 || secCalls.Load() != 1 || archCalls.Load() != 1 || gateCalls.Load() != 1 {
 		t.Fatalf("unexpected call counts: pack=%d, sec=%d, arch=%d, gate=%d",
 			packCalls.Load(), secCalls.Load(), archCalls.Load(), gateCalls.Load())
@@ -121,6 +129,7 @@ func TestGraph_CompilerAndExecutionTopology(t *testing.T) {
 
 func TestGraph_MultiBranchConditionalJournaling(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 
 	var codeCalls, fallbackCalls atomic.Int32
@@ -167,6 +176,7 @@ func TestGraph_MultiBranchConditionalJournaling(t *testing.T) {
 
 	state := flow.AcquireStateFromGraphState(flow.NewState(map[string]any{"intent": "code"}))
 	runCtx := action.WithExecutionID(ctx, "run_123")
+
 	outState, err := dagInst.Execute(runCtx, state)
 	if err != nil {
 		t.Fatalf("first DAG run failed: %v", err)
@@ -179,6 +189,7 @@ func TestGraph_MultiBranchConditionalJournaling(t *testing.T) {
 	}
 
 	stateMutated := flow.AcquireStateFromGraphState(flow.NewState(map[string]any{"intent": "unknown"}))
+
 	outStateReplayed, err := dagInst.Execute(runCtx, stateMutated)
 	if err != nil {
 		t.Fatalf("replayed DAG run failed: %v", err)
@@ -216,6 +227,7 @@ func TestGraph_ApprovalRequiresGateAtCompileTime(t *testing.T) {
 
 	gate := newMockApprovalGate()
 	compilerWithGate := flow.NewCompiler(registry, flow.WithApprovalGate(gate))
+
 	_, _, err = compilerWithGate.Compile(context.Background(), def)
 	if err != nil {
 		t.Fatalf("expected compilation to succeed with gate, got: %v", err)
@@ -248,6 +260,7 @@ func TestGraph_ScopedApprovalEnforcement(t *testing.T) {
 	}
 
 	state := flow.AcquireStateFromGraphState(flow.NewState(nil))
+
 	_, err = dagInst.Execute(context.Background(), state)
 	if err == nil {
 		t.Fatal("expected approval failure when token is missing")
@@ -257,6 +270,7 @@ func TestGraph_ScopedApprovalEnforcement(t *testing.T) {
 
 	state2 := flow.AcquireStateFromGraphState(flow.NewState(nil))
 	ctx := xctx.WithApprovalToken(context.Background(), "tok_deploy")
+
 	out, err := dagInst.Execute(ctx, state2)
 	if err != nil {
 		t.Fatalf("expected execution to succeed with approved token, got: %v", err)

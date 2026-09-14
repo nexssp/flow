@@ -11,6 +11,7 @@ import (
 func TestParser_Example(t *testing.T) {
 	input := `github.issue:arch#pkg~testdata@security -> { prompt: "Triage: " + issue.title } -> ai.triage`
 	parser := compiler.NewParser(input)
+
 	ast, err := parser.ParseExpression()
 	if err != nil {
 		t.Fatal(err)

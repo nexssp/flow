@@ -10,6 +10,7 @@ import (
 
 func TestGraph_ExecuteAction_DualInputModes(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 
 	actStepA := action.New("step.a", func(_ context.Context, _ map[string]any) (string, error) {
@@ -31,6 +32,7 @@ func TestGraph_ExecuteAction_DualInputModes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DSL execution failed: %v", err)
 	}
+
 	if resDSL.LayersRun != 2 {
 		t.Errorf("expected 2 layers, got %d", resDSL.LayersRun)
 	}
@@ -51,12 +53,14 @@ edges:
   - from: node_1
     to: node_2
 `
+
 	resYAML, err := flow.Execute(ctx, execAction, flow.GraphExecReq{
 		YAML: yamlManifest,
 	})
 	if err != nil {
 		t.Fatalf("YAML execution failed: %v", err)
 	}
+
 	if resYAML.GraphName != "yaml-pipeline" || resYAML.LayersRun != 2 {
 		t.Errorf("unexpected YAML execution output: %+v", resYAML)
 	}

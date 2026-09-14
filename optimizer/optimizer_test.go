@@ -33,13 +33,13 @@ func createTestRegistry() flow.Registry {
 
 func TestEvolve_InvalidBaseline(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 	reg := createTestRegistry()
 
 	_, err := optimizer.Evolve(ctx, "invalid -> -> dsl", reg, func(_ context.Context, _ action.AnyAction) (float64, error) {
 		return 10.0, nil
 	}, optimizer.Options{})
-
 	if err == nil {
 		t.Fatal("expected error on malformed baseline DSL, got nil")
 	}
@@ -47,13 +47,13 @@ func TestEvolve_InvalidBaseline(t *testing.T) {
 
 func TestEvolve_EvaluatorFailure(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 	reg := createTestRegistry()
 
 	_, err := optimizer.Evolve(ctx, "fetch -> save", reg, func(_ context.Context, _ action.AnyAction) (float64, error) {
 		return 0, context.Canceled
 	}, optimizer.Options{})
-
 	if err == nil {
 		t.Fatal("expected error when evaluator fails baseline, got nil")
 	}
@@ -61,6 +61,7 @@ func TestEvolve_EvaluatorFailure(t *testing.T) {
 
 func TestEvolve_DiscoversHigherScore(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 	reg := createTestRegistry()
 
@@ -69,10 +70,12 @@ func TestEvolve_DiscoversHigherScore(t *testing.T) {
 	// Fitness function gives huge bonus for parallelizing ( & ) or adding retries (:retry=2)
 	evaluator := func(evalCtx context.Context, candidate action.AnyAction) (float64, error) {
 		meta := candidate.Describe()
+
 		name := ""
 		if meta != nil {
 			name = meta.Name
 		}
+
 		_ = name
 
 		// Test execution to guarantee the candidate compiles and runs cleanly
@@ -80,6 +83,7 @@ func TestEvolve_DiscoversHigherScore(t *testing.T) {
 		if err != nil {
 			return -100.0, nil
 		}
+
 		if res == nil {
 			return -50.0, nil
 		}
@@ -90,8 +94,10 @@ func TestEvolve_DiscoversHigherScore(t *testing.T) {
 	}
 
 	var evalCalls atomic.Int32
+
 	countingEvaluator := func(evalCtx context.Context, candidate action.AnyAction) (float64, error) {
 		evalCalls.Add(1)
+
 		score, _ := evaluator(evalCtx, candidate)
 
 		return score, nil
@@ -108,9 +114,11 @@ func TestEvolve_DiscoversHigherScore(t *testing.T) {
 	if best.DSL == "" {
 		t.Fatal("expected non-empty best DSL")
 	}
+
 	if best.Score < 10.0 {
 		t.Errorf("expected score >= 10.0, got %f", best.Score)
 	}
+
 	if evalCalls.Load() < 2 {
 		t.Errorf("expected multiple candidate evaluations, got %d", evalCalls.Load())
 	}
@@ -118,6 +126,7 @@ func TestEvolve_DiscoversHigherScore(t *testing.T) {
 
 func TestEvolve_ParallelScoreBonus(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 	reg := createTestRegistry()
 
@@ -149,6 +158,7 @@ func TestEvolve_ParallelScoreBonus(t *testing.T) {
 
 func TestEvolve_SingleNodePipeline(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 	reg := createTestRegistry()
 
@@ -161,6 +171,7 @@ func TestEvolve_SingleNodePipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error on single node evolution: %v", err)
 	}
+
 	if best.Score != 42.0 {
 		t.Errorf("expected score 42.0, got %f", best.Score)
 	}

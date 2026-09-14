@@ -96,6 +96,7 @@ func TestDSL_Modifiers_Validation(t *testing.T) {
 
 	// 1. Valid payload passes
 	valid := ValidationTarget{Name: "Alexander", Email: "alex@nexss.com"}
+
 	res, err := built.Do(context.Background(), valid)
 	if err != nil || res != "saved:Alexander" {
 		t.Fatalf("valid payload failed validation: %v", err)
@@ -103,6 +104,7 @@ func TestDSL_Modifiers_Validation(t *testing.T) {
 
 	// 2. Invalid payload (name too short, invalid email) rejected immediately
 	invalid := ValidationTarget{Name: "Al", Email: "not-an-email"}
+
 	_, err = built.Do(context.Background(), invalid)
 	if err == nil {
 		t.Fatal("expected validation error on invalid struct, got nil")
@@ -146,6 +148,7 @@ func TestDSL_Modifiers_Coalesce(t *testing.T) {
 	t.Parallel()
 
 	var heavyCalls atomic.Int32
+
 	gate := make(chan struct{})
 
 	heavyAct := action.New("heavy.compute", func(_ context.Context, id string) (string, error) {
@@ -166,12 +169,14 @@ func TestDSL_Modifiers_Coalesce(t *testing.T) {
 	built := pipeline.Build()
 
 	const concurrent = 10
+
 	var wg sync.WaitGroup
 	wg.Add(concurrent)
 
 	for i := 0; i < concurrent; i++ {
 		go func() {
 			defer wg.Done()
+
 			_, _ = built.Do(context.Background(), "same_key")
 		}()
 	}
@@ -212,6 +217,7 @@ func TestDSL_AttributesAndParameters_Injection(t *testing.T) {
 	}
 
 	input := map[string]any{"user_id": "usr_100"}
+
 	_, err = pipeline.Build().Do(context.Background(), input)
 	if err != nil {
 		t.Fatalf("execution failed: %v", err)
@@ -220,12 +226,15 @@ func TestDSL_AttributesAndParameters_Injection(t *testing.T) {
 	if capturedMap["profile"] != "arch" {
 		t.Errorf("expected profile 'arch', got %v", capturedMap["profile"])
 	}
+
 	if capturedMap["prompt"] != "security_audit" {
 		t.Errorf("expected prompt 'security_audit', got %v", capturedMap["prompt"])
 	}
+
 	if capturedMap["env"] != "staging" {
 		t.Errorf("expected env 'staging', got %v", capturedMap["env"])
 	}
+
 	if capturedMap["max_depth"] != "5" {
 		t.Errorf("expected max_depth '5', got %v", capturedMap["max_depth"])
 	}

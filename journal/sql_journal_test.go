@@ -63,6 +63,7 @@ func TestSQLBranchJournal_DurableRecordAndReplay(t *testing.T) {
 	if len(stored) != 2 {
 		t.Fatalf("expected 2 stored records, got %d", len(stored))
 	}
+
 	if stored[0].Status != journal.BranchSelected || stored[1].Status != journal.BranchSkipped {
 		t.Fatalf("unexpected statuses in stored journal: %+v", stored)
 	}
