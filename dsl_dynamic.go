@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
+	"github.com/nexssp/ops/dsl"
 	"github.com/nexssp/transport/codec"
 	"github.com/nexssp/transport/tcli"
 	"github.com/nexssp/transport/thttp"
@@ -21,30 +21,9 @@ import (
 	"github.com/nexssp/validation"
 )
 
-type DynamicPolicy struct {
-	RetryCount  int
-	Timeout     time.Duration
-	CacheTTL    time.Duration
-	Idempotent  bool
-	Breaker     bool
-	Debug       bool
-	Validate    bool
-	Coalesce    bool
-	Dedup       bool
-	HTTPMethod  string
-	HTTPPath    string
-	StatusCode  int
-	CLICommand  string
-	CLIDesc     string
-	A2ARole     string
-	CustomName  string
-	Description string
-}
-
 func resolveDynamicNode(atom *compiler.AtomExpr, reg Registry) (*action.Builder[any, any], error) {
 	act, ok := reg.Get(atom.Name)
 	if !ok {
-		// ── PREFLIGHT FAILURE: List all available capabilities ────────────────
 		var available []string
 
 		for _, a := range reg.Actions() {
@@ -62,41 +41,77 @@ func resolveDynamicNode(atom *compiler.AtomExpr, reg Registry) (*action.Builder[
 	}
 
 	dyn := action.Dynamic(act)
-	policy := parseModifiers(atom.Modifiers)
 
-	if policy.CustomName != "" {
-		dyn.Name(policy.CustomName)
+	// Build line fragment and parse using canonical ops/dsl parser
+	lineFragment := atom.Name
+	if len(atom.Modifiers) > 0 {
+		lineFragment += ":" + strings.Join(atom.Modifiers, ":")
+	}
+
+	parsedLine, _ := dsl.ParseLine(lineFragment)
+	mod := parsedLine.Modifiers
+
+	if mod.CustomName != "" {
+		dyn.Name(mod.CustomName)
 	} else {
 		dyn.Name(atom.Name)
 	}
 
-	if policy.Description != "" {
-		dyn.Description(policy.Description)
+	if mod.Description != "" {
+		dyn.Description(mod.Description)
 	}
 
-	if policy.StatusCode > 0 {
-		dyn.SuccessStatus(policy.StatusCode)
+	if mod.SuccessStatus > 0 {
+		dyn.SuccessStatus(mod.SuccessStatus)
 	}
 
-	if policy.Timeout > 0 {
-		dyn.Timeout(policy.Timeout)
+	if mod.Timeout > 0 {
+		dyn.Timeout(mod.Timeout)
 	}
 
-	if policy.RetryCount > 0 {
-		dyn.Retry(policy.RetryCount, action.ExponentialJitter(20*time.Millisecond, 500*time.Millisecond))
+	if mod.ConcurrencyLimit > 0 {
+		dyn.ConcurrencyLimit(mod.ConcurrencyLimit)
 	}
 
-	if policy.Idempotent {
-		dyn.Idempotent()
+	if mod.RetryMax > 0 {
+		backoff := ExponentialJitterOr(mod.BackoffBase, mod.BackoffMax)
+		if mod.RetryPredicate != "" {
+			dyn.RetryIf(mod.RetryMax, backoff, action.AlwaysRetryPredicate)
+		} else {
+			dyn.Retry(mod.RetryMax, backoff)
+		}
 	}
 
-	if policy.HTTPPath != "" {
-		method := strings.ToUpper(policy.HTTPMethod)
+	if mod.Idempotent {
+		if mod.IdempotencyHeader != "" {
+			dyn.IdempotentWithConfig(action.IdempotencyConfig{
+				Enabled:   true,
+				KeyHeader: mod.IdempotencyHeader,
+			})
+		} else {
+			dyn.Idempotent()
+		}
+	}
+
+	if mod.RateLimitRPS > 0 {
+		burst := mod.RateLimitBurst
+		if burst <= 0 {
+			burst = int(mod.RateLimitRPS)
+			if burst < 1 {
+				burst = 1
+			}
+		}
+
+		dyn.RateLimit(mod.RateLimitRPS, burst)
+	}
+
+	if mod.Path != "" {
+		method := strings.ToUpper(mod.Method)
 		if method == "" {
 			method = "POST"
 		}
 
-		newRoute := thttp.HTTPRoute{Method: method, Path: policy.HTTPPath}
+		newRoute := thttp.HTTPRoute{Method: method, Path: mod.Path}
 
 		for _, b := range act.GetBindings() {
 			if r, ok := b.(thttp.HTTPRoute); ok {
@@ -112,12 +127,30 @@ func resolveDynamicNode(atom *compiler.AtomExpr, reg Registry) (*action.Builder[
 		dyn.Route(newRoute)
 	}
 
-	if policy.CLICommand != "" {
-		dyn.Route(tcli.Command(policy.CLICommand, policy.CLIDesc))
+	for i := range mod.Transports {
+		t := &mod.Transports[i]
+		switch t.Kind {
+		case "cli":
+			dyn.Route(tcli.Command(t.Target, mod.CLIDesc).WithAliases(t.Aliases...))
+		case "a2a":
+			dyn.Route(ta2a.Role(t.Target).WithDescription(mod.A2ADesc))
+		}
 	}
 
-	if policy.A2ARole != "" {
-		dyn.Route(ta2a.Role(policy.A2ARole))
+	for _, role := range mod.Roles {
+		dyn.RequireRole(role)
+	}
+
+	for _, perm := range mod.Permissions {
+		dyn.RequirePermission(perm)
+	}
+
+	for _, feat := range mod.Features {
+		dyn.RequireFeature(feat)
+	}
+
+	if mod.RequiresAuth {
+		dyn.RequireAuth()
 	}
 
 	hashFn := func(req any) string {
@@ -138,30 +171,28 @@ func resolveDynamicNode(atom *compiler.AtomExpr, reg Registry) (*action.Builder[
 		return atom.Name + ":" + string(buf[:])
 	}
 
-	if policy.CacheTTL > 0 {
-		dyn.Cache(policy.CacheTTL, hashFn)
+	if mod.CacheTTL > 0 {
+		dyn.Cache(mod.CacheTTL, hashFn)
 	}
 
-	if policy.Coalesce {
-		dyn.Coalesce(action.NewCoalescer(), hashFn)
-	}
+	// Check boolean modifier flags
+	for _, rawMod := range atom.Modifiers {
+		switch strings.ToLower(strings.TrimSpace(rawMod)) {
+		case "coalesce":
+			dyn.Coalesce(action.NewCoalescer(), hashFn)
+		case "dedup":
+			dyn.Dedup(hashFn)
+		case "debug":
+			dyn.LogCalls(slog.Default())
+		case "validate":
+			dyn.Validate(func(ctx context.Context, req any) error {
+				if req != nil {
+					return validation.Struct(ctx, req)
+				}
 
-	if policy.Dedup {
-		dyn.Dedup(hashFn)
-	}
-
-	if policy.Debug {
-		dyn.LogCalls(slog.Default())
-	}
-
-	if policy.Validate {
-		dyn.Validate(func(ctx context.Context, req any) error {
-			if req != nil {
-				return validation.Struct(ctx, req)
-			}
-
-			return nil
-		})
+				return nil
+			})
+		}
 	}
 
 	hasInjections := len(atom.Params) > 0 || len(atom.Inputs) > 0 ||
@@ -199,77 +230,14 @@ func resolveDynamicNode(atom *compiler.AtomExpr, reg Registry) (*action.Builder[
 	return dyn, nil
 }
 
-func parseModifiers(modifiers []string) DynamicPolicy {
-	var policy DynamicPolicy
-
-	for _, p := range modifiers {
-		p = strings.TrimSpace(p)
-		pClean := strings.Trim(p, `"'`)
-		pLower := strings.ToLower(pClean)
-
-		switch {
-		case strings.HasPrefix(pLower, "name="):
-			policy.CustomName = strings.Trim(strings.TrimPrefix(pClean, "name="), `"' `)
-		case strings.HasPrefix(pLower, "desc=") || strings.HasPrefix(pLower, "description="):
-			val := strings.TrimPrefix(pClean, "desc=")
-			val = strings.TrimPrefix(val, "description=")
-			policy.Description = strings.Trim(val, `"' `)
-		case strings.HasPrefix(pLower, "status="):
-			if code, err := strconv.Atoi(strings.TrimPrefix(pLower, "status=")); err == nil {
-				policy.StatusCode = code
-			}
-		case strings.HasPrefix(pLower, "route=") || strings.HasPrefix(pLower, "http="):
-			val := strings.TrimPrefix(pClean, "route=")
-			val = strings.TrimPrefix(val, "http=")
-			val = strings.TrimPrefix(val, "ROUTE=")
-			val = strings.TrimPrefix(val, "HTTP=")
-			val = strings.Trim(val, `"' `)
-
-			parts := strings.Fields(val)
-			if len(parts) == 2 {
-				policy.HTTPMethod = parts[0]
-				policy.HTTPPath = parts[1]
-			} else if len(parts) == 1 {
-				policy.HTTPMethod = "POST"
-				policy.HTTPPath = parts[0]
-			}
-		case strings.HasPrefix(pLower, "cli="):
-			val := strings.TrimPrefix(pClean, "cli=")
-			val = strings.Trim(val, `"' `)
-			parts := strings.SplitN(val, ":", 2)
-
-			policy.CLICommand = parts[0]
-			if len(parts) > 1 {
-				policy.CLIDesc = parts[1]
-			}
-		case strings.HasPrefix(pLower, "role="):
-			policy.A2ARole = strings.Trim(strings.TrimPrefix(pClean, "role="), `"' `)
-		case strings.HasPrefix(pLower, "retry="):
-			if val, err := strconv.Atoi(strings.TrimPrefix(pLower, "retry=")); err == nil && val > 0 {
-				policy.RetryCount = val
-			}
-		case strings.HasPrefix(pLower, "timeout="):
-			if dur, err := time.ParseDuration(strings.TrimPrefix(pLower, "timeout=")); err == nil && dur > 0 {
-				policy.Timeout = dur
-			}
-		case strings.HasPrefix(pLower, "cache="):
-			if dur, err := time.ParseDuration(strings.TrimPrefix(pLower, "cache=")); err == nil && dur > 0 {
-				policy.CacheTTL = dur
-			}
-		case pLower == "idempotent":
-			policy.Idempotent = true
-		case pLower == "breaker":
-			policy.Breaker = true
-		case pLower == "debug":
-			policy.Debug = true
-		case pLower == "validate":
-			policy.Validate = true
-		case pLower == "coalesce":
-			policy.Coalesce = true
-		case pLower == "dedup":
-			policy.Dedup = true
-		}
+func ExponentialJitterOr(base, maxDelay time.Duration) func(attempt int) time.Duration {
+	if base <= 0 {
+		base = 20 * time.Millisecond
 	}
 
-	return policy
+	if maxDelay <= 0 {
+		maxDelay = 500 * time.Millisecond
+	}
+
+	return action.ExponentialJitter(base, maxDelay)
 }
