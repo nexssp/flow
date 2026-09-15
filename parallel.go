@@ -1,4 +1,3 @@
-// path: flow/parallel.go
 package flow
 
 import (

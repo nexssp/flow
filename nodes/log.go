@@ -1,5 +1,3 @@
-// path: nexssp/flow/nodes/log.go
-//
 // Log nodes. Input is a map so a log node can be inserted anywhere in a
 // pipeline without a projection: the previous node's output is logged as
 // structured attributes and passed through unchanged.

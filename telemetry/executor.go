@@ -1,4 +1,3 @@
-// path: nexssp/flow/telemetry/executor.go
 package telemetry
 
 import (

@@ -1,4 +1,3 @@
-// path: nexssp/flow/nodes/saga.go
 package nodes
 
 import (

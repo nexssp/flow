@@ -1,5 +1,3 @@
-// path: nexssp/flow/aliases.go
-//
 // Human-readable aliases for registered actions. An alias points at the
 // SAME *BuiltAction as its canonical name; no wrapper, no reflection.
 // Resolved once at boot; the DSL compiler sees an ordinary registry entry.
