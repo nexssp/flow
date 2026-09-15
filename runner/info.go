@@ -28,8 +28,14 @@ type FlowStep struct {
 	Prompt string
 }
 
-// PrintFlowInfo now takes ctx so WASM resolver construction is cancellable.
-func PrintFlowInfo(ctx context.Context, out io.Writer, req Request) int {
+// PrintFlowInfo inspects a .flow file and prints its pipeline
+// topography, entry payload shape, and per-node action metadata.
+//
+// reg is the registry used to resolve each node name. Pass the same
+// registry the flow will execute against so the info output matches
+// what the flow would actually call. Pass nil to fall back to the
+// domainless standard library.
+func PrintFlowInfo(ctx context.Context, out io.Writer, req Request, reg *flow.MapRegistry) int {
 	manifest, err := os.ReadFile(req.Path)
 	if err != nil {
 		fmt.Fprintf(out, "❌ failed to read flow file %q: %v\n", req.Path, err)
@@ -44,11 +50,15 @@ func PrintFlowInfo(ctx context.Context, out io.Writer, req Request) int {
 		return 1
 	}
 
-	reg, err := BuildStaticRegistry()
-	if err != nil {
-		fmt.Fprintf(out, "❌ failed to build registry: %v\n", err)
+	if reg == nil {
+		fallback, ferr := flow.BuildRegistry(flow.StandardLibrary())
+		if ferr != nil {
+			fmt.Fprintf(out, "❌ failed to build fallback registry: %v\n", ferr)
 
-		return 1
+			return 1
+		}
+
+		reg = fallback
 	}
 
 	resolver, err := capability.NewResolver(ctx, reg, string(manifest))

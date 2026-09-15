@@ -1,5 +1,3 @@
-// path: nexssp/flow/runner/bootstrap/assembly.go
-//
 // Assembly is the single composition pipeline for a nexss binary. Every
 // capability on App is a loader: a function that receives the accumulating
 // action set and appends to it. Loaders run in declaration order, which

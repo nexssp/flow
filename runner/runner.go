@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	aiflow "github.com/nexssp/ai/flow"
 	"github.com/nexssp/cost"
 	"github.com/nexssp/flow"
 	"github.com/nexssp/flow/runner/capability"
@@ -44,35 +43,10 @@ type Request struct {
 	Stderr io.Writer
 }
 
-func RunFlow(ctx context.Context, req Request) int {
-	stdout := req.Stdout
-	if stdout == nil {
-		stdout = os.Stdout
-	}
-
-	observer := NewRunnerObserver(stdout, req.Verbosity)
-
-	reg, err := BuildStaticRegistryWithObserver(observer)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "❌ failed to build capability registry: %v\n", err)
-
-		return 1
-	}
-
-	return RunWithRegistry(ctx, req, reg, observer)
-}
-
-func RunWithCustomRegistry(ctx context.Context, req Request, reg *flow.MapRegistry) int {
-	stdout := req.Stdout
-	if stdout == nil {
-		stdout = os.Stdout
-	}
-
-	observer := NewRunnerObserver(stdout, req.Verbosity)
-
-	return RunWithRegistry(ctx, req, reg, observer)
-}
-
+// RunWithRegistry executes a flow against the caller-supplied registry.
+// Use this when you already know what actions the flow may call. For
+// the AI-flavoured entry point that builds a standard AI registry, see
+// ai/flow/bootstrap.RunFlow.
 func RunWithRegistry(ctx context.Context, req Request, reg *flow.MapRegistry, observer *RunnerObserver) int {
 	stdout := req.Stdout
 	if stdout == nil {
@@ -98,8 +72,7 @@ func RunWithRegistry(ctx context.Context, req Request, reg *flow.MapRegistry, ob
 	}
 
 	if useInfo {
-		// contextcheck fix: forward ctx so WASM compilation can be cancelled.
-		return PrintFlowInfo(ctx, stdout, req)
+		return PrintFlowInfo(ctx, stdout, req, reg)
 	}
 
 	pre, err := flow.Preprocess(req.Path)
@@ -287,7 +260,6 @@ func RunWithRegistry(ctx context.Context, req Request, reg *flow.MapRegistry, ob
 		fmt.Fprintf(stdout, "[%s] ⚙ compile    pipeline ready\n", tNow)
 	}
 
-	// contextcheck fix: forward ctx so WASM compilation can be cancelled.
 	resolver, err := capability.NewResolver(ctx, reg, manifestStr)
 	if err == nil {
 		defer resolver.Close()
@@ -312,7 +284,7 @@ func RunWithRegistry(ctx context.Context, req Request, reg *flow.MapRegistry, ob
 	scope.ExecutionID = runID
 
 	if cfg.MaxTokens > 0 {
-		runCtx = aiflow.WithMaxTokens(runCtx, cfg.MaxTokens)
+		runCtx = flow.WithMaxTokens(runCtx, cfg.MaxTokens)
 	}
 
 	payload := make(map[string]any, len(req.Payload)+len(resumeState))

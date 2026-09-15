@@ -1,5 +1,11 @@
 package flow
 
+import (
+	"context"
+
+	"github.com/nexssp/kernel/xctx"
+)
+
 // Layer identifies where a resolved config value came from. The runner
 // prints the layer next to each value at -vvv so the operator can see
 // whether a knob came from the CLI, the environment, the .flow file,
@@ -90,4 +96,34 @@ func markAllDefaults(prov map[string]Layer) {
 	for _, k := range knobKeys {
 		prov[k] = LayerDefault
 	}
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Per-run token budget
+//
+// WithMaxTokens stores a per-run MaxTokens override in the context.
+// Nodes read it with MaxTokensFromCtx and fall back to their own
+// default when it is absent or non-positive.
+//
+// The value is domainless: any node that wants a token budget can read
+// it. The AI nodes happen to be the ones that do today.
+// ─────────────────────────────────────────────────────────────────────
+
+var maxTokensKey = xctx.NewKey[int]("flow.max_tokens")
+
+func WithMaxTokens(ctx context.Context, n int) context.Context {
+	if n <= 0 {
+		return ctx
+	}
+	return maxTokensKey.With(ctx, n)
+}
+
+func MaxTokensFromCtx(ctx context.Context, def int) int {
+	if ctx == nil {
+		return def
+	}
+	if v, ok := maxTokensKey.From(ctx); ok && v > 0 {
+		return v
+	}
+	return def
 }

@@ -1,5 +1,3 @@
-// path: nexssp/bootstrap/console/console.go
-//
 // Package console exposes a small, generic, self-contained web UI for any
 // Nexss binary. It lists the registered actions and lets you invoke one
 // with a JSON payload. It is intentionally minimal — a debugging surface,

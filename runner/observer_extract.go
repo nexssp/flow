@@ -3,26 +3,35 @@ package runner
 import (
 	"time"
 
-	"github.com/nexssp/ai/llm"
+	"github.com/nexssp/cost"
 )
 
+// tokenCostReporter is the domainless shape a result can implement to
+// report its own token count and cost. Micros are currency-agnostic;
+// the currency itself is reported separately through currencyReporter.
+//
+// A result that reports tokens but no cost is fine: return 0 for
+// micros and the observer renders the cost column as "-".
 type tokenCostReporter interface {
 	Tokens() (int, int)
-	CostUSD() int64
+	CostMicros() int64
 }
 
-// timeNow is a swappable clock for tests. Assigning time.Now directly
-// (instead of wrapping it in a lambda) keeps the compiler happy and
-// silences gocritic's unlambda check, while remaining test-overridable.
+// currencyReporter is optional. When absent, the observer assumes USD,
+// matching cost.USD which is the default in cost.NewLedger.
+type currencyReporter interface {
+	Currency() cost.Currency
+}
+
+// timeNow is a swappable clock for tests.
 var timeNow = time.Now
 
-func extractPrompt(req any) string {
+// extractPromptGeneric returns a prompt-like string from a request.
+// It understands the two domainless shapes every non-AI caller uses:
+// a map with "prompt" or "goal", or anything else (returns empty).
+func extractPromptGeneric(req any) string {
 	if req == nil {
 		return ""
-	}
-
-	if llmReq, ok := req.(llm.Request); ok && len(llmReq.Messages) > 0 {
-		return llmReq.Messages[len(llmReq.Messages)-1].Content
 	}
 
 	if m, ok := req.(map[string]any); ok {
@@ -38,42 +47,24 @@ func extractPrompt(req any) string {
 	return ""
 }
 
-func extractTokensAndCost(res any) (int, int, int64, bool) {
+// extractTokensAndCostGeneric is the domainless fallback. It returns
+// (prompt, completion, micros, currency, known).
+func extractTokensAndCostGeneric(res any) (int, int, int64, cost.Currency, bool) {
 	if res == nil {
-		return 0, 0, 0, false
+		return 0, 0, 0, cost.USD, false
 	}
 
-	if r, ok := res.(*llm.Response); ok && r != nil {
-		_, _, known := r.Cost()
-
-		return r.PromptTokens, r.CompTokens, int64(r.CostMicros()), known
+	r, ok := res.(tokenCostReporter)
+	if !ok {
+		return 0, 0, 0, cost.USD, false
 	}
 
-	if r, ok := res.(llm.Response); ok {
-		_, _, known := r.Cost()
+	in, out := r.Tokens()
 
-		return r.PromptTokens, r.CompTokens, int64(r.CostMicros()), known
+	curr := cost.USD
+	if c, ok := res.(currencyReporter); ok {
+		curr = c.Currency()
 	}
 
-	if u, ok := res.(llm.Usage); ok {
-		_, _, known := llm.CalculateCost(
-			u.Model, u.PromptTokens, u.CachedPromptTokens, u.CompTokens, timeNow())
-
-		return u.PromptTokens, u.CompTokens, u.CostUSD(), known
-	}
-
-	if u, ok := res.(*llm.Usage); ok && u != nil {
-		_, _, known := llm.CalculateCost(
-			u.Model, u.PromptTokens, u.CachedPromptTokens, u.CompTokens, timeNow())
-
-		return u.PromptTokens, u.CompTokens, u.CostUSD(), known
-	}
-
-	if r, ok := res.(tokenCostReporter); ok {
-		in, out := r.Tokens()
-
-		return in, out, r.CostUSD(), true
-	}
-
-	return 0, 0, 0, false
+	return in, out, r.CostMicros(), curr, true
 }
