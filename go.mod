@@ -6,13 +6,13 @@ require (
 	github.com/expr-lang/expr v1.17.8
 	github.com/joho/godotenv v1.5.1
 	github.com/ncruces/go-sqlite3 v0.35.4
-	github.com/nexssp/cost v0.1.3
-	github.com/nexssp/cost/adapters/kernel v0.1.3
+	github.com/nexssp/cost v0.1.5
+	github.com/nexssp/cost/adapters/kernel v0.1.5
 	github.com/nexssp/kernel v0.11.2
-	github.com/nexssp/testkit v0.2.0
-	github.com/nexssp/transport v0.2.1
-	github.com/nexssp/transportai v0.8.1
-	github.com/nexssp/validation v0.1.2
+	github.com/nexssp/testkit v0.3.3
+	github.com/nexssp/transport v0.2.3
+	github.com/nexssp/transportai v0.8.3
+	github.com/nexssp/validation v0.1.4
 	github.com/tetratelabs/wazero v1.12.0
 	golang.org/x/sync v0.23.0
 	gopkg.in/yaml.v3 v3.0.1
