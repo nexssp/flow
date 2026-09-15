@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"strconv"
+	"strings"
 	"unicode"
 )
 
@@ -24,8 +25,8 @@ func (l *Lexer) Next() Token {
 	}
 
 	offset := l.pos
-
 	ch := l.input[l.pos]
+
 	switch {
 	case ch == '(':
 		l.pos++
@@ -63,10 +64,19 @@ func (l *Lexer) Next() Token {
 
 		return Token{Type: TokenAssign, Lit: "=", Line: l.line, Col: l.col - 1, Offset: offset}
 	case ch == '@':
+		// Prompt modifier: consumes until the end of the current line
+		start := l.pos
 		l.pos++
-		l.col++
 
-		return Token{Type: TokenAt, Lit: "@", Line: l.line, Col: l.col - 1, Offset: offset}
+		l.col++
+		for l.pos < len(l.input) && l.input[l.pos] != '\n' {
+			l.pos++
+			l.col++
+		}
+
+		lit := strings.TrimSpace(l.input[start+1 : l.pos])
+
+		return Token{Type: TokenAtPrompt, Lit: lit, Line: l.line, Col: l.col - len(lit), Offset: offset}
 	case ch == '#':
 		l.pos++
 		l.col++

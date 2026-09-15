@@ -74,7 +74,6 @@ func (p *Parser) parseExpr() (Expr, error) {
 	return p.parseConditional()
 }
 
-// parseConditional handles '?'
 func (p *Parser) parseConditional() (Expr, error) {
 	gate, err := p.parseFallback()
 	if err != nil {
@@ -95,7 +94,6 @@ func (p *Parser) parseConditional() (Expr, error) {
 	return gate, nil
 }
 
-// parseFallback handles '||'
 func (p *Parser) parseFallback() (Expr, error) {
 	left, err := p.parsePipe()
 	if err != nil {
@@ -116,7 +114,6 @@ func (p *Parser) parseFallback() (Expr, error) {
 	return left, nil
 }
 
-// parsePipe handles '->' and '|'
 func (p *Parser) parsePipe() (Expr, error) {
 	left, err := p.parseParallel()
 	if err != nil {
@@ -137,7 +134,6 @@ func (p *Parser) parsePipe() (Expr, error) {
 	return left, nil
 }
 
-// parseParallel handles '&'
 func (p *Parser) parseParallel() (Expr, error) {
 	var children []Expr
 
@@ -166,11 +162,10 @@ func (p *Parser) parseParallel() (Expr, error) {
 	return &ParallelExpr{Children: children}, nil
 }
 
-// parsePrimary handles atom, projection, loops, parentheses
 func (p *Parser) parsePrimary() (Expr, error) {
 	switch p.tok.Type {
 	case TokenLParen:
-		p.next() // consume '('
+		p.next()
 
 		inner, err := p.parseExpr()
 		if err != nil {
@@ -198,7 +193,6 @@ func (p *Parser) parsePrimary() (Expr, error) {
 	}
 }
 
-// parseProjection safely reads raw code spanning out from inside braces
 func (p *Parser) parseProjection() (Expr, error) {
 	if p.tok.Type != TokenLBrace {
 		return nil, p.errorf("expected '{'")
@@ -242,9 +236,8 @@ func (p *Parser) parseProjection() (Expr, error) {
 	return nil, p.errorf("unclosed projection brace")
 }
 
-// parseLoop handles `loop( A ) until( B )`
 func (p *Parser) parseLoop() (Expr, error) {
-	p.next() // consume 'loop'
+	p.next()
 
 	if !p.expect(TokenLParen) {
 		return nil, p.errorf("expected '(' after loop")
@@ -263,7 +256,7 @@ func (p *Parser) parseLoop() (Expr, error) {
 		return nil, p.errorf("expected 'until' after loop body")
 	}
 
-	p.next() // consume 'until'
+	p.next()
 
 	if p.tok.Type != TokenLParen {
 		return nil, p.errorf("expected '(' after until")
@@ -307,7 +300,6 @@ func (p *Parser) parseLoop() (Expr, error) {
 	return nil, p.errorf("unclosed until parenthesis")
 }
 
-// parseAtom: name [modifiers...] [(key=value, ...)]
 func (p *Parser) parseAtom() (Expr, error) {
 	if p.tok.Type != TokenIdent {
 		return nil, p.errorf("expected identifier")
@@ -353,13 +345,7 @@ loop:
 			if atom.Profile == "" && !strings.Contains(modifier, "=") {
 				atom.Profile = modifier
 			}
-		case TokenAt:
-			p.next()
-
-			if p.tok.Type != TokenIdent && p.tok.Type != TokenString {
-				return nil, p.errorf("expected prompt string after '@'")
-			}
-
+		case TokenAtPrompt: // Directly consume the prompt literal
 			atom.Prompt = p.tok.Lit
 			p.next()
 		case TokenHash:

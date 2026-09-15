@@ -11,10 +11,9 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
-// CompilePipeline parses the Arrow DSL into an AST and compiles it into an executable Builder.
 func CompilePipeline(expr string, reg Registry) (*action.Builder[any, any], error) {
-	expr = strings.TrimSpace(expr)
-	if expr == "" {
+	expr = SanitizeDSL(expr)
+	if strings.TrimSpace(expr) == "" {
 		return nil, xerr.BadRequest("flow: pipeline expression cannot be empty")
 	}
 
@@ -44,7 +43,6 @@ func compileAST(node compiler.Expr, reg Registry) (*action.Builder[any, any], er
 		builtRight := right.Build()
 		pipeBld := action.Pipe[any, any, any]("pipe", left.Build(), builtRight)
 
-		// Hoist routes, status, description, and name from the terminal node to the composite pipeline
 		for _, b := range builtRight.GetBindings() {
 			pipeBld.Route(b)
 		}

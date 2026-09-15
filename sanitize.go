@@ -2,61 +2,42 @@ package flow
 
 import "strings"
 
-// SanitizeDSL converts a full .flow manifest into the single-line arrow
-// pipeline that the flow compiler consumes.
 func SanitizeDSL(rawContent string) string {
+	// Strip UTF-8 BOM
+	rawContent = strings.TrimPrefix(rawContent, "\xef\xbb\xbf")
+
 	var sb strings.Builder
-
-	sb.Grow(len(rawContent)) // single allocation; worst case == input length
-
-	needSpace := false
+	sb.Grow(len(rawContent))
 
 	for rawContent != "" {
 		var line string
-
 		if i := strings.IndexByte(rawContent, '\n'); i >= 0 {
 			line, rawContent = rawContent[:i], rawContent[i+1:]
 		} else {
 			line, rawContent = rawContent, ""
 		}
 
+		line = strings.TrimRight(line, "\r")
+
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
 		}
 
+		// Skip config and comment lines completely
 		c := trimmed[0]
-		if c == '#' || c == '@' ||
-			(len(trimmed) >= 2 && trimmed[0] == '/' && trimmed[1] == '/') {
+		if c == '#' || c == '@' || (len(trimmed) >= 2 && trimmed[0] == '/' && trimmed[1] == '/') {
 			continue
 		}
 
-		isIndented := line != "" && (line[0] == ' ' || line[0] == '\t')
-		if !isIndented &&
-			!strings.Contains(trimmed, "->") &&
-			(strings.Contains(trimmed, ":route=") || strings.Contains(trimmed, ":http=")) {
-			continue
-		}
-
-		trimmed = stripAtAnnotations(trimmed)
-		if trimmed == "" {
-			continue
-		}
-
-		if needSpace {
-			sb.WriteByte(' ')
-		}
-
+		// Preserve newlines so the lexer can safely terminate unquoted @ prompts
 		sb.WriteString(trimmed)
-
-		needSpace = true
+		sb.WriteByte('\n')
 	}
 
 	return sb.String()
 }
 
-// stripAtAnnotations removes a trailing inline @-annotation from a DSL line.
-// Quoted '@' characters (with `\` escapes inside quotes) are preserved.
 func stripAtAnnotations(line string) string {
 	inQuotes := false
 

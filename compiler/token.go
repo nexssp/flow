@@ -1,4 +1,3 @@
-// nexssp/flow/compiler/token.go
 package compiler
 
 type TokenType int
@@ -8,20 +7,20 @@ const (
 	TokenIdent
 	TokenString
 	TokenNumber
-	TokenArrow     // ->
-	TokenPipe      // |
-	TokenOr        // ||
-	TokenAmpersand // &
+	TokenArrow
+	TokenPipe
+	TokenOr
+	TokenAmpersand
 	TokenLParen
 	TokenRParen
 	TokenLBrace
 	TokenRBrace
-	TokenQuestion // ?
-	TokenColon    // :
-	TokenAssign   // =
-	TokenAt       // @
-	TokenHash     // #
-	TokenTilde    // ~
+	TokenQuestion
+	TokenColon
+	TokenAssign
+	TokenAtPrompt // Replaces TokenAt
+	TokenHash
+	TokenTilde
 	TokenComma
 	TokenInvalid
 )
@@ -42,7 +41,7 @@ var tokenNames = map[TokenType]string{
 	TokenQuestion:  "?",
 	TokenColon:     ":",
 	TokenAssign:    "=",
-	TokenAt:        "@",
+	TokenAtPrompt:  "@",
 	TokenHash:      "#",
 	TokenTilde:     "~",
 	TokenComma:     ",",

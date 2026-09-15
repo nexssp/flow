@@ -8,9 +8,8 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
-// ParseArrowDSL converts a compact arrow pipeline expression into a standard declarative
-// GraphDefinition using the unified AST parser.
 func ParseArrowDSL(name, dsl string) (GraphDefinition, error) {
+	dsl = SanitizeDSL(dsl)
 	if strings.TrimSpace(dsl) == "" {
 		return GraphDefinition{}, xerr.BadRequest("graph: arrow DSL expression cannot be empty")
 	}
@@ -37,7 +36,7 @@ func ParseArrowDSL(name, dsl string) (GraphDefinition, error) {
 		Edges: []EdgeSpec{},
 	}
 
-	nodeCounter := 0
+	nodeCounts := make(map[string]int)
 
 	var walk func(expr compiler.Expr, prevIDs []string) ([]string, error)
 
@@ -66,8 +65,13 @@ func ParseArrowDSL(name, dsl string) (GraphDefinition, error) {
 			return outIDs, nil
 
 		case *compiler.AtomExpr:
-			nodeCounter++
-			nodeID := fmt.Sprintf("step_%d", nodeCounter)
+			count := nodeCounts[n.Name]
+			nodeCounts[n.Name]++
+
+			nodeID := n.Name
+			if count > 0 {
+				nodeID = fmt.Sprintf("%s_%d", n.Name, count)
+			}
 
 			params := make(map[string]any)
 			for k, v := range n.Params {
@@ -109,8 +113,14 @@ func ParseArrowDSL(name, dsl string) (GraphDefinition, error) {
 			return []string{nodeID}, nil
 
 		case *compiler.ProjectionExpr:
-			nodeCounter++
-			nodeID := fmt.Sprintf("step_%d", nodeCounter)
+			count := nodeCounts["projection"]
+			nodeCounts["projection"]++
+
+			nodeID := "projection"
+			if count > 0 {
+				nodeID = fmt.Sprintf("projection_%d", count)
+			}
+
 			spec := NodeSpec{
 				ID:         nodeID,
 				Kind:       NodeTool,
