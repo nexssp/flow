@@ -13,6 +13,11 @@ import (
 	"github.com/nexssp/kernel/action"
 )
 
+// mustInvoke / mustInvokeReg / ctxWithRegistry live in bench_test.go and
+// are shared by every test file in package nodes_test.
+
+// ── distribute.map ─────────────────────────────────────────────────────────
+
 func TestDistributeMap_HappyPathPreservesOrder(t *testing.T) {
 	reg := flow.NewRegistry()
 	reg.Register("echo", action.New("echo",
@@ -25,7 +30,7 @@ func TestDistributeMap_HappyPathPreservesOrder(t *testing.T) {
 		},
 	).Build())
 
-	res := mustInvoke(t, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
+	res := mustInvokeReg(t, reg, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
 		Action:      "echo",
 		Concurrency: 8,
 		Items:       []any{1, 2, 3, 4, 5},
@@ -66,7 +71,7 @@ func TestDistributeMap_ConcurrencyIsBounded(t *testing.T) {
 		},
 	).Build())
 
-	res := mustInvoke(t, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
+	res := mustInvokeReg(t, reg, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
 		Action:      "slow",
 		Concurrency: 3,
 		Items:       []any{1, 2, 3, 4, 5, 6, 7, 8, 9},
@@ -93,7 +98,7 @@ func TestDistributeMap_FailureIsolatedPerSlot(t *testing.T) {
 		},
 	).Build())
 
-	res := mustInvoke(t, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
+	res := mustInvokeReg(t, reg, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
 		Action:      "maybe",
 		Concurrency: 4,
 		Items:       []any{1, 2, 3, 4, 5},
@@ -124,7 +129,7 @@ func TestDistributeMap_PanicIsContainedPerSlot(t *testing.T) {
 		},
 	).Build())
 
-	res := mustInvoke(t, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
+	res := mustInvokeReg(t, reg, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
 		Action: "boom",
 		Items:  []any{1, 2, 3},
 	}).(nodes.DistributeMapRes)
@@ -139,10 +144,13 @@ func TestDistributeMap_PanicIsContainedPerSlot(t *testing.T) {
 }
 
 func TestDistributeMap_EmptyItemsIsNoop(t *testing.T) {
-	res := mustInvoke(t, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
-		Action: "anything",
-		Items:  []any{},
-	}).(nodes.DistributeMapRes)
+	// Even with no items, the action still validates that a registry
+	// reached it — the empty-items short-circuit runs after the guard.
+	res := mustInvokeReg(t, flow.NewRegistry(), nodes.NewDistributeMapAction(),
+		nodes.DistributeMapReq{
+			Action: "anything",
+			Items:  []any{},
+		}).(nodes.DistributeMapRes)
 	if res.Succeeded != 0 || res.Failed != 0 || len(res.Items) != 0 {
 		t.Fatalf("expected empty result, got %+v", res)
 	}
@@ -151,7 +159,8 @@ func TestDistributeMap_EmptyItemsIsNoop(t *testing.T) {
 func TestDistributeMap_ItemsExceedLimit(t *testing.T) {
 	items := make([]any, nodes.DistributeMaxItemsForTest()+1)
 
-	_, err := action.InvokeAny(context.Background(), nodes.NewDistributeMapAction(),
+	_, err := action.InvokeAny(ctxWithRegistry(t, flow.NewRegistry()),
+		nodes.NewDistributeMapAction(),
 		nodes.DistributeMapReq{Action: "x", Items: items})
 	if err == nil || !strings.Contains(err.Error(), "limit") {
 		t.Fatalf("expected limit error, got %v", err)
@@ -159,18 +168,30 @@ func TestDistributeMap_ItemsExceedLimit(t *testing.T) {
 }
 
 func TestDistributeMap_MissingAction(t *testing.T) {
-	_, err := action.InvokeAny(context.Background(), nodes.NewDistributeMapAction(),
+	// Registry present but does not contain the target. Exercises the
+	// NotFound path, not the missing-context path.
+	_, err := action.InvokeAny(ctxWithRegistry(t, flow.NewRegistry()),
+		nodes.NewDistributeMapAction(),
 		nodes.DistributeMapReq{Action: "missing", Items: []any{1}})
 	if err == nil {
 		t.Fatal("expected NotFound")
 	}
+
+	if !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("expected 'not found', got %v", err)
+	}
 }
 
 func TestDistributeMap_NilRegistry(t *testing.T) {
+	// Deliberately bare: the action must report the missing registry.
 	_, err := action.InvokeAny(context.Background(), nodes.NewDistributeMapAction(),
 		nodes.DistributeMapReq{Action: "x", Items: []any{1}})
 	if err == nil {
 		t.Fatal("expected error for nil registry")
+	}
+
+	if !strings.Contains(err.Error(), "no registry in context") {
+		t.Fatalf("expected 'no registry in context', got %v", err)
 	}
 }
 
@@ -187,7 +208,9 @@ func TestDistributeMap_ContextCanceledStops(t *testing.T) {
 		},
 	).Build())
 
-	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+	// Combine registry-bearing ctx with a short deadline so the
+	// in-flight items observe cancellation.
+	ctx, cancel := context.WithTimeout(ctxWithRegistry(t, reg), 40*time.Millisecond)
 	defer cancel()
 
 	res, err := action.InvokeAny(ctx, nodes.NewDistributeMapAction(),
@@ -210,7 +233,6 @@ func TestDistributeReduce_AllStrategies(t *testing.T) {
 		{OK: false, Error: "nope"},
 		{OK: true, Result: 3},
 	}
-	reg := flow.NewRegistry()
 
 	cases := []struct {
 		strategy string
@@ -245,6 +267,7 @@ func TestDistributeReduce_AllStrategies(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.strategy, func(t *testing.T) {
+			// distribute.reduce is a pure fold — no registry needed.
 			res := mustInvoke(t, nodes.NewDistributeReduceAction(), nodes.DistributeReduceReq{
 				Strategy: c.strategy,
 				Items:    items,
@@ -252,8 +275,6 @@ func TestDistributeReduce_AllStrategies(t *testing.T) {
 			c.assert(t, res)
 		})
 	}
-
-	_ = reg
 }
 
 func TestDistributeReduce_FirstSuccessNoneSucceeds(t *testing.T) {
