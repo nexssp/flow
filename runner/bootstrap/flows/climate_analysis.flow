@@ -1,0 +1,13 @@
+# path: flows/climate_analysis.flow
+@config: model="deepseek-chat"
+@config: sandbox_image="python:3.12-slim"
+
+goal "Analyze temperature anomalies in the provided CSV dataset"
+
+hypothesis "Propose a statistical model for anomaly detection"
+  -> experiment "Write pandas/numpy analysis script"
+  -> sandbox "Execute analysis on /workspace/data.csv"
+  -> measure "Record processing_time_ms and memory_mb"
+  -> publish "Save report to reports/anomaly_{date}.pdf"
+  -> compare "Compare against baselines/2023_anomaly.pdf"
+  -> [if: compare.deviation > 0.05] peer_review "Investigate statistical deviation"

@@ -1,0 +1,17 @@
+# flows/self_improve.flow
+@config:budget_micros=15000000
+
+@assert: success == true
+@assert: pass == true
+
+self.improve:route="POST /api/self/improve":status=200:timeout=10m
+  read:path="src/main.go"
+  -> review:provider="deepseek":model="deepseek-chat"
+  -> fix:expert="coding":skills="go_compiler":timeout=40s
+  -> test:image="golang:1.26-alpine":timeout=30s
+  -> critic:expert="reasoning":timeout=20s
+  -> { path: "src/main.go", content: .source_code } -> write
+  -> bench:action="critic":iterations=20
+  -> save_bench:file=".bench/self_improve.json"
+  -> compare:baseline=".bench/self_improve.json"
+  -> log:message="self_improve finished"

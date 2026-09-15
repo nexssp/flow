@@ -1,0 +1,10 @@
+# flows/analyze_many.flow
+@config:budget_micros=20000000
+
+analyze.many:route="POST /api/analyze/many":status=200:timeout=5m
+  read:path="data/manifest.json"
+  -> { items: .files, action: "analyze_one", concurrency: 8 } -> map
+  -> reduce:strategy="collect"
+  -> summarize:provider="ollama"
+  -> write:path="reports/batch.md"
+  -> log:message="batch analysis complete"

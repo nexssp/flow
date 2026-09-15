@@ -1,0 +1,11 @@
+# flows/run_simulation.flow
+@config:budget_micros=5000000
+
+simulation.run:route="POST /api/sim/run":status=200
+  read:path="params.csv"
+  -> run:command="python3":args=["simulate.py"]:timeout=120s
+  -> summarize:provider="ollama":model="qwen2.5:7b"
+  -> { path: "results/summary.md", content: . } -> write
+  -> bench:action="run":iterations=5
+  -> save_bench:file=".bench/simulation.json"
+  -> log:message="simulation complete"

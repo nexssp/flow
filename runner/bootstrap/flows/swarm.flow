@@ -1,0 +1,28 @@
+# ── Global Swarm Governance & Bounds ──────────────────────────────
+@config:budget_micros=15000000
+@config:skills_dir=".jumalu_workspace/skills"
+@config:experts_file="_experts_test.yml"
+@config:max_agents=5
+@config:allowed_roles="Orchestrator,Engineer,Architect,Specialist"
+
+# ── Preflight Assertions (Evaluated on CLI / Flow execution) ──────
+@assert: success == true
+@assert: turns_used > 0
+@assert: spent_micros < 5000000
+
+# ── Multi-Model Swarm Flow Topology ───────────────────────────────
+# 1. Orchestrator uses Fast Intent Router (MoE Nano Router) with spawning tools
+# 2. Parallel Workers execute specialized tasks using MoE models & verified local skills
+# 3. Code verified in isolated Go 1.26 Container Sandbox
+# 4. Logic Critic validates results before approving
+swarm.solve:route="POST /api/swarm/solve":cli="swarm:solve:Run bounded swarm":status=200
+  swarm.orchestrator:expert="router":spawn_limit=5:roles="Engineer,Architect"@Decompose user goal and spawn specialized workers
+  -> ( agent.coder:expert="coding":skills="go_compiler":timeout=40s & agent.auditor:expert="security":skills="git_inspector":timeout=30s )
+  -> {
+      session_id: agent.coder.session_id,
+      goal: agent.coder.goal,
+      source_code: agent.coder.source_code,
+      test_code: agent.coder.test_code
+  }
+  -> sandbox.test_runner:timeout=30s
+  -> agent.critic:expert="reasoning":timeout=20s

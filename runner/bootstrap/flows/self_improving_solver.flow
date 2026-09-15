@@ -1,0 +1,15 @@
+# path: flows/self_improving_solver.flow
+@config: budget_micros=10000000
+@config: telemetry_ring=8192
+@config: max_turns=5
+
+# Goal: Optimize a mathematical function
+goal "Write a Go function to calculate the Nth prime number in O(N log log N)"
+
+hypothesis "Design the Sieve of Eratosthenes approach"
+  -> experiment "Write the Go code and tests"
+  -> sandbox "Run tests and measure execution time"
+  -> peer_review "Check for edge cases (N=0, N=1) and memory leaks"
+  -> [if: review.rejected || sandbox.failed] evolve "Analyze the failure and fix the code" -> hypothesis
+  -> measure "Record time_complexity_ms"
+  -> publish "Save to results/primes_{timestamp}.go"

@@ -1,0 +1,5 @@
+# DeepSeek Orchestrator -> Ollama Local Worker (with Go skills) -> Sandbox Test -> Critic
+agent.orchestrator:model="deepseek-flash":role="planner"
+  -> agent.worker:model="ollama/qwen2.5-coder:7b":skills="go_compiler,git":timeout=45s
+  -> sandbox.test_runner:image="golang:1.26-alpine":timeout=30s
+  -> agent.critic:model="deepseek-flash"

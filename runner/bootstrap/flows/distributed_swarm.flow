@@ -1,0 +1,14 @@
+# path: flows/distributed_swarm.flow
+@config:budget_micros=15000000
+@config:anti_ssrf=true
+@config:sandbox_driver="docker"
+
+distributed.solve:route="POST /api/distributed/solve":status=200:retry=2
+  plan:expert="router":spawn_limit=5:roles="Engineer,Architect"
+  -> ( code:expert="coding":skills="go_compiler":timeout=40s
+     & review_code:expert="security":skills="git_inspector":timeout=30s )
+  -> test:timeout=30s
+  -> critic:expert="reasoning":timeout=20s
+  -> bench:action="test":iterations=10
+  -> save_bench:file=".bench/distributed_solve.json"
+  -> log:message="distributed_solve complete"

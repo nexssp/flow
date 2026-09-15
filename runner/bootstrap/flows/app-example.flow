@@ -1,0 +1,15 @@
+# ── System Runtime Configurations ──────────────────────────────────
+@config:budget_micros=10000000
+@config:anti_ssrf=true
+@config:sandbox_driver="docker"
+
+# ── Dynamic Multi-Model Autonomous Swarm Pipeline ──────────────────
+# 1. DeepSeek acts as the Master Architect
+# 2. Local Ollama Qwen acts as the Fast Worker equipped with Go Skills
+# 3. Docker Sandbox verifies code execution
+# 4. DeepSeek Flash evaluates correctness
+autonomous.solve:route="POST /api/autonomous/solve":status=200
+  agent.orchestrator:model="deepseek/deepseek-flash":role="Orchestrator"@Break down user task into exact implementation steps
+  -> agent.worker:model="ollama/qwen2.5-coder:7b":role="Engineer":skills="go_compiler,git_inspector":timeout=45s
+  -> sandbox.test_runner:timeout=30s
+  -> agent.critic:model="deepseek/deepseek-flash"@Verify sandbox exit code is 0 and 0 security vulnerabilities exist

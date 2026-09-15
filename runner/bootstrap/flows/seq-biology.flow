@@ -1,0 +1,21 @@
+# 🧬 DNA Sequence Anomaly Detection
+# Readable by a biologist, executed by the AI Swarm.
+
+@config:budget_micros=15000000
+@config:skills_dir=".jumalu_workspace/skills/bio"
+@assert: success == true
+@assert: exit_code == 0
+
+# 1. Ingest & Validate (Fast, local, deterministic)
+ingest_data:exec="python3 scripts/validate_csv.py"
+-> sandbox.test_runner:skills="python-analyst":timeout=30s
+
+# 2. AI Analysis (Small local model for speed)
+agent.analyze:expert="science":model="ollama/qwen2.5:7b"@Find anomalies in the genome sequence
+-> { report: .analysis, data: .raw_data }
+
+# 3. Self-Healing Peer Review Loop
+# If the critic rejects it, the feedback loops back to the architect automatically.
+agent.critic:expert="peer-review":model="deepseek-chat"@Verify scientific accuracy
+-> save_to_disk:exec="mkdir -p ./reports && cat > ./reports/final_$(date +%s).md"
+-> log_telemetry:cli="echo '✅ Analysis complete and saved'"

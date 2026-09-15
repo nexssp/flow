@@ -1,0 +1,4 @@
+# path: flows/remote_capability.flow
+agent.worker:remote="http://10.0.0.6:9002/work":timeout=45s
+tools.ripgrep:exec="rg --json":timeout=10s
+skills.lint:wasm="./skills/lint.wasm":timeout=15s

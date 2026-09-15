@@ -1,0 +1,12 @@
+# ⚡ LLM Routing & Benchmark Matrix
+@config:max_agents=3
+@assert: duration_ms < 15000
+
+# Run 3 models in parallel (Scatter)
+( agent.worker:expert="coding":model="ollama/qwen2.5-coder:7b":timeout=10s
+& agent.worker:expert="coding":model="groq/llama-3.1-8b-instant":timeout=10s
+& agent.worker:expert="coding":model="deepseek/deepseek-chat":timeout=10s )
+
+# Evaluate and pick the best (Gather & Fallback)
+-> agent.benchmark:expert="evaluator"@Compare execution time and token cost
+-> ( save_results:exec="cat > ./benchmarks/results.json" || agent.heavy_fallback:expert="reasoning":model="claude-3-5-sonnet" )
