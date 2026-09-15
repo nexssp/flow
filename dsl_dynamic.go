@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/dslparse"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
-	"github.com/nexssp/ops/dsl"
 	"github.com/nexssp/transport/codec"
 	"github.com/nexssp/transport/tcli"
 	"github.com/nexssp/transport/thttp"
@@ -48,7 +48,7 @@ func resolveDynamicNode(atom *compiler.AtomExpr, reg Registry) (*action.Builder[
 		lineFragment += ":" + strings.Join(atom.Modifiers, ":")
 	}
 
-	parsedLine, _ := dsl.ParseLine(lineFragment)
+	parsedLine, _ := dslparse.ParseLine(lineFragment)
 	mod := parsedLine.Modifiers
 
 	if mod.CustomName != "" {
