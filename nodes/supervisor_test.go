@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/nexssp/flow"
+	"github.com/nexssp/flow/contracts"
 	"github.com/nexssp/flow/nodes"
 	"github.com/nexssp/kernel/action"
 )
@@ -27,12 +28,16 @@ func TestSupervisor_DynamicChildSpawning(t *testing.T) {
 		return "posted_to_slack", nil
 	}).Build()
 
-	registry := flow.NewRegistry(summarizePrompt, slackTool)
+	// 3. Registry that child pipelines compile against.
+	reg := flow.NewRegistry(summarizePrompt, slackTool)
 
-	// 3. Supervisor Node
-	supervisorNode := nodes.NewSupervisorNode("main.supervisor", registry)
+	// 4. Supervisor reads registry + compiler from context.
+	ctx = contracts.WithRegistry(ctx, reg)
+	if pc, ok := any(reg).(contracts.PipelineCompiler); ok {
+		ctx = contracts.WithCompiler(ctx, pc)
+	}
 
-	// Execute supervisor directly
+	supervisorNode := nodes.NewSupervisorNode("main.supervisor")
 	execAct := action.Dynamic(supervisorNode)
 
 	req := nodes.SupervisorReq{
@@ -61,6 +66,7 @@ func TestSupervisor_DynamicChildSpawning(t *testing.T) {
 	}
 
 	if supRes.Total != 2 || supRes.Succeeded != 2 {
-		t.Fatalf("expected 2 successful child tasks, got succeeded=%d failed=%d", supRes.Succeeded, supRes.Failed)
+		t.Fatalf("expected 2 successful child tasks, got succeeded=%d failed=%d",
+			supRes.Succeeded, supRes.Failed)
 	}
 }

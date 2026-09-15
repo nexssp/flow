@@ -1,21 +1,3 @@
-// path: nexssp/flow/nodes/bench.go
-//
-// Benchmark nodes.
-//
-// Design notes:
-//   - bench.run captures the registry at construction. The registry is a
-//     live pointer, so actions registered after construction are visible
-//     at invoke time.
-//   - Per-iteration work is a single time.Now / time.Since pair and a
-//     slice write. No maps, no reflection, no fmt on the measured path.
-//   - Panic in a target counts as one error and does not abort the run.
-//     The defer is function-scoped so the compiler can open-code it.
-//   - bench.save and bench.compare embed BenchRunRes so they chain
-//     directly from bench.run without a projection step in the flow.
-//   - All caller-supplied paths go through kernel/xfs.Rel: absolute
-//     paths, ".." traversal, ":" (Windows ADS/drive), NUL and control
-//     characters, trailing dots, and reserved device names are rejected
-//     before any filesystem call.
 package nodes
 
 import (
@@ -32,8 +14,6 @@ import (
 	"github.com/nexssp/kernel/xfs"
 )
 
-// ── bench.run ──────────────────────────────────────────────────────────────
-
 type BenchRunReq struct {
 	Action     string         `json:"action"               validate:"required" usage:"Node name to benchmark"`
 	Iterations int            `json:"iterations,omitempty"                    usage:"Timed iterations (default 50)"`
@@ -41,7 +21,6 @@ type BenchRunReq struct {
 	Payload    map[string]any `json:"payload,omitempty"                       usage:"Request passed to each invocation"`
 }
 
-// BenchRunRes is the measured distribution. All durations are milliseconds.
 type BenchRunRes struct {
 	Action     string  `json:"action"`
 	Iterations int     `json:"iterations"`
@@ -63,8 +42,17 @@ const (
 	benchMaxIterations     = 1_000_000
 )
 
-func NewBenchRunAction(reg contracts.Registry) action.AnyAction {
+// NewBenchRunAction benchmarks another action. The target action is
+// resolved against the registry that the flow compiler placed in the
+// execution context, so this node works the same whether it is called
+// directly or from inside a pipeline.
+func NewBenchRunAction() action.AnyAction {
 	return action.New("bench.run", func(ctx context.Context, req BenchRunReq) (BenchRunRes, error) {
+		reg := contracts.RegistryFromContext(ctx)
+		if reg == nil {
+			return BenchRunRes{}, xerr.Internal("bench.run: no registry in context")
+		}
+
 		return runBenchmark(ctx, reg, req)
 	}).
 		Description("Run an action N times and report its latency distribution").
@@ -144,12 +132,10 @@ func runBenchmark(ctx context.Context, reg contracts.Registry, req BenchRunReq) 
 	}, nil
 }
 
-// invokeOnce executes one iteration with panic isolation. Function-scoped
-// defer keeps this out of the hot loop's escape analysis.
 func invokeOnce(ctx context.Context, act action.AnyAction, payload any) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = xerr.Internal("bench.run: iteration panicked")
+			err = xerr.PanicRecovery(r)
 		}
 	}()
 
@@ -178,8 +164,6 @@ func percentile(sorted []time.Duration, p float64) time.Duration {
 func toMs(d time.Duration) float64 {
 	return float64(d) / float64(time.Millisecond)
 }
-
-// ── bench.save ─────────────────────────────────────────────────────────────
 
 type BenchSaveReq struct {
 	File string `json:"file" validate:"required" usage:"Relative path to write (validated by xfs.Rel)"`
@@ -224,8 +208,6 @@ func NewBenchSaveAction() action.AnyAction {
 		Tag("bench", "io").
 		Build()
 }
-
-// ── bench.compare ──────────────────────────────────────────────────────────
 
 type BenchCompareReq struct {
 	Baseline     string  `json:"baseline" validate:"required" usage:"Baseline JSON path (validated by xfs.Rel)"`

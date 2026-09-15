@@ -3,11 +3,13 @@ package flow
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"slices"
 	"time"
 
 	"github.com/nexssp/cost"
 	kernelcost "github.com/nexssp/cost/adapters/kernel"
+	"github.com/nexssp/flow/contracts"
 	"github.com/nexssp/flow/journal"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/ai/dag"
@@ -25,6 +27,7 @@ type Compiler struct {
 	journal  journal.BranchJournal
 	gate     ApprovalGate
 	reserver cost.Reserver
+	hooks    []action.AnyHook
 }
 
 func NewCompiler(reg Registry, opts ...func(*Compiler)) *Compiler {
@@ -58,6 +61,12 @@ func WithApprovalGate(g ApprovalGate) func(*Compiler) {
 func WithReserver(r cost.Reserver) func(*Compiler) {
 	return func(c *Compiler) {
 		c.reserver = r
+	}
+}
+
+func WithHooks(hooks ...action.AnyHook) func(*Compiler) {
+	return func(c *Compiler) {
+		c.hooks = append(c.hooks, hooks...)
 	}
 }
 
@@ -141,7 +150,7 @@ func (c *Compiler) Compile(ctx context.Context, def GraphDefinition) (*dag.DAG, 
 				}
 			}
 
-			payloadMap := make(map[string]any, len(nodeSpec.Params)+len(nodeSpec.InputBindings))
+			payloadMap := make(map[string]any, len(nodeSpec.Params)+len(nodeSpec.InputBindings)+16)
 			for k, v := range nodeSpec.Params {
 				payloadMap[k] = v
 			}
@@ -159,6 +168,7 @@ func (c *Compiler) Compile(ctx context.Context, def GraphDefinition) (*dag.DAG, 
 					for _, fromID := range incoming {
 						directVal, dFound := dag.GetNodeOutput[any](nCtx.Input, fromID)
 						if dFound == nil && directVal != nil {
+							unpackIntoMap(payloadMap, directVal)
 							payloadMap[fromID] = directVal
 						}
 					}
@@ -199,6 +209,15 @@ func (c *Compiler) Compile(ctx context.Context, def GraphDefinition) (*dag.DAG, 
 				}
 			}
 
+			// Attach the registry (and, when available, the pipeline compiler)
+			// to the execution context so context-aware actions — bench.run,
+			// distribute.map, supervisor — can reach other actions by name
+			// without any constructor plumbing.
+			execCtx = contracts.WithRegistry(execCtx, c.registry)
+			if pc, ok := c.registry.(contracts.PipelineCompiler); ok {
+				execCtx = contracts.WithCompiler(execCtx, pc)
+			}
+
 			return act.ExecuteDecoded(execCtx, func(target any) error {
 				if len(payloadData) == 0 {
 					return nil
@@ -220,8 +239,17 @@ func (c *Compiler) Compile(ctx context.Context, def GraphDefinition) (*dag.DAG, 
 			dagAction.Retry(nodeSpec.Retry.MaxAttempts, action.ExponentialBackoff(100*time.Millisecond, 2*time.Second))
 		}
 
-		if c.reserver != nil && nodeSpec.EstimateMicros > 0 {
-			dagAction.AnyHook(kernelcost.GuardAction(c.reserver, nodeSpec.EstimateMicros))
+		if c.reserver != nil {
+			estimate := nodeSpec.EstimateMicros
+			if estimate < 0 {
+				estimate = 0
+			}
+
+			dagAction.AnyHook(kernelcost.GuardAction(c.reserver, estimate))
+		}
+
+		if len(c.hooks) > 0 {
+			dagAction.AnyHook(c.hooks...)
 		}
 
 		dagBuilder.AddNode(nodeSpec.ID, outputKey, dagAction.Build())
@@ -235,7 +263,7 @@ func (c *Compiler) Compile(ctx context.Context, def GraphDefinition) (*dag.DAG, 
 			targetNode := edge.To
 
 			gateAction := action.New(gateID, func(execCtx context.Context, nCtx *dag.NodeContext) (bool, error) {
-				runID := action.ExecutionIDFrom(execCtx)
+				runID := xctx.ExecutionIDFrom(execCtx)
 				st := NewStateFromDAG(nCtx.Input)
 
 				var (
@@ -288,4 +316,54 @@ func (c *Compiler) Compile(ctx context.Context, def GraphDefinition) (*dag.DAG, 
 	}
 
 	return compiledDAG, compiledDef, nil
+}
+
+func unpackIntoMap(dst map[string]any, src any) {
+	if src == nil {
+		return
+	}
+
+	if m, ok := src.(map[string]any); ok {
+		for k, v := range m {
+			dst[k] = v
+		}
+
+		return
+	}
+
+	rv := reflect.ValueOf(src)
+	for rv.Kind() == reflect.Pointer || rv.Kind() == reflect.Interface {
+		if rv.IsNil() {
+			return
+		}
+
+		rv = rv.Elem()
+	}
+
+	if rv.Kind() != reflect.Struct {
+		return
+	}
+
+	t := rv.Type()
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+
+		val := rv.Field(i).Interface()
+		dst[f.Name] = val
+
+		tag := f.Tag.Get("json")
+		if tag != "" && tag != "-" {
+			name := tag
+			if comma := slices.Index([]byte(tag), ','); comma >= 0 {
+				name = tag[:comma]
+			}
+
+			if name != "" {
+				dst[name] = val
+			}
+		}
+	}
 }

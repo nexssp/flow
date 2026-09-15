@@ -1,32 +1,7 @@
-// path: nexssp/flow/nodes/distribute.go
-//
-// Fan-out / fold primitives.
-//
-// Contract — distribute.map:
-//
-//	Input  : { "items": [ ...anything... ], "action": "...", "concurrency": N }
-//	Output : { "items": [ {ok, result?, error?} ], "succeeded": N, "failed": M }
-//
-// Order is preserved: output.items[i] corresponds to input.items[i]. This
-// is achieved without a mutex or channel by pre-allocating two slices and
-// writing to distinct slots from each goroutine.
-//
-// Failure isolation: a failing sub-item does NOT abort its siblings. The
-// error is stored in the slot. errgroup is used only for its bounded
-// concurrency gate (SetLimit), not for error propagation.
-//
-// Concurrency: the gate caps in-flight goroutines. This is the only
-// backpressure a caller needs — memory and network are bounded by N.
-//
-// Contract — distribute.reduce:
-//
-//	Input  : { "items": [ {ok, result?, error?} ], "strategy": "..." }
-//	Output : depends on strategy (see DistributeReduceRes).
 package nodes
 
 import (
 	"context"
-	"errors"
 
 	"github.com/nexssp/flow/contracts"
 	"github.com/nexssp/kernel/action"
@@ -40,15 +15,12 @@ const (
 	distributeMaxItems           = 10_000
 )
 
-// ── distribute.map ─────────────────────────────────────────────────────────
-
 type DistributeMapReq struct {
 	Action      string `json:"action"      validate:"required" usage:"Node name to invoke for each item"`
 	Concurrency int    `json:"concurrency,omitempty"           usage:"Max in-flight invocations (default 4, max 256)"`
 	Items       []any  `json:"items"       validate:"required" usage:"Items to fan out. Passed unchanged to Action."`
 }
 
-// DistributeItem is the per-slot outcome. Rendered as JSON on the wire.
 type DistributeItem struct {
 	OK     bool   `json:"ok"`
 	Result any    `json:"result,omitempty"`
@@ -61,8 +33,16 @@ type DistributeMapRes struct {
 	Failed    int              `json:"failed"`
 }
 
-func NewDistributeMapAction(reg contracts.Registry) action.AnyAction {
+// NewDistributeMapAction invokes another action once per item, bounded
+// by concurrency. The target action is resolved against the registry
+// placed in the execution context by the flow compiler.
+func NewDistributeMapAction() action.AnyAction {
 	return action.New("distribute.map", func(ctx context.Context, req DistributeMapReq) (DistributeMapRes, error) {
+		reg := contracts.RegistryFromContext(ctx)
+		if reg == nil {
+			return DistributeMapRes{}, xerr.Internal("distribute.map: no registry in context")
+		}
+
 		return runDistribute(ctx, reg, req)
 	}).
 		Description("Invoke an action once per item, bounded by concurrency, preserving order").
@@ -101,8 +81,6 @@ func runDistribute(ctx context.Context, reg contracts.Registry, req DistributeMa
 		return DistributeMapRes{}, xerr.NotFound("distribute.map: action not found: " + req.Action)
 	}
 
-	// Pre-allocated. Each goroutine writes to a distinct index — no lock,
-	// no false sharing beyond adjacent cache lines, no copy on the way out.
 	items := make([]DistributeItem, len(req.Items))
 
 	g, gctx := errgroup.WithContext(ctx)
@@ -132,9 +110,6 @@ func runDistribute(ctx context.Context, reg contracts.Registry, req DistributeMa
 		})
 	}
 
-	// errgroup's Wait is guaranteed to return nil because every goroutine
-	// returns nil. Errors are stored in slots; a single failure never
-	// aborts siblings.
 	_ = g.Wait()
 
 	res := DistributeMapRes{Items: items, Succeeded: 0, Failed: 0}
@@ -149,30 +124,17 @@ func runDistribute(ctx context.Context, reg contracts.Registry, req DistributeMa
 	return res, nil
 }
 
-// invokeSafely wraps action.InvokeAny with panic isolation. A panicking
-// target is reported as a regular per-slot error, never as a crash.
 func invokeSafely(ctx context.Context, act action.AnyAction, in any) (out any, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			out = nil
-			err = errors.New("panic: " + sprintAny(r))
+			err = xerr.PanicRecovery(r)
 		}
 	}()
 
 	return action.InvokeAny(ctx, act, in)
 }
 
-// ── distribute.reduce ──────────────────────────────────────────────────────
-
-// DistributeReduceReq consumes the output of distribute.map directly.
-//
-// Strategies:
-//
-//	collect       — return every result, in order, skipping failures
-//	all_pass      — true iff every item succeeded; false otherwise
-//	any_pass      — true iff at least one item succeeded
-//	first_success — first successful result (error if none)
-//	count         — number of successes / failures
 type DistributeReduceReq struct {
 	Strategy string           `json:"strategy" validate:"required,oneof=collect all_pass any_pass first_success count"`
 	Items    []DistributeItem `json:"items"    validate:"required"`
@@ -243,7 +205,7 @@ func runReduce(req DistributeReduceReq) (DistributeReduceRes, error) {
 
 		return res, xerr.NotFound("distribute.reduce: no successful item")
 	case "count":
-		// Succeeded / Failed already populated.
+		// Succeeded / Failed already populated above.
 	default:
 		return res, xerr.BadRequest("distribute.reduce: unknown strategy: " + req.Strategy)
 	}
@@ -251,18 +213,4 @@ func runReduce(req DistributeReduceReq) (DistributeReduceRes, error) {
 	return res, nil
 }
 
-func sprintAny(v any) string {
-	switch x := v.(type) {
-	case string:
-		return x
-	case error:
-		return x.Error()
-	default:
-		return "recovered"
-	}
-}
-
-// DistributeMaxItemsForTest exposes the item cap so tests do not have to
-// hard-code the same constant in two places. Production code reads
-// distributeMaxItems directly.
 func DistributeMaxItemsForTest() int { return distributeMaxItems }

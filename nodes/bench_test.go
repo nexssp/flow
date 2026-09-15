@@ -40,7 +40,7 @@ func TestBenchRun_HappyPath(t *testing.T) {
 		func(_ context.Context, _ struct{}) (string, error) { return "ok", nil },
 	).Build())
 
-	res := mustInvoke(t, nodes.NewBenchRunAction(reg),
+	res := mustInvoke(t, nodes.NewBenchRunAction(),
 		nodes.BenchRunReq{Action: "noop", Iterations: 100}).(nodes.BenchRunRes)
 
 	if res.Iterations != 100 || res.Errors != 0 {
@@ -57,7 +57,7 @@ func TestBenchRun_HappyPath(t *testing.T) {
 }
 
 func TestBenchRun_NilRegistry(t *testing.T) {
-	_, err := action.InvokeAny(context.Background(), nodes.NewBenchRunAction(nil),
+	_, err := action.InvokeAny(context.Background(), nodes.NewBenchRunAction(),
 		nodes.BenchRunReq{Action: "x", Iterations: 5})
 	if err == nil {
 		t.Fatal("expected error for nil registry")
@@ -65,9 +65,7 @@ func TestBenchRun_NilRegistry(t *testing.T) {
 }
 
 func TestBenchRun_TargetNotFound(t *testing.T) {
-	reg := flow.NewRegistry()
-
-	_, err := action.InvokeAny(context.Background(), nodes.NewBenchRunAction(reg),
+	_, err := action.InvokeAny(context.Background(), nodes.NewBenchRunAction(),
 		nodes.BenchRunReq{Action: "missing", Iterations: 5})
 	if err == nil {
 		t.Fatal("expected NotFound")
@@ -75,9 +73,7 @@ func TestBenchRun_TargetNotFound(t *testing.T) {
 }
 
 func TestBenchRun_IterationsExceedLimit(t *testing.T) {
-	reg := flow.NewRegistry()
-
-	_, err := action.InvokeAny(context.Background(), nodes.NewBenchRunAction(reg),
+	_, err := action.InvokeAny(context.Background(), nodes.NewBenchRunAction(),
 		nodes.BenchRunReq{Action: "x", Iterations: 2_000_000})
 	if err == nil || !strings.Contains(err.Error(), "limit") {
 		t.Fatalf("expected limit error, got %v", err)
@@ -99,7 +95,7 @@ func TestBenchRun_PanicIsolation(t *testing.T) {
 		},
 	).Build())
 
-	res := mustInvoke(t, nodes.NewBenchRunAction(reg),
+	res := mustInvoke(t, nodes.NewBenchRunAction(),
 		nodes.BenchRunReq{Action: "flaky", Iterations: 20, Warmup: 0}).(nodes.BenchRunRes)
 	if res.Errors != 1 {
 		t.Fatalf("expected exactly 1 error, got %d", res.Errors)
@@ -115,7 +111,7 @@ func TestBenchRun_ContextCanceledStopsEarly(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := action.InvokeAny(ctx, nodes.NewBenchRunAction(reg),
+	_, err := action.InvokeAny(ctx, nodes.NewBenchRunAction(),
 		nodes.BenchRunReq{Action: "noop", Iterations: 1000})
 	if err == nil {
 		t.Fatal("expected context.Canceled")

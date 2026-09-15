@@ -25,7 +25,7 @@ func TestDistributeMap_HappyPathPreservesOrder(t *testing.T) {
 		},
 	).Build())
 
-	res := mustInvoke(t, nodes.NewDistributeMapAction(reg), nodes.DistributeMapReq{
+	res := mustInvoke(t, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
 		Action:      "echo",
 		Concurrency: 8,
 		Items:       []any{1, 2, 3, 4, 5},
@@ -66,7 +66,7 @@ func TestDistributeMap_ConcurrencyIsBounded(t *testing.T) {
 		},
 	).Build())
 
-	res := mustInvoke(t, nodes.NewDistributeMapAction(reg), nodes.DistributeMapReq{
+	res := mustInvoke(t, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
 		Action:      "slow",
 		Concurrency: 3,
 		Items:       []any{1, 2, 3, 4, 5, 6, 7, 8, 9},
@@ -93,7 +93,7 @@ func TestDistributeMap_FailureIsolatedPerSlot(t *testing.T) {
 		},
 	).Build())
 
-	res := mustInvoke(t, nodes.NewDistributeMapAction(reg), nodes.DistributeMapReq{
+	res := mustInvoke(t, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
 		Action:      "maybe",
 		Concurrency: 4,
 		Items:       []any{1, 2, 3, 4, 5},
@@ -124,7 +124,7 @@ func TestDistributeMap_PanicIsContainedPerSlot(t *testing.T) {
 		},
 	).Build())
 
-	res := mustInvoke(t, nodes.NewDistributeMapAction(reg), nodes.DistributeMapReq{
+	res := mustInvoke(t, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
 		Action: "boom",
 		Items:  []any{1, 2, 3},
 	}).(nodes.DistributeMapRes)
@@ -139,9 +139,7 @@ func TestDistributeMap_PanicIsContainedPerSlot(t *testing.T) {
 }
 
 func TestDistributeMap_EmptyItemsIsNoop(t *testing.T) {
-	reg := flow.NewRegistry()
-
-	res := mustInvoke(t, nodes.NewDistributeMapAction(reg), nodes.DistributeMapReq{
+	res := mustInvoke(t, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
 		Action: "anything",
 		Items:  []any{},
 	}).(nodes.DistributeMapRes)
@@ -151,10 +149,9 @@ func TestDistributeMap_EmptyItemsIsNoop(t *testing.T) {
 }
 
 func TestDistributeMap_ItemsExceedLimit(t *testing.T) {
-	reg := flow.NewRegistry()
 	items := make([]any, nodes.DistributeMaxItemsForTest()+1)
 
-	_, err := action.InvokeAny(context.Background(), nodes.NewDistributeMapAction(reg),
+	_, err := action.InvokeAny(context.Background(), nodes.NewDistributeMapAction(),
 		nodes.DistributeMapReq{Action: "x", Items: items})
 	if err == nil || !strings.Contains(err.Error(), "limit") {
 		t.Fatalf("expected limit error, got %v", err)
@@ -162,9 +159,7 @@ func TestDistributeMap_ItemsExceedLimit(t *testing.T) {
 }
 
 func TestDistributeMap_MissingAction(t *testing.T) {
-	reg := flow.NewRegistry()
-
-	_, err := action.InvokeAny(context.Background(), nodes.NewDistributeMapAction(reg),
+	_, err := action.InvokeAny(context.Background(), nodes.NewDistributeMapAction(),
 		nodes.DistributeMapReq{Action: "missing", Items: []any{1}})
 	if err == nil {
 		t.Fatal("expected NotFound")
@@ -172,7 +167,7 @@ func TestDistributeMap_MissingAction(t *testing.T) {
 }
 
 func TestDistributeMap_NilRegistry(t *testing.T) {
-	_, err := action.InvokeAny(context.Background(), nodes.NewDistributeMapAction(nil),
+	_, err := action.InvokeAny(context.Background(), nodes.NewDistributeMapAction(),
 		nodes.DistributeMapReq{Action: "x", Items: []any{1}})
 	if err == nil {
 		t.Fatal("expected error for nil registry")
@@ -195,7 +190,7 @@ func TestDistributeMap_ContextCanceledStops(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
 	defer cancel()
 
-	res, err := action.InvokeAny(ctx, nodes.NewDistributeMapAction(reg),
+	res, err := action.InvokeAny(ctx, nodes.NewDistributeMapAction(),
 		nodes.DistributeMapReq{Action: "slow", Concurrency: 2, Items: []any{1, 2, 3, 4}})
 	if err != nil {
 		t.Fatal(err)

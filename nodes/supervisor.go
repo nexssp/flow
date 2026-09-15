@@ -36,12 +36,18 @@ type SupervisorRes struct {
 	Results   []ChildResult `json:"results"`
 }
 
-// NewSupervisorNode creates a main orchestrator node that compiles and
-// controls child pipelines dynamically with panic isolation and leak protection.
-func NewSupervisorNode(name string, compiler contracts.PipelineCompiler) action.AnyAction {
+// NewSupervisorNode builds a supervisor that compiles and runs child
+// pipelines on the fly. The compiler is obtained from the execution
+// context, so the node works inside any flow without constructor args.
+func NewSupervisorNode(name string) action.AnyAction {
 	return action.New(name, func(ctx context.Context, req SupervisorReq) (SupervisorRes, error) {
 		if len(req.Tasks) == 0 {
 			return SupervisorRes{}, xerr.BadRequest("supervisor: no child tasks provided")
+		}
+
+		compiler := contracts.CompilerFromContext(ctx)
+		if compiler == nil {
+			return SupervisorRes{}, xerr.Internal("supervisor: no pipeline compiler in context")
 		}
 
 		results := make([]ChildResult, len(req.Tasks))
@@ -113,6 +119,6 @@ func NewSupervisorNode(name string, compiler contracts.PipelineCompiler) action.
 			Results:   results,
 		}, nil
 	}).
-		Description("Main orchestrator node that dynamic spins up and supervises child pipelines").
+		Description("Main orchestrator node that dynamically spawns and supervises child pipelines").
 		Build()
 }
