@@ -1,0 +1,10 @@
+    # 06_include_action — split flows across files, expose one as an action.
+# Demonstrates: @include pulls in pipelines from another file;
+#                @action marks this file callable from other flows.
+
+@include ./common.flow
+
+@action greet
+@description "Greets the payload's name in one line"
+
+greet_pipeline

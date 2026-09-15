@@ -1,0 +1,8 @@
+# 01_hello — the smallest possible flow.
+# Demonstrates: a single action, then an inline projection.
+
+@config:verbosity=2
+
+log.info
+-> { message: "hello, " + name, name: name }
+-> log.info

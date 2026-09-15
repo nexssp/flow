@@ -1,0 +1,17 @@
+# Remote @require. This file is identical to ../demo.flow except for
+# one line: the @require directive. Nothing in text/library.go changes
+# when the library is published — the module path is the only thing
+# that differs.
+#
+# This file will not run until you actually publish
+# text/ to a public Git repository under the path below. It is here
+# as documentation of the two forms.
+
+# @require ./text                                (local, this repo)
+@require github.com/nexssp/flow/examples/m6_require/text v1.0.0
+
+@config:verbosity=2
+
+{ message: "hello from a published library" }
+-> text_tools.uppercase
+-> log.info

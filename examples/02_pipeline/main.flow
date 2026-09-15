@@ -1,0 +1,12 @@
+# 02_pipeline — a pipeline is a subflow with a name.
+# Demonstrates: @pipeline / @end, calling a pipeline from two places.
+
+@config:verbosity=2
+
+@pipeline announce
+    { message: "announcing: " + what }
+    -> log.info
+@end
+
+{ what: "first pass" } -> announce
+-> { what: "second pass" } -> announce

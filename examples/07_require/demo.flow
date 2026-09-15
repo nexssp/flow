@@ -1,0 +1,7 @@
+@require ./text
+
+@config:verbosity=2
+
+{ message: "hello from a local library" }
+-> text_tools.uppercase
+-> log.info

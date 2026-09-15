@@ -1,0 +1,11 @@
+# 03_parallel_and_fallback — scatter/gather and first-success.
+# Demonstrates: ( A & B ) runs A and B concurrently and gathers;
+#                ( A || B ) tries A, falls back to B on error.
+
+@config:verbosity=2
+
+    ( { message: "branch A" } -> log.info
+    & { message: "branch B" } -> log.warn )
+
+-> ( { message: "missing" } -> fails_never_registered
+    || { message: "fallback ran" } -> log.info )

@@ -1,0 +1,8 @@
+@config:verbosity=3
+
+{ message: "step 1" }
+-> log.info
+-> { action: "does.not.exist" }
+-> bench.run
+-> { message: "step 2" }
+-> log.info

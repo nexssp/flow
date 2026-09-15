@@ -1,0 +1,7 @@
+@require github.com/acme/text-tools v1.0.0
+
+@config:verbosity=2
+
+{ message: "hello, world" }
+-> text_tools.uppercase
+-> log.info

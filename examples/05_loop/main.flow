@@ -1,0 +1,12 @@
+# 05_loop — iterate until a condition is true.
+# Demonstrates: loop( body ) until( condition ) with a bounded
+# iteration ceiling. The body runs, its output feeds the next turn,
+# and the loop stops when the condition evaluates to true.
+
+@config:verbosity=2
+
+{ attempts: 0, message: "turn 1" }
+-> loop(
+    { attempts: attempts + 1, message: "turn " + string(attempts + 1) }
+    -> log.info
+) until( attempts >= 3 )

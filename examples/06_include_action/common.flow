@@ -1,0 +1,5 @@
+# flow/examples/06_include_action/common.flow
+@pipeline greet_pipeline
+    { message: "hello, " + name }
+    -> log.info
+@end

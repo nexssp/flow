@@ -1,0 +1,7 @@
+# 04_conditional — gate a branch on a boolean.
+# Demonstrates: gate ? target runs target only when gate's output is truthy.
+
+@config:verbosity=2
+
+{ approved: true, message: "proceeding" }
+-> { approved: approved } -> ( approved ? log.info )
