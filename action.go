@@ -67,10 +67,13 @@ func NewExecuteAction(compiler *Compiler) *action.BuiltAction[GraphExecReq, Grap
 		defer dagState.Release()
 
 		finalDagState, err := dagInstance.Execute(ctx, dagState)
+		if finalDagState != nil {
+			defer finalDagState.Release()
+		}
+
 		if err != nil {
 			return GraphExecRes{}, err
 		}
-		defer finalDagState.Release()
 
 		return GraphExecRes{
 			GraphName:  def.Metadata.Name,
