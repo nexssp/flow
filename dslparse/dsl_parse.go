@@ -18,6 +18,7 @@ func parseModifiers(mods []string) Modifiers {
 			p.Method, p.Path = parseRouteValue(mClean[len("route="):], "POST")
 		case strings.HasPrefix(mLower, "http="):
 			method, path := parseRouteValue(mClean[len("http="):], "POST")
+
 			p.Method, p.Path = method, path
 			if path != "" {
 				p.Transports = append(p.Transports, TransportBinding{
@@ -171,6 +172,7 @@ func parseModifiers(mods []string) Modifiers {
 		default:
 			if eq := strings.IndexByte(mClean, '='); eq > 0 {
 				key := strings.ToLower(strings.TrimSpace(mClean[:eq]))
+
 				val := trimValue(mClean[eq+1:])
 				if b := buildDSLTransportBinding(key, val); b != nil {
 					p.Transports = append(p.Transports, *b)
@@ -178,6 +180,7 @@ func parseModifiers(mods []string) Modifiers {
 			}
 		}
 	}
+
 	return p
 }
 
@@ -190,16 +193,19 @@ func applyTransportExtras(p *Modifiers) {
 				if b.Meta == nil {
 					b.Meta = map[string]string{}
 				}
+
 				b.Meta["channel"] = p.SSEChannel
 			}
 		case "cli":
 			if len(p.CLIAliases) > 0 {
 				b.Aliases = append([]string(nil), p.CLIAliases...)
 			}
+
 			if p.CLIDesc != "" {
 				if b.Meta == nil {
 					b.Meta = map[string]string{}
 				}
+
 				b.Meta["description"] = p.CLIDesc
 			}
 		case "a2a":
@@ -207,12 +213,15 @@ func applyTransportExtras(p *Modifiers) {
 				if b.Meta == nil {
 					b.Meta = map[string]string{}
 				}
+
 				b.Meta["description"] = p.A2ADesc
 			}
+
 			if len(p.A2AExample) > 0 {
 				if b.Meta == nil {
 					b.Meta = map[string]string{}
 				}
+
 				b.Meta["examples"] = strings.Join(p.A2AExample, ",")
 			}
 		}
@@ -221,6 +230,7 @@ func applyTransportExtras(p *Modifiers) {
 
 func parseRouteValue(raw string, defaultMethod string) (method, path string) {
 	val := trimValue(raw)
+
 	parts := strings.Fields(val)
 	switch len(parts) {
 	case 2:
@@ -237,17 +247,21 @@ func parseBudget(raw string) (int64, bool) {
 	if raw == "" {
 		return 0, false
 	}
+
 	if strings.HasPrefix(raw, "$") || strings.Contains(raw, ".") {
 		f, err := strconv.ParseFloat(strings.TrimPrefix(raw, "$"), 64)
 		if err != nil {
 			return 0, false
 		}
+
 		return int64(f * 1_000_000), true
 	}
+
 	n, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
 		return 0, false
 	}
+
 	return n, true
 }
 
@@ -255,10 +269,12 @@ func parseRPS(s string) float64 {
 	s = strings.TrimSuffix(s, "/s")
 	s = strings.TrimSuffix(s, "/sec")
 	s = strings.TrimSuffix(s, "rps")
+
 	f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
 	if err != nil {
 		return 0
 	}
+
 	return f
 }
 
@@ -266,19 +282,24 @@ func applyBreakerSpec(p *Modifiers, spec string) {
 	if spec == "" {
 		return
 	}
+
 	if !strings.Contains(spec, "=") {
 		if d, err := time.ParseDuration(spec); err == nil {
 			p.BreakerCooldown = d
 		}
+
 		return
 	}
+
 	for _, part := range splitCSV(spec) {
 		kv := strings.SplitN(part, "=", 2)
 		if len(kv) != 2 {
 			continue
 		}
+
 		k := strings.TrimSpace(kv[0])
 		v := strings.TrimSpace(kv[1])
+
 		switch k {
 		case "failures":
 			if n, err := strconv.Atoi(v); err == nil {
@@ -296,18 +317,22 @@ func applyBackoffSpec(p *Modifiers, spec string) {
 	if spec == "" {
 		return
 	}
+
 	parts := splitCSV(spec)
 	if len(parts) == 0 {
 		return
 	}
+
 	p.BackoffStrategy = parts[0]
 	for _, part := range parts[1:] {
 		kv := strings.SplitN(part, "=", 2)
 		if len(kv) != 2 {
 			continue
 		}
+
 		k := strings.TrimSpace(kv[0])
 		v := strings.TrimSpace(kv[1])
+
 		switch k {
 		case "base":
 			if d, err := time.ParseDuration(v); err == nil {

@@ -369,6 +369,7 @@ func (o *RunnerObserver) PrintSummary(out io.Writer) {
 		}
 
 		costStr := "-"
+
 		switch {
 		case r.CostKnown:
 			costStr = formatCost(r.CostMicros, r.Currency)
@@ -397,6 +398,7 @@ func (o *RunnerObserver) PrintSummary(out io.Writer) {
 	for c := range byCurrency {
 		currencies = append(currencies, c)
 	}
+
 	sort.Slice(currencies, func(i, j int) bool {
 		return currencies[i].String() < currencies[j].String()
 	})
@@ -427,12 +429,14 @@ func actionName(m *action.Meta) string {
 
 func snip(s string, maxLen int) string {
 	s = strings.TrimSpace(s)
+
 	s = strings.ReplaceAll(s, "\n", " ")
 	if len(s) <= maxLen || maxLen < 10 {
 		return s
 	}
 
 	half := (maxLen - 3) / 2
+
 	return s[:half] + "..." + s[len(s)-half:]
 }
 

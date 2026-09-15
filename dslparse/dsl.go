@@ -107,8 +107,10 @@ func ParseManifest(content string) (map[string]Modifiers, Config) {
 
 		if strings.HasPrefix(line, "@config:") {
 			ApplyConfigLine(&cfg, line)
+
 			continue
 		}
+
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
 			continue
 		}
@@ -117,16 +119,19 @@ func ParseManifest(content string) (map[string]Modifiers, Config) {
 		if !ok {
 			continue
 		}
+
 		name := pl.RawName
 		if pl.Modifiers.CustomName != "" {
 			name = pl.Modifiers.CustomName
 		}
+
 		if existing, ok := out[name]; ok {
 			out[name] = mergeModifiers(existing, pl.Modifiers)
 		} else {
 			out[name] = pl.Modifiers
 		}
 	}
+
 	return out, cfg
 }
 
@@ -142,10 +147,12 @@ func ParseLine(line string) (ParsedLine, bool) {
 	colonIdx := strings.IndexByte(targetAtom, ':')
 	rawName := targetAtom
 	modsStr := ""
+
 	if colonIdx >= 0 {
 		rawName = strings.TrimSpace(targetAtom[:colonIdx])
 		modsStr = targetAtom[colonIdx+1:]
 	}
+
 	if rawName == "" {
 		return ParsedLine{}, false
 	}
@@ -154,6 +161,7 @@ func ParseLine(line string) (ParsedLine, bool) {
 	applyTransportExtras(&p)
 
 	head := ""
+
 	if isComposite {
 		arrows := scanTopLevelArrows(line)
 		if len(arrows) > 0 {
@@ -175,12 +183,15 @@ func ParseLine(line string) (ParsedLine, bool) {
 // ApplyConfigLine parses one @config: directive into cfg.
 func ApplyConfigLine(cfg *Config, line string) {
 	body := strings.TrimPrefix(line, "@config:")
+
 	kv := strings.SplitN(body, "=", 2)
 	if len(kv) != 2 {
 		return
 	}
+
 	k := strings.TrimSpace(kv[0])
 	v := trimValue(kv[1])
+
 	switch k {
 	case "silent", "silent_rules", "mute":
 		for _, r := range splitCSV(v) {
@@ -195,105 +206,139 @@ func mergeModifiers(a, b Modifiers) Modifiers {
 	if b.CustomName != "" {
 		a.CustomName = b.CustomName
 	}
+
 	if b.Description != "" {
 		a.Description = b.Description
 	}
+
 	if b.ReqType != "" {
 		a.ReqType = b.ReqType
 	}
+
 	if b.ResType != "" {
 		a.ResType = b.ResType
 	}
+
 	if b.Method != "" {
 		a.Method = b.Method
 	}
+
 	if b.Path != "" {
 		a.Path = b.Path
 	}
+
 	if b.Timeout > 0 {
 		a.Timeout = b.Timeout
 	}
+
 	if b.CacheTTL > 0 {
 		a.CacheTTL = b.CacheTTL
 	}
+
 	if b.CacheKey != "" {
 		a.CacheKey = b.CacheKey
 	}
+
 	if b.RetryMax > 0 {
 		a.RetryMax = b.RetryMax
 	}
+
 	if b.RetryPredicate != "" {
 		a.RetryPredicate = b.RetryPredicate
 	}
+
 	if b.BackoffStrategy != "" {
 		a.BackoffStrategy = b.BackoffStrategy
 	}
+
 	if b.BackoffBase > 0 {
 		a.BackoffBase = b.BackoffBase
 	}
+
 	if b.BackoffMax > 0 {
 		a.BackoffMax = b.BackoffMax
 	}
+
 	if b.Idempotent {
 		a.Idempotent = true
 	}
+
 	if b.IdempotencyHeader != "" {
 		a.IdempotencyHeader = b.IdempotencyHeader
 	}
+
 	if b.RateLimit != "" {
 		a.RateLimit = b.RateLimit
 	}
+
 	if b.RateLimitRPS > 0 {
 		a.RateLimitRPS = b.RateLimitRPS
 	}
+
 	if b.RateLimitBurst > 0 {
 		a.RateLimitBurst = b.RateLimitBurst
 	}
+
 	if b.ConcurrencyLimit > 0 {
 		a.ConcurrencyLimit = b.ConcurrencyLimit
 	}
+
 	if b.BreakerFailures > 0 {
 		a.BreakerFailures = b.BreakerFailures
 	}
+
 	if b.BreakerCooldown > 0 {
 		a.BreakerCooldown = b.BreakerCooldown
 	}
+
 	if b.Priority != "" {
 		a.Priority = b.Priority
 	}
+
 	if b.RequiresAuth {
 		a.RequiresAuth = true
 	}
+
 	if b.Scope != "" {
 		a.Scope = b.Scope
 	}
+
 	if b.SuccessStatus > 0 {
 		a.SuccessStatus = b.SuccessStatus
 	}
+
 	if b.BudgetMicros > 0 {
 		a.BudgetMicros = b.BudgetMicros
 	}
+
 	if b.Audit {
 		a.Audit = true
 	}
+
 	if b.HITLPrompt != "" {
 		a.HITLPrompt = b.HITLPrompt
 	}
+
 	if b.Deprecated {
 		a.Deprecated = true
 	}
+
 	if b.DeprecatedSince != "" {
 		a.DeprecatedSince = b.DeprecatedSince
 	}
+
 	if b.DeprecatedUse != "" {
 		a.DeprecatedUse = b.DeprecatedUse
 	}
+
 	if b.SSEChannel != "" {
 		a.SSEChannel = b.SSEChannel
 	}
+
 	if b.CLIDesc != "" {
 		a.CLIDesc = b.CLIDesc
 	}
+
 	if b.A2ADesc != "" {
 		a.A2ADesc = b.A2ADesc
 	}
@@ -320,7 +365,9 @@ func splitCSV(s string) []string {
 	if s == "" {
 		return nil
 	}
+
 	parts := strings.Split(s, ",")
+
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
 		p = trimValue(p)
@@ -328,5 +375,6 @@ func splitCSV(s string) []string {
 			out = append(out, p)
 		}
 	}
+
 	return out
 }

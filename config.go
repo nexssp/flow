@@ -115,6 +115,7 @@ func WithMaxTokens(ctx context.Context, n int) context.Context {
 	if n <= 0 {
 		return ctx
 	}
+
 	return maxTokensKey.With(ctx, n)
 }
 
@@ -122,8 +123,10 @@ func MaxTokensFromCtx(ctx context.Context, def int) int {
 	if ctx == nil {
 		return def
 	}
+
 	if v, ok := maxTokensKey.From(ctx); ok && v > 0 {
 		return v
 	}
+
 	return def
 }

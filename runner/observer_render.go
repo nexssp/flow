@@ -30,6 +30,7 @@ func getAgentTag(name string) string {
 		if len(upper) > 10 {
 			return upper[:10]
 		}
+
 		return upper
 	}
 }

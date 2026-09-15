@@ -1,8 +1,6 @@
 package runner
 
 import (
-	"time"
-
 	"github.com/nexssp/cost"
 )
 
@@ -22,9 +20,6 @@ type tokenCostReporter interface {
 type currencyReporter interface {
 	Currency() cost.Currency
 }
-
-// timeNow is a swappable clock for tests.
-var timeNow = time.Now
 
 // extractPromptGeneric returns a prompt-like string from a request.
 // It understands the two domainless shapes every non-AI caller uses:
