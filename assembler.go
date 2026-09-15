@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 )
 
@@ -35,6 +36,16 @@ func (s *SystemAssembler) AssembleFile(path string) ([]action.AnyAction, error) 
 	return s.AssembleManifest(string(data))
 }
 
+// AssembleManifest compiles a manifest of action declarations. Each
+// non-empty, non-comment line is one action; blank lines and lines
+// starting with '#' or '//' are ignored.
+//
+// Unlike CompilePipeline, this method does NOT run SanitizeDSL on the
+// input. SanitizeDSL's route-header filter treats an unindented
+// ":route=" line with no arrow as a whole-flow mount point, which is
+// correct for a .flow file but wrong for a manifest-of-actions: every
+// line here is its own declaration and route modifiers belong to the
+// action on that line.
 func (s *SystemAssembler) AssembleManifest(manifestDSL string) ([]action.AnyAction, error) {
 	lines := strings.Split(manifestDSL, "\n")
 	for _, rawLine := range lines {
@@ -43,7 +54,14 @@ func (s *SystemAssembler) AssembleManifest(manifestDSL string) ([]action.AnyActi
 			continue
 		}
 
-		builder, err := CompilePipeline(line, s.registry)
+		parser := compiler.NewParser(line)
+
+		ast, err := parser.ParseExpression()
+		if err != nil {
+			return nil, fmt.Errorf("flow: assemble %q failed: %w", line, err)
+		}
+
+		builder, err := compileAST(ast, s.registry)
 		if err != nil {
 			return nil, fmt.Errorf("flow: assemble %q failed: %w", line, err)
 		}

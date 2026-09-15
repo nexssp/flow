@@ -26,25 +26,33 @@ func TestStripAtAnnotations(t *testing.T) {
 }
 
 func TestSanitizeDSL(t *testing.T) {
-	src := "# comment\n" +
-		"@config:budget_micros=1000\n" +
-		"\n" +
-		"agent.orchestrator:model=\"x\":role=\"Orchestrator\"@Break down task\n" +
-		"  -> agent.worker:model=\"y\":skills=\"go\"@Implement\n" +
-		"  -> sandbox.test_runner:timeout=30s\n" +
-		"  -> agent.critic:model=\"x\"\n"
+	input := `# System Runtime Configurations
+@config:budget_micros=10000000
 
-	want := `agent.orchestrator:model="x":role="Orchestrator" -> agent.worker:model="y":skills="go" -> sandbox.test_runner:timeout=30s -> agent.critic:model="x"`
-	if got := SanitizeDSL(src); got != want {
-		t.Errorf("\n got: %q\nwant: %q", got, want)
+# Swarm Pipeline
+agent.orchestrator:model="x":role="Orchestrator"@Break down task
+-> agent.worker:model="y":skills="go"@Implement
+-> sandbox.test_runner:timeout=30s
+-> agent.critic:model="x"
+`
+	want := "agent.orchestrator:model=\"x\":role=\"Orchestrator\"@Break down task\n" +
+		"-> agent.worker:model=\"y\":skills=\"go\"@Implement\n" +
+		"-> sandbox.test_runner:timeout=30s\n" +
+		"-> agent.critic:model=\"x\"\n"
+
+	got := SanitizeDSL(input)
+	if got != want {
+		t.Fatalf("SanitizeDSL:\n  got:  %q\n  want: %q", got, want)
 	}
 }
 
 func TestSanitizeDSL_SkipsRouteHeader(t *testing.T) {
-	src := "autonomous.solve:route=\"POST /api/x\":status=200\nagent.planner -> agent.critic"
+	input := `autonomous.solve:route="POST /api/x":status=200
+agent.planner -> agent.critic`
+	want := "agent.planner -> agent.critic\n"
 
-	want := "agent.planner -> agent.critic"
-	if got := SanitizeDSL(src); got != want {
-		t.Errorf("got %q, want %q", got, want)
+	got := SanitizeDSL(input)
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }

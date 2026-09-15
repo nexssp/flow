@@ -64,12 +64,28 @@ func (l *Lexer) Next() Token {
 
 		return Token{Type: TokenAssign, Lit: "=", Line: l.line, Col: l.col - 1, Offset: offset}
 	case ch == '@':
-		// Prompt modifier: consumes until the end of the current line
+		// Prompt modifier: read free text up to the next structural
+		// delimiter or end of line. Structural delimiters are the ones
+		// the atom parser needs to see as their own tokens: pipeline
+		// arrows, pipe/parallel/fallback operators, conditional gate,
+		// opening paren of a params block, and closing paren of a
+		// surrounding group.
 		start := l.pos
 		l.pos++
-
 		l.col++
-		for l.pos < len(l.input) && l.input[l.pos] != '\n' {
+
+		for l.pos < len(l.input) {
+			c := l.input[l.pos]
+
+			if c == '\n' || c == '(' || c == ')' ||
+				c == '|' || c == '&' || c == '?' || c == ':' {
+				break
+			}
+
+			if c == '-' && l.pos+1 < len(l.input) && l.input[l.pos+1] == '>' {
+				break
+			}
+
 			l.pos++
 			l.col++
 		}
