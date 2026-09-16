@@ -15,6 +15,7 @@ import (
 	"github.com/nexssp/cost"
 	"github.com/nexssp/flow"
 	"github.com/nexssp/flow/runner/capability"
+	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/ai/dag"
 	"github.com/nexssp/kernel/observe"
 	"github.com/nexssp/kernel/xctx"
@@ -47,7 +48,7 @@ type Request struct {
 // Use this when you already know what actions the flow may call. For
 // the AI-flavoured entry point that builds a standard AI registry, see
 // ai/flow/bootstrap.RunFlow.
-func RunWithRegistry(ctx context.Context, req Request, reg *flow.MapRegistry, observer *RunnerObserver) int {
+func RunWithRegistry(ctx context.Context, req Request, reg *action.Registry, observer *RunnerObserver) int {
 	stdout := req.Stdout
 	if stdout == nil {
 		stdout = os.Stdout
@@ -236,8 +237,10 @@ func RunWithRegistry(ctx context.Context, req Request, reg *flow.MapRegistry, ob
 	}
 
 	if len(pre.Pipelines) > 0 {
-		if err := flow.RegisterPipelines(reg, pre.Pipelines); err != nil {
-			fmt.Fprintf(stderr, "❌ %v\n", err)
+		var regErr error
+		reg, regErr = flow.RegisterPipelines(reg, pre.Pipelines)
+		if regErr != nil {
+			fmt.Fprintf(stderr, "❌ %v\n", regErr)
 
 			return 1
 		}
@@ -264,7 +267,18 @@ func RunWithRegistry(ctx context.Context, req Request, reg *flow.MapRegistry, ob
 	if err == nil {
 		defer resolver.Close()
 
-		resolver.Install()
+		if remoteActions := resolver.Actions(); len(remoteActions) > 0 {
+			merged, mergeErr := action.NewRegistry(
+				action.Library{Name: "base", Actions: reg.Actions()},
+				action.Library{Name: "remote", Actions: remoteActions},
+			)
+			if mergeErr != nil {
+				fmt.Fprintf(stderr, "❌ capability merge: %v\n", mergeErr)
+
+				return 1
+			}
+			reg = merged
+		}
 	}
 
 	obsHook := observe.Hook(observer)

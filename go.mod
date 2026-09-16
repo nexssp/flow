@@ -5,10 +5,10 @@ go 1.26.0
 require (
 	github.com/expr-lang/expr v1.17.8
 	github.com/joho/godotenv v1.5.1
-	github.com/ncruces/go-sqlite3 v0.35.4
+	github.com/ncruces/go-sqlite3 v0.35.5
 	github.com/nexssp/cost v0.1.5
 	github.com/nexssp/cost/adapters/kernel v0.1.5
-	github.com/nexssp/kernel v0.11.2
+	github.com/nexssp/kernel v0.12.1
 	github.com/nexssp/testkit v0.3.3
 	github.com/nexssp/transport v0.2.3
 	github.com/nexssp/transportai v0.8.3
@@ -25,7 +25,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.4 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/leodido/go-urn v1.5.0 // indirect
-	github.com/ncruces/go-sqlite3-wasm/v5 v5.0.35304 // indirect
+	github.com/ncruces/go-sqlite3-wasm/v6 v6.2.35304 // indirect
 	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect

@@ -6,12 +6,11 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/nexssp/flow"
 	"github.com/nexssp/flow/optimizer"
 	"github.com/nexssp/kernel/action"
 )
 
-func createTestRegistry() flow.Registry {
+func createTestRegistry() *action.Registry {
 	act1 := action.New("fetch", func(_ context.Context, _ any) (string, error) {
 		return "data", nil
 	}).Build()
@@ -28,7 +27,7 @@ func createTestRegistry() flow.Registry {
 		return "saved:" + req, nil
 	}).Build()
 
-	return flow.NewRegistry(act1, act2, act3, act4)
+	return action.MustNewRegistry(action.Of(act1, act2, act3, act4))
 }
 
 func TestEvolve_InvalidBaseline(t *testing.T) {
@@ -67,18 +66,7 @@ func TestEvolve_DiscoversHigherScore(t *testing.T) {
 
 	baselineDSL := "fetch -> process_a -> process_b -> save"
 
-	// Fitness function gives huge bonus for parallelizing ( & ) or adding retries (:retry=2)
 	evaluator := func(evalCtx context.Context, candidate action.AnyAction) (float64, error) {
-		meta := candidate.Describe()
-
-		name := ""
-		if meta != nil {
-			name = meta.Name
-		}
-
-		_ = name
-
-		// Test execution to guarantee the candidate compiles and runs cleanly
 		res, err := candidate.DoAny(evalCtx, nil)
 		if err != nil {
 			return -100.0, nil
@@ -88,9 +76,7 @@ func TestEvolve_DiscoversHigherScore(t *testing.T) {
 			return -50.0, nil
 		}
 
-		score := 10.0
-		// We evaluate based on structural qualities
-		return score, nil
+		return 10.0, nil
 	}
 
 	var evalCalls atomic.Int32
@@ -98,9 +84,7 @@ func TestEvolve_DiscoversHigherScore(t *testing.T) {
 	countingEvaluator := func(evalCtx context.Context, candidate action.AnyAction) (float64, error) {
 		evalCalls.Add(1)
 
-		score, _ := evaluator(evalCtx, candidate)
-
-		return score, nil
+		return evaluator(evalCtx, candidate)
 	}
 
 	best, err := optimizer.Evolve(ctx, baselineDSL, reg, countingEvaluator, optimizer.Options{
@@ -132,7 +116,6 @@ func TestEvolve_ParallelScoreBonus(t *testing.T) {
 
 	baselineDSL := "fetch -> process_a -> process_b -> save"
 
-	// Evaluator gives 100 points if the pipeline successfully forms a parallel group
 	evaluator := func(evalCtx context.Context, candidate action.AnyAction) (float64, error) {
 		_, err := candidate.DoAny(evalCtx, nil)
 		if err != nil {
@@ -150,7 +133,6 @@ func TestEvolve_ParallelScoreBonus(t *testing.T) {
 		t.Fatalf("Evolve failed: %v", err)
 	}
 
-	// Over 3 generations with 6 population, it should explore mutations
 	if strings.TrimSpace(best.DSL) == "" {
 		t.Fatal("best DSL should not be empty")
 	}

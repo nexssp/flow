@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/nexssp/flow"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/transport/thttp"
 )
@@ -25,12 +24,12 @@ func Uppercase() *action.BuiltAction[UppercaseReq, UppercaseRes] {
 		Build()
 }
 
-func Library() flow.Library {
-	return flow.Library{
+func Library() action.Library {
+	return action.Library{
 		Name:        "text",
 		Description: "Text manipulation utilities for flow examples",
 		Actions:     []action.AnyAction{Uppercase()},
-		Aliases: []flow.Alias{
+		Aliases: []action.Alias{
 			{Canonical: "text_tools.uppercase", Short: []string{"uppercase", "upper"}},
 		},
 	}

@@ -14,6 +14,7 @@ import (
 
 	"github.com/nexssp/flow"
 	flowrunner "github.com/nexssp/flow/runner"
+	"github.com/nexssp/kernel/action"
 )
 
 // Result captures the outcome of one flow run inside a test.
@@ -39,15 +40,15 @@ func RunDSL(
 	t testing.TB,
 	dsl string,
 	payload map[string]any,
-	libs ...flow.Library,
+	libs ...action.Library,
 ) Result {
 	t.Helper()
 
 	if len(libs) == 0 {
-		libs = []flow.Library{flow.StandardLibrary()}
+		libs = []action.Library{flow.StandardLibrary()}
 	}
 
-	reg, err := flow.BuildRegistry(libs...)
+	reg, err := action.NewRegistry(libs...)
 	if err != nil {
 		t.Fatalf("testkit.RunDSL: build registry: %v", err)
 	}

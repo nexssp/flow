@@ -13,16 +13,12 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
-// FlowDef describes one .flow file that declared itself an action via
-// @action.
 type FlowDef struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	Path        string `json:"path"`
 }
 
-// ScanFlowsFolder walks root recursively and returns every *.flow file
-// that declares @action. Files without @action are ignored.
 func ScanFlowsFolder(root string) ([]FlowDef, error) {
 	var defs []FlowDef
 
@@ -61,9 +57,6 @@ func ScanFlowsFolder(root string) ([]FlowDef, error) {
 	return defs, nil
 }
 
-// BuildFlowActions turns FlowDefs into actions. Each flow action reads
-// its own DSL and pipelines on every call and runs them against a
-// per-call snapshot of the parent registry.
 func BuildFlowActions(defs []FlowDef, parent func() []action.AnyAction) []action.AnyAction {
 	out := make([]action.AnyAction, 0, len(defs))
 	for _, def := range defs {
@@ -82,8 +75,13 @@ func buildFlowAction(def FlowDef, parent func() []action.AnyAction) action.AnyAc
 
 		dsl := flow.SanitizeDSL(pre.DSL)
 
-		localReg := flow.NewRegistry(parent()...)
-		if err := flow.RegisterPipelines(localReg, pre.Pipelines); err != nil {
+		localReg, err := action.NewRegistry(action.Of(parent()...))
+		if err != nil {
+			return nil, err
+		}
+
+		localReg, err = flow.RegisterPipelines(localReg, pre.Pipelines)
+		if err != nil {
 			return nil, err
 		}
 
@@ -105,7 +103,6 @@ func buildFlowAction(def FlowDef, parent func() []action.AnyAction) action.AnyAc
 		Build()
 }
 
-// BuildFlowMetaTools returns flow.list, flow.inspect, and flow.run.
 func BuildFlowMetaTools(defs []FlowDef, flowActions map[string]action.AnyAction) []action.AnyAction {
 	byName := make(map[string]FlowDef, len(defs))
 	for _, d := range defs {

@@ -37,8 +37,8 @@ func (a *App) WithActions(fn func(context.Context) ([]action.AnyAction, error)) 
 // Two passes:
 //
 //  1. Read all flow sources and install any :exec= / :remote= / :wasm=
-//     capability bindings into the shared registry so their short names
-//     resolve when the compiler reads the sources.
+//     capability bindings so their short names resolve when the compiler
+//     reads the sources.
 //  2. Compile each flow into a named action whose Name is the file stem.
 //
 // Load WithFlows last so its nodes see every other loader's actions.
@@ -85,16 +85,33 @@ func (a *App) WithFlows(dir string) *App {
 			combined.WriteByte('\n')
 		}
 
-		// Pass 1: install capability bindings. Failure to resolve any
-		// single binding is non-fatal; the compiler will surface a clear
+		baseReg, err := action.NewRegistry(action.Of(asm.Actions...))
+		if err != nil {
+			return fmt.Errorf("flow: build base registry: %w", err)
+		}
+
+		// Pass 1: resolve capability bindings. Failure to resolve any
+		// single binding is non-fatal; the compiler surfaces a clear
 		// "capability not found" error per flow when it tries to use it.
-		if resolver, rerr := capability.NewResolver(context.Background(), asm.registry, combined.String()); rerr == nil {
-			resolver.Install()
+		resolver, rerr := capability.NewResolver(context.Background(), baseReg, combined.String())
+		if rerr == nil {
+			defer resolver.Close()
+
+			if remoteActions := resolver.Actions(); len(remoteActions) > 0 {
+				merged, mergeErr := action.NewRegistry(
+					action.Library{Name: "base", Actions: baseReg.Actions()},
+					action.Library{Name: "capabilities", Actions: remoteActions},
+				)
+				if mergeErr != nil {
+					return fmt.Errorf("flow: merge capabilities: %w", mergeErr)
+				}
+				baseReg = merged
+			}
 		}
 
 		// Pass 2: compile each flow into a named action.
 		for _, f := range flowsList {
-			act, cerr := compileFlowFile(f.name, f.source, asm.registry)
+			act, cerr := compileFlowFile(f.name, f.source, baseReg)
 			if cerr != nil {
 				return fmt.Errorf("compile flow %q: %w", f.path, cerr)
 			}
@@ -109,18 +126,16 @@ func (a *App) WithFlows(dir string) *App {
 }
 
 // compileFlowFile reads a .flow source, sanitizes the DSL, and returns a
-// single action whose Name is the file stem. The registered graph is
+// single action whose Name is the file stem. The compiled graph is
 // independent of the caller — the returned action executes the flow
 // end-to-end with a JSON payload.
-func compileFlowFile(name, source string, reg *flow.MapRegistry) (action.AnyAction, error) {
+func compileFlowFile(name, source string, reg *action.Registry) (action.AnyAction, error) {
 	dsl := flow.SanitizeDSL(source)
 	if dsl == "" {
 		return nil, fmt.Errorf("no executable pipeline")
 	}
-
 	compiler := flow.NewCompiler(reg)
 	execAct := flow.NewExecuteAction(compiler)
-
 	return action.New(name, func(ctx context.Context, payload map[string]any) (flow.GraphExecRes, error) {
 		return execAct.Do(ctx, flow.GraphExecReq{
 			DSL:            dsl,

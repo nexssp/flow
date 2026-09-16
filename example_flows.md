@@ -59,7 +59,7 @@ func main() {
 	}).Build()
 
 	// 3. Register & Attach Global Telemetry Hook
-	registry := flow.NewRegistry(dbQuery, sendEmail)
+	registry := action.MustNewRegistry(action.Of(dbQuery, sendEmail))
 
 	// Apply telemetry to EVERY action in the registry automatically
 	for _, act := range registry.Actions() {

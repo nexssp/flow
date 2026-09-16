@@ -11,7 +11,7 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
-func CompilePipeline(expr string, reg Registry) (*action.Builder[any, any], error) {
+func CompilePipeline(expr string, reg *action.Registry) (*action.Builder[any, any], error) {
 	expr = SanitizeDSL(expr)
 	if strings.TrimSpace(expr) == "" {
 		return nil, xerr.BadRequest("flow: pipeline expression cannot be empty")
@@ -27,7 +27,7 @@ func CompilePipeline(expr string, reg Registry) (*action.Builder[any, any], erro
 	return compileAST(ast, reg)
 }
 
-func compileAST(node compiler.Expr, reg Registry) (*action.Builder[any, any], error) {
+func compileAST(node compiler.Expr, reg *action.Registry) (*action.Builder[any, any], error) {
 	switch n := node.(type) {
 	case *compiler.PipelineExpr:
 		left, err := compileAST(n.Left, reg)

@@ -49,7 +49,10 @@ func main() {
 		return WorkerRes{Result: req.Data + "_safe_cloud"}, nil
 	}).Build()
 
-	registry := flow.NewRegistry(fetch, fragile, safe)
+	registry, err := action.NewRegistry(action.Of(fetch, fragile, safe))
+	if err != nil {
+		panic(err)
+	}
 
 	currentDSL := "fetch -> fragile"
 

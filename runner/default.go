@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/nexssp/flow"
+	"github.com/nexssp/kernel/action"
 )
 
 // Default is the standard flow.Runner implementation. It builds a
@@ -27,10 +28,10 @@ func (d Default) RunFlow(
 	path string,
 	payload map[string]any,
 	args []string,
-	libs []flow.Library,
+	libs []action.Library,
 	stdout, stderr io.Writer,
 ) int {
-	reg, err := flow.BuildRegistry(libs...)
+	reg, err := action.NewRegistry(libs...)
 	if err != nil {
 		fmt.Fprintf(stderr, "❌ registry build failed: %v\n", err)
 
@@ -54,7 +55,7 @@ func (d Default) RunFlow(
 func (d Default) RunWithRegistry(
 	ctx context.Context,
 	req Request,
-	reg *flow.MapRegistry,
+	reg *action.Registry,
 	obs *RunnerObserver,
 ) int {
 	if obs == nil {

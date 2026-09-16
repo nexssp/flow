@@ -1,15 +1,5 @@
 // Filesystem-touching tests use t.Chdir(tmp) + relative paths so the
-// xfs.Rel path guard accepts the input. This matches the production
-// contract: bench.save / bench.compare are invoked from a workspace
-// directory, not with absolute paths.
-//
-// t.Chdir forbids t.Parallel(); tests that mutate CWD do not call it.
-//
-// Every test that invokes bench.run goes through ctxWithRegistry, so
-// the action reads the target from the execution context (see
-// contracts.RegistryFromContext). Tests for bench.save and
-// bench.compare keep context.Background() because those actions do
-// not look up other actions.
+// xfs.Rel path guard accepts the input.
 package nodes_test
 
 import (
@@ -20,15 +10,12 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/nexssp/flow"
 	"github.com/nexssp/flow/contracts"
 	"github.com/nexssp/flow/nodes"
 	"github.com/nexssp/kernel/action"
 )
 
-// ctxWithRegistry returns a context carrying the registry and, when the
-// registry implements it, the pipeline compiler.
-func ctxWithRegistry(t *testing.T, reg *flow.MapRegistry) context.Context {
+func ctxWithRegistry(t *testing.T, reg *action.Registry) context.Context {
 	t.Helper()
 
 	ctx := contracts.WithRegistry(context.Background(), reg)
@@ -39,9 +26,6 @@ func ctxWithRegistry(t *testing.T, reg *flow.MapRegistry) context.Context {
 	return ctx
 }
 
-// mustInvoke runs act with a bare context. Use for actions that do not
-// resolve other actions from the context (bench.save, bench.compare,
-// distribute.reduce).
 func mustInvoke(t *testing.T, act action.AnyAction, req any) any {
 	t.Helper()
 
@@ -53,10 +37,7 @@ func mustInvoke(t *testing.T, act action.AnyAction, req any) any {
 	return raw
 }
 
-// mustInvokeReg runs act with a context that carries reg. Use for
-// actions that resolve their target by name (bench.run, distribute.map,
-// supervisor).
-func mustInvokeReg(t *testing.T, reg *flow.MapRegistry, act action.AnyAction, req any) any {
+func mustInvokeReg(t *testing.T, reg *action.Registry, act action.AnyAction, req any) any {
 	t.Helper()
 
 	raw, err := action.InvokeAny(ctxWithRegistry(t, reg), act, req)
@@ -70,10 +51,11 @@ func mustInvokeReg(t *testing.T, reg *flow.MapRegistry, act action.AnyAction, re
 // ── bench.run ──────────────────────────────────────────────────────────────
 
 func TestBenchRun_HappyPath(t *testing.T) {
-	reg := flow.NewRegistry()
-	reg.Register("noop", action.New("noop",
-		func(_ context.Context, _ struct{}) (string, error) { return "ok", nil },
-	).Build())
+	reg := action.MustNewRegistry(action.Of(
+		action.New("noop", func(_ context.Context, _ struct{}) (string, error) {
+			return "ok", nil
+		}).Build(),
+	))
 
 	res := mustInvokeReg(t, reg, nodes.NewBenchRunAction(),
 		nodes.BenchRunReq{Action: "noop", Iterations: 100}).(nodes.BenchRunRes)
@@ -92,7 +74,6 @@ func TestBenchRun_HappyPath(t *testing.T) {
 }
 
 func TestBenchRun_NilRegistry(t *testing.T) {
-	// Deliberately bare: the action must report the missing registry.
 	_, err := action.InvokeAny(context.Background(), nodes.NewBenchRunAction(),
 		nodes.BenchRunReq{Action: "x", Iterations: 5})
 	if err == nil {
@@ -105,9 +86,8 @@ func TestBenchRun_NilRegistry(t *testing.T) {
 }
 
 func TestBenchRun_TargetNotFound(t *testing.T) {
-	// Registry present but does not contain the target. Exercises the
-	// NotFound path, not the missing-context path.
-	_, err := action.InvokeAny(ctxWithRegistry(t, flow.NewRegistry()),
+	_, err := action.InvokeAny(
+		ctxWithRegistry(t, action.MustNewRegistry()),
 		nodes.NewBenchRunAction(),
 		nodes.BenchRunReq{Action: "missing", Iterations: 5})
 	if err == nil {
@@ -120,8 +100,8 @@ func TestBenchRun_TargetNotFound(t *testing.T) {
 }
 
 func TestBenchRun_IterationsExceedLimit(t *testing.T) {
-	// Registry present so the iterations guard actually runs.
-	_, err := action.InvokeAny(ctxWithRegistry(t, flow.NewRegistry()),
+	_, err := action.InvokeAny(
+		ctxWithRegistry(t, action.MustNewRegistry()),
 		nodes.NewBenchRunAction(),
 		nodes.BenchRunReq{Action: "x", Iterations: 2_000_000})
 	if err == nil || !strings.Contains(err.Error(), "limit") {
@@ -130,19 +110,17 @@ func TestBenchRun_IterationsExceedLimit(t *testing.T) {
 }
 
 func TestBenchRun_PanicIsolation(t *testing.T) {
-	reg := flow.NewRegistry()
-
 	var n atomic.Int64
 
-	reg.Register("flaky", action.New("flaky",
-		func(_ context.Context, _ struct{}) (string, error) {
+	reg := action.MustNewRegistry(action.Of(
+		action.New("flaky", func(_ context.Context, _ struct{}) (string, error) {
 			if n.Add(1) == 5 {
 				panic("boom")
 			}
 
 			return "ok", nil
-		},
-	).Build())
+		}).Build(),
+	))
 
 	res := mustInvokeReg(t, reg, nodes.NewBenchRunAction(),
 		nodes.BenchRunReq{Action: "flaky", Iterations: 20, Warmup: 0}).(nodes.BenchRunRes)
@@ -152,13 +130,12 @@ func TestBenchRun_PanicIsolation(t *testing.T) {
 }
 
 func TestBenchRun_ContextCanceledStopsEarly(t *testing.T) {
-	reg := flow.NewRegistry()
-	reg.Register("noop", action.New("noop",
-		func(_ context.Context, _ struct{}) (string, error) { return "", nil },
-	).Build())
+	reg := action.MustNewRegistry(action.Of(
+		action.New("noop", func(_ context.Context, _ struct{}) (string, error) {
+			return "", nil
+		}).Build(),
+	))
 
-	// Registry must be in ctx so the action reaches the iteration loop
-	// and observes the cancellation there, not the missing-registry guard.
 	ctx, cancel := context.WithCancel(ctxWithRegistry(t, reg))
 	cancel()
 
@@ -203,15 +180,15 @@ func TestBenchSave_RejectsUnsafePaths(t *testing.T) {
 	t.Chdir(tmp)
 
 	for _, p := range []string{
-		"/tmp/x.json",       // POSIX absolute
-		`C:\Windows\x.json`, // Windows drive
-		`\\server\share\x`,  // Windows UNC
-		"../escape.json",    // traversal
-		"foo/../../escape",  // nested traversal
-		"x\x00y",            // NUL
-		"con",               // reserved device name
-		"file.",             // trailing dot
-		"",                  // empty
+		"/tmp/x.json",
+		`C:\Windows\x.json`,
+		`\\server\share\x`,
+		"../escape.json",
+		"foo/../../escape",
+		"x\x00y",
+		"con",
+		"file.",
+		"",
 	} {
 		t.Run(p, func(t *testing.T) {
 			_, err := action.InvokeAny(context.Background(), nodes.NewBenchSaveAction(),

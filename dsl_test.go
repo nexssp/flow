@@ -9,25 +9,6 @@ import (
 	"github.com/nexssp/kernel/action"
 )
 
-type mockRegistry struct {
-	m map[string]action.AnyAction
-}
-
-func (r *mockRegistry) Get(name string) (action.AnyAction, bool) {
-	a, ok := r.m[name]
-
-	return a, ok
-}
-
-func (r *mockRegistry) Actions() []action.AnyAction {
-	out := make([]action.AnyAction, 0, len(r.m))
-	for _, a := range r.m {
-		out = append(out, a)
-	}
-
-	return out
-}
-
 func TestDSL_PipeAndParallelScatterGather(t *testing.T) {
 	t.Parallel()
 
@@ -63,14 +44,7 @@ func TestDSL_PipeAndParallelScatterGather(t *testing.T) {
 		return "Approved for deployment", nil
 	}).Build()
 
-	reg := &mockRegistry{
-		m: map[string]action.AnyAction{
-			"pack":                actPack,
-			"security.audit":      actSec,
-			"architecture.review": actArch,
-			"review.gate":         actGate,
-		},
-	}
+	reg := action.MustNewRegistry(action.Of(actPack, actSec, actArch, actGate))
 
 	pipeline, err := flow.CompilePipeline("pack | (security.audit & architecture.review) | review.gate", reg)
 	if err != nil {

@@ -21,7 +21,7 @@ func TestGraph_ExecuteAction_DualInputModes(t *testing.T) {
 		return "beta", nil
 	}).Build()
 
-	registry := flow.NewRegistry(actStepA, actStepB)
+	registry := action.MustNewRegistry(action.Of(actStepA, actStepB))
 	compiler := flow.NewCompiler(registry)
 	execAction := flow.NewExecuteAction(compiler)
 

@@ -64,7 +64,10 @@ func main() {
 		}, nil
 	}).Build()
 
-	registry := flow.NewRegistry(validate, fraud, settle)
+	registry, err := action.NewRegistry(action.Of(validate, fraud, settle))
+	if err != nil {
+		panic(err)
+	}
 
 	dsl := `order.validate -> risk.eval -> payment.settle`
 	fmt.Printf("⚡ Pipeline Topography: %s\n\n", dsl)

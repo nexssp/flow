@@ -310,7 +310,7 @@ func (b *TokenBucket) Allow() bool {
 		}, nil
 	}).Build()
 
-	registry := flow.NewRegistry(
+	registry, err := action.NewRegistry(action.Of(
 		firewallAct,
 		plannerAct,
 		architectAct,
@@ -319,7 +319,10 @@ func (b *TokenBucket) Allow() bool {
 		wasmSecAct,
 		criticJudgeAct,
 		deployAct,
-	)
+	))
+	if err != nil {
+		panic(err)
+	}
 
 	arrowDSL := `
 		sec_firewall:validate:debug

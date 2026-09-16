@@ -28,14 +28,7 @@ type FlowStep struct {
 	Prompt string
 }
 
-// PrintFlowInfo inspects a .flow file and prints its pipeline
-// topography, entry payload shape, and per-node action metadata.
-//
-// reg is the registry used to resolve each node name. Pass the same
-// registry the flow will execute against so the info output matches
-// what the flow would actually call. Pass nil to fall back to the
-// domainless standard library.
-func PrintFlowInfo(ctx context.Context, out io.Writer, req Request, reg *flow.MapRegistry) int {
+func PrintFlowInfo(ctx context.Context, out io.Writer, req Request, reg *action.Registry) int {
 	manifest, err := os.ReadFile(req.Path)
 	if err != nil {
 		fmt.Fprintf(out, "❌ failed to read flow file %q: %v\n", req.Path, err)
@@ -51,7 +44,7 @@ func PrintFlowInfo(ctx context.Context, out io.Writer, req Request, reg *flow.Ma
 	}
 
 	if reg == nil {
-		fallback, ferr := flow.BuildRegistry(flow.StandardLibrary())
+		fallback, ferr := action.NewRegistry(flow.StandardLibrary())
 		if ferr != nil {
 			fmt.Fprintf(out, "❌ failed to build fallback registry: %v\n", ferr)
 
@@ -65,7 +58,15 @@ func PrintFlowInfo(ctx context.Context, out io.Writer, req Request, reg *flow.Ma
 	if err == nil {
 		defer resolver.Close()
 
-		resolver.Install()
+		if remoteActions := resolver.Actions(); len(remoteActions) > 0 {
+			merged, mergeErr := action.NewRegistry(
+				action.Library{Name: "base", Actions: reg.Actions()},
+				action.Library{Name: "remote", Actions: remoteActions},
+			)
+			if mergeErr == nil {
+				reg = merged
+			}
+		}
 	}
 
 	parser := compiler.NewParser(dsl)

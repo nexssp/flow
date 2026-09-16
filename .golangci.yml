@@ -3,8 +3,6 @@ run:
   tests: true
 linters:
   enable:
-    - wsl_v5
-    - nlreturn
     - bodyclose
     - contextcheck
     - gocritic
@@ -17,6 +15,7 @@ linters:
     - unconvert
     - rowserrcheck
     - sqlclosecheck
+    - unconvert
     - wastedassign
   settings:
     gocritic:

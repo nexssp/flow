@@ -21,7 +21,7 @@ import (
 	"github.com/nexssp/validation"
 )
 
-func resolveDynamicNode(atom *compiler.AtomExpr, reg Registry) (*action.Builder[any, any], error) {
+func resolveDynamicNode(atom *compiler.AtomExpr, reg *action.Registry) (*action.Builder[any, any], error) {
 	act, ok := reg.Get(atom.Name)
 	if !ok {
 		var available []string

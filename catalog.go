@@ -23,7 +23,7 @@ type CapabilitySpec struct {
 }
 
 // ExtractCapabilities converts a Registry into an AI-friendly CapabilitySpec catalog.
-func ExtractCapabilities(reg Registry) []CapabilitySpec {
+func ExtractCapabilities(reg *action.Registry) []CapabilitySpec {
 	if reg == nil {
 		return nil
 	}
@@ -77,7 +77,7 @@ func ExtractCapabilities(reg Registry) []CapabilitySpec {
 }
 
 // BuildCatalogAction returns a system action exposing the capability catalog over HTTP/A2A.
-func BuildCatalogAction(reg Registry) action.AnyAction {
+func BuildCatalogAction(reg *action.Registry) action.AnyAction {
 	return action.New("flow.catalog", func(_ context.Context, _ struct{}) ([]CapabilitySpec, error) {
 		if reg == nil {
 			return nil, xerr.NotFound("flow: registry is nil")

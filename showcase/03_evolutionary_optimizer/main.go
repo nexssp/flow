@@ -46,10 +46,16 @@ func main() {
 		return "RELEASE_STAGING_" + t.CommitID, nil
 	}).Build()
 
-	registry := flow.NewRegistry(fetch, auditSec, auditPerf, deploy)
+	registry, err := action.NewRegistry(action.Of(fetch, auditSec, auditPerf, deploy))
+	if err != nil {
+		panic(err)
+	}
 
 	baselineDSL := "fetch -> audit_sec -> audit_perf -> deploy"
-	baselineBld, _ := flow.CompilePipeline(baselineDSL, registry)
+	baselineBld, compileErr := flow.CompilePipeline(baselineDSL, registry)
+	if compileErr != nil {
+		panic(compileErr)
+	}
 	livePipeline := action.NewProxy(baselineBld.Build())
 
 	fmt.Printf("⚡ Active Baseline (Sequential): %s (~60ms)\n\n", baselineDSL)

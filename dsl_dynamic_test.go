@@ -30,9 +30,8 @@ func TestDSL_Modifiers_Timeout(t *testing.T) {
 		}
 	}).Build()
 
-	reg := flow.NewRegistry(slowAct)
+	reg := action.MustNewRegistry(action.Of(slowAct))
 
-	// DSL attaches :timeout=50ms dynamically via Kernel
 	pipeline, err := flow.CompilePipeline("slow.op:timeout=50ms", reg)
 	if err != nil {
 		t.Fatalf("compile failed: %v", err)
@@ -52,16 +51,14 @@ func TestDSL_Modifiers_Retry(t *testing.T) {
 	flakyAct := action.New("flaky.op", func(_ context.Context, _ any) (string, error) {
 		count := attempts.Add(1)
 		if count < 3 {
-			// Transient error recognized by xerr.IsTransient triggers Kernel retry
 			return "", xerr.Unavailable("temporary upstream network drop")
 		}
 
 		return "recovered", nil
 	}).Build()
 
-	reg := flow.NewRegistry(flakyAct)
+	reg := action.MustNewRegistry(action.Of(flakyAct))
 
-	// DSL attaches :retry=3 dynamically
 	pipeline, err := flow.CompilePipeline("flaky.op:retry=3", reg)
 	if err != nil {
 		t.Fatalf("compile failed: %v", err)
@@ -84,9 +81,8 @@ func TestDSL_Modifiers_Validation(t *testing.T) {
 		return "saved:" + u.Name, nil
 	}).Build()
 
-	reg := flow.NewRegistry(saveAct)
+	reg := action.MustNewRegistry(action.Of(saveAct))
 
-	// DSL attaches :validate
 	pipeline, err := flow.CompilePipeline("user.save:validate", reg)
 	if err != nil {
 		t.Fatalf("compile failed: %v", err)
@@ -94,7 +90,6 @@ func TestDSL_Modifiers_Validation(t *testing.T) {
 
 	built := pipeline.Build()
 
-	// 1. Valid payload passes
 	valid := ValidationTarget{Name: "Alexander", Email: "alex@nexss.com"}
 
 	res, err := built.Do(context.Background(), valid)
@@ -102,7 +97,6 @@ func TestDSL_Modifiers_Validation(t *testing.T) {
 		t.Fatalf("valid payload failed validation: %v", err)
 	}
 
-	// 2. Invalid payload (name too short, invalid email) rejected immediately
 	invalid := ValidationTarget{Name: "Al", Email: "not-an-email"}
 
 	_, err = built.Do(context.Background(), invalid)
@@ -122,9 +116,8 @@ func TestDSL_Modifiers_Cache(t *testing.T) {
 		return "data_payload", nil
 	}).Build()
 
-	reg := flow.NewRegistry(dbAct)
+	reg := action.MustNewRegistry(action.Of(dbAct))
 
-	// DSL attaches :cache=1h
 	pipeline, err := flow.CompilePipeline("db.query:cache=1h", reg)
 	if err != nil {
 		t.Fatalf("compile failed: %v", err)
@@ -132,11 +125,8 @@ func TestDSL_Modifiers_Cache(t *testing.T) {
 
 	built := pipeline.Build()
 
-	// First call -> hits DB
 	_, _ = built.Do(context.Background(), 42)
-	// Second call with same key -> served from cache
 	_, _ = built.Do(context.Background(), 42)
-	// Third call with different key -> hits DB
 	_, _ = built.Do(context.Background(), 99)
 
 	if dbCalls.Load() != 2 {
@@ -153,14 +143,13 @@ func TestDSL_Modifiers_Coalesce(t *testing.T) {
 
 	heavyAct := action.New("heavy.compute", func(_ context.Context, id string) (string, error) {
 		heavyCalls.Add(1)
-		<-gate // Hold until all callers join
+		<-gate
 
 		return "computed:" + id, nil
 	}).Build()
 
-	reg := flow.NewRegistry(heavyAct)
+	reg := action.MustNewRegistry(action.Of(heavyAct))
 
-	// DSL attaches :coalesce
 	pipeline, err := flow.CompilePipeline("heavy.compute:coalesce", reg)
 	if err != nil {
 		t.Fatalf("compile failed: %v", err)
@@ -201,14 +190,8 @@ func TestDSL_AttributesAndParameters_Injection(t *testing.T) {
 		return "ok", nil
 	}).Build()
 
-	reg := flow.NewRegistry(workerAct)
+	reg := action.MustNewRegistry(action.Of(workerAct))
 
-	// Test complex AST token decorations:
-	// - Profile: :arch
-	// - Target: #internal/auth,pkg/api
-	// - Exclude: ~testdata,mocks
-	// - Prompt: @security_audit
-	// - Parameters: (env="staging", max_depth=5)
 	dsl := `tool.run:arch#internal/auth,pkg/api~testdata,mocks@security_audit(env="staging", max_depth=5)`
 
 	pipeline, err := flow.CompilePipeline(dsl, reg)

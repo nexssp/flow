@@ -16,6 +16,7 @@ import (
 
 	"github.com/nexssp/flow"
 	"github.com/nexssp/flow/runner"
+	"github.com/nexssp/kernel/action"
 )
 
 func main() {
@@ -90,7 +91,7 @@ func runCmd(args []string) int {
 		return 1
 	}
 
-	libs := []flow.Library{flow.StandardLibrary()}
+	libs := []action.Library{flow.StandardLibrary()}
 
 	return runner.Default{}.RunFlow(
 		ctx, path, payload, flags, libs,

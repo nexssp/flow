@@ -41,7 +41,7 @@ type App struct {
 	WorkDir string
 	Actions []action.AnyAction
 
-	libraries []flow.Library
+	libraries []action.Library
 
 	loaders []loader
 }
@@ -102,7 +102,7 @@ func (a *App) run() int {
 	defer stop()
 
 	if len(a.libraries) > 0 {
-		reg, err := flow.BuildRegistry(a.libraries...)
+		reg, err := action.NewRegistry(a.libraries...)
 		if err != nil {
 			slog.Error("bootstrap: library registry build failed", "err", err)
 
@@ -210,12 +210,15 @@ func (a *App) runCLI(ctx context.Context, args, assertions []string) int {
 		return 1
 	}
 
-	cliReg := flow.NewRegistry(a.Actions...)
-	ctx = flowcontracts.WithRegistry(ctx, cliReg)
+	cliReg, regErr := action.NewRegistry(action.Of(a.Actions...))
+	if regErr != nil {
+		fmt.Fprintf(os.Stderr, "❌ registry build failed: %v\n", regErr)
 
-	if pc, ok := any(cliReg).(flowcontracts.PipelineCompiler); ok {
-		ctx = flowcontracts.WithCompiler(ctx, pc)
+		return 1
 	}
+
+	ctx = flowcontracts.WithRegistry(ctx, cliReg)
+	ctx = flowcontracts.WithCompiler(ctx, flow.NewCompiler(cliReg))
 
 	start := time.Now()
 	res, err := action.InvokeAny(ctx, targetAct, payload)
@@ -272,7 +275,12 @@ func (a *App) runFlow(ctx context.Context, args []string) int {
 		runnerArgs = append(runnerArgs, arg)
 	}
 
-	reg := flow.NewRegistry(a.Actions...)
+	reg, err := action.NewRegistry(action.Of(a.Actions...))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "❌ registry build failed: %v\n", err)
+
+		return 1
+	}
 
 	return flowrunner.Default{}.RunWithRegistry(ctx, flowrunner.Request{
 		Path:    flowPath,
@@ -402,13 +410,13 @@ func WithConsoleExecute() ConsoleOption {
 	return func(c *console.Config) { c.AllowExecute = true }
 }
 
-func (a *App) WithLibrary(lib flow.Library) *App {
+func (a *App) WithLibrary(lib action.Library) *App {
 	a.libraries = append(a.libraries, lib)
 
 	return a
 }
 
-func (a *App) WithLibraries(libs ...flow.Library) *App {
+func (a *App) WithLibraries(libs ...action.Library) *App {
 	a.libraries = append(a.libraries, libs...)
 
 	return a

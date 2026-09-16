@@ -26,7 +26,7 @@ type Candidate struct {
 func Evolve(
 	ctx context.Context,
 	baselineDSL string,
-	reg flow.Registry,
+	reg *action.Registry,
 	eval Evaluator,
 	opts Options,
 ) (Candidate, error) {

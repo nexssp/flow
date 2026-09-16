@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/nexssp/flow"
-	"github.com/nexssp/flow/journal"
+	branchjournal "github.com/nexssp/flow/journal"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xctx"
 	"github.com/nexssp/kernel/xerr"
@@ -106,7 +106,7 @@ func TestGraph_CompilerAndExecutionTopology(t *testing.T) {
 		return true, nil
 	}).Build()
 
-	registry := flow.NewRegistry(actPack, actSec, actArch, actGate)
+	registry := action.MustNewRegistry(action.Of(actPack, actSec, actArch, actGate))
 	compiler := flow.NewCompiler(registry)
 	execAct := flow.NewExecuteAction(compiler)
 
@@ -150,9 +150,9 @@ func TestGraph_MultiBranchConditionalJournaling(t *testing.T) {
 		return "fallback executed", nil
 	}).Build()
 
-	registry := flow.NewRegistry(classifyAct, codeAct, fallbackAct)
-	journal := journal.NewMemoryBranchJournal()
-	compiler := flow.NewCompiler(registry, flow.WithJournal(journal))
+	registry := action.MustNewRegistry(action.Of(classifyAct, codeAct, fallbackAct))
+	branchJournal := branchjournal.NewMemoryBranchJournal()
+	compiler := flow.NewCompiler(registry, flow.WithJournal(branchJournal))
 
 	def := flow.GraphDefinition{
 		APIVersion: flow.APIVersion,
@@ -208,7 +208,7 @@ func TestGraph_ApprovalRequiresGateAtCompileTime(t *testing.T) {
 		return "ok", nil
 	}).Build()
 
-	registry := flow.NewRegistry(dummyAct)
+	registry := action.MustNewRegistry(action.Of(dummyAct))
 	compilerWithoutGate := flow.NewCompiler(registry)
 
 	def := flow.GraphDefinition{
@@ -241,7 +241,7 @@ func TestGraph_ScopedApprovalEnforcement(t *testing.T) {
 		return "deployed", nil
 	}).Build()
 
-	registry := flow.NewRegistry(dummyAct)
+	registry := action.MustNewRegistry(action.Of(dummyAct))
 	gate := newMockApprovalGate()
 	compiler := flow.NewCompiler(registry, flow.WithApprovalGate(gate))
 

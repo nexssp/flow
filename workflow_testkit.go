@@ -11,12 +11,12 @@ import (
 type WorkflowFixture struct {
 	t        testing.TB
 	dsl      string
-	registry Registry
+	registry *action.Registry
 	built    action.Executable
 	timeout  time.Duration
 }
 
-func NewWorkflowTest(t testing.TB, reg Registry, dsl string) *WorkflowFixture {
+func NewWorkflowTest(t testing.TB, reg *action.Registry, dsl string) *WorkflowFixture {
 	builder, err := CompilePipeline(dsl, reg)
 	if err != nil {
 		t.Fatalf("workflow_testkit: DSL compilation failed for %q: %v", dsl, err)

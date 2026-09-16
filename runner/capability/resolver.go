@@ -5,39 +5,42 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/nexssp/flow"
 	"github.com/nexssp/kernel/action"
 )
 
 type Resolver struct {
-	registry *flow.MapRegistry
+	registry *action.Registry
 	bindings []Binding
 	built    map[string]action.AnyAction
+	order    []string
 	cleanups []func() error
 }
 
-// NewResolver now takes ctx so WASM compilation can be cancelled.
-func NewResolver(ctx context.Context, registry *flow.MapRegistry, manifest string) (*Resolver, error) {
+func NewResolver(ctx context.Context, registry *action.Registry, manifest string) (*Resolver, error) {
 	bindings := ParseBindings(manifest)
 
 	r := &Resolver{
 		registry: registry,
 		bindings: bindings,
 		built:    make(map[string]action.AnyAction, len(bindings)),
+		order:    make([]string, 0, len(bindings)),
 	}
 
 	for _, b := range bindings {
-		if _, ok := registry.Get(b.Name); ok {
-			continue
+		if registry != nil {
+			if _, ok := registry.Get(b.Name); ok {
+				continue
+			}
 		}
 
 		act, cleanup, err := r.build(ctx, b)
 		if err != nil {
 			_ = r.Close()
-
 			return nil, err
 		}
-
+		if _, dup := r.built[b.Name]; !dup {
+			r.order = append(r.order, b.Name)
+		}
 		r.built[b.Name] = act
 		if cleanup != nil {
 			r.cleanups = append(r.cleanups, cleanup)
@@ -48,49 +51,57 @@ func NewResolver(ctx context.Context, registry *flow.MapRegistry, manifest strin
 }
 
 func (r *Resolver) Resolve(name string) (action.AnyAction, bool) {
-	if act, ok := r.registry.Get(name); ok {
-		return act, true
+	if r == nil {
+		return nil, false
 	}
-
 	if act, ok := r.built[name]; ok {
 		return act, true
 	}
-
+	if r.registry != nil {
+		return r.registry.Get(name)
+	}
 	return nil, false
 }
 
-func (r *Resolver) Install() {
-	for name, act := range r.built {
-		r.registry.Register(name, act)
+func (r *Resolver) Actions() []action.AnyAction {
+	if r == nil {
+		return nil
 	}
+	out := make([]action.AnyAction, 0, len(r.order))
+	for _, name := range r.order {
+		out = append(out, r.built[name])
+	}
+	return out
 }
 
-func (r *Resolver) Bindings() []Binding { return r.bindings }
+func (r *Resolver) Bindings() []Binding {
+	if r == nil {
+		return nil
+	}
+	return r.bindings
+}
 
 func (r *Resolver) Close() error {
+	if r == nil {
+		return nil
+	}
 	var firstErr error
 	for _, fn := range r.cleanups {
 		if err := fn(); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
-
 	r.cleanups = nil
-
 	return firstErr
 }
 
-// build takes ctx and forwards it only to the wasm branch.
-// httpProxy and execProxy do no eager I/O, so they don't need it.
 func (r *Resolver) build(ctx context.Context, b Binding) (action.AnyAction, func() error, error) {
 	switch b.Kind {
 	case KindHTTP:
 		act, err := httpProxy(b)
-
 		return act, nil, err
 	case KindExec:
 		act, err := execProxy(b)
-
 		return act, nil, err
 	case KindWASM:
 		return wasmProxy(ctx, b)
@@ -103,11 +114,9 @@ func parseTimeout(s string, def time.Duration) time.Duration {
 	if s == "" {
 		return def
 	}
-
 	d, err := time.ParseDuration(s)
 	if err != nil || d <= 0 {
 		return def
 	}
-
 	return d
 }

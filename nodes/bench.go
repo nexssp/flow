@@ -60,7 +60,7 @@ func NewBenchRunAction() action.AnyAction {
 		Build()
 }
 
-func runBenchmark(ctx context.Context, reg contracts.Registry, req BenchRunReq) (BenchRunRes, error) {
+func runBenchmark(ctx context.Context, reg *action.Registry, req BenchRunReq) (BenchRunRes, error) {
 	if reg == nil {
 		return BenchRunRes{}, xerr.Internal("bench.run: registry is nil")
 	}

@@ -81,7 +81,8 @@ func main() {
         return fmt.Sprintf("sent to %v", req["to"]), nil
     }).Build()
 
-    reg := flow.NewRegistry(fetch, notify)
+    reg, err := action.NewRegistry(action.Of(fetch, notify))
+    if err != nil { t.Fatal(err) }
 
     pipeline, err := flow.CompilePipeline(
         `user.fetch -> { to: .name, subject: "Welcome " + .tier } -> email.send`,
@@ -108,7 +109,7 @@ A `.flow` file is a plain text pipeline. It may contain directives
 (lines starting with `@`), a route declaration header, and the pipeline
 body.
 
-```flow
+```elixir
 # pipeline comments start with # or //
 @config:budget_usd=1.00
 @config:approval=danger
@@ -976,13 +977,14 @@ one with `action.New` and register it:
 
 ```go
 myNode := action.New("my.custom_node", func(ctx context.Context, req MyReq) (MyRes, error) {
-    return MyRes{}, nil
+	return MyRes{}, nil
 }).
-    Description("Does something custom").
-    Tag("custom").
-    Build()
+	Description("Does something custom").
+	Tag("custom").
+	Build()
 
-reg := flow.NewRegistry(myNode)
+reg := action.MustNewRegistry(action.Of(myNode))
+
 ```
 
 ### Adding a custom transport

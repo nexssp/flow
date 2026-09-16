@@ -50,7 +50,7 @@ func NewDistributeMapAction() action.AnyAction {
 		Build()
 }
 
-func runDistribute(ctx context.Context, reg contracts.Registry, req DistributeMapReq) (DistributeMapRes, error) {
+func runDistribute(ctx context.Context, reg *action.Registry, req DistributeMapReq) (DistributeMapRes, error) {
 	if reg == nil {
 		return DistributeMapRes{}, xerr.Internal("distribute.map: registry is nil")
 	}

@@ -23,14 +23,14 @@ type ApprovalGate interface {
 }
 
 type Compiler struct {
-	registry Registry
+	registry *action.Registry
 	journal  journal.BranchJournal
 	gate     ApprovalGate
 	reserver cost.Reserver
 	hooks    []action.AnyHook
 }
 
-func NewCompiler(reg Registry, opts ...func(*Compiler)) *Compiler {
+func NewCompiler(reg *action.Registry, opts ...func(*Compiler)) *Compiler {
 	c := &Compiler{
 		registry: reg,
 		journal:  journal.NewMemoryBranchJournal(),
@@ -38,7 +38,6 @@ func NewCompiler(reg Registry, opts ...func(*Compiler)) *Compiler {
 	for _, opt := range opts {
 		opt(c)
 	}
-
 	return c
 }
 
@@ -214,9 +213,7 @@ func (c *Compiler) Compile(ctx context.Context, def GraphDefinition) (*dag.DAG, 
 			// distribute.map, supervisor — can reach other actions by name
 			// without any constructor plumbing.
 			execCtx = contracts.WithRegistry(execCtx, c.registry)
-			if pc, ok := c.registry.(contracts.PipelineCompiler); ok {
-				execCtx = contracts.WithCompiler(execCtx, pc)
-			}
+			execCtx = contracts.WithCompiler(execCtx, c)
 
 			return act.ExecuteDecoded(execCtx, func(target any) error {
 				if len(payloadData) == 0 {
@@ -366,4 +363,15 @@ func unpackIntoMap(dst map[string]any, src any) {
 			}
 		}
 	}
+}
+
+func (c *Compiler) CompilePipeline(expr string) (action.Executable, error) {
+	if c == nil || c.registry == nil {
+		return nil, fmt.Errorf("flow: nil compiler or registry")
+	}
+	builder, err := CompilePipeline(expr, c.registry)
+	if err != nil {
+		return nil, err
+	}
+	return builder.Build(), nil
 }

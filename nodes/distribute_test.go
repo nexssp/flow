@@ -8,27 +8,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nexssp/flow"
 	"github.com/nexssp/flow/nodes"
 	"github.com/nexssp/kernel/action"
 )
 
-// mustInvoke / mustInvokeReg / ctxWithRegistry live in bench_test.go and
-// are shared by every test file in package nodes_test.
-
 // ── distribute.map ─────────────────────────────────────────────────────────
 
 func TestDistributeMap_HappyPathPreservesOrder(t *testing.T) {
-	reg := flow.NewRegistry()
-	reg.Register("echo", action.New("echo",
-		func(_ context.Context, in int) (int, error) {
-			// Sleep decreases with value so slower items are scheduled
-			// first if the implementation does not preserve order.
+	reg := action.MustNewRegistry(action.Of(
+		action.New("echo", func(_ context.Context, in int) (int, error) {
 			time.Sleep(time.Duration(50-in) * time.Millisecond)
 
 			return in, nil
-		},
-	).Build())
+		}).Build(),
+	))
 
 	res := mustInvokeReg(t, reg, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
 		Action:      "echo",
@@ -49,12 +42,10 @@ func TestDistributeMap_HappyPathPreservesOrder(t *testing.T) {
 }
 
 func TestDistributeMap_ConcurrencyIsBounded(t *testing.T) {
-	reg := flow.NewRegistry()
-
 	var inFlight, peak atomic.Int64
 
-	reg.Register("slow", action.New("slow",
-		func(_ context.Context, _ int) (int, error) {
+	reg := action.MustNewRegistry(action.Of(
+		action.New("slow", func(_ context.Context, _ int) (int, error) {
 			n := inFlight.Add(1)
 
 			for {
@@ -68,8 +59,8 @@ func TestDistributeMap_ConcurrencyIsBounded(t *testing.T) {
 			inFlight.Add(-1)
 
 			return 0, nil
-		},
-	).Build())
+		}).Build(),
+	))
 
 	res := mustInvokeReg(t, reg, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
 		Action:      "slow",
@@ -87,16 +78,15 @@ func TestDistributeMap_ConcurrencyIsBounded(t *testing.T) {
 }
 
 func TestDistributeMap_FailureIsolatedPerSlot(t *testing.T) {
-	reg := flow.NewRegistry()
-	reg.Register("maybe", action.New("maybe",
-		func(_ context.Context, in int) (int, error) {
+	reg := action.MustNewRegistry(action.Of(
+		action.New("maybe", func(_ context.Context, in int) (int, error) {
 			if in == 3 {
 				return 0, fmt.Errorf("simulated failure")
 			}
 
 			return in, nil
-		},
-	).Build())
+		}).Build(),
+	))
 
 	res := mustInvokeReg(t, reg, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
 		Action:      "maybe",
@@ -111,23 +101,22 @@ func TestDistributeMap_FailureIsolatedPerSlot(t *testing.T) {
 	if res.Items[2].OK || res.Items[2].Error == "" {
 		t.Fatalf("slot 2 must record the failure: %+v", res.Items[2])
 	}
-	// Sibling slots must still have succeeded.
+
 	if !res.Items[0].OK || !res.Items[4].OK {
 		t.Fatalf("failure leaked to siblings: %+v", res.Items)
 	}
 }
 
 func TestDistributeMap_PanicIsContainedPerSlot(t *testing.T) {
-	reg := flow.NewRegistry()
-	reg.Register("boom", action.New("boom",
-		func(_ context.Context, in int) (int, error) {
+	reg := action.MustNewRegistry(action.Of(
+		action.New("boom", func(_ context.Context, in int) (int, error) {
 			if in == 2 {
 				panic("kaboom")
 			}
 
 			return in, nil
-		},
-	).Build())
+		}).Build(),
+	))
 
 	res := mustInvokeReg(t, reg, nodes.NewDistributeMapAction(), nodes.DistributeMapReq{
 		Action: "boom",
@@ -144,9 +133,7 @@ func TestDistributeMap_PanicIsContainedPerSlot(t *testing.T) {
 }
 
 func TestDistributeMap_EmptyItemsIsNoop(t *testing.T) {
-	// Even with no items, the action still validates that a registry
-	// reached it — the empty-items short-circuit runs after the guard.
-	res := mustInvokeReg(t, flow.NewRegistry(), nodes.NewDistributeMapAction(),
+	res := mustInvokeReg(t, action.MustNewRegistry(), nodes.NewDistributeMapAction(),
 		nodes.DistributeMapReq{
 			Action: "anything",
 			Items:  []any{},
@@ -159,7 +146,7 @@ func TestDistributeMap_EmptyItemsIsNoop(t *testing.T) {
 func TestDistributeMap_ItemsExceedLimit(t *testing.T) {
 	items := make([]any, nodes.DistributeMaxItemsForTest()+1)
 
-	_, err := action.InvokeAny(ctxWithRegistry(t, flow.NewRegistry()),
+	_, err := action.InvokeAny(ctxWithRegistry(t, action.MustNewRegistry()),
 		nodes.NewDistributeMapAction(),
 		nodes.DistributeMapReq{Action: "x", Items: items})
 	if err == nil || !strings.Contains(err.Error(), "limit") {
@@ -168,9 +155,8 @@ func TestDistributeMap_ItemsExceedLimit(t *testing.T) {
 }
 
 func TestDistributeMap_MissingAction(t *testing.T) {
-	// Registry present but does not contain the target. Exercises the
-	// NotFound path, not the missing-context path.
-	_, err := action.InvokeAny(ctxWithRegistry(t, flow.NewRegistry()),
+	_, err := action.InvokeAny(
+		ctxWithRegistry(t, action.MustNewRegistry()),
 		nodes.NewDistributeMapAction(),
 		nodes.DistributeMapReq{Action: "missing", Items: []any{1}})
 	if err == nil {
@@ -183,7 +169,6 @@ func TestDistributeMap_MissingAction(t *testing.T) {
 }
 
 func TestDistributeMap_NilRegistry(t *testing.T) {
-	// Deliberately bare: the action must report the missing registry.
 	_, err := action.InvokeAny(context.Background(), nodes.NewDistributeMapAction(),
 		nodes.DistributeMapReq{Action: "x", Items: []any{1}})
 	if err == nil {
@@ -196,20 +181,17 @@ func TestDistributeMap_NilRegistry(t *testing.T) {
 }
 
 func TestDistributeMap_ContextCanceledStops(t *testing.T) {
-	reg := flow.NewRegistry()
-	reg.Register("slow", action.New("slow",
-		func(ctx context.Context, _ int) (int, error) {
+	reg := action.MustNewRegistry(action.Of(
+		action.New("slow", func(ctx context.Context, _ int) (int, error) {
 			select {
 			case <-ctx.Done():
 				return 0, ctx.Err()
 			case <-time.After(500 * time.Millisecond):
 				return 0, nil
 			}
-		},
-	).Build())
+		}).Build(),
+	))
 
-	// Combine registry-bearing ctx with a short deadline so the
-	// in-flight items observe cancellation.
 	ctx, cancel := context.WithTimeout(ctxWithRegistry(t, reg), 40*time.Millisecond)
 	defer cancel()
 
@@ -218,7 +200,7 @@ func TestDistributeMap_ContextCanceledStops(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Slots that did not get to run must carry the context error.
+
 	failed := res.(nodes.DistributeMapRes).Failed
 	if failed == 0 {
 		t.Fatalf("expected some failures after cancel: %+v", res)
@@ -267,7 +249,6 @@ func TestDistributeReduce_AllStrategies(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.strategy, func(t *testing.T) {
-			// distribute.reduce is a pure fold — no registry needed.
 			res := mustInvoke(t, nodes.NewDistributeReduceAction(), nodes.DistributeReduceReq{
 				Strategy: c.strategy,
 				Items:    items,

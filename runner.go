@@ -3,6 +3,8 @@ package flow
 import (
 	"context"
 	"io"
+
+	"github.com/nexssp/kernel/action"
 )
 
 // Runner is the shape of a flow execution engine.
@@ -33,7 +35,7 @@ type Runner interface {
 		path string,
 		payload map[string]any,
 		args []string,
-		libs []Library,
+		libs []action.Library,
 		stdout, stderr io.Writer,
 	) int
 }

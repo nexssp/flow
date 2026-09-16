@@ -46,7 +46,7 @@ func main() {
 {{- end}}
 	}
 
-	reg, err := flow.BuildRegistry(libs...)
+	reg, err := action.NewRegistry(libs...)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "❌", err)
 		os.Exit(1)

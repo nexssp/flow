@@ -24,18 +24,18 @@ func TestSupervisor_DynamicChildSpawning(t *testing.T) {
 	})
 
 	// 2. Worker Tool
-	slackTool := action.New("slack.post", func(_ context.Context, req map[string]any) (string, error) {
+	slackTool := action.New("slack.post", func(_ context.Context, _ map[string]any) (string, error) {
 		return "posted_to_slack", nil
 	}).Build()
 
 	// 3. Registry that child pipelines compile against.
-	reg := flow.NewRegistry(summarizePrompt, slackTool)
+	reg := action.MustNewRegistry(action.Of(summarizePrompt, slackTool))
 
-	// 4. Supervisor reads registry + compiler from context.
+	// 4. Supervisor reads registry + compiler from context. The
+	// compiler is what the supervisor uses to compile each child
+	// task's DSL string on the fly.
 	ctx = contracts.WithRegistry(ctx, reg)
-	if pc, ok := any(reg).(contracts.PipelineCompiler); ok {
-		ctx = contracts.WithCompiler(ctx, pc)
-	}
+	ctx = contracts.WithCompiler(ctx, flow.NewCompiler(reg))
 
 	supervisorNode := nodes.NewSupervisorNode("main.supervisor")
 	execAct := action.Dynamic(supervisorNode)

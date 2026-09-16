@@ -12,7 +12,7 @@ import (
 )
 
 // CompileSaga parses Arrow DSL with embedded transaction rollbacks into a Saga Node.
-func CompileSaga(expr string, reg Registry) (*action.Builder[any, any], error) {
+func CompileSaga(expr string, reg *action.Registry) (*action.Builder[any, any], error) {
 	expr = strings.TrimSpace(expr)
 	if expr == "" {
 		return nil, xerr.BadRequest("flow: saga expression cannot be empty")
@@ -28,7 +28,7 @@ func CompileSaga(expr string, reg Registry) (*action.Builder[any, any], error) {
 	return compileSagaAST(ast, reg)
 }
 
-func compileSagaAST(node compiler.Expr, reg Registry) (*action.Builder[any, any], error) {
+func compileSagaAST(node compiler.Expr, reg *action.Registry) (*action.Builder[any, any], error) {
 	switch n := node.(type) {
 	case *compiler.ParallelExpr:
 		routes := make(map[string]action.AnyAction, len(n.Children))
