@@ -1,6 +1,8 @@
 package nodes
 
-import "github.com/nexssp/kernel/action"
+import (
+	"github.com/nexssp/kernel/action"
+)
 
 // All returns every domain-neutral action this package provides.
 //
@@ -20,6 +22,7 @@ func All() []action.AnyAction {
 		NewDistributeMapAction(),
 		NewDistributeReduceAction(),
 
+		NewDispatchAction(),
 		NewSupervisorNode("supervisor"),
 	}
 }

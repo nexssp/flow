@@ -51,7 +51,7 @@ func TestDynamicSaga_RollbackLIFOOnFailure(t *testing.T) {
 		Compensate: action.New("flight.cancel", func(_ context.Context, _ any) (string, error) {
 			rolledBack = append(rolledBack, "flight.cancel")
 
-			return "cancelled", nil
+			return "canceled", nil
 		}).Build(),
 	}
 
@@ -63,7 +63,7 @@ func TestDynamicSaga_RollbackLIFOOnFailure(t *testing.T) {
 		Compensate: action.New("hotel.cancel", func(_ context.Context, _ any) (string, error) {
 			rolledBack = append(rolledBack, "hotel.cancel")
 
-			return "cancelled", nil
+			return "canceled", nil
 		}).Build(),
 	}
 

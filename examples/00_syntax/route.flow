@@ -1,0 +1,7 @@
+@route classify {
+  when score >= 90 -> grade.a
+  when score >= 70 -> grade.b
+  else             -> grade.f
+}
+
+classify

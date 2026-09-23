@@ -1,0 +1,5 @@
+# Skipped by the coverage run-mode test: event preprocessing is not executable here.
+@on event "topic:coverage"
+@assert: result == "event"
+
+const @{ value: "event" }

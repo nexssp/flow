@@ -1,0 +1,10 @@
+@description "Standard bench.compare"
+@assert: result != nil
+
+{
+  baseline: "coverage_bench.json",
+  action: "cov.echo",
+  iterations: 1,
+  min_ms: 0, max_ms: 0, mean_ms: 0,
+  p50_ms: 0, p95_ms: 10, p99_ms: 0, rps: 0, elapsed_ms: 0
+} -> bench.compare

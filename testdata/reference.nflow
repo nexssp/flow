@@ -1,0 +1,68 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# NEXSS FLOW — REFERENCE PIPELINE
+# ═══════════════════════════════════════════════════════════════════════════
+# Ten plik jest wykonywalną specyfikacją języka. Zawiera każdą dyrektywę,
+# każdy operator i każdy typ modyfikatora. Jeśli ten plik się parsuje,
+# kompiluje i wykonuje — to znaczy że implementacja jest kompletna.
+#
+# Uruchomienie:
+#   nexssflow test reference.nflow
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─── 1. METADANE ──────────────────────────────────────────────────────────
+@description "Reference pipeline — exercises every directive"
+@assert: result.status == "approved"
+@assert: cost_usd < 1.00
+
+# ─── 2. PROFIL BEZPIECZEŃSTWA ─────────────────────────────────────────────
+@profile: untrusted_input
+@requires: llm[deepseek], sandbox[golang:1.26], network[api.github.com]
+
+# ─── 3. CONFIG ────────────────────────────────────────────────────────────
+@config:budget_usd=0.50
+@config:approval=danger
+@config:max_tokens=4096
+
+# ─── 4. DEKLARACJE AI ─────────────────────────────────────────────────────
+@llm architect { provider: "deepseek", model: "deepseek-chat", caps: [plan] }
+@llm critic    { provider: "deepseek", model: "deepseek-chat", caps: [review] }
+@pool experts  [architect, critic]
+
+# ─── 5. DEKLARACJA SANDBOXA ───────────────────────────────────────────────
+@sandbox builder { image: "golang:1.26-alpine", memory_mb: 2048, cpus: 2.0, read_only_root_fs }
+
+# ─── 6. GATES ─────────────────────────────────────────────────────────────
+@gate: on high_risk
+@gate: when cost_usd > 0.10
+
+# ─── 7. NAZWANE PIPELINES ─────────────────────────────────────────────────
+@pipeline security_scan
+  scanner.security:read_only @{ code: .source_code }
+  -> { findings: .result, passed: .exit_code == 0 }
+@end
+
+@pipeline test_scan
+  scanner.test:read_only @{ code: .source_code }
+  -> { passed: .exit_code == 0, output: .stdout }
+@end
+
+# ─── 8. GŁÓWNY PIPELINE ───────────────────────────────────────────────────
+# Demonstrates: sequence, parallel, projection, inline args, typed modifier,
+# provider modifier, effect modifier, ternary with else, named pipelines.
+
+parser.spec
+-> architect:provider="deepseek":typed=ArchitectPlan
+   @{ goal: .ticket, feedback: "" }
+-> ( security_scan & test_scan )
+-> {
+     session_id:  .session_id,
+     ticket_id:   .ticket_id,
+     source_code: .source_code,
+     test_code:   .test_code,
+     sec_passed:  .security_scan.passed,
+     test_passed: .test_scan.passed,
+   }
+-> critic:provider="deepseek":typed=Verdict @{ review: .source_code }
+-> ( approved
+     ? merger.merge:effect=high_risk
+     : human.review:effect=high_risk )

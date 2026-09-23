@@ -1,0 +1,4 @@
+@description "Base wrap action"
+@assert: result.payload.value == 7
+
+{ value: 7 } -> wrap @{ key: "payload" }

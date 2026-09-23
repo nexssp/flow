@@ -1,4 +1,4 @@
-# path: flows/self_improving_solver.flow
+# path: flows/self_improving_solver.nflow
 @config: budget_micros=10000000
 @config: telemetry_ring=8192
 @config: max_turns=5

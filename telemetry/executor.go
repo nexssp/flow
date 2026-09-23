@@ -2,12 +2,12 @@ package telemetry
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/nexssp/kernel/ringbuf"
 	"github.com/nexssp/kernel/xerr"
-	"github.com/nexssp/transport/codec"
 )
 
 type ActionInvoker interface {
@@ -68,7 +68,7 @@ func (e *HotPathExecutor) ExecuteNode(
 			return nil
 		}
 
-		return codec.Default.Unmarshal(payloadInput, target)
+		return json.Unmarshal(payloadInput, target)
 	})
 	if execErr != nil {
 		status = 500

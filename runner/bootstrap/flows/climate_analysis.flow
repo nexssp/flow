@@ -1,4 +1,4 @@
-# path: flows/climate_analysis.flow
+# path: flows/climate_analysis.nflow
 @config: model="deepseek-chat"
 @config: sandbox_image="python:3.12-slim"
 

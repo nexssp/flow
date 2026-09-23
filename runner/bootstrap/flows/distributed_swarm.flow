@@ -1,4 +1,4 @@
-# path: flows/distributed_swarm.flow
+# path: flows/distributed_swarm.nflow
 @config:budget_micros=15000000
 @config:anti_ssrf=true
 @config:sandbox_driver="docker"

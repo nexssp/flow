@@ -1,0 +1,11 @@
+@description "Schema directive: single type"
+@assert: result == "schema"
+
+@schema User struct {
+	ID    int    `json:"id" cli:"id" validate:"required"`
+	Name  string `json:"name" cli:"name" validate:"required,min=1"`
+	Email string `json:"email" cli:"email" validate:"email"`
+	Age   int    `json:"age" cli:"age"`
+}
+
+const @{ value: "schema" }

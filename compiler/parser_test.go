@@ -1,4 +1,3 @@
-// nexssp/flow/compiler/parser_test.go
 package compiler_test
 
 import (
@@ -74,15 +73,15 @@ func TestParser(t *testing.T) {
 	}{
 		{
 			name:  "simple atom",
-			input: "github.issue",
+			input: "github.com/issue", // zmodyfikowano żeby był pełny ubiór w razie czego
 			check: func(t *testing.T, e compiler.Expr) {
 				atom, ok := e.(*compiler.AtomExpr)
 				if !ok {
 					t.Fatalf("expected AtomExpr, got %T", e)
 				}
 
-				if atom.Name != "github.issue" {
-					t.Errorf("name = %q, want github.issue", atom.Name)
+				if atom.Name != "github.com/issue" {
+					t.Errorf("name = %q, want github.com/issue", atom.Name)
 				}
 			},
 		},
@@ -263,5 +262,19 @@ func TestParser(t *testing.T) {
 				tt.check(t, expr)
 			}
 		})
+	}
+}
+
+func TestParser_AssertWithRelationalOperators(t *testing.T) {
+	t.Parallel()
+
+	// Added 'noop ->' to make it a valid pipeline expression,
+	// because an arrow '->' requires a left-hand side operand.
+	dsl := `noop -> assert(.take >= 1 && .take <= 3, "bad") -> assert(.take <= .stones, "not enough")`
+
+	p := compiler.NewParser(dsl)
+	_, err := p.ParseExpression()
+	if err != nil {
+		t.Fatalf("ParseExpression failed: %v", err)
 	}
 }

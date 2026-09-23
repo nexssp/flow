@@ -1,0 +1,9 @@
+@approval coverage_approval {
+  role: "reviewer",
+  expires: 30m,
+  reason: "coverage test for human-in-the-loop gate"
+}
+
+@assert: result == "approved"
+
+const @{ value: "approved" } -> approval.coverage_approval

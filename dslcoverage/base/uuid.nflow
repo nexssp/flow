@@ -1,0 +1,4 @@
+@description "Base UUID generation"
+@assert: result != nil
+
+uuid

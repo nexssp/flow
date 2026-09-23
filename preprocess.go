@@ -1,68 +1,50 @@
 package flow
 
 import (
-	"bufio"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/nexssp/flow/directives"
 	"github.com/nexssp/kernel/xerr"
 )
 
-// ActionMeta describes a .flow file that declares itself as an action
-// via @action and (optionally) @description.
-type ActionMeta struct {
-	Name        string
-	Description string
-}
+// Preprocessed is the alias for directives.Preprocessed. Callers that
+// import flow see flow.Preprocessed; the implementation lives in
+// flow/directives so the directive registry and the data shape stay
+// together.
+type Preprocessed = directives.Preprocessed
+type Pipeline = directives.Pipeline
+type ActionMeta = directives.ActionMeta
+type Requirement = directives.Requirement
 
-// Pipeline is a named reusable subflow declared with @pipeline.
-//
-// Pipelines live as a slice, not a map: a duplicate name is a
-// declaration error, and the order in which they were written matters
-// for diagnostics. The registry later converts each into an action.
-type Pipeline struct {
-	Name string
-	Body string
-}
-
-// Requirement is one @require directive, fully resolved.
-//
-// Two forms are accepted in .flow files:
-//
-//	Local:   @require ./relative/path
-//	         @require ../shared/actions
-//	Remote:  @require github.com/acme/text v1.0.0
-//
-// Local paths are resolved at preprocess time to a canonical Go module
-// path by walking up from the target directory until a go.mod is found
-// and reading its module line.
-type Requirement struct {
-	Import     string
-	Version    string
-	LocalPath  string
-	ModuleRoot string
-	ModulePath string
-}
-
-func (r Requirement) IsLocal() bool { return r.LocalPath != "" }
-
-// Preprocessed is the result of resolving @include directives and
-// extracting @pipeline / @action / @require metadata from a .flow source.
-type Preprocessed struct {
-	DSL       string
-	Pipelines []Pipeline
-	Action    *ActionMeta
-	Includes  []string
-	Requires  []Requirement
-}
-
-// Preprocess reads path, resolves @include directives recursively,
-// extracts metadata, and returns the flow body with directives removed.
+// Preprocess reads a .nflow file from disk and resolves every
+// directive: @profile, @include, @pipeline … @end, @action,
+// @description, @require. The resulting DSL is line-aligned with the
+// source file so parser errors point at the original line numbers.
 func Preprocess(path string) (*Preprocessed, error) {
 	visited := make(map[string]bool)
-
 	return preprocessFile(path, visited)
+}
+
+// PreprocessBytes processes an in-memory .nflow source. It is the
+// entry point for embedded libraries (go:embed) that carry their
+// pipeline as a string rather than as a file on disk.
+//
+// @include is rejected in this mode: an embedded source has no on-disk
+// base directory, so relative paths cannot be resolved.
+func PreprocessBytes(source []byte, name string) (*Preprocessed, error) {
+	if name == "" {
+		name = "<embedded>"
+	}
+
+	pre, err := preprocessSource(string(source), "", name, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	pre.Includes = append([]string{name}, pre.Includes...)
+	return pre, nil
 }
 
 func preprocessFile(path string, visited map[string]bool) (*Preprocessed, error) {
@@ -74,7 +56,6 @@ func preprocessFile(path string, visited map[string]bool) (*Preprocessed, error)
 	if visited[abs] {
 		return nil, xerr.Conflict("flow: @include cycle: " + abs)
 	}
-
 	visited[abs] = true
 	defer delete(visited, abs)
 
@@ -83,302 +64,67 @@ func preprocessFile(path string, visited map[string]bool) (*Preprocessed, error)
 		return nil, xerr.NotFound("flow: read "+abs, err)
 	}
 
-	pre, err := preprocessSource(string(data), filepath.Dir(abs), visited)
+	pre, err := preprocessSource(string(data), filepath.Dir(abs), abs, visited)
 	if err != nil {
 		return nil, err
 	}
 
 	pre.Includes = append([]string{abs}, pre.Includes...)
-
 	return pre, nil
 }
 
-func preprocessSource(src, baseDir string, visited map[string]bool) (*Preprocessed, error) {
-	out := &Preprocessed{}
-
-	var body []string
+// preprocessSource returns a Preprocessed whose DSL is line-aligned
+// with the source: every input line produces exactly one output line.
+// Directive lines are replaced by empty lines, and multi-line
+// directives (@pipeline … @end) leave their slots empty, which keeps
+// parser error positions pointing at the original file.
+func preprocessSource(src, baseDir, file string, visited map[string]bool) (*Preprocessed, error) {
+	out := &Preprocessed{
+		File:         file,
+		Config:       map[string]string{},
+		Declarations: map[string]any{},
+	}
 
 	lines := strings.Split(src, "\n")
+	body := make([]string, len(lines))
+
+	ctx := &directives.Context{
+		Out:     out,
+		BaseDir: baseDir,
+		File:    file,
+		Body:    body,
+		ValidateProfile: func(name string) error {
+			_, err := LookupProfile(name)
+			return err
+		},
+	}
+
+	// The include resolver is only wired up in file mode. In byte mode
+	// (PreprocessBytes) visited is nil and @include will fail with a
+	// clear message from at_include.go.
+	if visited != nil {
+		ctx.IncludeResolver = func(p string) (*Preprocessed, error) {
+			return preprocessFile(p, visited)
+		}
+	}
+
 	i := 0
-
 	for i < len(lines) {
-		line := lines[i]
-		trimmed := strings.TrimSpace(line)
+		trimmed := strings.TrimSpace(lines[i])
 
-		switch {
-		case strings.HasPrefix(trimmed, "@include "):
-			ref := strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmed, "@include ")), `"'`)
-
-			incPath := ref
-			if !filepath.IsAbs(incPath) {
-				incPath = filepath.Join(baseDir, incPath)
-			}
-
-			inc, err := preprocessFile(incPath, visited)
-			if err != nil {
-				return nil, xerr.BadRequest("flow: @include " + ref + ": " + err.Error())
-			}
-
-			for _, p := range inc.Pipelines {
-				if _, exists := findPipeline(out.Pipelines, p.Name); exists {
-					return nil, xerr.Conflict("flow: @pipeline " + p.Name +
-						" declared in both this file and " + incPath)
-				}
-
-				out.Pipelines = append(out.Pipelines, p)
-			}
-
-			for _, r := range inc.Requires {
-				out.Requires = appendUniqueRequirement(out.Requires, r)
-			}
-
-			if s := strings.TrimSpace(inc.DSL); s != "" {
-				body = append(body, "("+s+")")
-			}
-
-			i++
-
-			continue
-
-		case strings.HasPrefix(trimmed, "@pipeline "):
-			name := strings.TrimSpace(strings.TrimPrefix(trimmed, "@pipeline "))
-			if name == "" {
-				return nil, xerr.BadRequest("flow: @pipeline requires a name")
-			}
-
-			var pbody []string
-
-			i++
-			closed := false
-
-			for i < len(lines) {
-				if strings.TrimSpace(lines[i]) == "@end" {
-					closed = true
-					i++
-
-					break
-				}
-
-				pbody = append(pbody, lines[i])
-				i++
-			}
-
-			if !closed {
-				return nil, xerr.BadRequest("flow: @pipeline " + name + " missing @end")
-			}
-
-			if _, exists := findPipeline(out.Pipelines, name); exists {
-				return nil, xerr.Conflict("flow: @pipeline " + name + " declared twice")
-			}
-
-			out.Pipelines = append(out.Pipelines, Pipeline{
-				Name: name,
-				Body: strings.TrimSpace(strings.Join(pbody, "\n")),
-			})
-
-			continue
-
-		case strings.HasPrefix(trimmed, "@action "):
-			if out.Action == nil {
-				out.Action = &ActionMeta{}
-			}
-
-			out.Action.Name = strings.Trim(
-				strings.TrimSpace(strings.TrimPrefix(trimmed, "@action ")), `"'`)
-			i++
-
-			continue
-
-		case strings.HasPrefix(trimmed, "@description "):
-			if out.Action == nil {
-				out.Action = &ActionMeta{}
-			}
-
-			out.Action.Description = strings.Trim(
-				strings.TrimSpace(strings.TrimPrefix(trimmed, "@description ")), `"'`)
-			i++
-
-			continue
-
-		case strings.HasPrefix(trimmed, "@require "):
-			spec := strings.TrimSpace(strings.TrimPrefix(trimmed, "@require "))
-
-			req, err := parseRequirement(spec, baseDir)
+		if d, ok := directives.Lookup(trimmed); ok {
+			next, err := d.Apply(ctx, lines, i)
 			if err != nil {
 				return nil, err
 			}
-
-			out.Requires = appendUniqueRequirement(out.Requires, req)
-			i++
-
+			i = next
 			continue
 		}
 
-		body = append(body, line)
+		body[i] = lines[i]
 		i++
 	}
 
 	out.DSL = strings.Join(body, "\n")
-
 	return out, nil
-}
-
-func findPipeline(ps []Pipeline, name string) (Pipeline, bool) {
-	for _, p := range ps {
-		if p.Name == name {
-			return p, true
-		}
-	}
-
-	return Pipeline{}, false
-}
-
-// parseRequirement interprets one @require line.
-func parseRequirement(spec, baseDir string) (Requirement, error) {
-	parts := strings.Fields(spec)
-	switch len(parts) {
-	case 1:
-		importPath := strings.Trim(parts[0], `"'`)
-		if importPath == "" {
-			return Requirement{}, xerr.BadRequest("flow: empty @require")
-		}
-
-		if !looksLikeLocalPath(importPath) {
-			return Requirement{}, xerr.BadRequest(
-				"flow: remote @require needs a version: `@require " + importPath + " v1.2.3`")
-		}
-
-		return resolveLocalRequirement(importPath, baseDir)
-
-	case 2:
-		importPath := strings.Trim(parts[0], `"'`)
-
-		version := strings.Trim(parts[1], `"'`)
-		if importPath == "" || version == "" {
-			return Requirement{}, xerr.BadRequest("flow: malformed @require: " + spec)
-		}
-
-		if looksLikeLocalPath(importPath) {
-			return Requirement{}, xerr.BadRequest(
-				"flow: local @require must not carry a version: `@require " + importPath + "`")
-		}
-
-		if !strings.HasPrefix(version, "v") {
-			return Requirement{}, xerr.BadRequest(
-				"flow: version must start with 'v': `@require " + importPath + " " + version + "`")
-		}
-
-		return Requirement{Import: importPath, Version: version}, nil
-
-	default:
-		return Requirement{}, xerr.BadRequest(
-			"flow: @require expects `path` or `path version`, got: " + spec)
-	}
-}
-
-func resolveLocalRequirement(importPath, baseDir string) (Requirement, error) {
-	target := importPath
-	if !filepath.IsAbs(target) {
-		target = filepath.Join(baseDir, target)
-	}
-
-	abs, err := filepath.Abs(target)
-	if err != nil {
-		return Requirement{}, xerr.BadRequest(
-			"flow: resolve local path " + importPath + ": " + err.Error())
-	}
-
-	moduleRoot, modulePath, err := findModuleRoot(abs)
-	if err != nil {
-		return Requirement{}, xerr.BadRequest(
-			"flow: local @require " + importPath + ": " + err.Error())
-	}
-
-	rel, err := filepath.Rel(moduleRoot, abs)
-	if err != nil {
-		return Requirement{}, xerr.BadRequest(
-			"flow: local @require " + importPath + ": " + err.Error())
-	}
-
-	importCanonical := modulePath
-	if rel != "." && rel != "" {
-		importCanonical = modulePath + "/" + filepath.ToSlash(rel)
-	}
-
-	return Requirement{
-		Import:     importCanonical,
-		LocalPath:  abs,
-		ModuleRoot: moduleRoot,
-		ModulePath: modulePath,
-	}, nil
-}
-
-func findModuleRoot(dir string) (string, string, error) {
-	curr := dir
-	for {
-		gomod := filepath.Join(curr, "go.mod")
-		if _, err := os.Stat(gomod); err == nil {
-			modulePath, err := readModuleLine(gomod)
-			if err != nil {
-				return "", "", err
-			}
-
-			return curr, modulePath, nil
-		}
-
-		parent := filepath.Dir(curr)
-		if parent == curr {
-			return "", "", xerr.NotFound(
-				"no go.mod found above " + dir +
-					" (local @require must point into a Go module)")
-		}
-
-		curr = parent
-	}
-}
-
-func readModuleLine(gomod string) (string, error) {
-	f, err := os.Open(gomod)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, "module ") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "module ")), nil
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return "", err
-	}
-
-	return "", xerr.BadRequest(gomod + " has no module directive")
-}
-
-func looksLikeLocalPath(s string) bool {
-	return strings.HasPrefix(s, "./") ||
-		strings.HasPrefix(s, "../") ||
-		strings.HasPrefix(s, "/") ||
-		strings.HasPrefix(s, `.\`) ||
-		strings.HasPrefix(s, `..\`)
-}
-
-func appendUniqueRequirement(dst []Requirement, r Requirement) []Requirement {
-	for _, existing := range dst {
-		if existing.Import != r.Import {
-			continue
-		}
-
-		if existing.Version != r.Version && existing.Version != "" && r.Version != "" {
-			return append(dst, r)
-		}
-
-		return dst
-	}
-
-	return append(dst, r)
 }

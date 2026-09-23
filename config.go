@@ -8,7 +8,7 @@ import (
 
 // Layer identifies where a resolved config value came from. The runner
 // prints the layer next to each value at -vvv so the operator can see
-// whether a knob came from the CLI, the environment, the .flow file,
+// whether a knob came from the CLI, the environment, the .nflow file,
 // or a built-in default.
 type Layer uint8
 
@@ -35,7 +35,7 @@ func (l Layer) String() string {
 // Config is the complete set of runtime knobs for a flow run.
 //
 // Zero values are meaningful defaults supplied by defaultConfig. Every
-// field is optional in the .flow, in the environment, and on the CLI.
+// field is optional in the .nflow, in the environment, and on the CLI.
 type Config struct {
 	Verbosity    int
 	BudgetMicros int64

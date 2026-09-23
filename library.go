@@ -19,6 +19,7 @@ func StandardLibrary() action.Library {
 			{Canonical: "bench.compare", Short: []string{"compare", "diff"}},
 			{Canonical: "distribute.map", Short: []string{"map", "fanout", "parallel"}},
 			{Canonical: "distribute.reduce", Short: []string{"reduce", "fold"}},
+			{Canonical: "stats.print", Short: []string{"stats"}},
 		},
 	}
 }

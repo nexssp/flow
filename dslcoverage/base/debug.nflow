@@ -1,0 +1,4 @@
+@description "Base debug action"
+@assert: result == "visible"
+
+const @{ value: "visible" } -> debug

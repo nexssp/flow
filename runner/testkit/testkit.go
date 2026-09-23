@@ -28,14 +28,20 @@ type Result struct {
 	Stderr   string
 }
 
-// RunDSL executes a flow body directly, without reading a .flow file.
+// RunDSL executes a flow body directly, without reading a .nflow file.
 //
-// The DSL is treated as if it were the content of a .flow file: it may
+// The DSL is treated as if it were the content of a .nflow file: it may
 // contain @config, @pipeline, and @assert directives, but not @include
 // or @require (those need a real file on disk).
 //
 // payload is passed as the initial state. libs is the library set the
 // DSL may call; pass at least flow.StandardLibrary().
+//
+// Stream atoms (fs.walk, fs.read, out.file, …) live in the flow
+// registry, not the action registry. RunDSL builds a flow registry
+// from the same libraries and passes it to CompilePipeline via
+// WithFlowRegistry, so stream pipelines route through the pipeline
+// compiler instead of failing in the DAG path.
 func RunDSL(
 	t testing.TB,
 	dsl string,
@@ -52,6 +58,17 @@ func RunDSL(
 	if err != nil {
 		t.Fatalf("testkit.RunDSL: build registry: %v", err)
 	}
+
+	flowReg := flow.NewRegistry()
+	for i := range libs {
+		if err := flowReg.Register(libs[i]); err != nil {
+			t.Fatalf("testkit.RunDSL: flow registry: %v", err)
+		}
+	}
+
+	prev := flow.DefaultRegistry()
+	flow.SetDefaultRegistry(flowReg)
+	t.Cleanup(func() { flow.SetDefaultRegistry(prev) })
 
 	var stdout, stderr bytes.Buffer
 

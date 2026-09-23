@@ -1,4 +1,4 @@
-# Remote @require. This file is identical to ../demo.flow except for
+# Remote @require. This file is identical to ../demo.nflow except for
 # one line: the @require directive. Nothing in text/library.go changes
 # when the library is published — the module path is the only thing
 # that differs.

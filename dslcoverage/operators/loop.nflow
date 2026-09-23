@@ -1,0 +1,4 @@
+@description "Bounded loop operator"
+@assert: result != nil
+
+const @{ value: "loop" } -> loop(noop) until(true)

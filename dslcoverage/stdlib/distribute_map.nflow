@@ -1,0 +1,4 @@
+@description "Standard distribute.map"
+@assert: result != nil
+
+{ action: "noop", items: [1, 2] } -> distribute.map

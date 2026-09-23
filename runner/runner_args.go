@@ -16,6 +16,7 @@ type runnerArgs struct {
 	BenchRuns  int
 	CacheDir   string
 	Resume     string
+	Approve    string
 }
 
 func parseRunnerArgs(args []string) runnerArgs {
@@ -39,15 +40,14 @@ func parseRunnerArgs(args []string) runnerArgs {
 			out.CacheDir = strings.TrimPrefix(arg, "--cache=")
 		case strings.HasPrefix(arg, "--resume="):
 			out.Resume = strings.TrimPrefix(arg, "--resume=")
+		case strings.HasPrefix(arg, "--approve="):
+			out.Approve = strings.TrimPrefix(arg, "--approve=")
 		}
 	}
 
 	return out
 }
 
-// parseApprovalMode converts a config string into the typed enum.
-// Unknown values are a hard error so a typo in @config:approval= does
-// not silently downgrade to the default.
 func parseApprovalMode(s string) (ApprovalMode, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "", "none", "auto":

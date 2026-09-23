@@ -1,4 +1,4 @@
-# flows/run_simulation.flow
+# flows/run_simulation.nflow
 @config:budget_micros=5000000
 
 simulation.run:route="POST /api/sim/run":status=200

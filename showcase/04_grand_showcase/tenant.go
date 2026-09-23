@@ -99,7 +99,7 @@ func TenantCostHook(reg *TenantLedgerRegistry, estimateMicros int64) action.AnyH
 			}
 
 			actual := estimateMicros
-			if reporter, ok := result.(cost.CostReporter); ok {
+			if reporter, ok := result.(cost.Reporter); ok {
 				actual = reporter.CostMicros()
 				if actual < 0 {
 					actual = 0

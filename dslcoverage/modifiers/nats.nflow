@@ -1,0 +1,3 @@
+@assert: result == "nats"
+
+const:nats="coverage.events" @{ value: "nats" }

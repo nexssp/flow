@@ -1,0 +1,4 @@
+@pool coverage [cov.echo]
+@assert: result != nil
+
+{ pool: "coverage", payload: { value: "pool" } } -> dispatch

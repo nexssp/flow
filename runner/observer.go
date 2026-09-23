@@ -2,7 +2,6 @@ package runner
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -12,13 +11,12 @@ import (
 	"time"
 
 	"github.com/nexssp/cost"
+	"github.com/nexssp/flow"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/observe"
 	"github.com/nexssp/kernel/xerr"
 )
 
-// maxObserverVerbosity is the highest verbosity level the observer honours.
-// Values above this are clamped, not wrapped.
 const maxObserverVerbosity = 3
 
 func clampVerbosity(n int) int32 {
@@ -28,13 +26,10 @@ func clampVerbosity(n int) int32 {
 	case n > maxObserverVerbosity:
 		return maxObserverVerbosity
 	default:
-		// n is bounded by the two cases above.
 		return int32(n) //nolint:gosec // G115: bounded to [0, maxObserverVerbosity]
 	}
 }
 
-// MetricRecord is one row in the metrics table printed at the end of a
-// run, or at exit on failure.
 type MetricRecord struct {
 	ExecutionID   string
 	Action        string
@@ -48,18 +43,6 @@ type MetricRecord struct {
 	Success       bool
 }
 
-// RunnerObserver is the flow runner's terminal reporter. It receives
-// lifecycle events from two sources:
-//
-//   - the observe.Hook attached to every action by the compiler, which
-//     feeds the end-of-run metrics table;
-//   - the live hook returned by Hook(), which prints the per-action
-//     trace lines while the flow is running.
-//
-// Domain-specific rendering (LLM token counts, evaluator verdicts,
-// price catalog lookups) is delegated to ObserverHooks. A nil hook
-// falls back to a domainless default, so the observer works for any
-// flow — AI-flavoured or not.
 type RunnerObserver struct {
 	mu        sync.Mutex
 	out       io.Writer
@@ -69,15 +52,10 @@ type RunnerObserver struct {
 	hooks     ObserverHooks
 }
 
-// NewRunnerObserver creates an observer with no domain-specific hooks.
-// Use this for flows that carry no AI/LLM actions.
 func NewRunnerObserver(out io.Writer, verbosity int) *RunnerObserver {
 	return NewRunnerObserverWithHooks(out, verbosity, ObserverHooks{})
 }
 
-// NewRunnerObserverWithHooks creates an observer that delegates
-// domain-specific rendering to the supplied hooks. Nil hook functions
-// are safe: the observer falls back to domainless defaults.
 func NewRunnerObserverWithHooks(out io.Writer, verbosity int, hooks ObserverHooks) *RunnerObserver {
 	if out == nil {
 		out = io.Discard
@@ -99,8 +77,49 @@ func (o *RunnerObserver) AddSpend(micros int64) {
 	}
 }
 
-// ─── hook dispatch: chained, so the AI hook gets first crack and the
-//     domainless default catches everything else ──────────────────────
+// OnSecurity implements flow.SecurityObserver. It is called by the
+// compiler for every profile hook that fires around a node. At
+// verbosity >= 1, a passing hook prints one line; a rejecting hook
+// prints a distinct failure line. At verbosity < 1, no output is
+// produced — the events still fire, they are simply not rendered.
+func (o *RunnerObserver) OnSecurity(_ context.Context, ev flow.SecurityEvent) {
+	if o == nil || o.out == nil {
+		return
+	}
+
+	v := o.Verbosity()
+	if v < 1 {
+		return
+	}
+
+	// "after" events are only interesting when they carry an error;
+	// the matching "before" line already showed the hook firing.
+	if ev.Phase == "after" && ev.Err == nil {
+		return
+	}
+
+	tNow := time.Now().Format("15:04:05.000")
+
+	switch {
+	case ev.Err == nil:
+		fmt.Fprintf(o.out,
+			"[%s] [SECURITY  ] 🛡️  %-26s node=%-20s pass (%s)\n",
+			tNow, ev.Hook, ev.Node, ev.Elapsed.Round(time.Microsecond),
+		)
+	case ev.Phase == "error":
+		fmt.Fprintf(o.out,
+			"[%s] [SECURITY  ] ❌ %-26s node=%-20s fail: %s\n",
+			tNow, ev.Hook, ev.Node, snip(ev.Err.Error(), 160),
+		)
+	default:
+		fmt.Fprintf(o.out,
+			"[%s] [SECURITY  ] ⛔ %-26s node=%-20s blocked: %s\n",
+			tNow, ev.Hook, ev.Node, snip(ev.Err.Error(), 160),
+		)
+	}
+}
+
+// ─── hook dispatch ─────────────────────────────────────────────────
 
 func (o *RunnerObserver) knownModel(model string) bool {
 	if o.hooks.KnownModel == nil {
@@ -140,11 +159,8 @@ func (o *RunnerObserver) promptFromRequest(req any) string {
 	return extractPromptGeneric(req)
 }
 
-// ─── provider trace: called by llm.NewObservableProvider ────────────
+// ─── provider trace ────────────────────────────────────────────────
 
-// ProviderTrace is the callback installed on the LLM provider wrapper.
-// It receives one event per Complete call (start / finish / warn /
-// error) and renders it to the live log at verbosity >= 1.
 func (o *RunnerObserver) ProviderTrace(
 	kind, provider, model string,
 	in, out int,
@@ -185,7 +201,7 @@ func (o *RunnerObserver) ProviderTrace(
 	}
 }
 
-// ─── live hook: the per-action trace printed while the flow runs ────
+// ─── live hook ─────────────────────────────────────────────────────
 
 func (o *RunnerObserver) Hook() action.AnyHook {
 	return action.AnyHook{
@@ -211,7 +227,7 @@ func (o *RunnerObserver) Hook() action.AnyHook {
 			return ctx, nil
 		},
 
-		OnExecuted: func(ctx context.Context, req, res any, _ error, meta *action.Meta) {
+		OnSuccess: func(ctx context.Context, req, res any, meta *action.Meta) {
 			name := actionName(meta)
 			if !isUserAction(name) {
 				return
@@ -266,33 +282,30 @@ func (o *RunnerObserver) Hook() action.AnyHook {
 			if !isUserAction(name) {
 				return
 			}
+			if o.Verbosity() < 1 {
+				return
+			}
 
 			tag := getAgentTag(name)
 			tNow := time.Now().Format("15:04:05.000")
+			appErr := xerr.From(err)
 
-			fmt.Fprintf(o.out,
-				"[%s] [%-10s] ❌ %s failed: %s\n",
-				tNow, tag, name, snip(err.Error(), 240))
+			fmt.Fprintf(o.out, "[%s] [%-10s] ✗ %s: %s\n", tNow, tag, name, appErr.Message)
 
 			if o.Verbosity() >= 2 {
-				var appErr *xerr.AppError
-				if errors.As(err, &appErr) {
-					fmt.Fprintf(o.out, "              ├── kind    : %s\n", appErr.Kind)
-					fmt.Fprintf(o.out, "              ├── message : %s\n", appErr.Message)
-
-					if appErr.Cause != nil {
-						fmt.Fprintf(o.out, "              └── cause   : %v\n", appErr.Cause)
-					}
+				fmt.Fprintf(o.out, "              ├── kind    : %s\n", appErr.Kind)
+				if appErr.Cause != nil {
+					fmt.Fprintf(o.out, "              └── cause   : %v\n", appErr.Cause)
 				}
 			}
 		},
 	}
 }
 
-// ─── metrics sink: called by observe.Hook attached to every action ──
+// ─── metrics sink ──────────────────────────────────────────────────
 
 func (o *RunnerObserver) Emit(_ context.Context, ev observe.Event) {
-	if ev.Kind != observe.KindExecuted && ev.Kind != observe.KindError {
+	if ev.Kind != observe.KindSuccess && ev.Kind != observe.KindError {
 		return
 	}
 
@@ -333,9 +346,6 @@ func (o *RunnerObserver) TotalTokens() int {
 	return total
 }
 
-// PrintSummary renders the end-of-run metrics table. Callers pass the
-// writer they want the table on (usually the same stdout the live log
-// went to). Safe to call after the flow has failed.
 func (o *RunnerObserver) PrintSummary(out io.Writer) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -388,12 +398,6 @@ func (o *RunnerObserver) PrintSummary(out io.Writer) {
 
 	fmt.Fprintln(out, strings.Repeat("─", 94))
 
-	// One total line per currency seen. In the common case there is
-	// exactly one currency and this prints a single line. Mixed-currency
-	// runs happen when a flow reaches providers priced in different
-	// currencies; the totals are kept separate rather than summed,
-	// because summing across currencies requires an exchange rate the
-	// observer does not have.
 	currencies := make([]cost.Currency, 0, len(byCurrency))
 	for c := range byCurrency {
 		currencies = append(currencies, c)
@@ -413,10 +417,18 @@ func (o *RunnerObserver) PrintSummary(out io.Writer) {
 	}
 }
 
-// ─── small helpers ──────────────────────────────────────────────────
+// ─── helpers ───────────────────────────────────────────────────────
 
 func isUserAction(name string) bool {
-	return !strings.HasPrefix(name, "gate_") && !strings.HasPrefix(name, "system.")
+	switch {
+	case name == "graph.execute":
+		return false
+	case strings.HasPrefix(name, "gate_"):
+		return false
+	case strings.HasPrefix(name, "system."):
+		return false
+	}
+	return true
 }
 
 func actionName(m *action.Meta) string {
@@ -440,9 +452,6 @@ func snip(s string, maxLen int) string {
 	return s[:half] + "..." + s[len(s)-half:]
 }
 
-// formatCost renders a micros amount with its currency code, using the
-// currency's own String(). Never uses a hardcoded symbol table, so the
-// observer is not tied to any particular currency.
 func formatCost(micros int64, c cost.Currency) string {
 	return fmt.Sprintf("%.6f %s", cost.Micro(micros).Float64(), c.String())
 }

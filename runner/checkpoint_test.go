@@ -27,7 +27,7 @@ func runCheckpointStoreContract(t *testing.T, s CheckpointStore) {
 
 	cp := Checkpoint{
 		RunID:    "run_123",
-		Flow:     "foo.flow",
+		Flow:     "foo.nflow",
 		FlowHash: "abc123",
 		Layer:    2,
 		SavedAt:  time.Now().UTC(),

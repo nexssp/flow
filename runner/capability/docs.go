@@ -4,14 +4,14 @@
 // Three resolution backends are supported, tried in this order:
 //
 //  1. Static — the caller-supplied registry (in-process actions).
-//  2. Remote — HTTP/JSON or exec-based proxies declared in the .flow manifest
+//  2. Remote — HTTP/JSON or exec-based proxies declared in the .nflow manifest
 //     via :remote= and :exec= modifiers.
 //  3. WASM   — WebAssembly modules loaded via wazero, declared via :wasm= in
 //     the manifest.
 //
 // Static lookups always win: an in-process action shadows a manifest-declared
 // remote with the same name. This lets callers override individual
-// capabilities during development without editing the .flow manifest.
+// capabilities during development without editing the .nflow manifest.
 //
 // Manifest syntax (all modifiers are colon-separated, in any order):
 //

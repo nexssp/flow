@@ -19,7 +19,7 @@ nodes, and the extension points that let you add your own.
 
 1. [Install](#install)
 2. [Quick start](#quick-start)
-3. [The .flow file format](#the-flow-file-format)
+3. [The .nflow file format](#the-flow-file-format)
 4. [Arrow DSL operators](#arrow-dsl-operators)
 5. [Directives](#directives)
 6. [Action modifiers](#action-modifiers)
@@ -103,9 +103,9 @@ func main() {
 
 ---
 
-## The .flow file format
+## The .nflow file format
 
-A `.flow` file is a plain text pipeline. It may contain directives
+A `.nflow` file is a plain text pipeline. It may contain directives
 (lines starting with `@`), a route declaration header, and the pipeline
 body.
 
@@ -203,7 +203,7 @@ and do not appear in the compiled pipeline.
 | `@config:key=value` | Override a runtime knob |
 | `@assert: expr` | Testkit assertion evaluated after the flow finishes |
 | `@pipeline Name` … `@end` | Declare a named subflow, callable by name |
-| `@include ./path.flow` | Merge pipelines and requires from another file |
+| `@include ./path.nflow` | Merge pipelines and requires from another file |
 | `@action name` | Expose this file as a callable action named `name` |
 | `@description "text"` | Human-readable description for the action |
 | `@require ./local/path` | Import a local Go library |
@@ -357,7 +357,7 @@ attached to the same action.
 
 ### Capability bindings
 
-A `.flow` file can proxy a node to an external target without writing Go:
+A `.nflow` file can proxy a node to an external target without writing Go:
 
 | Modifier | Target | Behaviour |
 |---|---|---|
@@ -533,16 +533,16 @@ reg, err := flow.BuildRegistry(
 ### CLI
 
 ```bash
-nexssflow ./pipeline.flow '{"user_id": 42}' -vvv --assert="success == true"
-nexssflow ./pipeline.flow --info
-nexssflow ./pipeline.flow --resume=run_1731000000
+nexssflow ./pipeline.nflow '{"user_id": 42}' -vvv --assert="success == true"
+nexssflow ./pipeline.nflow --info
+nexssflow ./pipeline.nflow --resume=run_1731000000
 ```
 
 ### Programmatic
 
 ```go
 req := flowrunner.Request{
-    Path:    "./pipeline.flow",
+    Path:    "./pipeline.nflow",
     Payload: map[string]any{"user_id": 42},
     Args:    []string{"-vv"},
     Stdout:  os.Stdout,
@@ -659,7 +659,7 @@ Built-in implementations: `FileCheckpointStore` (atomic write, 0600),
 On failure the runner writes a checkpoint and prints a resume command:
 
 ```bash
-nexssflow ./pipeline.flow --resume=run_1731000000
+nexssflow ./pipeline.nflow --resume=run_1731000000
 ```
 
 Resume replays the checkpoint's state and skips completed layers. A
@@ -1010,6 +1010,47 @@ app.WithLoader(func(asm *bootstrap.Assembly) error {
 })
 ```
 
+### Adding project-specific actions
+
+When a `.nflow` file references an action that is not in `BaseLibrary` or
+`StandardLibrary`, mount it from a small `main.go` in your project:
+
+```go
+package main
+
+import (
+    "context"
+    "os"
+
+    "github.com/nexssp/flow"
+    "github.com/nexssp/flow/runner"
+    "github.com/nexssp/kernel/action"
+)
+
+func main() {
+    libs := []action.Library{
+        flow.BaseLibrary(),
+        flow.StandardLibrary(),
+        {
+            Name: "myproject",
+            Actions: []action.AnyAction{
+                action.New("myproject.greet", func(_ context.Context, name string) (string, error) {
+                    return "hello, " + name, nil
+                }).Build(),
+            },
+        },
+    }
+
+    os.Exit(runner.Default{}.RunFlow(
+        context.Background(), os.Args[1], map[string]any{},
+        os.Args[2:], libs, os.Stdout, os.Stderr,
+    ))
+}
+```
+
+That is the intended extension point. The shipped `nexssflow` binary is
+deliberately closed; applications compose their own.
+
 ### Adding a hook
 
 Hooks run before and after every node. Use them for logging, auditing,
@@ -1092,7 +1133,7 @@ Extend `Config` in `config.go`, add the parser branch in each of
 ## See also
 
 - `FLOW.en.md` — design rationale and manifesto
-- `examples/` — runnable `.flow` files and Go examples
+- `examples/` — runnable `.nflow` files and Go examples
 - `showcase/` — adaptive router, hot swap, evolutionary optimizer,
   multi-tenant governance
 - `runner/` — the runner package in isolation

@@ -27,7 +27,7 @@ func ScanFlowsFolder(root string) ([]FlowDef, error) {
 			return walkErr
 		}
 
-		if info.IsDir() || !strings.HasSuffix(path, ".flow") {
+		if info.IsDir() || !strings.HasSuffix(path, ".nflow") {
 			return nil
 		}
 

@@ -1,0 +1,4 @@
+@description "Base const action"
+@assert: result == 42
+
+const @{ value: 42 }

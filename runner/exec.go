@@ -8,7 +8,7 @@ import (
 
 // ExecSelf re-executes the runner binary with the given args.
 // The context is threaded through so the child is killed when the parent
-// receives SIGTERM or its context is otherwise cancelled.
+// receives SIGTERM or its context is otherwise canceled.
 func ExecSelf(ctx context.Context, binary string, args []string) int {
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Stdin = os.Stdin

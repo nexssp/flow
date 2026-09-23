@@ -116,6 +116,17 @@ func runBenchmark(ctx context.Context, reg *action.Registry, req BenchRunReq) (B
 
 	slices.Sort(samples)
 
+	// RPS from nanoseconds, with a 1ns floor. On a fast machine (or a
+	// coarse monotonic clock) elapsed can be small enough that
+	// elapsed.Seconds() rounds to zero inside the float division, which
+	// leaves RPS at 0 for a run that clearly produced iterations. The
+	// floor keeps the number meaningful without inflating it.
+	nanos := elapsed.Nanoseconds()
+	if nanos < 1 {
+		nanos = 1
+	}
+	rps := float64(req.Iterations) * 1e9 / float64(nanos)
+
 	return BenchRunRes{
 		Action:     req.Action,
 		Iterations: req.Iterations,
@@ -127,7 +138,7 @@ func runBenchmark(ctx context.Context, reg *action.Registry, req BenchRunReq) (B
 		P50Ms:      toMs(percentile(samples, 0.50)),
 		P95Ms:      toMs(percentile(samples, 0.95)),
 		P99Ms:      toMs(percentile(samples, 0.99)),
-		RPS:        float64(req.Iterations) / elapsed.Seconds(),
+		RPS:        rps,
 		ElapsedMs:  elapsed.Milliseconds(),
 	}, nil
 }

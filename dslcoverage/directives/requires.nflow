@@ -1,0 +1,4 @@
+@requires: network[api.example.test]
+@assert: result == "requires"
+
+const @{ value: "requires" }

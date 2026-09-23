@@ -1,0 +1,3 @@
+@assert: result == "status"
+
+const:status=201 @{ value: "status" }

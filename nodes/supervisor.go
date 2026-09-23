@@ -86,7 +86,7 @@ func NewSupervisorNode(name string) action.AnyAction {
 				}
 
 				out, execErr := childPipeline.ExecuteDecoded(childCtx, func(target any) error {
-					return decodePayload(task.Payload, target)
+					return AssignPayload(task.Payload, target)
 				})
 
 				resSlot.Duration = time.Since(start).Milliseconds()

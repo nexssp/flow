@@ -42,3 +42,4 @@ data/
 *.sqlite
 
 .nexss/
+coverage_bench.json

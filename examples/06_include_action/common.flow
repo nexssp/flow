@@ -1,4 +1,4 @@
-# flow/examples/06_include_action/common.flow
+# flow/examples/06_include_action/common.nflow
 @pipeline greet_pipeline
     { message: "hello, " + name }
     -> log.info

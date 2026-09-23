@@ -1,4 +1,4 @@
-# flows/self_improve.flow
+# flows/self_improve.nflow
 @config:budget_micros=15000000
 
 @assert: success == true

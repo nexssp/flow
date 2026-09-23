@@ -88,6 +88,7 @@ type GraphDefinition struct {
 	APIVersion string      `json:"apiVersion" yaml:"apiVersion"`
 	Kind       string      `json:"kind" yaml:"kind"`
 	Metadata   Metadata    `json:"metadata" yaml:"metadata"`
+	Profile    Profile     `json:"profile,omitempty" yaml:"profile,omitempty"`
 	Policy     GraphPolicy `json:"policy,omitempty" yaml:"policy,omitempty"`
 	Nodes      []NodeSpec  `json:"nodes" yaml:"nodes"`
 	Edges      []EdgeSpec  `json:"edges" yaml:"edges"`
@@ -290,6 +291,12 @@ func validate(def GraphDefinition) error {
 
 	if def.Metadata.Name == "" || def.Metadata.Version == "" {
 		return fmt.Errorf("graph: metadata.name and metadata.version are required")
+	}
+
+	if def.Profile != "" {
+		if _, err := LookupProfile(string(def.Profile)); err != nil {
+			return err
+		}
 	}
 
 	if len(def.Nodes) == 0 {

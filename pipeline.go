@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 )
@@ -91,13 +92,31 @@ func detectPipelineCycles(pipelines []Pipeline) error {
 			return nil
 		}
 
-		for ref := range referencedAtoms(p.Body) {
-			if _, isPipeline := byName[ref]; !isPipeline {
-				continue
+		// Używamy prawdziwego parsera AST zamiast tekstowych splitów
+		parser := compiler.NewParser(p.Body)
+		ast, err := parser.ParseExpression()
+		if err != nil {
+			// Błędy składniowe zostaną wyłapane później przez właściwy kompilator.
+			// Dla detekcji cykli ignorujemy błędne linie.
+			color[name] = black
+			return nil
+		}
+
+		var cycleErr error
+		walkAtoms(ast, func(atomName string) {
+			if cycleErr != nil {
+				return
 			}
-			if err := visit(ref, append(stack, name)); err != nil {
-				return err
+			if _, isPipeline := byName[atomName]; !isPipeline {
+				return
 			}
+			if err := visit(atomName, append(stack, name)); err != nil {
+				cycleErr = err
+			}
+		})
+
+		if cycleErr != nil {
+			return cycleErr
 		}
 
 		color[name] = black
@@ -110,31 +129,4 @@ func detectPipelineCycles(pipelines []Pipeline) error {
 		}
 	}
 	return nil
-}
-
-func referencedAtoms(body string) map[string]struct{} {
-	out := make(map[string]struct{}, 8)
-	splitter := func(r rune) bool {
-		switch r {
-		case '>', '|', '&', '\n', '(', ')', '{', '}':
-			return true
-		}
-		return false
-	}
-	for _, raw := range strings.FieldsFunc(body, splitter) {
-		atom := strings.TrimSpace(raw)
-		atom = strings.TrimPrefix(atom, "-")
-		atom = strings.TrimSpace(atom)
-		if atom == "" {
-			continue
-		}
-		if idx := strings.IndexByte(atom, ':'); idx > 0 {
-			atom = atom[:idx]
-		}
-		if atom == "" || strings.ContainsAny(atom, " \"'") {
-			continue
-		}
-		out[atom] = struct{}{}
-	}
-	return out
 }

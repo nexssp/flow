@@ -22,11 +22,7 @@ func NewState(values map[string]any) *State {
 	return &State{data: copyValues}
 }
 
-func NewStateFromDAG(dagState *dag.State) *State {
-	if dagState == nil {
-		return NewState(nil)
-	}
-
+func NewStateFromDAG(dagState dag.ReadState) *State {
 	return NewState(dagState.Data())
 }
 

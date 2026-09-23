@@ -1,0 +1,6 @@
+@pipeline named_coverage
+  const @{ value: "named" }
+@end
+@assert: result == "named"
+
+{} -> named_coverage

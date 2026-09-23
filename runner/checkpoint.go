@@ -21,6 +21,7 @@ type Checkpoint struct {
 	SavedAt     time.Time      `json:"saved_at"`
 	SpentMicros int64          `json:"spent_micros"`
 	State       map[string]any `json:"state"`
+	Suspended   bool           `json:"suspended,omitempty"`
 }
 
 type CheckpointStore interface {

@@ -1,0 +1,7 @@
+@route coverage_route {
+  when route == "yes" -> noop
+  else -> const
+}
+@assert: result != nil
+
+{ route: "yes" } -> coverage_route

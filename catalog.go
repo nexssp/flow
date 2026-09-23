@@ -7,10 +7,8 @@ import (
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
-	"github.com/nexssp/transport/thttp"
 )
 
-// CapabilitySpec represents a machine-readable action contract for AI agents & graph builders.
 type CapabilitySpec struct {
 	Name         string         `json:"name"`
 	Description  string         `json:"description"`
@@ -22,13 +20,16 @@ type CapabilitySpec struct {
 	IsSystem     bool           `json:"is_system"`
 }
 
-// ExtractCapabilities converts a Registry into an AI-friendly CapabilitySpec catalog.
-func ExtractCapabilities(reg *action.Registry) []CapabilitySpec {
-	if reg == nil {
+type routeBindingAccessor interface {
+	HTTPRoute() (method, path string)
+}
+
+func ExtractCapabilities(registry *action.Registry) []CapabilitySpec {
+	if registry == nil {
 		return nil
 	}
 
-	actions := reg.Actions()
+	actions := registry.Actions()
 	specs := make([]CapabilitySpec, 0, len(actions))
 
 	for _, act := range actions {
@@ -43,12 +44,23 @@ func ExtractCapabilities(reg *action.Registry) []CapabilitySpec {
 
 		method, route := "", ""
 
-		for _, b := range act.GetBindings() {
-			if r, ok := b.(thttp.HTTPRoute); ok {
-				method = r.Method
-				route = r.Path
-
+		// Duck-typing avoids a direct compile dependency on specific transport packages.
+		for _, binding := range act.GetBindings() {
+			if accessor, ok := binding.(routeBindingAccessor); ok {
+				method, route = accessor.HTTPRoute()
 				break
+			}
+
+			bindingValue := reflect.ValueOf(binding)
+			if bindingValue.Kind() == reflect.Struct {
+				methodField := bindingValue.FieldByName("Method")
+				pathField := bindingValue.FieldByName("Path")
+				if methodField.IsValid() && pathField.IsValid() &&
+					methodField.Kind() == reflect.String && pathField.Kind() == reflect.String {
+					method = methodField.String()
+					route = pathField.String()
+					break
+				}
 			}
 		}
 
@@ -76,20 +88,23 @@ func ExtractCapabilities(reg *action.Registry) []CapabilitySpec {
 	return specs
 }
 
-// BuildCatalogAction returns a system action exposing the capability catalog over HTTP/A2A.
-func BuildCatalogAction(reg *action.Registry) action.AnyAction {
-	return action.New("flow.catalog", func(_ context.Context, _ struct{}) ([]CapabilitySpec, error) {
-		if reg == nil {
+func BuildCatalogAction(registry *action.Registry, bindings ...action.Binding) action.AnyAction {
+	builder := action.New("flow.catalog", func(_ context.Context, _ struct{}) ([]CapabilitySpec, error) {
+		if registry == nil {
 			return nil, xerr.NotFound("flow: registry is nil")
 		}
 
-		return ExtractCapabilities(reg), nil
+		return ExtractCapabilities(registry), nil
 	}).
 		System().
 		Description("Exposes machine-readable action capabilities for AI Agents & Flow DSL synthesis").
-		Tag("infra", "flow", "ai").
-		Route(thttp.GET("/flow/catalog")).
-		Build()
+		Tag("infra", "flow", "ai")
+
+	if len(bindings) > 0 {
+		builder.Route(bindings...)
+	}
+
+	return builder.Build()
 }
 
 func reflectToSchema(t reflect.Type) map[string]any {
@@ -106,7 +121,6 @@ func reflectToSchema(t reflect.Type) map[string]any {
 	}
 
 	props := make(map[string]any)
-
 	var required []string
 
 	for i := 0; i < t.NumField(); i++ {
@@ -126,7 +140,6 @@ func reflectToSchema(t reflect.Type) map[string]any {
 		}
 
 		kindStr := "string"
-
 		switch f.Type.Kind() {
 		case reflect.Int, reflect.Int64, reflect.Float64:
 			kindStr = "number"

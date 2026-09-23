@@ -46,7 +46,7 @@ func loadWASM(ctx context.Context, name, path string) (*wasmModule, error) {
 	return &wasmModule{name: name, path: path, r: r, mod: mod}, nil
 }
 
-// Close stays context-free: cleanup must not inherit a cancelled caller.
+// Close stays context-free: cleanup must not inherit a canceled caller.
 func (m *wasmModule) Close() error {
 	m.closeOnce.Do(func() {
 		m.closeErr = m.r.Close(context.Background())

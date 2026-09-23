@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/nexssp/testkit"
+	"github.com/nexssp/kernel/xtest/ktest"
 )
 
 // Pure function test. Fast, no action wrapper.
@@ -43,18 +43,18 @@ func TestLibraryContract(t *testing.T) {
 		t.Fatal("Library() must return at least one action")
 	}
 
-	testkit.AssertContracts(t, lib.Actions)
+	ktest.AssertContracts(t, lib.Actions)
 }
 
 // Benchmark with testkit. Works because Uppercase() returns a typed
 // *action.BuiltAction, exactly what testkit.BenchAction expects.
 func BenchmarkUppercase(b *testing.B) {
-	testkit.BenchAction(b, Uppercase(), UppercaseReq{Message: "hi"})
+	ktest.BenchAction(b, Uppercase(), UppercaseReq{Message: "hi"})
 }
 
 // Concurrency test with testkit. Same reason.
 func TestUppercaseConcurrent(t *testing.T) {
-	testkit.Simulate(t, Uppercase(), UppercaseReq{Message: "hi"}, 20,
+	ktest.Simulate(t, Uppercase(), UppercaseReq{Message: "hi"}, 20,
 		func(t testing.TB, res UppercaseRes, err error) {
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)

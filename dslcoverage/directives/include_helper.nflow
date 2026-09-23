@@ -1,0 +1,3 @@
+@pipeline included_coverage
+  const @{ value: "included" }
+@end

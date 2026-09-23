@@ -1,0 +1,3 @@
+@assert: result == "timeout"
+
+const:timeout=1s @{ value: "timeout" }

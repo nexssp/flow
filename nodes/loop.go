@@ -13,6 +13,9 @@ import (
 
 var loopCounter atomic.Int64
 
+// NewLoopAction compiles a `loop(body) until(cond)` construct. The until
+// condition is rewritten through PreprocessDotNotation, so leading-dot
+// state references work identically to projections and asserts.
 func NewLoopAction(
 	bodyAction action.AnyAction,
 	untilCondition string,
@@ -22,7 +25,9 @@ func NewLoopAction(
 		maxTurns = 15
 	}
 
-	program, err := expr.Compile(untilCondition, expr.AllowUndefinedVariables())
+	compiledCondition, _ := PreprocessDotNotation(untilCondition)
+
+	program, err := expr.Compile(compiledCondition, expr.AllowUndefinedVariables())
 	if err != nil {
 		return nil, fmt.Errorf("flow: invalid loop until condition %q: %w", untilCondition, err)
 	}
@@ -45,13 +50,13 @@ func NewLoopAction(
 			}
 
 			output, execErr := executable.ExecuteDecoded(ctx, func(target any) error {
-				return decodePayload(currentInput, target)
+				return AssignPayload(currentInput, target)
 			})
 			if execErr != nil {
 				return nil, execErr
 			}
 
-			env := normalizeProjectionEnv(output)
+			env := NormalizeEnv(output)
 
 			satisfied, evalErr := evalLoopCondition(program, env)
 			if evalErr != nil {

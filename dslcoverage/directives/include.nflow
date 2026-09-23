@@ -1,0 +1,4 @@
+@include ./include_helper.nflow
+@assert: result == "included"
+
+included_coverage

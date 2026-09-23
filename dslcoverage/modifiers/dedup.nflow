@@ -1,0 +1,3 @@
+@assert: result == "dedup"
+
+const:dedup @{ value: "dedup" }

@@ -1,0 +1,4 @@
+@profile: untrusted_input
+@assert: result == "profile"
+
+const @{ value: "profile" }

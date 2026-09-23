@@ -101,7 +101,7 @@ func compileSagaAST(node compiler.Expr, reg *action.Registry) (*action.Builder[a
 
 	default:
 		// If it's not a pipe, parallel, or atom, try to compile it normally and wrap it
-		return compileAST(node, reg)
+		return compileAST(node, reg, nil)
 	}
 }
 

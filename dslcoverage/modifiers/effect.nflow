@@ -1,0 +1,3 @@
+@assert: result == "effect"
+
+const:effect=read_only @{ value: "effect" }

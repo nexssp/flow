@@ -5,9 +5,20 @@ import (
 	"testing"
 
 	"github.com/nexssp/flow"
+	"github.com/nexssp/flow/dslparse"
+	flowtransport "github.com/nexssp/flow/transport"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/testkit"
+	"github.com/nexssp/transport/thttp"
 )
+
+func init() {
+	flowtransport.RegisterResolverMap(map[string]flowtransport.ResolverFunc{
+		"http": func(b *dslparse.TransportBinding) (action.Binding, error) {
+			return thttp.HTTPRoute{Method: b.Method, Path: b.Path}, nil
+		},
+	})
+}
 
 type userPayload struct {
 	ID   string `json:"id"`

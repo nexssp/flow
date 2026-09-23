@@ -32,7 +32,7 @@ func (a *App) WithActions(fn func(context.Context) ([]action.AnyAction, error)) 
 	return a
 }
 
-// WithFlows compiles every *.flow file in dir into a named action.
+// WithFlows compiles every *.nflow file in dir into a named action.
 //
 // Two passes:
 //
@@ -65,7 +65,7 @@ func (a *App) WithFlows(dir string) *App {
 		)
 
 		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".flow") {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".nflow") {
 				continue
 			}
 
@@ -77,7 +77,7 @@ func (a *App) WithFlows(dir string) *App {
 			}
 
 			flowsList = append(flowsList, flowEntry{
-				name:   strings.TrimSuffix(e.Name(), ".flow"),
+				name:   strings.TrimSuffix(e.Name(), ".nflow"),
 				path:   path,
 				source: string(data),
 			})
@@ -125,7 +125,7 @@ func (a *App) WithFlows(dir string) *App {
 	return a
 }
 
-// compileFlowFile reads a .flow source, sanitizes the DSL, and returns a
+// compileFlowFile reads a .nflow source, sanitizes the DSL, and returns a
 // single action whose Name is the file stem. The compiled graph is
 // independent of the caller — the returned action executes the flow
 // end-to-end with a JSON payload.
@@ -144,7 +144,7 @@ func compileFlowFile(name, source string, reg *action.Registry) (action.AnyActio
 	}).Tag("flow").Build(), nil
 }
 
-// WithFlowsFolder scans a directory for .flow files that declare
+// WithFlowsFolder scans a directory for .nflow files that declare
 // @action and registers each one as a callable action, plus three
 // meta-tools (flow.list, flow.inspect, flow.run).
 //

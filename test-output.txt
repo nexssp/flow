@@ -1,0 +1,1101 @@
+=== RUN   TestStripAtAnnotations
+=== RUN   TestStripAtAnnotations/no_annotation
+=== RUN   TestStripAtAnnotations/trailing_annotation
+=== RUN   TestStripAtAnnotations/quoted_at_preserved
+=== RUN   TestStripAtAnnotations/single-quoted_at
+=== RUN   TestStripAtAnnotations/backtick_quoted_at
+=== RUN   TestStripAtAnnotations/escaped_quote_inside
+=== RUN   TestStripAtAnnotations/annotation_only
+--- PASS: TestStripAtAnnotations (0.00s)
+    --- PASS: TestStripAtAnnotations/no_annotation (0.00s)
+    --- PASS: TestStripAtAnnotations/trailing_annotation (0.00s)
+    --- PASS: TestStripAtAnnotations/quoted_at_preserved (0.00s)
+    --- PASS: TestStripAtAnnotations/single-quoted_at (0.00s)
+    --- PASS: TestStripAtAnnotations/backtick_quoted_at (0.00s)
+    --- PASS: TestStripAtAnnotations/escaped_quote_inside (0.00s)
+    --- PASS: TestStripAtAnnotations/annotation_only (0.00s)
+=== RUN   TestSanitizeDSL
+--- PASS: TestSanitizeDSL (0.00s)
+=== RUN   TestSanitizeDSL_SkipsRouteHeader
+--- PASS: TestSanitizeDSL_SkipsRouteHeader (0.00s)
+=== RUN   TestSanitizeDSL_PreservesLineCount
+--- PASS: TestSanitizeDSL_PreservesLineCount (0.00s)
+=== RUN   TestGraph_ExecuteAction_DualInputModes
+=== PAUSE TestGraph_ExecuteAction_DualInputModes
+=== RUN   TestArrowDSL_LiftsEffectOntoNodeSpec
+--- PASS: TestArrowDSL_LiftsEffectOntoNodeSpec (0.00s)
+=== RUN   TestArrowDSL_LiftsReadOnlyOntoNodeSpec
+--- PASS: TestArrowDSL_LiftsReadOnlyOntoNodeSpec (0.00s)
+=== RUN   TestArrowDSL_GateModifierForcesApproval
+--- PASS: TestArrowDSL_GateModifierForcesApproval (0.00s)
+=== RUN   TestArrowDSL_LiftsTimeoutAndRetry
+--- PASS: TestArrowDSL_LiftsTimeoutAndRetry (0.00s)
+=== RUN   TestArrowDSL_ModifiersNotLiftedRemainOnAtom
+--- PASS: TestArrowDSL_ModifiersNotLiftedRemainOnAtom (0.00s)
+=== RUN   TestParseArrowDSL_ComplexTopology
+=== PAUSE TestParseArrowDSL_ComplexTopology
+=== RUN   TestParseArrowDSL_InvalidSyntax
+=== PAUSE TestParseArrowDSL_InvalidSyntax
+=== RUN   TestParseArrowDSL_ExplicitFieldBindings
+=== PAUSE TestParseArrowDSL_ExplicitFieldBindings
+=== RUN   TestAssembler_DSLGeneratesRoutesAndPipelines
+=== PAUSE TestAssembler_DSLGeneratesRoutesAndPipelines
+=== RUN   TestSegmented_HappyPath_StreamCollectUnary
+--- PASS: TestSegmented_HappyPath_StreamCollectUnary (0.00s)
+=== RUN   TestSegmented_EmptySource
+--- PASS: TestSegmented_EmptySource (0.00s)
+=== RUN   TestSegmented_TerminalBoundary
+--- PASS: TestSegmented_TerminalBoundary (0.00s)
+=== RUN   TestSegmented_Error_BoundaryAtStart
+--- PASS: TestSegmented_Error_BoundaryAtStart (0.00s)
+=== RUN   TestSegmented_Error_TwoBoundaries
+--- PASS: TestSegmented_Error_TwoBoundaries (0.00s)
+=== RUN   TestSegmented_Error_UnaryHead
+--- PASS: TestSegmented_Error_UnaryHead (0.00s)
+=== RUN   TestDetectPipelineMode_BoundaryWinsOverStream
+--- PASS: TestDetectPipelineMode_BoundaryWinsOverStream (0.00s)
+=== RUN   TestEndToEnd_FsWalkFilterStdout_RealFiles
+    compiler_stream_e2e_test.go:86: expected 2 lines of output, got 4:
+        .hidden.go
+        main.go
+        main_test.go
+        utils.go
+--- FAIL: TestEndToEnd_FsWalkFilterStdout_RealFiles (0.05s)
+=== RUN   TestCompileStream_SourceOnly
+=== PAUSE TestCompileStream_SourceOnly
+=== RUN   TestCompileStream_SourceThenOneOperator
+=== PAUSE TestCompileStream_SourceThenOneOperator
+=== RUN   TestCompileStream_SourceThenTwoOperators
+=== PAUSE TestCompileStream_SourceThenTwoOperators
+=== RUN   TestCompileStream_OperatorParamFromModifier
+=== PAUSE TestCompileStream_OperatorParamFromModifier
+=== RUN   TestCompileStream_RejectsUnaryInStreamPipeline
+=== PAUSE TestCompileStream_RejectsUnaryInStreamPipeline
+=== RUN   TestCompileStream_RejectsSourceAfterOperator
+=== PAUSE TestCompileStream_RejectsSourceAfterOperator
+=== RUN   TestCompileStream_RejectsOperatorAsHead
+=== PAUSE TestCompileStream_RejectsOperatorAsHead
+=== RUN   TestCompileStream_RejectsUnknownOperatorParam
+=== PAUSE TestCompileStream_RejectsUnknownOperatorParam
+=== RUN   TestCompilePipeline_UnaryPath_UnaffectedByFlowRegistry
+=== PAUSE TestCompilePipeline_UnaryPath_UnaffectedByFlowRegistry
+=== RUN   TestDSL_Modifiers_Timeout
+=== PAUSE TestDSL_Modifiers_Timeout
+=== RUN   TestDSL_Modifiers_Retry
+=== PAUSE TestDSL_Modifiers_Retry
+=== RUN   TestDSL_Modifiers_Validation
+=== PAUSE TestDSL_Modifiers_Validation
+=== RUN   TestDSL_Modifiers_Cache
+=== PAUSE TestDSL_Modifiers_Cache
+=== RUN   TestDSL_Modifiers_Coalesce
+=== PAUSE TestDSL_Modifiers_Coalesce
+=== RUN   TestDSL_AttributesAndParameters_Injection
+=== PAUSE TestDSL_AttributesAndParameters_Injection
+=== RUN   TestDSL_PipeAndParallelScatterGather
+=== PAUSE TestDSL_PipeAndParallelScatterGather
+=== RUN   TestGraph_ArrowDSL_Parsing
+=== PAUSE TestGraph_ArrowDSL_Parsing
+=== RUN   TestGraph_ArrowDSL_InlineArgs
+=== PAUSE TestGraph_ArrowDSL_InlineArgs
+=== RUN   TestGraph_CompilerAndExecutionTopology
+=== PAUSE TestGraph_CompilerAndExecutionTopology
+=== RUN   TestGraph_MultiBranchConditionalJournaling
+=== PAUSE TestGraph_MultiBranchConditionalJournaling
+=== RUN   TestGraph_ApprovalRequiresGateAtCompileTime
+=== PAUSE TestGraph_ApprovalRequiresGateAtCompileTime
+=== RUN   TestGraph_ScopedApprovalEnforcement
+=== PAUSE TestGraph_ScopedApprovalEnforcement
+=== RUN   TestReferencePipeline
+=== PAUSE TestReferencePipeline
+=== RUN   TestRegistry_RegisterAndResolve
+=== PAUSE TestRegistry_RegisterAndResolve
+=== RUN   TestRegistry_DuplicateAcrossLibraries
+=== PAUSE TestRegistry_DuplicateAcrossLibraries
+=== RUN   TestRegistry_ConflictBetweenKinds
+=== PAUSE TestRegistry_ConflictBetweenKinds
+=== RUN   TestRegistry_TransactionalOnConflict
+=== PAUSE TestRegistry_TransactionalOnConflict
+=== RUN   TestRegistry_NilActionSkipped
+=== PAUSE TestRegistry_NilActionSkipped
+=== RUN   TestRegistry_EmptyLibrary
+=== PAUSE TestRegistry_EmptyLibrary
+=== RUN   TestRegistry_NamesSorted
+=== PAUSE TestRegistry_NamesSorted
+=== RUN   TestRegistry_NilSafe
+=== PAUSE TestRegistry_NilSafe
+=== RUN   TestOperator_BuildWithConfig
+=== PAUSE TestOperator_BuildWithConfig
+=== RUN   TestOperator_BuildRejectsUnknownField
+=== PAUSE TestOperator_BuildRejectsUnknownField
+=== RUN   TestResolveParams_EndToEndStreamPipeline
+main.go
+--- FAIL: TestResolveParams_EndToEndStreamPipeline (0.04s)
+panic: interface conversion: interface {} is flow.StreamDrainResult, not struct { Count int } [recovered, repanicked]
+
+goroutine 80 [running]:
+testing.tRunner.func1.2({0x7ff7399fd100, 0x2a76197a31a0})
+	D:/Scoop/apps/go/current/src/testing/testing.go:1974 +0x239
+testing.tRunner.func1()
+	D:/Scoop/apps/go/current/src/testing/testing.go:1977 +0x349
+panic({0x7ff7399fd100?, 0x2a76197a31a0?})
+	D:/Scoop/apps/go/current/src/runtime/panic.go:860 +0x13a
+github.com/nexssp/flow_test.TestResolveParams_EndToEndStreamPipeline(0x2a761980ca00)
+	D:/Desktop/Intranet/__CURRENT__/nexssp/flow/resolve_params_test.go:54 +0x6f5
+testing.tRunner(0x2a761980ca00, 0x7ff739d57880)
+	D:/Scoop/apps/go/current/src/testing/testing.go:2036 +0xc3
+created by testing.(*T).Run in goroutine 1
+	D:/Scoop/apps/go/current/src/testing/testing.go:2101 +0x4a9
+FAIL	github.com/nexssp/flow	0.890s
+=== RUN   TestGenerateRequiresFile_CreatesValidGoCode
+=== PAUSE TestGenerateRequiresFile_CreatesValidGoCode
+=== CONT  TestGenerateRequiresFile_CreatesValidGoCode
+--- PASS: TestGenerateRequiresFile_CreatesValidGoCode (0.03s)
+PASS
+ok  	github.com/nexssp/flow/cmd/nexssflow	(cached)
+=== RUN   TestLexer_ComparisonOperatorsAreBenign
+=== PAUSE TestLexer_ComparisonOperatorsAreBenign
+=== RUN   TestParser_Example
+AST: *compiler.PipelineExpr
+Pipeline: left = &{0xcce1abfe090 0xcce1ab64320} right = &{ai.triage   [] [] map[] map[] map[] []}
+--- PASS: TestParser_Example (0.00s)
+=== RUN   TestConditional_TwoArm
+--- PASS: TestConditional_TwoArm (0.00s)
+=== RUN   TestConditional_ThreeArm
+--- PASS: TestConditional_ThreeArm (0.00s)
+=== RUN   TestConditional_WithModifiersOnBothArms
+--- PASS: TestConditional_WithModifiersOnBothArms (0.00s)
+=== RUN   TestConditional_RightAssociative
+--- PASS: TestConditional_RightAssociative (0.00s)
+=== RUN   TestAtomModifier_GluedColonStillWorks
+--- PASS: TestAtomModifier_GluedColonStillWorks (0.00s)
+=== RUN   TestAtBrace_HappyPath
+--- PASS: TestAtBrace_HappyPath (0.00s)
+=== RUN   TestAtBrace_QuotedValuesAreLiteral
+--- PASS: TestAtBrace_QuotedValuesAreLiteral (0.00s)
+=== RUN   TestAtBrace_WithModifiers
+--- PASS: TestAtBrace_WithModifiers (0.00s)
+=== RUN   TestAtBrace_RejectsDuplicateKey
+--- PASS: TestAtBrace_RejectsDuplicateKey (0.00s)
+=== RUN   TestAtBrace_RejectsMissingColon
+--- PASS: TestAtBrace_RejectsMissingColon (0.00s)
+=== RUN   TestAtBrace_EmptyIsNoop
+--- PASS: TestAtBrace_EmptyIsNoop (0.00s)
+=== RUN   TestAtBrace_NestedObject
+--- PASS: TestAtBrace_NestedObject (0.00s)
+=== RUN   TestAtBrace_ArrayOfObjects
+--- PASS: TestAtBrace_ArrayOfObjects (0.00s)
+=== RUN   TestAtBrace_NumberBoolNull
+--- PASS: TestAtBrace_NumberBoolNull (0.00s)
+=== RUN   TestAtBrace_WholeStateRef
+--- PASS: TestAtBrace_WholeStateRef (0.00s)
+=== RUN   TestAtBrace_CommentsInside
+--- PASS: TestAtBrace_CommentsInside (0.00s)
+=== RUN   TestAtPrompt_StillWorks
+--- PASS: TestAtPrompt_StillWorks (0.00s)
+=== RUN   TestAtPrompt_AndAtBrace_OnSameAtom
+--- PASS: TestAtPrompt_AndAtBrace_OnSameAtom (0.00s)
+=== RUN   TestParser_AllLanguageCommands
+--- PASS: TestParser_AllLanguageCommands (0.00s)
+=== RUN   TestParser
+=== RUN   TestParser/simple_atom
+=== RUN   TestParser/atom_with_modifiers
+=== RUN   TestParser/atom_with_params_including_negative_numbers_and_hyphens
+=== RUN   TestParser/pipeline:_A_->_B
+=== RUN   TestParser/parallel:_A_&_B
+=== RUN   TestParser/fallback:_A_||_B
+=== RUN   TestParser/conditional:_A_?_B
+=== RUN   TestParser/loop_autonomous_logic
+=== RUN   TestParser/projection:_{_prompt:_"hello"_+_name_}
+=== RUN   TestParser/error:_missing_closing_paren
+=== RUN   TestParser/error:_invalid_character
+=== RUN   TestParser/error:_unexpected_token_after_expression
+--- PASS: TestParser (0.00s)
+    --- PASS: TestParser/simple_atom (0.00s)
+    --- PASS: TestParser/atom_with_modifiers (0.00s)
+    --- PASS: TestParser/atom_with_params_including_negative_numbers_and_hyphens (0.00s)
+    --- PASS: TestParser/pipeline:_A_->_B (0.00s)
+    --- PASS: TestParser/parallel:_A_&_B (0.00s)
+    --- PASS: TestParser/fallback:_A_||_B (0.00s)
+    --- PASS: TestParser/conditional:_A_?_B (0.00s)
+    --- PASS: TestParser/loop_autonomous_logic (0.00s)
+    --- PASS: TestParser/projection:_{_prompt:_"hello"_+_name_} (0.00s)
+    --- PASS: TestParser/error:_missing_closing_paren (0.00s)
+    --- PASS: TestParser/error:_invalid_character (0.00s)
+    --- PASS: TestParser/error:_unexpected_token_after_expression (0.00s)
+=== RUN   TestParser_AssertWithRelationalOperators
+=== PAUSE TestParser_AssertWithRelationalOperators
+=== CONT  TestLexer_ComparisonOperatorsAreBenign
+--- PASS: TestLexer_ComparisonOperatorsAreBenign (0.00s)
+=== CONT  TestParser_AssertWithRelationalOperators
+--- PASS: TestParser_AssertWithRelationalOperators (0.00s)
+PASS
+ok  	github.com/nexssp/flow/compiler	(cached)
+?   	github.com/nexssp/flow/contracts	[no test files]
+=== RUN   TestAtGate_OnHighRisk
+--- PASS: TestAtGate_OnHighRisk (0.00s)
+=== RUN   TestAtGate_WhenWithExpression
+--- PASS: TestAtGate_WhenWithExpression (0.00s)
+=== RUN   TestAtGate_RejectsUnknownEffect
+--- PASS: TestAtGate_RejectsUnknownEffect (0.00s)
+=== RUN   TestAtGate_RejectsMissingKeyword
+--- PASS: TestAtGate_RejectsMissingKeyword (0.00s)
+=== RUN   TestAtGate_RejectsMissingValue
+--- PASS: TestAtGate_RejectsMissingValue (0.00s)
+=== RUN   TestAtGate_Accumulates
+--- PASS: TestAtGate_Accumulates (0.00s)
+=== RUN   TestAtGate_AllThreeEffectClasses
+=== RUN   TestAtGate_AllThreeEffectClasses/read_only
+=== RUN   TestAtGate_AllThreeEffectClasses/side_effect
+=== RUN   TestAtGate_AllThreeEffectClasses/high_risk
+--- PASS: TestAtGate_AllThreeEffectClasses (0.00s)
+    --- PASS: TestAtGate_AllThreeEffectClasses/read_only (0.00s)
+    --- PASS: TestAtGate_AllThreeEffectClasses/side_effect (0.00s)
+    --- PASS: TestAtGate_AllThreeEffectClasses/high_risk (0.00s)
+=== RUN   TestAtPool_HappyPath
+--- PASS: TestAtPool_HappyPath (0.00s)
+=== RUN   TestAtPool_RejectsEmptyMembers
+--- PASS: TestAtPool_RejectsEmptyMembers (0.00s)
+=== RUN   TestAtPool_RejectsMissingBracket
+--- PASS: TestAtPool_RejectsMissingBracket (0.00s)
+=== RUN   TestAtPool_RejectsDuplicate
+--- PASS: TestAtPool_RejectsDuplicate (0.00s)
+=== RUN   TestLookup_BoundaryRule
+--- PASS: TestLookup_BoundaryRule (0.00s)
+=== RUN   TestLookup_RegistersAllCoreDirectives
+--- PASS: TestLookup_RegistersAllCoreDirectives (0.00s)
+=== RUN   TestStripDirectivePrefix
+--- PASS: TestStripDirectivePrefix (0.00s)
+=== RUN   TestSplitNameAndAttrs_HappyPath
+--- PASS: TestSplitNameAndAttrs_HappyPath (0.00s)
+=== RUN   TestSplitNameAndAttrs_NoBraces
+--- PASS: TestSplitNameAndAttrs_NoBraces (0.00s)
+=== RUN   TestSplitNameAndAttrs_RejectsDuplicateAttr
+--- PASS: TestSplitNameAndAttrs_RejectsDuplicateAttr (0.00s)
+=== RUN   TestParseList
+--- PASS: TestParseList (0.00s)
+=== RUN   TestTrimQuotes
+--- PASS: TestTrimQuotes (0.00s)
+=== RUN   TestRegistry_RegisterDuplicatePanics
+--- PASS: TestRegistry_RegisterDuplicatePanics (0.00s)
+=== RUN   TestAtRequires_HappyPath
+--- PASS: TestAtRequires_HappyPath (0.00s)
+=== RUN   TestAtRequires_MergesMultipleLines
+--- PASS: TestAtRequires_MergesMultipleLines (0.00s)
+=== RUN   TestAtRequires_RejectsUnknownDomain
+--- PASS: TestAtRequires_RejectsUnknownDomain (0.00s)
+=== RUN   TestAtRequires_RejectsMissingBracket
+--- PASS: TestAtRequires_RejectsMissingBracket (0.00s)
+=== RUN   TestAtRequires_RejectsEmpty
+--- PASS: TestAtRequires_RejectsEmpty (0.00s)
+=== RUN   TestAtConfig_HappyPath
+--- PASS: TestAtConfig_HappyPath (0.00s)
+=== RUN   TestAtConfig_StripsQuotes
+--- PASS: TestAtConfig_StripsQuotes (0.00s)
+=== RUN   TestAtConfig_LaterOverridesEarlier
+--- PASS: TestAtConfig_LaterOverridesEarlier (0.00s)
+=== RUN   TestAtConfig_RejectsMissingEquals
+--- PASS: TestAtConfig_RejectsMissingEquals (0.00s)
+=== RUN   TestAtConfig_RejectsEmptyKey
+--- PASS: TestAtConfig_RejectsEmptyKey (0.00s)
+=== RUN   TestAtAssert_CollectsExpressions
+--- PASS: TestAtAssert_CollectsExpressions (0.00s)
+=== RUN   TestAtAssert_RejectsEmpty
+--- PASS: TestAtAssert_RejectsEmpty (0.00s)
+=== RUN   TestAtAssert_DirectiveLineIsBlankedInBody
+--- PASS: TestAtAssert_DirectiveLineIsBlankedInBody (0.00s)
+=== RUN   TestDirective_ConfigLoad
+=== PAUSE TestDirective_ConfigLoad
+=== RUN   TestAtConfig_BlockSyntax
+=== PAUSE TestAtConfig_BlockSyntax
+=== RUN   TestAtConfig_SingleLineStillWorks
+=== PAUSE TestAtConfig_SingleLineStillWorks
+=== RUN   TestAtHook_SingleName
+--- PASS: TestAtHook_SingleName (0.00s)
+=== RUN   TestAtHook_CommaSeparated
+--- PASS: TestAtHook_CommaSeparated (0.00s)
+=== RUN   TestAtHook_BracketedList
+--- PASS: TestAtHook_BracketedList (0.00s)
+=== RUN   TestAtHook_MultipleDirectivesAccumulate
+--- PASS: TestAtHook_MultipleDirectivesAccumulate (0.00s)
+=== RUN   TestAtHook_MissingName
+--- PASS: TestAtHook_MissingName (0.00s)
+=== RUN   TestRequire_OptionsBlock
+=== PAUSE TestRequire_OptionsBlock
+=== RUN   TestDomainlessFlowIntegration
+--- PASS: TestDomainlessFlowIntegration (0.00s)
+=== RUN   TestDomainlessFlow_RejectsUnknownProfile
+--- PASS: TestDomainlessFlow_RejectsUnknownProfile (0.00s)
+=== RUN   TestDomainlessFlow_RejectsUnknownCapabilityDomain
+--- PASS: TestDomainlessFlow_RejectsUnknownCapabilityDomain (0.00s)
+=== RUN   TestFlowDoesNotImportAI
+--- PASS: TestFlowDoesNotImportAI (1.84s)
+=== CONT  TestDirective_ConfigLoad
+=== CONT  TestAtConfig_SingleLineStillWorks
+--- PASS: TestAtConfig_SingleLineStillWorks (0.00s)
+=== CONT  TestRequire_OptionsBlock
+--- PASS: TestRequire_OptionsBlock (0.00s)
+=== CONT  TestAtConfig_BlockSyntax
+--- PASS: TestAtConfig_BlockSyntax (0.00s)
+--- PASS: TestDirective_ConfigLoad (0.01s)
+PASS
+ok  	github.com/nexssp/flow/directives	2.146s
+?   	github.com/nexssp/flow/directives/builtin	[no test files]
+?   	github.com/nexssp/flow/directives/builtin/at_approval	[no test files]
+=== RUN   TestFallback_RoutesOnErrorKind
+--- PASS: TestFallback_RoutesOnErrorKind (0.02s)
+=== RUN   TestFallback_OnlyAppliesToNamedAtom
+--- PASS: TestFallback_OnlyAppliesToNamedAtom (0.02s)
+=== RUN   TestFallback_WrapsRetryFailures
+--- PASS: TestFallback_WrapsRetryFailures (0.01s)
+=== RUN   TestFallback_DirectiveErrors
+=== RUN   TestFallback_DirectiveErrors/missing_name
+=== RUN   TestFallback_DirectiveErrors/empty_block
+=== RUN   TestFallback_DirectiveErrors/unknown_kind
+=== RUN   TestFallback_DirectiveErrors/duplicate
+--- PASS: TestFallback_DirectiveErrors (0.02s)
+    --- PASS: TestFallback_DirectiveErrors/missing_name (0.01s)
+    --- PASS: TestFallback_DirectiveErrors/empty_block (0.01s)
+    --- PASS: TestFallback_DirectiveErrors/unknown_kind (0.01s)
+    --- PASS: TestFallback_DirectiveErrors/duplicate (0.01s)
+PASS
+ok  	github.com/nexssp/flow/directives/builtin/at_fallback	0.485s
+=== RUN   TestAtOn_Parse
+=== PAUSE TestAtOn_Parse
+=== CONT  TestAtOn_Parse
+--- PASS: TestAtOn_Parse (0.00s)
+PASS
+ok  	github.com/nexssp/flow/directives/builtin/at_on	(cached)
+=== RUN   TestOnError_RoutesByKind
+=== RUN   TestOnError_RoutesByKind/timeout_routes_to_timeout_recovery
+=== RUN   TestOnError_RoutesByKind/validation_routes_to_validation_recovery
+=== RUN   TestOnError_RoutesByKind/unavailable_falls_to_else
+--- PASS: TestOnError_RoutesByKind (0.03s)
+    --- PASS: TestOnError_RoutesByKind/timeout_routes_to_timeout_recovery (0.02s)
+    --- PASS: TestOnError_RoutesByKind/validation_routes_to_validation_recovery (0.01s)
+    --- PASS: TestOnError_RoutesByKind/unavailable_falls_to_else (0.00s)
+=== RUN   TestOnError_RecoveredErrorReachesTarget
+--- PASS: TestOnError_RecoveredErrorReachesTarget (0.01s)
+=== RUN   TestOnError_NoMatchNoElse_PropagatesOriginalError
+--- PASS: TestOnError_NoMatchNoElse_PropagatesOriginalError (0.01s)
+=== RUN   TestOnError_DirectiveErrors
+=== RUN   TestOnError_DirectiveErrors/no_name_allowed
+=== RUN   TestOnError_DirectiveErrors/empty_block
+=== RUN   TestOnError_DirectiveErrors/unknown_kind
+=== RUN   TestOnError_DirectiveErrors/unsupported_condition
+=== RUN   TestOnError_DirectiveErrors/duplicate
+--- PASS: TestOnError_DirectiveErrors (0.06s)
+    --- PASS: TestOnError_DirectiveErrors/no_name_allowed (0.01s)
+    --- PASS: TestOnError_DirectiveErrors/empty_block (0.01s)
+    --- PASS: TestOnError_DirectiveErrors/unknown_kind (0.01s)
+    --- PASS: TestOnError_DirectiveErrors/unsupported_condition (0.01s)
+    --- PASS: TestOnError_DirectiveErrors/duplicate (0.02s)
+PASS
+ok  	github.com/nexssp/flow/directives/builtin/at_on_error	0.532s
+=== RUN   TestParallel_RunsMembersConcurrently
+--- PASS: TestParallel_RunsMembersConcurrently (0.06s)
+=== RUN   TestParallel_ResultKeyedByMemberName
+--- PASS: TestParallel_ResultKeyedByMemberName (0.01s)
+=== RUN   TestParallel_FirstErrorFailsPipeline
+--- PASS: TestParallel_FirstErrorFailsPipeline (0.01s)
+=== RUN   TestParallel_DirectiveErrors
+=== RUN   TestParallel_DirectiveErrors/missing_name
+=== RUN   TestParallel_DirectiveErrors/too_few_members
+=== RUN   TestParallel_DirectiveErrors/duplicate_member
+=== RUN   TestParallel_DirectiveErrors/multiple_per_line
+=== RUN   TestParallel_DirectiveErrors/duplicate_declaration
+--- PASS: TestParallel_DirectiveErrors (0.10s)
+    --- PASS: TestParallel_DirectiveErrors/missing_name (0.02s)
+    --- PASS: TestParallel_DirectiveErrors/too_few_members (0.02s)
+    --- PASS: TestParallel_DirectiveErrors/duplicate_member (0.02s)
+    --- PASS: TestParallel_DirectiveErrors/multiple_per_line (0.01s)
+    --- PASS: TestParallel_DirectiveErrors/duplicate_declaration (0.03s)
+PASS
+ok  	github.com/nexssp/flow/directives/builtin/at_parallel	0.783s
+=== RUN   TestRace_ReturnsFirstSuccess
+--- PASS: TestRace_ReturnsFirstSuccess (0.02s)
+=== RUN   TestRace_LoserCanceledViaContext
+--- PASS: TestRace_LoserCanceledViaContext (0.07s)
+=== RUN   TestRace_AllFailReturnsLastError
+--- PASS: TestRace_AllFailReturnsLastError (0.35s)
+=== RUN   TestRace_DirectiveErrors
+=== RUN   TestRace_DirectiveErrors/missing_name
+=== RUN   TestRace_DirectiveErrors/too_few_members
+=== RUN   TestRace_DirectiveErrors/duplicate_member
+=== RUN   TestRace_DirectiveErrors/multiple_per_line
+=== RUN   TestRace_DirectiveErrors/duplicate_declaration
+--- PASS: TestRace_DirectiveErrors (0.23s)
+    --- PASS: TestRace_DirectiveErrors/missing_name (0.03s)
+    --- PASS: TestRace_DirectiveErrors/too_few_members (0.02s)
+    --- PASS: TestRace_DirectiveErrors/duplicate_member (0.08s)
+    --- PASS: TestRace_DirectiveErrors/multiple_per_line (0.06s)
+    --- PASS: TestRace_DirectiveErrors/duplicate_declaration (0.05s)
+PASS
+ok  	github.com/nexssp/flow/directives/builtin/at_race	1.120s
+?   	github.com/nexssp/flow/directives/builtin/at_retry	[no test files]
+=== RUN   TestRoute_EndToEnd
+--- PASS: TestRoute_EndToEnd (0.00s)
+=== RUN   TestRoute_DirectiveErrors
+=== RUN   TestRoute_DirectiveErrors/missing_name
+=== RUN   TestRoute_DirectiveErrors/empty_when
+=== RUN   TestRoute_DirectiveErrors/no_arrow
+=== RUN   TestRoute_DirectiveErrors/no_whens
+=== RUN   TestRoute_DirectiveErrors/duplicate_name
+--- PASS: TestRoute_DirectiveErrors (0.00s)
+    --- PASS: TestRoute_DirectiveErrors/missing_name (0.00s)
+    --- PASS: TestRoute_DirectiveErrors/empty_when (0.00s)
+    --- PASS: TestRoute_DirectiveErrors/no_arrow (0.00s)
+    --- PASS: TestRoute_DirectiveErrors/no_whens (0.00s)
+    --- PASS: TestRoute_DirectiveErrors/duplicate_name (0.00s)
+PASS
+ok  	github.com/nexssp/flow/directives/builtin/at_route	(cached)
+=== RUN   TestSchema_Directive
+=== PAUSE TestSchema_Directive
+=== RUN   TestSchema_DuplicateRejected
+=== PAUSE TestSchema_DuplicateRejected
+=== RUN   TestSchema_EmptyRejected
+=== PAUSE TestSchema_EmptyRejected
+=== RUN   TestSchema_BadFieldNameRejected
+=== PAUSE TestSchema_BadFieldNameRejected
+=== CONT  TestSchema_Directive
+--- PASS: TestSchema_Directive (0.00s)
+=== CONT  TestSchema_BadFieldNameRejected
+--- PASS: TestSchema_BadFieldNameRejected (0.00s)
+=== CONT  TestSchema_EmptyRejected
+--- PASS: TestSchema_EmptyRejected (0.00s)
+=== CONT  TestSchema_DuplicateRejected
+--- PASS: TestSchema_DuplicateRejected (0.00s)
+PASS
+ok  	github.com/nexssp/flow/directives/builtin/at_schema	(cached)
+?   	github.com/nexssp/flow/directives/core	[no test files]
+=== RUN   TestCoverage
+    coverage_test.go:62: discovered 83 coverage file(s)
+=== RUN   TestCoverage/base\call.nflow
+=== RUN   TestCoverage/base\const.nflow
+=== RUN   TestCoverage/base\debug.nflow
+[debug] "visible"
+=== RUN   TestCoverage/base\dispatch_by_prefix.nflow
+=== RUN   TestCoverage/base\env.nflow
+=== RUN   TestCoverage/base\fail.nflow
+=== RUN   TestCoverage/base\noop.nflow
+=== RUN   TestCoverage/base\pick.nflow
+=== RUN   TestCoverage/base\uuid.nflow
+=== RUN   TestCoverage/base\wrap.nflow
+=== RUN   TestCoverage/builtin\approval.nflow
+=== RUN   TestCoverage/builtin\fallback.nflow
+=== RUN   TestCoverage/builtin\on_error.nflow
+=== RUN   TestCoverage/builtin\on_event.nflow
+=== RUN   TestCoverage/builtin\parallel.nflow
+=== RUN   TestCoverage/builtin\race.nflow
+=== RUN   TestCoverage/builtin\retry.nflow
+=== RUN   TestCoverage/builtin\route.nflow
+=== RUN   TestCoverage/directives\action.nflow
+=== RUN   TestCoverage/directives\assert.nflow
+=== RUN   TestCoverage/directives\config.nflow
+=== RUN   TestCoverage/directives\description.nflow
+=== RUN   TestCoverage/directives\gate_on.nflow
+=== RUN   TestCoverage/directives\gate_when.nflow
+=== RUN   TestCoverage/directives\include.nflow
+=== RUN   TestCoverage/directives\pipeline.nflow
+=== RUN   TestCoverage/directives\pool.nflow
+=== RUN   TestCoverage/directives\profile.nflow
+=== RUN   TestCoverage/directives\require.nflow
+=== RUN   TestCoverage/directives\requires.nflow
+=== RUN   TestCoverage/directives\schema.nflow
+=== RUN   TestCoverage/directives\schema_multi.nflow
+=== RUN   TestCoverage/modifiers\auth.nflow
+=== RUN   TestCoverage/modifiers\backoff.nflow
+=== RUN   TestCoverage/modifiers\budget.nflow
+=== RUN   TestCoverage/modifiers\cache.nflow
+=== RUN   TestCoverage/modifiers\cli.nflow
+=== RUN   TestCoverage/modifiers\coalesce.nflow
+=== RUN   TestCoverage/modifiers\debug.nflow
+2026/09/23 20:47:09 INFO action_ok action=const duration=0s
+=== RUN   TestCoverage/modifiers\dedup.nflow
+=== RUN   TestCoverage/modifiers\desc.nflow
+=== RUN   TestCoverage/modifiers\effect.nflow
+=== RUN   TestCoverage/modifiers\feature.nflow
+=== RUN   TestCoverage/modifiers\idempotent.nflow
+=== RUN   TestCoverage/modifiers\name.nflow
+=== RUN   TestCoverage/modifiers\nats.nflow
+=== RUN   TestCoverage/modifiers\perm.nflow
+=== RUN   TestCoverage/modifiers\retry.nflow
+=== RUN   TestCoverage/modifiers\retry_if.nflow
+=== RUN   TestCoverage/modifiers\role.nflow
+=== RUN   TestCoverage/modifiers\route_http.nflow
+=== RUN   TestCoverage/modifiers\scope.nflow
+=== RUN   TestCoverage/modifiers\status.nflow
+=== RUN   TestCoverage/modifiers\tag.nflow
+=== RUN   TestCoverage/modifiers\timeout.nflow
+=== RUN   TestCoverage/modifiers\validate.nflow
+=== RUN   TestCoverage/operators\args.nflow
+=== RUN   TestCoverage/operators\fallback.nflow
+=== RUN   TestCoverage/operators\loop.nflow
+=== RUN   TestCoverage/operators\parallel.nflow
+=== RUN   TestCoverage/operators\pipe.nflow
+=== RUN   TestCoverage/operators\pipe_alias.nflow
+=== RUN   TestCoverage/operators\projection.nflow
+=== RUN   TestCoverage/operators\ternary.nflow
+=== RUN   TestCoverage/operators\ternary_else.nflow
+=== RUN   TestCoverage/stdlib\bench_compare.nflow
+=== RUN   TestCoverage/stdlib\bench_run.nflow
+=== RUN   TestCoverage/stdlib\bench_save.nflow
+=== RUN   TestCoverage/stdlib\dispatch.nflow
+=== RUN   TestCoverage/stdlib\distribute_map.nflow
+=== RUN   TestCoverage/stdlib\distribute_reduce.nflow
+=== RUN   TestCoverage/stdlib\log_error.nflow
+2026/09/23 20:47:09 ERROR  projection=map[value:error] value=error
+=== RUN   TestCoverage/stdlib\log_info.nflow
+2026/09/23 20:47:09 INFO  projection=map[value:info] value=info
+=== RUN   TestCoverage/stdlib\log_warn.nflow
+2026/09/23 20:47:09 WARN  projection=map[value:warn] value=warn
+=== RUN   TestCoverage/stdlib\supervisor.nflow
+=== RUN   TestCoverage/transport\a2a.nflow
+=== RUN   TestCoverage/transport\cli.nflow
+=== RUN   TestCoverage/transport\cron.nflow
+=== RUN   TestCoverage/transport\http_route.nflow
+=== RUN   TestCoverage/transport\http_sse.nflow
+=== RUN   TestCoverage/transport\nats.nflow
+=== RUN   TestCoverage/transport\topic.nflow
+=== RUN   TestCoverage/transport\worker.nflow
+--- PASS: TestCoverage (0.36s)
+    --- PASS: TestCoverage/base\call.nflow (0.02s)
+    --- PASS: TestCoverage/base\const.nflow (0.00s)
+    --- PASS: TestCoverage/base\debug.nflow (0.00s)
+    --- PASS: TestCoverage/base\dispatch_by_prefix.nflow (0.00s)
+    --- PASS: TestCoverage/base\env.nflow (0.00s)
+    --- PASS: TestCoverage/base\fail.nflow (0.00s)
+    --- PASS: TestCoverage/base\noop.nflow (0.00s)
+    --- PASS: TestCoverage/base\pick.nflow (0.00s)
+    --- PASS: TestCoverage/base\uuid.nflow (0.00s)
+    --- PASS: TestCoverage/base\wrap.nflow (0.00s)
+    --- PASS: TestCoverage/builtin\approval.nflow (0.00s)
+    --- PASS: TestCoverage/builtin\fallback.nflow (0.00s)
+    --- PASS: TestCoverage/builtin\on_error.nflow (0.00s)
+    --- PASS: TestCoverage/builtin\on_event.nflow (0.00s)
+    --- PASS: TestCoverage/builtin\parallel.nflow (0.00s)
+    --- PASS: TestCoverage/builtin\race.nflow (0.00s)
+    --- PASS: TestCoverage/builtin\retry.nflow (0.30s)
+    --- PASS: TestCoverage/builtin\route.nflow (0.00s)
+    --- PASS: TestCoverage/directives\action.nflow (0.00s)
+    --- PASS: TestCoverage/directives\assert.nflow (0.00s)
+    --- PASS: TestCoverage/directives\config.nflow (0.00s)
+    --- PASS: TestCoverage/directives\description.nflow (0.00s)
+    --- PASS: TestCoverage/directives\gate_on.nflow (0.00s)
+    --- PASS: TestCoverage/directives\gate_when.nflow (0.00s)
+    --- PASS: TestCoverage/directives\include.nflow (0.00s)
+    --- PASS: TestCoverage/directives\pipeline.nflow (0.00s)
+    --- PASS: TestCoverage/directives\pool.nflow (0.00s)
+    --- PASS: TestCoverage/directives\profile.nflow (0.00s)
+    --- PASS: TestCoverage/directives\require.nflow (0.00s)
+    --- PASS: TestCoverage/directives\requires.nflow (0.00s)
+    --- PASS: TestCoverage/directives\schema.nflow (0.00s)
+    --- PASS: TestCoverage/directives\schema_multi.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\auth.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\backoff.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\budget.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\cache.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\cli.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\coalesce.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\debug.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\dedup.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\desc.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\effect.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\feature.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\idempotent.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\name.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\nats.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\perm.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\retry.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\retry_if.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\role.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\route_http.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\scope.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\status.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\tag.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\timeout.nflow (0.00s)
+    --- PASS: TestCoverage/modifiers\validate.nflow (0.00s)
+    --- PASS: TestCoverage/operators\args.nflow (0.00s)
+    --- PASS: TestCoverage/operators\fallback.nflow (0.00s)
+    --- PASS: TestCoverage/operators\loop.nflow (0.00s)
+    --- PASS: TestCoverage/operators\parallel.nflow (0.00s)
+    --- PASS: TestCoverage/operators\pipe.nflow (0.00s)
+    --- PASS: TestCoverage/operators\pipe_alias.nflow (0.00s)
+    --- PASS: TestCoverage/operators\projection.nflow (0.00s)
+    --- PASS: TestCoverage/operators\ternary.nflow (0.00s)
+    --- PASS: TestCoverage/operators\ternary_else.nflow (0.00s)
+    --- PASS: TestCoverage/stdlib\bench_compare.nflow (0.00s)
+    --- PASS: TestCoverage/stdlib\bench_run.nflow (0.00s)
+    --- PASS: TestCoverage/stdlib\bench_save.nflow (0.00s)
+    --- PASS: TestCoverage/stdlib\dispatch.nflow (0.00s)
+    --- PASS: TestCoverage/stdlib\distribute_map.nflow (0.00s)
+    --- PASS: TestCoverage/stdlib\distribute_reduce.nflow (0.00s)
+    --- PASS: TestCoverage/stdlib\log_error.nflow (0.00s)
+    --- PASS: TestCoverage/stdlib\log_info.nflow (0.00s)
+    --- PASS: TestCoverage/stdlib\log_warn.nflow (0.00s)
+    --- PASS: TestCoverage/stdlib\supervisor.nflow (0.00s)
+    --- PASS: TestCoverage/transport\a2a.nflow (0.00s)
+    --- PASS: TestCoverage/transport\cli.nflow (0.00s)
+    --- PASS: TestCoverage/transport\cron.nflow (0.00s)
+    --- PASS: TestCoverage/transport\http_route.nflow (0.00s)
+    --- PASS: TestCoverage/transport\http_sse.nflow (0.00s)
+    --- PASS: TestCoverage/transport\nats.nflow (0.00s)
+    --- PASS: TestCoverage/transport\topic.nflow (0.00s)
+    --- PASS: TestCoverage/transport\worker.nflow (0.00s)
+PASS
+ok  	github.com/nexssp/flow/dslcoverage	0.906s
+=== RUN   TestParseSchemaAndTypedModifiers
+--- PASS: TestParseSchemaAndTypedModifiers (0.00s)
+PASS
+ok  	github.com/nexssp/flow/dslparse	(cached)
+=== RUN   TestUppercaseFunction
+--- PASS: TestUppercaseFunction (0.00s)
+=== RUN   TestUppercaseAction
+--- PASS: TestUppercaseAction (0.00s)
+=== RUN   TestLibraryContract
+=== RUN   TestLibraryContract/text_tools.uppercase
+--- PASS: TestLibraryContract (0.00s)
+    --- PASS: TestLibraryContract/text_tools.uppercase (0.00s)
+=== RUN   TestUppercaseConcurrent
+--- PASS: TestUppercaseConcurrent (0.00s)
+PASS
+ok  	github.com/nexssp/flow/examples/07_require/text	(cached)
+?   	github.com/nexssp/flow/examples/08_typed_actions	[no test files]
+=== RUN   TestFlows
+=== RUN   TestFlows/01_http_greet.nflow/name=world
+    flows_test.go:84: flow not present: 01_http_greet.nflow
+=== RUN   TestFlows/02_math_chain.nflow/n=4
+    flows_test.go:84: flow not present: 02_math_chain.nflow
+=== RUN   TestFlows/03_route_classify.nflow/n=5
+    flows_test.go:84: flow not present: 03_route_classify.nflow
+=== RUN   TestFlows/03_route_classify.nflow/n=5#01
+    flows_test.go:84: flow not present: 03_route_classify.nflow
+=== RUN   TestFlows/03_route_classify.nflow/n=0
+    flows_test.go:84: flow not present: 03_route_classify.nflow
+=== RUN   TestFlows/04_parallel.nflow/
+    flows_test.go:84: flow not present: 04_parallel.nflow
+=== RUN   TestFlows/05_race.nflow/
+    flows_test.go:84: flow not present: 05_race.nflow
+=== RUN   TestFlows/06_retry.nflow/
+    flows_test.go:84: flow not present: 06_retry.nflow
+=== RUN   TestFlows/07_fallback.nflow/
+    flows_test.go:84: flow not present: 07_fallback.nflow
+=== RUN   TestFlows/08_on_error.nflow/
+    flows_test.go:84: flow not present: 08_on_error.nflow
+--- PASS: TestFlows (0.00s)
+    --- SKIP: TestFlows/01_http_greet.nflow/name=world (0.00s)
+    --- SKIP: TestFlows/02_math_chain.nflow/n=4 (0.00s)
+    --- SKIP: TestFlows/03_route_classify.nflow/n=5 (0.00s)
+    --- SKIP: TestFlows/03_route_classify.nflow/n=5#01 (0.00s)
+    --- SKIP: TestFlows/03_route_classify.nflow/n=0 (0.00s)
+    --- SKIP: TestFlows/04_parallel.nflow/ (0.00s)
+    --- SKIP: TestFlows/05_race.nflow/ (0.00s)
+    --- SKIP: TestFlows/06_retry.nflow/ (0.00s)
+    --- SKIP: TestFlows/07_fallback.nflow/ (0.00s)
+    --- SKIP: TestFlows/08_on_error.nflow/ (0.00s)
+PASS
+ok  	github.com/nexssp/flow/examples/transports	0.532s
+?   	github.com/nexssp/flow/flowfile	[no test files]
+?   	github.com/nexssp/flow/flows	[no test files]
+=== RUN   TestFileSnapshotJournal_RoundTrip
+--- PASS: TestFileSnapshotJournal_RoundTrip (0.03s)
+=== RUN   TestFileSnapshotJournal_OverwriteWithLatestStep
+--- PASS: TestFileSnapshotJournal_OverwriteWithLatestStep (0.03s)
+=== RUN   TestFileSnapshotJournal_MissingReturnsNotFound
+--- PASS: TestFileSnapshotJournal_MissingReturnsNotFound (0.00s)
+=== RUN   TestSQLBranchJournal_DurableRecordAndReplay
+=== PAUSE TestSQLBranchJournal_DurableRecordAndReplay
+=== CONT  TestSQLBranchJournal_DurableRecordAndReplay
+--- PASS: TestSQLBranchJournal_DurableRecordAndReplay (0.00s)
+PASS
+ok  	github.com/nexssp/flow/journal	(cached)
+=== RUN   TestRouter_ExplorationAndConvergence
+=== PAUSE TestRouter_ExplorationAndConvergence
+=== CONT  TestRouter_ExplorationAndConvergence
+--- PASS: TestRouter_ExplorationAndConvergence (0.30s)
+PASS
+ok  	github.com/nexssp/flow/learn	(cached)
+=== RUN   TestAssert_DotNotation
+=== PAUSE TestAssert_DotNotation
+=== RUN   TestCollections_SortBySeverity
+--- PASS: TestCollections_SortBySeverity (0.00s)
+=== RUN   TestCollections_SortByDescending
+--- PASS: TestCollections_SortByDescending (0.00s)
+=== RUN   TestCollections_GroupBySeverity
+--- PASS: TestCollections_GroupBySeverity (0.00s)
+=== RUN   TestCollections_FilterCritical
+--- PASS: TestCollections_FilterCritical (0.00s)
+=== RUN   TestCollections_CountWithPredicate
+--- PASS: TestCollections_CountWithPredicate (0.00s)
+=== RUN   TestCollections_FirstAndLast
+--- PASS: TestCollections_FirstAndLast (0.00s)
+=== RUN   TestCollections_Take
+--- PASS: TestCollections_Take (0.00s)
+=== RUN   TestCollections_PipeChain
+--- PASS: TestCollections_PipeChain (0.00s)
+=== RUN   TestCollections_PipeWithSortAndTake
+--- PASS: TestCollections_PipeWithSortAndTake (0.00s)
+=== RUN   TestCollections_Uniq
+--- PASS: TestCollections_Uniq (0.00s)
+=== RUN   TestCollections_Flatten
+--- PASS: TestCollections_Flatten (0.00s)
+=== RUN   TestCollections_Concat
+--- PASS: TestCollections_Concat (0.00s)
+=== RUN   TestCollections_SpreadPreservesSortedFindings
+--- PASS: TestCollections_SpreadPreservesSortedFindings (0.00s)
+=== RUN   TestPreprocessDotNotation_PreservesPredicateScope
+=== RUN   TestPreprocessDotNotation_PreservesPredicateScope/hash_dot_field_survives
+=== RUN   TestPreprocessDotNotation_PreservesPredicateScope/hash_dot_nested_field_survives
+=== RUN   TestPreprocessDotNotation_PreservesPredicateScope/leading_dot_still_flattens
+=== RUN   TestPreprocessDotNotation_PreservesPredicateScope/plain_member_access_untouched
+=== RUN   TestPreprocessDotNotation_PreservesPredicateScope/index_then_member_untouched
+=== RUN   TestPreprocessDotNotation_PreservesPredicateScope/function_call_then_member_untouched
+--- PASS: TestPreprocessDotNotation_PreservesPredicateScope (0.00s)
+    --- PASS: TestPreprocessDotNotation_PreservesPredicateScope/hash_dot_field_survives (0.00s)
+    --- PASS: TestPreprocessDotNotation_PreservesPredicateScope/hash_dot_nested_field_survives (0.00s)
+    --- PASS: TestPreprocessDotNotation_PreservesPredicateScope/leading_dot_still_flattens (0.00s)
+    --- PASS: TestPreprocessDotNotation_PreservesPredicateScope/plain_member_access_untouched (0.00s)
+    --- PASS: TestPreprocessDotNotation_PreservesPredicateScope/index_then_member_untouched (0.00s)
+    --- PASS: TestPreprocessDotNotation_PreservesPredicateScope/function_call_then_member_untouched (0.00s)
+=== RUN   TestPreprocessDotNotation
+=== PAUSE TestPreprocessDotNotation
+=== RUN   TestProjection_PlainProducesExactFields
+--- PASS: TestProjection_PlainProducesExactFields (0.00s)
+=== RUN   TestProjection_SpreadPreservesFields
+--- PASS: TestProjection_SpreadPreservesFields (0.00s)
+=== RUN   TestProjection_PureSpreadIsPassThrough
+--- PASS: TestProjection_PureSpreadIsPassThrough (0.00s)
+=== RUN   TestProjection_SpreadOnNonMapDegradesToOverride
+--- PASS: TestProjection_SpreadOnNonMapDegradesToOverride (0.00s)
+=== RUN   TestProjection_SpreadWithExpression
+--- PASS: TestProjection_SpreadWithExpression (0.00s)
+=== RUN   TestProjection_SpreadDoesNotOverrideUserReservedNames
+--- PASS: TestProjection_SpreadDoesNotOverrideUserReservedNames (0.00s)
+=== RUN   TestProjection_SpreadChainedTwice
+--- PASS: TestProjection_SpreadChainedTwice (0.00s)
+=== RUN   TestPreprocessSpread_Detection
+=== RUN   TestPreprocessSpread_Detection/plain_body
+=== RUN   TestPreprocessSpread_Detection/bare_spread
+=== RUN   TestPreprocessSpread_Detection/leading_spread_with_comma
+=== RUN   TestPreprocessSpread_Detection/leading_spread_without_space
+=== RUN   TestPreprocessSpread_Detection/braced_spread
+=== RUN   TestPreprocessSpread_Detection/misplaced_spread
+=== RUN   TestPreprocessSpread_Detection/typo_not_detected_as_spread
+=== RUN   TestPreprocessSpread_Detection/spread-like_text_inside_string_is_ignored
+=== RUN   TestPreprocessSpread_Detection/misplaced_spread-like_text_in_string_is_ignored
+--- PASS: TestPreprocessSpread_Detection (0.00s)
+    --- PASS: TestPreprocessSpread_Detection/plain_body (0.00s)
+    --- PASS: TestPreprocessSpread_Detection/bare_spread (0.00s)
+    --- PASS: TestPreprocessSpread_Detection/leading_spread_with_comma (0.00s)
+    --- PASS: TestPreprocessSpread_Detection/leading_spread_without_space (0.00s)
+    --- PASS: TestPreprocessSpread_Detection/braced_spread (0.00s)
+    --- PASS: TestPreprocessSpread_Detection/misplaced_spread (0.00s)
+    --- PASS: TestPreprocessSpread_Detection/typo_not_detected_as_spread (0.00s)
+    --- PASS: TestPreprocessSpread_Detection/spread-like_text_inside_string_is_ignored (0.00s)
+    --- PASS: TestPreprocessSpread_Detection/misplaced_spread-like_text_in_string_is_ignored (0.00s)
+=== RUN   TestTrimSpreadPrefix
+=== RUN   TestTrimSpreadPrefix/...
+=== RUN   TestTrimSpreadPrefix/...,_a:_1
+=== RUN   TestTrimSpreadPrefix/...,a:_1
+=== RUN   TestTrimSpreadPrefix/...,____a:_1
+=== RUN   TestTrimSpreadPrefix/...foo
+=== RUN   TestTrimSpreadPrefix/..foo
+=== RUN   TestTrimSpreadPrefix/a:_1
+--- PASS: TestTrimSpreadPrefix (0.00s)
+    --- PASS: TestTrimSpreadPrefix/... (0.00s)
+    --- PASS: TestTrimSpreadPrefix/...,_a:_1 (0.00s)
+    --- PASS: TestTrimSpreadPrefix/...,a:_1 (0.00s)
+    --- PASS: TestTrimSpreadPrefix/...,____a:_1 (0.00s)
+    --- PASS: TestTrimSpreadPrefix/...foo (0.00s)
+    --- PASS: TestTrimSpreadPrefix/..foo (0.00s)
+    --- PASS: TestTrimSpreadPrefix/a:_1 (0.00s)
+=== RUN   TestBenchRun_HappyPath
+--- PASS: TestBenchRun_HappyPath (0.00s)
+=== RUN   TestBenchRun_NilRegistry
+--- PASS: TestBenchRun_NilRegistry (0.00s)
+=== RUN   TestBenchRun_TargetNotFound
+--- PASS: TestBenchRun_TargetNotFound (0.00s)
+=== RUN   TestBenchRun_IterationsExceedLimit
+--- PASS: TestBenchRun_IterationsExceedLimit (0.00s)
+=== RUN   TestBenchRun_PanicIsolation
+--- PASS: TestBenchRun_PanicIsolation (0.00s)
+=== RUN   TestBenchRun_ContextCanceledStopsEarly
+--- PASS: TestBenchRun_ContextCanceledStopsEarly (0.00s)
+=== RUN   TestBenchSave_CreatesDirectoryAndWrites
+--- PASS: TestBenchSave_CreatesDirectoryAndWrites (0.01s)
+=== RUN   TestBenchSave_RejectsUnsafePaths
+=== RUN   TestBenchSave_RejectsUnsafePaths//tmp/x.json
+=== RUN   TestBenchSave_RejectsUnsafePaths/C:\Windows\x.json
+=== RUN   TestBenchSave_RejectsUnsafePaths/\\server\share\x
+=== RUN   TestBenchSave_RejectsUnsafePaths/../escape.json
+=== RUN   TestBenchSave_RejectsUnsafePaths/foo/../../escape
+=== RUN   TestBenchSave_RejectsUnsafePaths/x\x00y
+=== RUN   TestBenchSave_RejectsUnsafePaths/con
+=== RUN   TestBenchSave_RejectsUnsafePaths/file.
+=== RUN   TestBenchSave_RejectsUnsafePaths/#00
+--- PASS: TestBenchSave_RejectsUnsafePaths (0.00s)
+    --- PASS: TestBenchSave_RejectsUnsafePaths//tmp/x.json (0.00s)
+    --- PASS: TestBenchSave_RejectsUnsafePaths/C:\Windows\x.json (0.00s)
+    --- PASS: TestBenchSave_RejectsUnsafePaths/\\server\share\x (0.00s)
+    --- PASS: TestBenchSave_RejectsUnsafePaths/../escape.json (0.00s)
+    --- PASS: TestBenchSave_RejectsUnsafePaths/foo/../../escape (0.00s)
+    --- PASS: TestBenchSave_RejectsUnsafePaths/x\x00y (0.00s)
+    --- PASS: TestBenchSave_RejectsUnsafePaths/con (0.00s)
+    --- PASS: TestBenchSave_RejectsUnsafePaths/file. (0.00s)
+    --- PASS: TestBenchSave_RejectsUnsafePaths/#00 (0.00s)
+=== RUN   TestBenchCompare_RegressionBeyondTolerance
+--- PASS: TestBenchCompare_RegressionBeyondTolerance (0.01s)
+=== RUN   TestBenchCompare_WithinTolerancePasses
+--- PASS: TestBenchCompare_WithinTolerancePasses (0.01s)
+=== RUN   TestBenchCompare_ZeroBaselineSkipped
+--- PASS: TestBenchCompare_ZeroBaselineSkipped (0.01s)
+=== RUN   TestBenchCompare_CorruptBaseline
+--- PASS: TestBenchCompare_CorruptBaseline (0.01s)
+=== RUN   TestBenchCompare_MissingBaseline
+--- PASS: TestBenchCompare_MissingBaseline (0.00s)
+=== RUN   TestBenchCompare_RejectsUnsafeBaselinePath
+=== RUN   TestBenchCompare_RejectsUnsafeBaselinePath//etc/passwd
+=== RUN   TestBenchCompare_RejectsUnsafeBaselinePath/../baseline.json
+=== RUN   TestBenchCompare_RejectsUnsafeBaselinePath/C:\baseline.json
+=== RUN   TestBenchCompare_RejectsUnsafeBaselinePath/foo:bar
+--- PASS: TestBenchCompare_RejectsUnsafeBaselinePath (0.00s)
+    --- PASS: TestBenchCompare_RejectsUnsafeBaselinePath//etc/passwd (0.00s)
+    --- PASS: TestBenchCompare_RejectsUnsafeBaselinePath/../baseline.json (0.00s)
+    --- PASS: TestBenchCompare_RejectsUnsafeBaselinePath/C:\baseline.json (0.00s)
+    --- PASS: TestBenchCompare_RejectsUnsafeBaselinePath/foo:bar (0.00s)
+=== RUN   TestDispatch_ChosenIsUsedFirst
+--- PASS: TestDispatch_ChosenIsUsedFirst (0.00s)
+=== RUN   TestDispatch_FallbackWhenChosenMissing
+--- PASS: TestDispatch_FallbackWhenChosenMissing (0.00s)
+=== RUN   TestDispatch_FallsThroughToMembersOnError
+--- PASS: TestDispatch_FallsThroughToMembersOnError (0.00s)
+=== RUN   TestDispatch_RejectsEmptyMembers
+--- PASS: TestDispatch_RejectsEmptyMembers (0.00s)
+=== RUN   TestDispatch_NoRegistry
+--- PASS: TestDispatch_NoRegistry (0.00s)
+=== RUN   TestDispatch_PoolExpandsToMembers
+--- PASS: TestDispatch_PoolExpandsToMembers (0.00s)
+=== RUN   TestDispatch_PoolNotDeclared
+--- PASS: TestDispatch_PoolNotDeclared (0.00s)
+=== RUN   TestDispatch_MembersOverridesPool
+--- PASS: TestDispatch_MembersOverridesPool (0.00s)
+=== RUN   TestDispatch_DialectIntegration
+--- PASS: TestDispatch_DialectIntegration (0.00s)
+=== RUN   TestDistributeMap_HappyPathPreservesOrder
+--- PASS: TestDistributeMap_HappyPathPreservesOrder (0.05s)
+=== RUN   TestDistributeMap_ConcurrencyIsBounded
+--- PASS: TestDistributeMap_ConcurrencyIsBounded (0.09s)
+=== RUN   TestDistributeMap_FailureIsolatedPerSlot
+--- PASS: TestDistributeMap_FailureIsolatedPerSlot (0.00s)
+=== RUN   TestDistributeMap_PanicIsContainedPerSlot
+--- PASS: TestDistributeMap_PanicIsContainedPerSlot (0.00s)
+=== RUN   TestDistributeMap_EmptyItemsIsNoop
+--- PASS: TestDistributeMap_EmptyItemsIsNoop (0.00s)
+=== RUN   TestDistributeMap_ItemsExceedLimit
+--- PASS: TestDistributeMap_ItemsExceedLimit (0.00s)
+=== RUN   TestDistributeMap_MissingAction
+--- PASS: TestDistributeMap_MissingAction (0.00s)
+=== RUN   TestDistributeMap_NilRegistry
+--- PASS: TestDistributeMap_NilRegistry (0.00s)
+=== RUN   TestDistributeMap_ContextCanceledStops
+--- PASS: TestDistributeMap_ContextCanceledStops (0.04s)
+=== RUN   TestDistributeReduce_AllStrategies
+=== RUN   TestDistributeReduce_AllStrategies/collect
+=== RUN   TestDistributeReduce_AllStrategies/all_pass
+=== RUN   TestDistributeReduce_AllStrategies/any_pass
+=== RUN   TestDistributeReduce_AllStrategies/first_success
+=== RUN   TestDistributeReduce_AllStrategies/count
+--- PASS: TestDistributeReduce_AllStrategies (0.00s)
+    --- PASS: TestDistributeReduce_AllStrategies/collect (0.00s)
+    --- PASS: TestDistributeReduce_AllStrategies/all_pass (0.00s)
+    --- PASS: TestDistributeReduce_AllStrategies/any_pass (0.00s)
+    --- PASS: TestDistributeReduce_AllStrategies/first_success (0.00s)
+    --- PASS: TestDistributeReduce_AllStrategies/count (0.00s)
+=== RUN   TestDistributeReduce_FirstSuccessNoneSucceeds
+--- PASS: TestDistributeReduce_FirstSuccessNoneSucceeds (0.00s)
+=== RUN   TestDistributeReduce_AllPassOnEmptyIsTrue
+--- PASS: TestDistributeReduce_AllPassOnEmptyIsTrue (0.00s)
+=== RUN   TestDistributeReduce_UnknownStrategy
+--- PASS: TestDistributeReduce_UnknownStrategy (0.00s)
+=== RUN   TestLogNodes_PassThroughUnchanged
+2026/09/23 20:47:09 INFO hi k=v n=42
+2026/09/23 20:47:09 WARN hi k=v n=42
+2026/09/23 20:47:09 ERROR hi k=v n=42
+--- PASS: TestLogNodes_PassThroughUnchanged (0.01s)
+=== RUN   TestLogNodes_MissingMessageDoesNotPanic
+2026/09/23 20:47:09 INFO  k=v
+--- PASS: TestLogNodes_MissingMessageDoesNotPanic (0.00s)
+=== RUN   TestLoop_BreaksWhenConditionMet
+=== PAUSE TestLoop_BreaksWhenConditionMet
+=== RUN   TestLoop_ExceedsMaxTurns
+=== PAUSE TestLoop_ExceedsMaxTurns
+=== RUN   TestProjection_StandardSyntax
+=== PAUSE TestProjection_StandardSyntax
+=== RUN   TestProjection_JQSyntaxPrefix
+=== PAUSE TestProjection_JQSyntaxPrefix
+=== RUN   TestProjection_StandaloneRootDot
+=== PAUSE TestProjection_StandaloneRootDot
+=== RUN   TestProjection_CasingAgnosticMultiStyle
+=== PAUSE TestProjection_CasingAgnosticMultiStyle
+=== RUN   TestDynamicSaga_SuccessfulExecution
+=== PAUSE TestDynamicSaga_SuccessfulExecution
+=== RUN   TestDynamicSaga_RollbackLIFOOnFailure
+=== PAUSE TestDynamicSaga_RollbackLIFOOnFailure
+=== RUN   TestSupervisor_DynamicChildSpawning
+=== PAUSE TestSupervisor_DynamicChildSpawning
+=== CONT  TestAssert_DotNotation
+=== CONT  TestProjection_StandaloneRootDot
+=== CONT  TestLoop_BreaksWhenConditionMet
+=== CONT  TestLoop_ExceedsMaxTurns
+=== CONT  TestProjection_JQSyntaxPrefix
+=== CONT  TestPreprocessDotNotation
+=== RUN   TestPreprocessDotNotation/simple_leading_dot
+=== RUN   TestPreprocessDotNotation/nested_leading_dot
+=== RUN   TestPreprocessDotNotation/two_references
+--- PASS: TestProjection_StandaloneRootDot (0.00s)
+=== CONT  TestSupervisor_DynamicChildSpawning
+=== CONT  TestDynamicSaga_SuccessfulExecution
+=== CONT  TestProjection_CasingAgnosticMultiStyle
+=== RUN   TestProjection_CasingAgnosticMultiStyle/Top-Level_Struct_Field_Variants
+=== CONT  TestDynamicSaga_RollbackLIFOOnFailure
+=== RUN   TestPreprocessDotNotation/index_access
+--- PASS: TestProjection_JQSyntaxPrefix (0.00s)
+--- PASS: TestAssert_DotNotation (0.00s)
+=== CONT  TestProjection_StandardSyntax
+--- PASS: TestLoop_ExceedsMaxTurns (0.00s)
+--- PASS: TestLoop_BreaksWhenConditionMet (0.00s)
+=== RUN   TestProjection_CasingAgnosticMultiStyle/Nested_Struct_Inside_Parallel_Map_Variants
+--- PASS: TestDynamicSaga_SuccessfulExecution (0.00s)
+=== RUN   TestPreprocessDotNotation/decimal_preserved
+--- PASS: TestProjection_StandardSyntax (0.00s)
+--- PASS: TestDynamicSaga_RollbackLIFOOnFailure (0.00s)
+--- PASS: TestProjection_CasingAgnosticMultiStyle (0.00s)
+    --- PASS: TestProjection_CasingAgnosticMultiStyle/Top-Level_Struct_Field_Variants (0.00s)
+    --- PASS: TestProjection_CasingAgnosticMultiStyle/Nested_Struct_Inside_Parallel_Map_Variants (0.00s)
+=== RUN   TestPreprocessDotNotation/string_literal_untouched
+=== RUN   TestPreprocessDotNotation/single-quoted_untouched
+=== RUN   TestPreprocessDotNotation/backtick_untouched
+=== RUN   TestPreprocessDotNotation/escaped_quote_inside_string
+=== RUN   TestPreprocessDotNotation/bare_dot_becomes_root
+=== RUN   TestPreprocessDotNotation/member_access_preserved
+=== RUN   TestPreprocessDotNotation/call_result_member
+=== RUN   TestPreprocessDotNotation/index_then_member
+--- PASS: TestPreprocessDotNotation (0.00s)
+    --- PASS: TestPreprocessDotNotation/simple_leading_dot (0.00s)
+    --- PASS: TestPreprocessDotNotation/nested_leading_dot (0.00s)
+    --- PASS: TestPreprocessDotNotation/two_references (0.00s)
+    --- PASS: TestPreprocessDotNotation/index_access (0.00s)
+    --- PASS: TestPreprocessDotNotation/decimal_preserved (0.00s)
+    --- PASS: TestPreprocessDotNotation/string_literal_untouched (0.00s)
+    --- PASS: TestPreprocessDotNotation/single-quoted_untouched (0.00s)
+    --- PASS: TestPreprocessDotNotation/backtick_untouched (0.00s)
+    --- PASS: TestPreprocessDotNotation/escaped_quote_inside_string (0.00s)
+    --- PASS: TestPreprocessDotNotation/bare_dot_becomes_root (0.00s)
+    --- PASS: TestPreprocessDotNotation/member_access_preserved (0.00s)
+    --- PASS: TestPreprocessDotNotation/call_result_member (0.00s)
+    --- PASS: TestPreprocessDotNotation/index_then_member (0.00s)
+--- PASS: TestSupervisor_DynamicChildSpawning (0.00s)
+PASS
+ok  	github.com/nexssp/flow/nodes	0.773s
+?   	github.com/nexssp/flow/nodes/decide	[no test files]
+=== RUN   TestOutFile_Pipeline
+=== PAUSE TestOutFile_Pipeline
+=== RUN   TestRead_StreamWithBufferPool
+=== PAUSE TestRead_StreamWithBufferPool
+=== RUN   TestRead_LineRangeFiltering
+=== PAUSE TestRead_LineRangeFiltering
+=== RUN   TestRenderMarkdown_Standard
+=== PAUSE TestRenderMarkdown_Standard
+=== RUN   TestRenderMarkdown_Zed
+=== PAUSE TestRenderMarkdown_Zed
+=== RUN   TestWalk_DefaultSkipDirs
+=== PAUSE TestWalk_DefaultSkipDirs
+=== RUN   TestWalk_IncludeAll
+=== PAUSE TestWalk_IncludeAll
+=== RUN   TestWalk_ExtFilter
+=== PAUSE TestWalk_ExtFilter
+=== RUN   TestWalk_MaxDepth
+=== PAUSE TestWalk_MaxDepth
+=== RUN   TestWalk_BackpressureCancellation
+=== PAUSE TestWalk_BackpressureCancellation
+=== RUN   TestWalk_ContextCancellation
+=== PAUSE TestWalk_ContextCancellation
+=== CONT  TestOutFile_Pipeline
+=== CONT  TestWalk_IncludeAll
+=== CONT  TestWalk_BackpressureCancellation
+=== CONT  TestWalk_MaxDepth
+=== CONT  TestWalk_ContextCancellation
+=== CONT  TestWalk_ExtFilter
+=== CONT  TestRenderMarkdown_Standard
+--- PASS: TestRenderMarkdown_Standard (0.00s)
+=== CONT  TestWalk_DefaultSkipDirs
+=== CONT  TestRead_LineRangeFiltering
+=== CONT  TestRenderMarkdown_Zed
+--- PASS: TestRenderMarkdown_Zed (0.00s)
+=== CONT  TestRead_StreamWithBufferPool
+--- PASS: TestRead_LineRangeFiltering (0.03s)
+--- PASS: TestRead_StreamWithBufferPool (0.03s)
+=== NAME  TestOutFile_Pipeline
+    out_file_test.go:37: got "", want "streaming data test payload for out.file"
+--- FAIL: TestOutFile_Pipeline (0.06s)
+--- PASS: TestWalk_MaxDepth (0.31s)
+--- PASS: TestWalk_BackpressureCancellation (0.32s)
+--- PASS: TestWalk_DefaultSkipDirs (0.33s)
+--- PASS: TestWalk_ContextCancellation (0.33s)
+--- PASS: TestWalk_ExtFilter (0.34s)
+--- PASS: TestWalk_IncludeAll (0.34s)
+FAIL
+FAIL	github.com/nexssp/flow/nodes/fsio	0.841s
+?   	github.com/nexssp/flow/nodes/utility	[no test files]
+=== RUN   TestEvolve_InvalidBaseline
+=== PAUSE TestEvolve_InvalidBaseline
+=== RUN   TestEvolve_EvaluatorFailure
+=== PAUSE TestEvolve_EvaluatorFailure
+=== RUN   TestEvolve_DiscoversHigherScore
+=== PAUSE TestEvolve_DiscoversHigherScore
+=== RUN   TestEvolve_ParallelScoreBonus
+=== PAUSE TestEvolve_ParallelScoreBonus
+=== RUN   TestEvolve_SingleNodePipeline
+=== PAUSE TestEvolve_SingleNodePipeline
+=== CONT  TestEvolve_InvalidBaseline
+--- PASS: TestEvolve_InvalidBaseline (0.00s)
+=== CONT  TestEvolve_SingleNodePipeline
+--- PASS: TestEvolve_SingleNodePipeline (0.00s)
+=== CONT  TestEvolve_ParallelScoreBonus
+=== CONT  TestEvolve_DiscoversHigherScore
+--- PASS: TestEvolve_DiscoversHigherScore (0.00s)
+=== CONT  TestEvolve_EvaluatorFailure
+--- PASS: TestEvolve_EvaluatorFailure (0.00s)
+--- PASS: TestEvolve_ParallelScoreBonus (0.00s)
+PASS
+ok  	github.com/nexssp/flow/optimizer	(cached)
+=== RUN   TestCheckpointStoreContract
+=== RUN   TestCheckpointStoreContract/FileCheckpointStore
+=== RUN   TestCheckpointStoreContract/MemoryCheckpointStore
+--- PASS: TestCheckpointStoreContract (0.02s)
+    --- PASS: TestCheckpointStoreContract/FileCheckpointStore (0.02s)
+    --- PASS: TestCheckpointStoreContract/MemoryCheckpointStore (0.00s)
+=== RUN   TestFlowHash_Stable
+--- PASS: TestFlowHash_Stable (0.00s)
+PASS
+ok  	github.com/nexssp/flow/runner	(cached)
+?   	github.com/nexssp/flow/runner/bootstrap	[no test files]
+?   	github.com/nexssp/flow/runner/bootstrap/console	[no test files]
+=== RUN   TestParseBindings
+--- PASS: TestParseBindings (0.00s)
+=== RUN   TestParseBindings_IgnoresNonHTTPRemote
+--- PASS: TestParseBindings_IgnoresNonHTTPRemote (0.00s)
+=== RUN   TestTailAtom_IgnoresArrowsInQuotes
+--- PASS: TestTailAtom_IgnoresArrowsInQuotes (0.00s)
+=== RUN   TestSplitMods_RespectsQuotes
+--- PASS: TestSplitMods_RespectsQuotes (0.00s)
+PASS
+ok  	github.com/nexssp/flow/runner/capability	(cached)
+?   	github.com/nexssp/flow/runner/testkit	[no test files]
+?   	github.com/nexssp/flow/showcase/01_adaptive_rl_router	[no test files]
+?   	github.com/nexssp/flow/showcase/02_self_healing_borg	[no test files]
+?   	github.com/nexssp/flow/showcase/03_evolutionary_optimizer	[no test files]
+?   	github.com/nexssp/flow/showcase/04_grand_showcase	[no test files]
+?   	github.com/nexssp/flow/telemetry	[no test files]
+?   	github.com/nexssp/flow/testkit	[no test files]
+?   	github.com/nexssp/flow/transport	[no test files]
+FAIL

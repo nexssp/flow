@@ -14,11 +14,13 @@ import (
 
 	"github.com/nexssp/cost"
 	"github.com/nexssp/flow"
+	"github.com/nexssp/flow/contracts"
 	"github.com/nexssp/flow/runner/capability"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/ai/dag"
 	"github.com/nexssp/kernel/observe"
 	"github.com/nexssp/kernel/xctx"
+	"github.com/nexssp/kernel/xerr"
 )
 
 type Request struct {
@@ -44,10 +46,6 @@ type Request struct {
 	Stderr io.Writer
 }
 
-// RunWithRegistry executes a flow against the caller-supplied registry.
-// Use this when you already know what actions the flow may call. For
-// the AI-flavoured entry point that builds a standard AI registry, see
-// ai/flow/bootstrap.RunFlow.
 func RunWithRegistry(ctx context.Context, req Request, reg *action.Registry, observer *RunnerObserver) int {
 	stdout := req.Stdout
 	if stdout == nil {
@@ -85,6 +83,18 @@ func RunWithRegistry(ctx context.Context, req Request, reg *action.Registry, obs
 
 	manifestStr := pre.DSL
 
+	reg, err = materializeFromPreprocessed(pre, reg)
+	if err != nil {
+		fmt.Fprintf(stderr, "❌ materialize declarations: %v\n", err)
+		return 1
+	}
+
+	reg, err = flow.ContributeRegistry(pre, reg)
+	if err != nil {
+		fmt.Fprintf(stderr, "❌ directive contribution: %v\n", err)
+		return 1
+	}
+
 	allAssertions := mergeAssertions(manifestStr, assertions)
 
 	resolved := flow.ResolveConfig(manifestStr, req.Args)
@@ -121,19 +131,22 @@ func RunWithRegistry(ctx context.Context, req Request, reg *action.Registry, obs
 	now := time.Now().UTC()
 	border := strings.Repeat("═", 78)
 
-	fmt.Fprintln(stdout, border)
-	fmt.Fprintf(stdout, "  NEXSS FLOW RUNNER  •  %s UTC\n", now.Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(stdout, "  flow      : %s\n", req.Path)
-	fmt.Fprintf(stdout, "  config    : verbosity=%d  budget=$%.6f  approval=%s",
-		cfg.Verbosity, float64(cfg.BudgetMicros)/1_000_000.0, cfg.Approval)
-
-	if cfg.MaxTokens > 0 {
-		fmt.Fprintf(stdout, "  max_tokens=%d", cfg.MaxTokens)
+	if cfg.Verbosity >= 1 {
+		fmt.Fprintln(stdout, border)
+		fmt.Fprintf(stdout, "  NEXSS FLOW RUNNER  •  %s UTC\n", now.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(stdout, "  flow      : %s\n", req.Path)
+		fmt.Fprintf(stdout, "  config    : verbosity=%d  budget=$%.6f  approval=%s",
+			cfg.Verbosity, float64(cfg.BudgetMicros)/1_000_000.0, cfg.Approval)
+		if cfg.MaxTokens > 0 {
+			fmt.Fprintf(stdout, "  max_tokens=%d", cfg.MaxTokens)
+		}
+		if pre.Profile != "" {
+			fmt.Fprintf(stdout, "  profile=%s", pre.Profile)
+		}
+		fmt.Fprintln(stdout)
+		fmt.Fprintln(stdout, border)
+		fmt.Fprintln(stdout)
 	}
-
-	fmt.Fprintln(stdout)
-	fmt.Fprintln(stdout, border)
-	fmt.Fprintln(stdout)
 
 	dsl := flow.SanitizeDSL(manifestStr)
 	if dsl == "" {
@@ -234,6 +247,10 @@ func RunWithRegistry(ctx context.Context, req Request, reg *action.Registry, obs
 			cfg.BudgetMicros, resolved.Provenance["budget"],
 			cfg.MaxTokens, resolved.Provenance["max_tokens"],
 			cfg.Approval, resolved.Provenance["approval"])
+
+		if pre.Profile != "" {
+			fmt.Fprintf(stdout, "[%s] ⚙ profile    %s\n", tNow, pre.Profile)
+		}
 	}
 
 	if len(pre.Pipelines) > 0 {
@@ -281,6 +298,18 @@ func RunWithRegistry(ctx context.Context, req Request, reg *action.Registry, obs
 		}
 	}
 
+	declaredHooks := make([]action.AnyHook, 0, len(pre.Hooks))
+	for _, hd := range pre.Hooks {
+		hook, ok := action.NamedHook(hd.Name)
+		if !ok {
+			fmt.Fprintf(stderr,
+				"❌ hook %q is not registered (declared at %s)\n",
+				hd.Name, hd.Pos)
+			return 1
+		}
+		declaredHooks = append(declaredHooks, hook)
+	}
+
 	obsHook := observe.Hook(observer)
 	liveHook := observer.Hook()
 
@@ -289,6 +318,8 @@ func RunWithRegistry(ctx context.Context, req Request, reg *action.Registry, obs
 		flow.WithApprovalGate(approvalGate),
 		flow.WithReserver(ledger),
 		flow.WithHooks(obsHook, liveHook),
+		flow.WithHooks(declaredHooks...),
+		flow.WithSecurityObserver(observer),
 	)
 	execAct := flow.NewExecuteAction(compiler).ToBuilder().AnyHook(obsHook, liveHook).Build()
 
@@ -296,6 +327,47 @@ func RunWithRegistry(ctx context.Context, req Request, reg *action.Registry, obs
 	defer release()
 
 	scope.ExecutionID = runID
+
+	// Inherit caller's context scope (roles, permissions, features, identity)
+	if parentScope := xctx.ScopeFrom(ctx); parentScope != nil {
+		if len(parentScope.Roles) > 0 {
+			scope.Roles = append([]string(nil), parentScope.Roles...)
+			scope.Role = parentScope.Role
+		}
+		if len(parentScope.Permissions) > 0 {
+			scope.Permissions = append([]string(nil), parentScope.Permissions...)
+		}
+		if len(parentScope.Features) > 0 {
+			scope.Features = append([]string(nil), parentScope.Features...)
+		}
+		if parentScope.UserID != "" {
+			scope.UserID = parentScope.UserID
+		}
+		if parentScope.TenantID != "" {
+			scope.TenantID = parentScope.TenantID
+		}
+	}
+
+	// Propagate registry and compiler to the execution context
+	runCtx = contracts.WithRegistry(runCtx, reg)
+	runCtx = contracts.WithCompiler(runCtx, compiler)
+
+	if len(pre.Pools) > 0 {
+		pools := make(map[string][]string, len(pre.Pools))
+		for _, p := range pre.Pools {
+			pools[p.Name] = p.Members
+		}
+		runCtx = contracts.WithPools(runCtx, pools)
+
+		if cfg.Verbosity >= 2 {
+			tNow := time.Now().Format("15:04:05.000")
+			for _, p := range pre.Pools {
+				fmt.Fprintf(stdout,
+					"[%s] ⚙ pool       %s = [%s] (%s)\n",
+					tNow, p.Name, strings.Join(p.Members, ", "), p.Pos)
+			}
+		}
+	}
 
 	if cfg.MaxTokens > 0 {
 		runCtx = flow.WithMaxTokens(runCtx, cfg.MaxTokens)
@@ -310,14 +382,32 @@ func RunWithRegistry(ctx context.Context, req Request, reg *action.Registry, obs
 		payload[k] = v
 	}
 
+	if rArgs.Approve != "" {
+		runCtx = xctx.WithApprovalToken(runCtx, rArgs.Approve)
+		if cfg.Verbosity >= 1 {
+			tNow := time.Now().Format("15:04:05.000")
+			fmt.Fprintf(stdout, "[%s] ⚙ approve    token=%s\n", tNow, rArgs.Approve)
+		}
+	} else if tok := xctx.ApprovalTokenFrom(ctx); tok != "" {
+		runCtx = xctx.WithApprovalToken(runCtx, tok)
+	}
+
 	start := time.Now()
 	res, err := execAct.Do(runCtx, flow.GraphExecReq{
 		DSL:            dsl,
+		Profile:        flow.Profile(pre.Profile),
+		Name:           req.Path,
 		InitialPayload: payload,
+		Preprocessed:   pre,
 	})
 	duration := time.Since(start)
 
 	showSummary := observer.Verbosity() >= 1 || req.Metrics || err != nil
+
+	if err != nil && errors.Is(err, dag.ErrSuspended) {
+		return handleSuspension(ctx, req, stderr, stdout, observer, store,
+			runID, currentHash, payload, duration, err)
+	}
 
 	if err != nil {
 		var execErr *dag.ExecutionError
@@ -334,27 +424,42 @@ func RunWithRegistry(ctx context.Context, req Request, reg *action.Registry, obs
 					State:       execErr.State.Data(),
 				})
 			}
-
 			execErr.State.Release()
 		}
 
-		fmt.Fprintf(stdout, "\n✗ FLOW FAILED after %v\n", duration.Round(time.Millisecond))
+		appErr := xerr.From(err)
+		fmt.Fprintf(stdout, "✗ %s\n", appErr.Message)
 
-		if store != nil {
-			fmt.Fprintf(stdout, "   resume with: %s\n",
-				buildResumeCommand(req.Path, req.Payload, req.Args, runID))
+		if cfg.Verbosity >= 1 {
+			fmt.Fprintf(stdout, "  kind    : %s\n", appErr.Kind)
+			if execErr != nil && execErr.FailedNode != "" {
+				fmt.Fprintf(stdout, "  node    : %s\n", execErr.FailedNode)
+			}
+			fmt.Fprintf(stdout, "  after   : %v\n", duration.Round(time.Millisecond))
 		}
 
-		if showSummary {
+		if cfg.Verbosity >= 2 {
+			if appErr.Cause != nil {
+				fmt.Fprintf(stdout, "  cause   : %v\n", appErr.Cause)
+			}
 			observer.PrintSummary(stdout)
 		}
 
 		return 1
 	}
 
-	outJSON, _ := json.MarshalIndent(res, "", "  ")
-	fmt.Fprintf(stdout, "\n✅ FLOW COMPLETED after %v\nOutputs:\n%s\n",
-		duration.Round(time.Millisecond), outJSON)
+	if cfg.Verbosity >= 1 {
+		outJSON, _ := json.MarshalIndent(res, "", "  ")
+		fmt.Fprintf(stdout, "✓ flow completed in %v\n", duration.Round(time.Millisecond))
+		fmt.Fprintf(stdout, "  name    : %s\n", req.Path)
+		fmt.Fprintf(stdout, "  layers  : %d\n", res.LayersRun)
+		fmt.Fprintf(stdout, "  result  :\n%s\n", indentJSON(res.Result))
+		if cfg.Verbosity >= 2 {
+			fmt.Fprintf(stdout, "  outputs :\n%s\n", outJSON)
+		}
+	} else {
+		fmt.Fprintln(stdout, compactJSON(res.Result))
+	}
 
 	if cfg.OutputFormat != "" {
 		saveOutput(cfg.OutputDir, cfg.OutputFormat, runID, res, stdout)
@@ -368,7 +473,7 @@ func RunWithRegistry(ctx context.Context, req Request, reg *action.Registry, obs
 		observer.PrintSummary(stdout)
 	}
 
-	return RunAssertions(res, allAssertions, observer)
+	return RunAssertions(res, allAssertions, observer, cfg.Verbosity)
 }
 
 func saveOutput(dir, format, execID string, data any, out io.Writer) {
@@ -422,28 +527,89 @@ func mergeAssertions(manifest string, extra []string) []string {
 	return out
 }
 
-func buildResumeCommand(path string, payload map[string]any, args []string, runID string) string {
+// handleSuspension saves the checkpoint, prints the suspension message
+// and the exact resume command, and returns exit code 3.
+func handleSuspension(
+	ctx context.Context,
+	req Request,
+	stderr, stdout io.Writer,
+	observer *RunnerObserver,
+	store CheckpointStore,
+	runID, flowHash string,
+	payload map[string]any,
+	duration time.Duration,
+	suspErr error,
+) int {
+	_ = stderr
+
+	if store != nil {
+		saveCtx := context.WithoutCancel(ctx)
+		_ = store.Save(saveCtx, Checkpoint{
+			RunID:       runID,
+			Flow:        req.Path,
+			FlowHash:    flowHash,
+			SavedAt:     time.Now().UTC(),
+			SpentMicros: observer.TotalSpentMicros(),
+			State:       payload,
+			Suspended:   true,
+		})
+	}
+
+	var susp *dag.SuspendError
+	_ = errors.As(suspErr, &susp)
+
+	fmt.Fprintf(stdout, "\n⏸ FLOW SUSPENDED after %v — awaiting approval\n",
+		duration.Round(time.Millisecond))
+
+	gate := ""
+	if susp != nil {
+		if m, ok := susp.Payload.(map[string]any); ok {
+			if g, ok := m["gate"].(string); ok {
+				gate = g
+			}
+			if role, ok := m["role"].(string); ok && role != "" {
+				fmt.Fprintf(stdout, "   role   : %s\n", role)
+			}
+			if reason, ok := m["reason"].(string); ok && reason != "" {
+				fmt.Fprintf(stdout, "   reason : %s\n", reason)
+			}
+			if expires, ok := m["expires"].(string); ok && expires != "" {
+				fmt.Fprintf(stdout, "   expires: %s\n", expires)
+			}
+		} else if susp.Reason != "" {
+			fmt.Fprintf(stdout, "   reason : %s\n", susp.Reason)
+		}
+	}
+
+	if store != nil {
+		approveArg := gate
+		if approveArg == "" {
+			approveArg = "all"
+		}
+		fmt.Fprintf(stdout, "   resume : %s\n",
+			buildResumeApproveCommand(req.Path, req.Args, runID, approveArg))
+	}
+
+	if observer.Verbosity() >= 1 {
+		observer.PrintSummary(stdout)
+	}
+	return 3
+}
+
+// buildResumeApproveCommand emits the exact shell command that resumes
+// a suspended flow with the approval token installed. The gate name is
+// passed to --approve; users may also pass --approve=all.
+func buildResumeApproveCommand(path string, args []string, runID, gate string) string {
 	exe := strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe")
 
-	parts := make([]string, 0, len(args)+4)
-	parts = append(parts, exe, shellQuote(path))
-
-	if len(payload) > 0 {
-		if data, err := json.Marshal(payload); err == nil && len(data) <= 256 {
-			parts = append(parts, shellQuote(string(data)))
-		}
-	}
-
+	parts := []string{exe, shellQuote(path)}
 	for _, a := range args {
-		if strings.HasPrefix(a, "--resume=") {
+		if strings.HasPrefix(a, "--resume=") || strings.HasPrefix(a, "--approve=") {
 			continue
 		}
-
 		parts = append(parts, a)
 	}
-
-	parts = append(parts, "--resume="+runID)
-
+	parts = append(parts, "--resume="+runID, "--approve="+gate)
 	return strings.Join(parts, " ")
 }
 
@@ -453,4 +619,20 @@ func shellQuote(s string) string {
 	}
 
 	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+}
+
+func compactJSON(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("(unencodable: %v)", err)
+	}
+	return string(b)
+}
+
+func indentJSON(v any) string {
+	b, err := json.MarshalIndent(v, "  ", "  ")
+	if err != nil {
+		return fmt.Sprintf("  (unencodable: %v)", err)
+	}
+	return string(b)
 }

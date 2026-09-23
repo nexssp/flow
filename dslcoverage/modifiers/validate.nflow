@@ -1,0 +1,3 @@
+@assert: result == "validate"
+
+const:validate @{ value: "validate" }

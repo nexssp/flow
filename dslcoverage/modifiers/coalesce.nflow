@@ -1,0 +1,3 @@
+@assert: result == "coalesce"
+
+const:coalesce @{ value: "coalesce" }

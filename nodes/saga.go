@@ -54,7 +54,7 @@ func NewDynamicSaga(name string, steps []SagaStep) *action.Builder[any, any] {
 
 		for i, s := range steps {
 			out, err := execs[i].ExecuteDecoded(ctx, func(target any) error {
-				return decodePayload(current, target)
+				return AssignPayload(current, target)
 			})
 			if err != nil {
 				// Roll back completed steps in reverse order. Each
@@ -70,7 +70,7 @@ func NewDynamicSaga(name string, steps []SagaStep) *action.Builder[any, any] {
 					}
 
 					if _, cerr := undos[idx].ExecuteDecoded(ctx, func(target any) error {
-						return decodePayload(input, target)
+						return AssignPayload(input, target)
 					}); cerr != nil && rollbackErr == nil {
 						rollbackErr = cerr
 					}

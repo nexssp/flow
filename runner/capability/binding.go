@@ -36,7 +36,7 @@ type Binding struct {
 	Timeout string // raw duration string; parsed by the resolver
 }
 
-// ParseBindings scans a raw .flow manifest for capability declarations.
+// ParseBindings scans a raw .nflow manifest for capability declarations.
 //
 // Recognised modifiers:
 //

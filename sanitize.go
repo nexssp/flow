@@ -2,17 +2,10 @@ package flow
 
 import "strings"
 
-// SanitizeDSL converts a full .flow manifest into the line-oriented
-// pipeline the flow compiler consumes.
-//
-// One statement per line. Comments (# or //), config directives
-// (@config:, @assert:, @require, …), and route declaration headers
-// (unindented lines that bind :route= or :http= and contain no
-// pipeline arrow) are dropped. Everything else is preserved verbatim
-// so the lexer can terminate an unquoted @prompt annotation at the
-// end of its line.
+// SanitizeDSL strips comments, directives, and declaration headers
+// from a .nflow source so that only the executable pipeline remains.
 func SanitizeDSL(rawContent string) string {
-	// Strip UTF-8 BOM
+	// Strip UTF-8 BOM if present.
 	rawContent = strings.TrimPrefix(rawContent, "\xef\xbb\xbf")
 
 	var sb strings.Builder
@@ -30,23 +23,32 @@ func SanitizeDSL(rawContent string) string {
 
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
+			sb.WriteByte('\n')
+
 			continue
 		}
 
 		c := trimmed[0]
-		if c == '#' || c == '@' || (len(trimmed) >= 2 && trimmed[0] == '/' && trimmed[1] == '/') {
+		// Directives start with '@', but '@{' introduces inline atom arguments and must be preserved.
+		if c == '#' || (c == '@' && !strings.HasPrefix(trimmed, "@{")) || (len(trimmed) >= 2 && trimmed[0] == '/' && trimmed[1] == '/') {
+			sb.WriteByte('\n')
+
 			continue
 		}
 
-		// Route declaration header: an unindented line that binds a
-		// route (":route=" or ":http=") and carries no pipeline arrow.
-		// This is the name under which the flow is mounted, not a step
-		// the compiler should try to execute. Indented lines are step
-		// atoms and are never treated as headers, even if they carry
-		// route modifiers.
+		// Declaration header detection. A header is:
+		//   - not indented,
+		//   - free of the pipeline operator '->',
+		//   - free of any '@' annotation,
+		//   - carries a :route= or :http= modifier.
 		isIndented := line != "" && (line[0] == ' ' || line[0] == '\t')
-		if !isIndented && !strings.Contains(trimmed, "->") &&
-			(strings.Contains(trimmed, ":route=") || strings.Contains(trimmed, ":http=")) {
+		hasArrow := strings.Contains(trimmed, "->")
+		hasAnnotation := strings.Contains(trimmed, "@")
+		hasRouteModifier := strings.Contains(trimmed, ":route=") || strings.Contains(trimmed, ":http=")
+
+		if !isIndented && !hasArrow && !hasAnnotation && hasRouteModifier {
+			sb.WriteByte('\n')
+
 			continue
 		}
 
@@ -57,11 +59,8 @@ func SanitizeDSL(rawContent string) string {
 	return sb.String()
 }
 
-// stripAtAnnotations removes a trailing inline @-annotation from a DSL
-// line. Quoted '@' characters (with \ escapes inside quotes) are
-// preserved. Kept for callers that need the pre-sanitize form; the
-// SanitizeDSL above preserves annotations instead, because the lexer
-// now consumes them as TokenAtPrompt.
+// stripAtAnnotations removes everything from the first unquoted '@' on
+// a line. Retained for callers that need to normalise a single atom.
 func stripAtAnnotations(line string) string {
 	inQuotes := false
 

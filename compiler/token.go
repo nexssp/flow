@@ -18,10 +18,13 @@ const (
 	TokenQuestion
 	TokenColon
 	TokenAssign
-	TokenAtPrompt // Replaces TokenAt
+	TokenAtPrompt // @text  — free-form prompt annotation
+	TokenAtBrace  // @{...} — structural inline arguments
 	TokenHash
 	TokenTilde
 	TokenComma
+	TokenLBracket // [
+	TokenRBracket // ]
 	TokenInvalid
 )
 
@@ -42,9 +45,12 @@ var tokenNames = map[TokenType]string{
 	TokenColon:     ":",
 	TokenAssign:    "=",
 	TokenAtPrompt:  "@",
+	TokenAtBrace:   "@{",
 	TokenHash:      "#",
 	TokenTilde:     "~",
 	TokenComma:     ",",
+	TokenLBracket:  "[",
+	TokenRBracket:  "]",
 }
 
 func (t TokenType) String() string { return tokenNames[t] }

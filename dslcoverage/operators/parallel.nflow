@@ -1,0 +1,4 @@
+@description "Parallel operator"
+@assert: result != nil
+
+( const @{ value: "left" } & const @{ value: "right" } )

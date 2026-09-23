@@ -2,7 +2,7 @@
 # Demonstrates: @include pulls in pipelines from another file;
 #                @action marks this file callable from other flows.
 
-@include ./common.flow
+@include ./common.nflow
 
 @action greet
 @description "Greets the payload's name in one line"
