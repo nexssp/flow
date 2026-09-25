@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/nexssp/kernel/action"
-	"github.com/nexssp/transport/thttp"
 )
 
 type UppercaseReq struct {
@@ -20,7 +19,6 @@ func Uppercase() *action.BuiltAction[UppercaseReq, UppercaseRes] {
 	return action.New("text_tools.uppercase", uppercase).
 		Description("Uppercases the 'message' field of the input").
 		Tag("text", "transform").
-		Route(thttp.POST("/api/text/uppercase")).
 		Build()
 }
 

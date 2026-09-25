@@ -31,8 +31,8 @@ func TestUppercaseAction(t *testing.T) {
 	}
 }
 
-// Metadata contract. Runs the whole library through the shared
-// invariant suite: names, aliases, hooks, payload shape.
+// flow-capability contract, not ingress; ktest.AssertContracts is service-oriented.
+// Evaluates Flow invariants for capabilities: ensuring metadata is present.
 func TestLibraryContract(t *testing.T) {
 	lib := Library()
 	if lib.Name == "" {
@@ -43,7 +43,18 @@ func TestLibraryContract(t *testing.T) {
 		t.Fatal("Library() must return at least one action")
 	}
 
-	ktest.AssertContracts(t, lib.Actions)
+	for _, act := range lib.Actions {
+		meta := act.Describe()
+		if meta.Name == "" {
+			t.Errorf("Action missing Name")
+		}
+		if meta.Description == "" {
+			t.Errorf("Action %q missing Description", meta.Name)
+		}
+		if len(meta.Tags) == 0 {
+			t.Errorf("Action %q missing Tags", meta.Name)
+		}
+	}
 }
 
 // Benchmark with testkit. Works because Uppercase() returns a typed

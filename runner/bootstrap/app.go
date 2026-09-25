@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -19,8 +20,8 @@ import (
 	flowcontracts "github.com/nexssp/flow/contracts"
 	flowrunner "github.com/nexssp/flow/runner"
 	"github.com/nexssp/flow/runner/bootstrap/console"
+	flowtransport "github.com/nexssp/flow/transport"
 	"github.com/nexssp/kernel/action"
-	"github.com/nexssp/transport/thttp"
 )
 
 type ExecutionAuditRecord struct {
@@ -35,15 +36,13 @@ type ExecutionAuditRecord struct {
 }
 
 type App struct {
-	Name    string
-	Version string
-	Port    string
-	WorkDir string
-	Actions []action.AnyAction
-
+	Name      string
+	Version   string
+	Port      string
+	WorkDir   string
+	Actions   []action.AnyAction
 	libraries []action.Library
-
-	loaders []loader
+	loaders   []loader
 }
 
 func New(name, version string) *App {
@@ -59,10 +58,7 @@ func New(name, version string) *App {
 		workDir = ".nexss_workspace"
 	}
 
-	// workDir is derived from WORKSPACE_DIR, a trusted local env var of
-	// this process; it is not request input. Gosec G703 cannot distinguish
-	// the two trust categories.
-	//nolint:gosec // G703: trusted local env, not user input
+	//nolint:gosec // G703: WORKSPACE_DIR is a trusted local env, not request input
 	_ = os.MkdirAll(filepath.Join(workDir, "runs"), 0o755)
 
 	return &App{
@@ -75,7 +71,6 @@ func New(name, version string) *App {
 
 func (a *App) Mount(actions ...action.AnyAction) *App {
 	a.Actions = append(a.Actions, actions...)
-
 	return a
 }
 
@@ -83,20 +78,13 @@ func (a *App) WithLoader(l Loader) *App {
 	if l != nil {
 		a.loaders = append(a.loaders, loader(l))
 	}
-
 	return a
 }
 
-// Run is a thin wrapper. It exists so that the deferred signal-context
-// cleanup inside run() always executes on the normal return path.
-// gocritic exitAfterDefer: os.Exit must not be called from a scope that
-// holds a deferred stop().
 func (a *App) Run() {
 	os.Exit(a.run())
 }
 
-// run owns the signal context and returns an exit code. It never calls
-// os.Exit itself, so every defer runs when it returns.
 func (a *App) run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -105,21 +93,17 @@ func (a *App) run() int {
 		reg, err := action.NewRegistry(a.libraries...)
 		if err != nil {
 			slog.Error("bootstrap: library registry build failed", "err", err)
-
 			return 1
 		}
-
 		a.Actions = append(a.Actions, reg.Actions()...)
 	}
 
 	asm := newAssembly()
-
 	asm.Actions = append(asm.Actions, a.Actions...)
 
 	for _, load := range a.loaders {
 		if err := load(asm); err != nil {
 			slog.Error("assembly failed", "err", err)
-
 			return 1
 		}
 	}
@@ -150,16 +134,35 @@ func (a *App) run() int {
 		return a.runFlow(ctx, cleanArgs)
 	}
 
-	server := thttp.New(":" + a.Port)
-	server.Mount(a.Actions)
-	slog.Info(fmt.Sprintf("🌟 %s v%s :: Online at http://localhost:%s",
-		strings.ToUpper(a.Name), a.Version, a.Port), "actions", len(a.Actions))
+	// Szukamy akcji triggera "http" bez żadnego importu thttp
+	triggerAct, ok := flowtransport.FindTrigger(a.Actions, "http")
+	if ok {
+		slog.Info(fmt.Sprintf("🌟 %s v%s :: Online at port %s",
+			strings.ToUpper(a.Name), a.Version, a.Port), "actions", len(a.Actions))
 
-	go func() {
-		if _, err := server.Do(ctx, nil); err != nil && err != http.ErrServerClosed {
-			slog.Error("server runtime error", "err", err)
-		}
-	}()
+		go func() {
+			// Zbierz wszystkie streamy z zarejestrowanych bibliotek
+			var sources []action.AnyStreamAction
+			for i := range a.libraries {
+				sources = append(sources, a.libraries[i].Sources...)
+			}
+
+			// Przekazujemy rdzenny kontener Kernela: action.Library (z akcjami i streamami!)
+			appWorkload := action.Library{
+				Name:    ":" + a.Port,
+				Actions: a.Actions,
+				Sources: sources,
+			}
+
+			_, err := triggerAct.DoAny(ctx, appWorkload)
+			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, http.ErrServerClosed) {
+				slog.Error("server runtime error", "err", err)
+			}
+		}()
+	} else {
+		slog.Info(fmt.Sprintf("🌟 %s v%s :: Ready (no http trigger action registered)",
+			strings.ToUpper(a.Name), a.Version), "actions", len(a.Actions))
+	}
 
 	<-ctx.Done()
 	slog.Info(fmt.Sprintf("Shutting down %s gracefully...", a.Name))
@@ -171,12 +174,10 @@ func (a *App) run() int {
 func (a *App) runCLI(ctx context.Context, args, assertions []string) int {
 	if len(args) < 3 {
 		fmt.Fprintln(os.Stderr, "❌ Usage: run <action.name> [json_payload]")
-
 		return 1
 	}
 
 	targetName := args[2]
-
 	rawJSON := "{}"
 	if len(args) >= 4 {
 		rawJSON = args[3]
@@ -186,11 +187,9 @@ func (a *App) runCLI(ctx context.Context, args, assertions []string) int {
 	fmt.Println(strings.Repeat("─", 80))
 
 	var targetAct action.AnyAction
-
 	for _, act := range a.Actions {
 		if act.Describe().Name == targetName {
 			targetAct = act
-
 			break
 		}
 	}
@@ -198,7 +197,6 @@ func (a *App) runCLI(ctx context.Context, args, assertions []string) int {
 	if targetAct == nil {
 		fmt.Fprintf(os.Stderr, "❌ Action %q not found in registry\n", targetName)
 		a.dumpError(targetName, "action not found in registry", rawJSON)
-
 		return 1
 	}
 
@@ -206,14 +204,12 @@ func (a *App) runCLI(ctx context.Context, args, assertions []string) int {
 	if err := json.Unmarshal([]byte(rawJSON), &payload); err != nil {
 		fmt.Fprintf(os.Stderr, "❌ Invalid JSON payload: %v\n", err)
 		a.dumpError(targetName, fmt.Sprintf("invalid JSON payload: %v", err), rawJSON)
-
 		return 1
 	}
 
 	cliReg, regErr := action.NewRegistry(action.Of(a.Actions...))
 	if regErr != nil {
 		fmt.Fprintf(os.Stderr, "❌ registry build failed: %v\n", regErr)
-
 		return 1
 	}
 
@@ -241,14 +237,12 @@ func (a *App) runCLI(ctx context.Context, args, assertions []string) int {
 		a.saveRunArtifact(audit)
 		a.dumpError(targetName, err.Error(), res)
 		fmt.Printf("❌ EXECUTION FAILED: %v\n", err)
-
 		return 1
 	}
 
 	a.saveRunArtifact(audit)
 
 	outJSON, _ := json.MarshalIndent(res, "", "  ")
-
 	fmt.Println("✅ EXECUTION SUCCESS. Output:")
 	fmt.Println(string(outJSON))
 
@@ -257,7 +251,6 @@ func (a *App) runCLI(ctx context.Context, args, assertions []string) int {
 
 func (a *App) runFlow(ctx context.Context, args []string) int {
 	flowPath := args[2]
-
 	runnerArgs := []string{}
 	payload := map[string]any{}
 
@@ -265,20 +258,16 @@ func (a *App) runFlow(ctx context.Context, args []string) int {
 		if strings.HasPrefix(arg, "{") {
 			if err := json.Unmarshal([]byte(arg), &payload); err != nil {
 				fmt.Fprintf(os.Stderr, "❌ Invalid JSON payload: %v\n", err)
-
 				return 1
 			}
-
 			continue
 		}
-
 		runnerArgs = append(runnerArgs, arg)
 	}
 
 	reg, err := action.NewRegistry(action.Of(a.Actions...))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "❌ registry build failed: %v\n", err)
-
 		return 1
 	}
 
@@ -298,8 +287,6 @@ func (a *App) saveRunArtifact(record ExecutionAuditRecord) {
 	dest := filepath.Join(a.WorkDir, "runs", filename)
 
 	if data, err := json.MarshalIndent(record, "", "  "); err == nil {
-		// 0600: audit records carry payload, result, and assertions, which
-		// may include user prompts and model responses.
 		_ = os.WriteFile(dest, data, 0o600)
 		slog.Info("artifact persisted", "file", dest)
 	}
@@ -332,9 +319,7 @@ func runCliAssertions(result any, assertions []string) int {
 	fmt.Printf("\n🧪 RUNNING TESTKIT ASSERTIONS (%d)...\n", len(assertions))
 
 	b, _ := json.Marshal(result)
-
 	var env map[string]any
-
 	_ = json.Unmarshal(b, &env)
 
 	failed := false
@@ -343,18 +328,14 @@ func runCliAssertions(result any, assertions []string) int {
 		program, err := expr.Compile(exprStr, expr.Env(env))
 		if err != nil {
 			fmt.Printf("  ❌ ERROR: Invalid syntax -> %s\n     (%v)\n", exprStr, err)
-
 			failed = true
-
 			continue
 		}
 
 		out, err := expr.Run(program, env)
 		if err != nil {
 			fmt.Printf("  ❌ ERROR: Runtime error -> %s\n     (%v)\n", exprStr, err)
-
 			failed = true
-
 			continue
 		}
 
@@ -362,7 +343,6 @@ func runCliAssertions(result any, assertions []string) int {
 			fmt.Printf("  ✅ PASS: %s\n", exprStr)
 		} else {
 			fmt.Printf("  ❌ FAIL: %s (Evaluated to: %v)\n", exprStr, out)
-
 			failed = true
 		}
 	}
@@ -371,12 +351,10 @@ func runCliAssertions(result any, assertions []string) int {
 
 	if failed {
 		fmt.Println("🛑 TESTKIT FAILED.")
-
 		return 1
 	}
 
 	fmt.Println("🎉 ALL TESTKIT ASSERTIONS PASSED.")
-
 	return 0
 }
 
@@ -389,7 +367,6 @@ func (a *App) WithConsole(opts ...ConsoleOption) *App {
 	a.loaders = append(a.loaders, func(asm *Assembly) error {
 		reg := console.RegistryFunc(func() []action.AnyAction { return asm.Actions })
 		asm.Actions = append(asm.Actions, console.Actions(reg, cfg)...)
-
 		return nil
 	})
 
@@ -412,12 +389,10 @@ func WithConsoleExecute() ConsoleOption {
 
 func (a *App) WithLibrary(lib action.Library) *App {
 	a.libraries = append(a.libraries, lib)
-
 	return a
 }
 
 func (a *App) WithLibraries(libs ...action.Library) *App {
 	a.libraries = append(a.libraries, libs...)
-
 	return a
 }
