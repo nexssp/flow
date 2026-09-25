@@ -24,12 +24,14 @@ func resolveDynamicNode(atom *compiler.AtomExpr, reg *action.Registry, opts *com
 	act, ok := reg.Get(atom.Name)
 	if !ok {
 		var available []string
-		for _, a := range reg.Actions() {
-			if a != nil && a.Describe() != nil {
-				available = append(available, a.Describe().Name)
+		if reg != nil {
+			for _, a := range reg.Actions() {
+				if a != nil && a.Describe() != nil {
+					available = append(available, a.Describe().Name)
+				}
 			}
+			slices.Sort(available)
 		}
-		slices.Sort(available)
 
 		return nil, xerr.NotFound(fmt.Sprintf(
 			"PREFLIGHT CHECK FAILED: capability %q does not exist in registry.\n"+
@@ -44,13 +46,6 @@ func resolveDynamicNode(atom *compiler.AtomExpr, reg *action.Registry, opts *com
 	}
 	parsedLine, _ := dslparse.ParseLine(lineFragment)
 	mod := parsedLine.Modifiers
-
-	resolved, err := resolveService(atom.Name, mod, act)
-	if err != nil {
-		return nil, xerr.BadRequest(fmt.Sprintf(
-			"%s: service resolver rejected modifiers: %v", atom.Name, err))
-	}
-	act = resolved
 
 	dyn := action.Dynamic(act)
 
@@ -155,16 +150,17 @@ func resolveDynamicNode(atom *compiler.AtomExpr, reg *action.Registry, opts *com
 
 	for i := range mod.Transports {
 		binding := &mod.Transports[i]
-		resolvedBinding, handled, err := flowtransport.Resolve(binding)
+
+		// Przekazujemy modyfikator z powrotem do rejestru Kernela,
+		// żeby akcje posiadające transport.OnDSL() mogły go przetłumaczyć
+		resolvedBinding, handled, err := flowtransport.ResolveModifier(opts.compileCtx, reg, binding)
 		if err != nil {
 			return nil, err
 		}
 		if !handled {
 			return nil, xerr.BadRequest(fmt.Sprintf(
-				"%s: transport modifier :%s= is not registered — "+
-					"did you forget to import the transport library? "+
-					"known kinds: %v",
-				atom.Name, binding.Kind, flowtransport.KnownKinds(),
+				"%s: modyfikator transportu :%s= nie jest obsługiwany — czy załadowałeś odpowiednią bibliotekę?",
+				atom.Name, binding.Kind,
 			))
 		}
 		dyn.Route(resolvedBinding)

@@ -38,7 +38,7 @@ func Evolve(
 		opts.Population = 4
 	}
 
-	baselineBld, err := flow.CompilePipeline(baselineDSL, reg)
+	baselineBld, err := flow.CompilePipeline(baselineDSL, reg, flow.WithCompileContext(ctx))
 	if err != nil {
 		return Candidate{}, fmt.Errorf("optimizer: invalid baseline DSL: %w", err)
 	}
@@ -63,7 +63,7 @@ func Evolve(
 		for i := 0; i < opts.Population; i++ {
 			mutatedDSL := mutate(best.DSL, actionNames)
 
-			compiled, compileErr := flow.CompilePipeline(mutatedDSL, reg)
+			compiled, compileErr := flow.CompilePipeline(mutatedDSL, reg, flow.WithCompileContext(ctx))
 			if compileErr != nil {
 				continue
 			}

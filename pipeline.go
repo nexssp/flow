@@ -1,6 +1,7 @@
 package flow
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
-func RegisterPipelines(reg *action.Registry, pipelines []Pipeline) (*action.Registry, error) {
+func RegisterPipelines(ctx context.Context, reg *action.Registry, pipelines []Pipeline) (*action.Registry, error) {
 	if len(pipelines) == 0 {
 		return reg, nil
 	}
@@ -44,7 +45,7 @@ func RegisterPipelines(reg *action.Registry, pipelines []Pipeline) (*action.Regi
 	}
 
 	for i := range pipelines {
-		builder, err := CompilePipeline(pipelines[i].Body, intermediate)
+		builder, err := CompilePipeline(pipelines[i].Body, intermediate, WithCompileContext(ctx))
 		if err != nil {
 			return nil, fmt.Errorf("flow: compile pipeline %q: %w", pipelines[i].Name, err)
 		}

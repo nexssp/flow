@@ -56,7 +56,7 @@ func main() {
 
 	currentDSL := "fetch -> fragile"
 
-	initialBld, err := flow.CompilePipeline(currentDSL, registry)
+	initialBld, err := flow.CompilePipeline(currentDSL, registry, flow.WithCompileContext(ctx))
 	if err != nil {
 		panic(err)
 	}
@@ -69,7 +69,7 @@ func main() {
 	)
 
 	supervisorHook = action.AnyHook{
-		After: func(_ context.Context, _, _ any, err error, meta *action.Meta) {
+		After: func(execCtx context.Context, _, _ any, err error, meta *action.Meta) {
 			if err != nil {
 				if !strings.Contains(currentDSL, meta.Name) {
 					return
@@ -92,7 +92,7 @@ func main() {
 					fmt.Printf("   • Old Topology: %s\n", currentDSL)
 					fmt.Printf("   • New Topology: %s\n", newDSL)
 
-					newBld, compileErr := flow.CompilePipeline(newDSL, registry)
+					newBld, compileErr := flow.CompilePipeline(newDSL, registry, flow.WithCompileContext(execCtx))
 					if compileErr != nil {
 						panic(compileErr)
 					}

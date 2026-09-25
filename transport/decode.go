@@ -3,13 +3,11 @@ package transport
 import (
 	"context"
 	"fmt"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/validation"
 )
 
@@ -115,35 +113,4 @@ func knownKeys(t reflect.Type) []string {
 		}
 	}
 	return out
-}
-
-// Bind populates T from raw options, resolving env tags and defaults, validates, and invokes factory.
-func Bind[T any](ctx context.Context, raw map[string]string, factory func(T) (action.Library, error)) (action.Library, error) {
-	var config T
-	reflectedValue := reflect.ValueOf(&config).Elem()
-	reflectedType := reflectedValue.Type()
-
-	mergedRaw := make(map[string]string, len(raw))
-	for key, value := range raw {
-		mergedRaw[key] = value
-	}
-
-	for i := 0; i < reflectedType.NumField(); i++ {
-		field := reflectedType.Field(i)
-		flowKey := field.Tag.Get("flow")
-		envKey := field.Tag.Get("env")
-
-		if flowKey != "" && mergedRaw[flowKey] == "" && envKey != "" {
-			if envValue := os.Getenv(envKey); envValue != "" {
-				mergedRaw[flowKey] = envValue
-			}
-		}
-	}
-
-	decoded, err := Decode[T](ctx, mergedRaw)
-	if err != nil {
-		return action.Library{}, err
-	}
-
-	return factory(decoded)
 }

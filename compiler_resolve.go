@@ -1,6 +1,7 @@
 package flow
 
 import (
+	"context"
 	"reflect"
 	"slices"
 
@@ -21,7 +22,7 @@ import (
 // The fallback is attempted only when the exact lookup fails. That way
 // a capability name that happens to also parse as a pipeline is never
 // silently turned into one; it must be a registered action.
-func (c *Compiler) resolveCapability(capName string) (action.AnyAction, bool) {
+func (c *Compiler) resolveCapability(ctx context.Context, capName string) (action.AnyAction, bool) {
 	if c.registry == nil {
 		return nil, false
 	}
@@ -30,7 +31,7 @@ func (c *Compiler) resolveCapability(capName string) (action.AnyAction, bool) {
 		return act, true
 	}
 
-	if bld, err := CompilePipeline(capName, c.registry); err == nil && bld != nil {
+	if bld, err := CompilePipeline(capName, c.registry, WithCompileContext(ctx)); err == nil && bld != nil {
 		return bld.Build(), true
 	}
 

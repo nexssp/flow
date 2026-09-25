@@ -9,10 +9,7 @@ require (
 	github.com/ncruces/go-sqlite3 v0.35.6
 	github.com/nexssp/cost v0.2.0
 	github.com/nexssp/cost/adapters/kernel v0.2.0
-	github.com/nexssp/kernel v0.21.0
-	github.com/nexssp/testkit v0.5.2
-	github.com/nexssp/transport v0.3.2
-	github.com/nexssp/transportai v0.9.1
+	github.com/nexssp/kernel v0.22.0
 	github.com/nexssp/validation v0.2.4
 	github.com/tetratelabs/wazero v1.12.0
 	golang.org/x/sync v0.23.0

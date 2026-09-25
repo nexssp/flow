@@ -1,32 +1,29 @@
-// Package transport is the sole extension point between the domainless
-// Flow compiler and concrete transport adapters.
+// Package transport is the small integration boundary between Flow and
+// concrete transport libraries.
 //
-// # The contract
+// A transport library contributes an action.Library through Register and may
+// expose three kinds of behavior:
 //
-// A transport library provides:
+//   - runtime actions and streams, returned by its factory;
+//   - DSL binding resolvers, represented by actions routed with OnDSL;
+//   - listener entry points, represented by actions routed with OnTrigger.
 //
-//  1. A Resolver — converts DSL modifiers into action.Binding values
-//     at compile time.
+// The compiler resolves DSL bindings through ResolveModifier. A runner can
+// locate a listener through FindTrigger. Transport-specific connections,
+// subscriptions, shutdown, and retries remain inside the concrete transport
+// action; this package does not own goroutines or network clients.
 //
-//  2. A RuntimeProvider — opens a live connection for `nexssflow serve`.
+// The cold path is intentionally dynamic: @require options are decoded from
+// string values and action bindings are type-erased. The execution path after
+// resolution is the typed Kernel action or stream selected by the transport.
 //
-//  3. A Library(...) function — returns the actions the transport adds
-//     to the pipeline (for example nats.publish, http.get).
+// The contract is deliberately limited to:
 //
-//  4. An init() function — calls RegisterResolver and
-//     RegisterRuntimeProvider so the compiler sees the transport.
+//   - Register, Load, and KnownPrefixes for libraries;
+//   - Decode for typed @require configuration;
+//   - OnDSL and OnTrigger for binding discovery;
+//   - ResolveModifier, FindTrigger, RequireTrigger, and AsLibrary for assembly.
 //
-// # What belongs here
-//
-// Only the interfaces and the registry. No concrete transport.
-//
-// # What does NOT belong here
-//
-// Anything that imports net/http, nats.go, os/exec, or a transport
-// package. This package must remain dependency-free apart from
-// kernel/action and flow/dslparse.
-//
-// # Example transport
-//
-// See github.com/nexssp/transportnats/nexssflow for a complete example.
+// No concrete protocol belongs in this package. HTTP, NATS, CLI, cron, and
+// other transports are separate modules that depend on this boundary.
 package transport

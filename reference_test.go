@@ -89,7 +89,7 @@ func TestReferencePipeline(t *testing.T) {
 	reg := buildReferenceRegistry(t, trace)
 
 	// ─── 3. register named pipelines ──────────────────────────────────
-	reg, err = flow.RegisterPipelines(reg, pre.Pipelines)
+	reg, err = flow.RegisterPipelines(t.Context(), reg, pre.Pipelines)
 	if err != nil {
 		t.Fatalf("RegisterPipelines: %v", err)
 	}

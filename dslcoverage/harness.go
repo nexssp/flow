@@ -1,7 +1,4 @@
 // Package coverage holds the coverage test suite for the flow DSL.
-//
-// The harness actions here are named `cov.*` so they cannot collide
-// with real actions. Each one is deliberately tiny and deterministic.
 package coverage
 
 import (
@@ -9,12 +6,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nexssp/flow/dslparse"
+	flowtransport "github.com/nexssp/flow/transport"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xctx"
 	"github.com/nexssp/kernel/xerr"
-
-	"github.com/nexssp/flow/dslparse"
-	flowtransport "github.com/nexssp/flow/transport"
 )
 
 var covFlakyCount atomic.Int32
@@ -31,7 +27,33 @@ func coverageActions() []action.AnyAction {
 		covRequirePerm("write"),
 		covBoom(),
 		covRecoverable(),
+		covStubResolver(),
 	}
+}
+
+func covStubResolver() action.AnyAction {
+	return action.New("cov.stub_resolver", func(_ context.Context, binding *dslparse.TransportBinding) (action.Binding, error) {
+		return "stub:" + binding.Kind, nil
+	}).
+		Route(
+			flowtransport.OnDSL("cli"),
+			flowtransport.OnDSL("http"),
+			flowtransport.OnDSL("route"),
+			flowtransport.OnDSL("raw"),
+			flowtransport.OnDSL("sse"),
+			flowtransport.OnDSL("nats"),
+			flowtransport.OnDSL("nats-pubsub"),
+			flowtransport.OnDSL("nats-rpc"),
+			flowtransport.OnDSL("nats-kv"),
+			flowtransport.OnDSL("nats-durable"),
+			flowtransport.OnDSL("nats-consumer"),
+			flowtransport.OnDSL("topic"),
+			flowtransport.OnDSL("cron"),
+			flowtransport.OnDSL("worker"),
+			flowtransport.OnDSL("a2a"),
+			flowtransport.OnDSL("mcp"),
+		).
+		Build()
 }
 
 func covEcho() action.AnyAction {
@@ -118,7 +140,6 @@ func covRecoverable() action.AnyAction {
 		}).Build()
 }
 
-// TestContext returns a context seeded with privileges for modifier coverage tests.
 func TestContext() context.Context {
 	ctx := context.Background()
 	ctx = xctx.WithRoles(ctx, []string{"admin"})
@@ -126,53 +147,4 @@ func TestContext() context.Context {
 	ctx = xctx.WithFeatures(ctx, []string{"coverage_enabled"})
 	ctx = xctx.WithApprovalToken(ctx, "coverage_approval,all")
 	return ctx
-}
-
-func init() {
-	// Stub resolvers for DSL syntax and modifier coverage tests.
-	// This allows flow to verify transport modifiers without depending on external transport modules.
-	flowtransport.RegisterResolverMap(map[string]flowtransport.ResolverFunc{
-		"cli": func(b *dslparse.TransportBinding) (action.Binding, error) {
-			return "stub:cli", nil
-		},
-		"http": func(b *dslparse.TransportBinding) (action.Binding, error) {
-			return "stub:http", nil
-		},
-		"raw": func(b *dslparse.TransportBinding) (action.Binding, error) {
-			return "stub:raw", nil
-		},
-		"sse": func(b *dslparse.TransportBinding) (action.Binding, error) {
-			return "stub:sse", nil
-		},
-		"nats-pubsub": func(b *dslparse.TransportBinding) (action.Binding, error) {
-			return "stub:nats-pubsub", nil
-		},
-		"nats-rpc": func(b *dslparse.TransportBinding) (action.Binding, error) {
-			return "stub:nats-rpc", nil
-		},
-		"nats-kv": func(b *dslparse.TransportBinding) (action.Binding, error) {
-			return "stub:nats-kv", nil
-		},
-		"nats-durable": func(b *dslparse.TransportBinding) (action.Binding, error) {
-			return "stub:nats-durable", nil
-		},
-		"nats-consumer": func(b *dslparse.TransportBinding) (action.Binding, error) {
-			return "stub:nats-consumer", nil
-		},
-		"topic": func(b *dslparse.TransportBinding) (action.Binding, error) {
-			return "stub:topic", nil
-		},
-		"cron": func(b *dslparse.TransportBinding) (action.Binding, error) {
-			return "stub:cron", nil
-		},
-		"worker": func(b *dslparse.TransportBinding) (action.Binding, error) {
-			return "stub:worker", nil
-		},
-		"a2a": func(b *dslparse.TransportBinding) (action.Binding, error) {
-			return "stub:a2a", nil
-		},
-		"mcp": func(b *dslparse.TransportBinding) (action.Binding, error) {
-			return "stub:mcp", nil
-		},
-	})
 }

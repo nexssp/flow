@@ -80,7 +80,7 @@ func buildFlowAction(def FlowDef, parent func() []action.AnyAction) action.AnyAc
 			return nil, err
 		}
 
-		localReg, err = flow.RegisterPipelines(localReg, pre.Pipelines)
+		localReg, err = flow.RegisterPipelines(ctx, localReg, pre.Pipelines)
 		if err != nil {
 			return nil, err
 		}

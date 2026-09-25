@@ -255,7 +255,7 @@ func RunWithRegistry(ctx context.Context, req Request, reg *action.Registry, obs
 
 	if len(pre.Pipelines) > 0 {
 		var regErr error
-		reg, regErr = flow.RegisterPipelines(reg, pre.Pipelines)
+		reg, regErr = flow.RegisterPipelines(ctx, reg, pre.Pipelines)
 		if regErr != nil {
 			fmt.Fprintf(stderr, "❌ %v\n", regErr)
 
@@ -635,4 +635,30 @@ func indentJSON(v any) string {
 		return fmt.Sprintf("  (unencodable: %v)", err)
 	}
 	return string(b)
+}
+
+// RunFlow to skrótowy punkt wejścia dla CLI uruchamiających pliki .nflow.
+func RunFlow(ctx context.Context, req Request) int {
+	stdout := req.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	stderr := req.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+
+	libs := []action.Library{
+		flow.BaseLibrary(),
+		flow.StandardLibrary(),
+	}
+
+	reg, err := action.NewRegistry(libs...)
+	if err != nil {
+		fmt.Fprintf(stderr, "❌ registry build failed: %v\n", err)
+		return 1
+	}
+
+	obs := NewRunnerObserver(stdout, req.Verbosity)
+	return RunWithRegistry(ctx, req, reg, obs)
 }

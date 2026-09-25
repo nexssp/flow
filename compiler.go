@@ -224,7 +224,7 @@ func (c *Compiler) Compile(ctx context.Context, def GraphDefinition) (*dag.DAG, 
 	for i := range def.Nodes {
 		nodeSpec := def.Nodes[i]
 
-		act, ok := c.resolveCapability(nodeSpec.Capability)
+		act, ok := c.resolveCapability(ctx, nodeSpec.Capability)
 		if !ok {
 			return nil, nil, xerr.NotFound(fmt.Sprintf(
 				"flow: capability %q required by node %q not found in registry",
