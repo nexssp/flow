@@ -1,4 +1,3 @@
-// flow/nodes/fsio/library.go
 package fsio
 
 import (

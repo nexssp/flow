@@ -45,6 +45,7 @@ func RegisterPipelines(ctx context.Context, reg *action.Registry, pipelines []Pi
 	}
 
 	for i := range pipelines {
+		//nolint:contextcheck // ctx threaded via WithCompileContext into opts.compileCtx
 		builder, err := CompilePipeline(pipelines[i].Body, intermediate, WithCompileContext(ctx))
 		if err != nil {
 			return nil, fmt.Errorf("flow: compile pipeline %q: %w", pipelines[i].Name, err)

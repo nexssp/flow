@@ -92,6 +92,7 @@ func main() {
 					fmt.Printf("   • Old Topology: %s\n", currentDSL)
 					fmt.Printf("   • New Topology: %s\n", newDSL)
 
+					//nolint:contextcheck // ctx threaded via WithCompileContext into opts.compileCtx
 					newBld, compileErr := flow.CompilePipeline(newDSL, registry, flow.WithCompileContext(execCtx))
 					if compileErr != nil {
 						panic(compileErr)

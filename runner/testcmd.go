@@ -121,8 +121,7 @@ func RunFlowTest(ctx context.Context, path string, reg *action.Registry, opts Te
 		return 2
 	}
 
-	manifestAssertions := extractAssertions(pre.DSL)
-	if len(manifestAssertions) == 0 {
+	if len(pre.Asserts) == 0 {
 		fmt.Fprintf(stderr, "❌ test: %s declares no @assert: directives\n", path)
 
 		return 2
@@ -270,22 +269,6 @@ func newMockAction(name string, responses []json.RawMessage) action.AnyAction {
 		Description("test fixture for " + name).
 		Internal().
 		Build()
-}
-
-// extractAssertions pulls every "@assert: ..." directive out of a
-// DSL body. Only used to enforce "a test file must declare at least
-// one assertion"; the runner does its own extraction during execute.
-func extractAssertions(dsl string) []string {
-	var out []string
-
-	for _, line := range strings.Split(dsl, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "@assert:") {
-			out = append(out, strings.TrimSpace(strings.TrimPrefix(trimmed, "@assert:")))
-		}
-	}
-
-	return out
 }
 
 // lastRunOutput is a placeholder for future golden-file comparison.

@@ -1,6 +1,7 @@
 package flow
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,30 +10,16 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
-// Preprocessed is the alias for directives.Preprocessed. Callers that
-// import flow see flow.Preprocessed; the implementation lives in
-// flow/directives so the directive registry and the data shape stay
-// together.
 type Preprocessed = directives.Preprocessed
 type Pipeline = directives.Pipeline
 type ActionMeta = directives.ActionMeta
 type Requirement = directives.Requirement
 
-// Preprocess reads a .nflow file from disk and resolves every
-// directive: @profile, @include, @pipeline … @end, @action,
-// @description, @require. The resulting DSL is line-aligned with the
-// source file so parser errors point at the original line numbers.
 func Preprocess(path string) (*Preprocessed, error) {
 	visited := make(map[string]bool)
 	return preprocessFile(path, visited)
 }
 
-// PreprocessBytes processes an in-memory .nflow source. It is the
-// entry point for embedded libraries (go:embed) that carry their
-// pipeline as a string rather than as a file on disk.
-//
-// @include is rejected in this mode: an embedded source has no on-disk
-// base directory, so relative paths cannot be resolved.
 func PreprocessBytes(source []byte, name string) (*Preprocessed, error) {
 	if name == "" {
 		name = "<embedded>"
@@ -45,6 +32,13 @@ func PreprocessBytes(source []byte, name string) (*Preprocessed, error) {
 
 	pre.Includes = append([]string{name}, pre.Includes...)
 	return pre, nil
+}
+
+// PreprocessFS pozwala na przetwarzanie manifestów z wirtualnego systemu plików (np. embed.FS)
+// ze wsparciem dla dyrektywy @include.
+func PreprocessFS(fsys fs.FS, path string) (*Preprocessed, error) {
+	visited := make(map[string]bool)
+	return preprocessFSFile(fsys, path, visited)
 }
 
 func preprocessFile(path string, visited map[string]bool) (*Preprocessed, error) {
@@ -64,7 +58,11 @@ func preprocessFile(path string, visited map[string]bool) (*Preprocessed, error)
 		return nil, xerr.NotFound("flow: read "+abs, err)
 	}
 
-	pre, err := preprocessSource(string(data), filepath.Dir(abs), abs, visited)
+	resolver := func(p string) (*Preprocessed, error) {
+		return preprocessFile(p, visited)
+	}
+
+	pre, err := preprocessSource(string(data), filepath.Dir(abs), abs, resolver)
 	if err != nil {
 		return nil, err
 	}
@@ -73,12 +71,42 @@ func preprocessFile(path string, visited map[string]bool) (*Preprocessed, error)
 	return pre, nil
 }
 
-// preprocessSource returns a Preprocessed whose DSL is line-aligned
-// with the source: every input line produces exactly one output line.
-// Directive lines are replaced by empty lines, and multi-line
-// directives (@pipeline … @end) leave their slots empty, which keeps
-// parser error positions pointing at the original file.
-func preprocessSource(src, baseDir, file string, visited map[string]bool) (*Preprocessed, error) {
+func preprocessFSFile(fsys fs.FS, path string, visited map[string]bool) (*Preprocessed, error) {
+	cleanPath := filepath.ToSlash(filepath.Clean(path))
+	if visited[cleanPath] {
+		return nil, xerr.Conflict("flow: @include fs cycle: " + cleanPath)
+	}
+	visited[cleanPath] = true
+	defer delete(visited, cleanPath)
+
+	data, err := fs.ReadFile(fsys, cleanPath)
+	if err != nil {
+		return nil, xerr.NotFound("flow: read fs "+cleanPath, err)
+	}
+
+	baseDir := filepath.ToSlash(filepath.Dir(cleanPath))
+	if baseDir == "." {
+		baseDir = ""
+	}
+
+	resolver := func(p string) (*Preprocessed, error) {
+		// embed.FS akceptuje tylko forward-slashe, mapujemy to by działało na Windowsie
+		if !filepath.IsAbs(p) && baseDir != "" {
+			p = filepath.ToSlash(filepath.Join(baseDir, p))
+		}
+		return preprocessFSFile(fsys, p, visited)
+	}
+
+	pre, err := preprocessSource(string(data), baseDir, cleanPath, resolver)
+	if err != nil {
+		return nil, err
+	}
+
+	pre.Includes = append([]string{cleanPath}, pre.Includes...)
+	return pre, nil
+}
+
+func preprocessSource(src, baseDir, file string, resolver func(string) (*Preprocessed, error)) (*Preprocessed, error) {
 	out := &Preprocessed{
 		File:         file,
 		Config:       map[string]string{},
@@ -97,15 +125,7 @@ func preprocessSource(src, baseDir, file string, visited map[string]bool) (*Prep
 			_, err := LookupProfile(name)
 			return err
 		},
-	}
-
-	// The include resolver is only wired up in file mode. In byte mode
-	// (PreprocessBytes) visited is nil and @include will fail with a
-	// clear message from at_include.go.
-	if visited != nil {
-		ctx.IncludeResolver = func(p string) (*Preprocessed, error) {
-			return preprocessFile(p, visited)
-		}
+		IncludeResolver: resolver,
 	}
 
 	i := 0

@@ -33,18 +33,17 @@ func (atInclude) Apply(ctx *Context, lines []string, i int) (int, error) {
 	}
 
 	if ctx.IncludeResolver == nil {
-		return 0, AtErr(ctx, i, "include",
-			"not available in byte-source mode; ship the pipeline as a file")
+		return 0, AtErr(ctx, i, "include", "not available in current mode (IncludeResolver is nil)")
 	}
 
 	incPath := ref
-	if !filepath.IsAbs(incPath) {
+	if !filepath.IsAbs(incPath) && ctx.BaseDir != "" {
 		incPath = filepath.Join(ctx.BaseDir, incPath)
 	}
 
 	inc, err := ctx.IncludeResolver(incPath)
 	if err != nil {
-		return 0, err
+		return 0, AtErrf(ctx, i, "include", "failed resolving %q: %v", ref, err)
 	}
 
 	merged, err := mergeProfile(ctx.Out.Profile, inc.Profile, incPath)
@@ -55,8 +54,7 @@ func (atInclude) Apply(ctx *Context, lines []string, i int) (int, error) {
 
 	for _, p := range inc.Pipelines {
 		if _, exists := findPipeline(ctx.Out.Pipelines, p.Name); exists {
-			return 0, AtErrf(ctx, i, "include "+ref,
-				"pipeline %q conflicts with an existing declaration", p.Name)
+			return 0, AtErrf(ctx, i, "include "+ref, "pipeline %q conflicts with an existing declaration", p.Name)
 		}
 		ctx.Out.Pipelines = append(ctx.Out.Pipelines, p)
 	}

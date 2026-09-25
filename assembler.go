@@ -64,7 +64,7 @@ func (s *SystemAssembler) AssembleManifest(manifestDSL string) ([]action.AnyActi
 		if err != nil {
 			return nil, fmt.Errorf("flow: assemble %q failed: %w", line, err)
 		}
-		builder, err := compileAST(ast, reg, nil)
+		builder, err := compileAST(ast, reg, applyCompileOptions(nil))
 		if err != nil {
 			return nil, fmt.Errorf("flow: assemble %q failed: %w", line, err)
 		}

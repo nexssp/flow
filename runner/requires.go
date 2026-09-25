@@ -5,9 +5,16 @@
 package runner
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"sort"
 
 	"github.com/nexssp/flow/directives"
@@ -121,4 +128,43 @@ func ParseOptions(pre *directives.Preprocessed, importPath string) map[string]st
 		}
 	}
 	return map[string]string{}
+}
+
+// ResolveRequires weryfikuje deklaracje @require i zwraca ścieżkę do skompilowanej binarki.
+func ResolveRequires(ctx context.Context, reqs []directives.Requirement, stdout, stderr io.Writer) (string, error) {
+	if len(reqs) == 0 {
+		return "", errors.New("brak deklaracji @require")
+	}
+
+	cacheDir := filepath.Join(".nexss", "cache")
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		return "", fmt.Errorf("tworzenie cache: %w", err)
+	}
+
+	// Unikalny hash ze wszystkich modułów w @require
+	h := sha256.New()
+	for _, r := range reqs {
+		fmt.Fprintf(h, "%s@%s\n", r.Import, r.Version)
+	}
+	hash := hex.EncodeToString(h.Sum(nil))[:16]
+
+	binName := "harness_" + hash
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	binPath := filepath.Join(cacheDir, binName)
+
+	if _, err := os.Stat(binPath); err == nil {
+		return binPath, nil // Trafienie w cache
+	}
+
+	// Jeśli nie ma w cache, budujemy bieżący projekt
+	cmd := exec.CommandContext(ctx, "go", "build", "-o", binPath, ".")
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("kompilacja harnessu nie powiodła się: %w", err)
+	}
+
+	return binPath, nil
 }

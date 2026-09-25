@@ -5,7 +5,6 @@ import "strings"
 // SanitizeDSL strips comments, directives, and declaration headers
 // from a .nflow source so that only the executable pipeline remains.
 func SanitizeDSL(rawContent string) string {
-	// Strip UTF-8 BOM if present.
 	rawContent = strings.TrimPrefix(rawContent, "\xef\xbb\xbf")
 
 	var sb strings.Builder
@@ -24,31 +23,25 @@ func SanitizeDSL(rawContent string) string {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			sb.WriteByte('\n')
-
 			continue
 		}
 
 		c := trimmed[0]
-		// Directives start with '@', but '@{' introduces inline atom arguments and must be preserved.
+		// Skip comments and directives (except inline args @{)
 		if c == '#' || (c == '@' && !strings.HasPrefix(trimmed, "@{")) || (len(trimmed) >= 2 && trimmed[0] == '/' && trimmed[1] == '/') {
 			sb.WriteByte('\n')
-
 			continue
 		}
 
-		// Declaration header detection. A header is:
-		//   - not indented,
-		//   - free of the pipeline operator '->',
-		//   - free of any '@' annotation,
-		//   - carries a :route= or :http= modifier.
 		isIndented := line != "" && (line[0] == ' ' || line[0] == '\t')
 		hasArrow := strings.Contains(trimmed, "->")
 		hasAnnotation := strings.Contains(trimmed, "@")
+		hasBrace := strings.Contains(trimmed, "{") || strings.Contains(trimmed, "}")
 		hasRouteModifier := strings.Contains(trimmed, ":route=") || strings.Contains(trimmed, ":http=")
 
-		if !isIndented && !hasArrow && !hasAnnotation && hasRouteModifier {
+		// Only strip legacy top-level action headers if they don't contain pipeline operators or braces
+		if !isIndented && !hasArrow && !hasAnnotation && !hasBrace && hasRouteModifier {
 			sb.WriteByte('\n')
-
 			continue
 		}
 

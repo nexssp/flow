@@ -174,6 +174,7 @@ func runAsPipeline(
 		)
 	}
 
+	//nolint:contextcheck // ctx threaded via compileOpts -> WithCompileContext
 	bld, err := CompilePipeline(req.DSL, comp.registry, compileOpts...)
 	if err != nil {
 		return GraphExecRes{}, err

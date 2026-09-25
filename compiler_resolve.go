@@ -31,6 +31,7 @@ func (c *Compiler) resolveCapability(ctx context.Context, capName string) (actio
 		return act, true
 	}
 
+	//nolint:contextcheck // ctx threaded via WithCompileContext into opts.compileCtx
 	if bld, err := CompilePipeline(capName, c.registry, WithCompileContext(ctx)); err == nil && bld != nil {
 		return bld.Build(), true
 	}

@@ -151,9 +151,13 @@ func resolveDynamicNode(atom *compiler.AtomExpr, reg *action.Registry, opts *com
 	for i := range mod.Transports {
 		binding := &mod.Transports[i]
 
-		// Przekazujemy modyfikator z powrotem do rejestru Kernela,
-		// żeby akcje posiadające transport.OnDSL() mogły go przetłumaczyć
-		resolvedBinding, handled, err := flowtransport.ResolveModifier(opts.compileCtx, reg, binding)
+		compileCtx := context.Background()
+		if opts != nil {
+			compileCtx = opts.compileCtx
+		}
+
+		// Pass the modifier back to the Kernel registry, so actions with transport.OnDSL() can translate it
+		resolvedBinding, handled, err := flowtransport.ResolveModifier(compileCtx, reg, binding)
 		if err != nil {
 			return nil, err
 		}
