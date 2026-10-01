@@ -1,6 +1,0 @@
-@fallback cov.boom {
-  when error.kind == "Internal" -> const
-}
-@assert: result == "recovered"
-
-cov.boom || const @{ value: "recovered" }

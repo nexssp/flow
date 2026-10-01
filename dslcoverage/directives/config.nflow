@@ -1,5 +1,0 @@
-@config:strict=true
-@config:silent=coverage
-@assert: result == "config"
-
-const @{ value: "config" }

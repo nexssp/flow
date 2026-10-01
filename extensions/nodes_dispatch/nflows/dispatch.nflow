@@ -1,0 +1,3 @@
+@description "dispatch by explicit members"
+@assert: result.value == "d"
+{ members: "cov.echo,noop", payload: { value: "d" } } -> dispatch

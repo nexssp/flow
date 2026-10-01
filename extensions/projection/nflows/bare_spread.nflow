@@ -1,0 +1,3 @@
+@description "Bare spread pass-through"
+@assert: result.x == 1
+{ x: 1 } -> { ... }

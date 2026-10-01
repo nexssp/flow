@@ -1,3 +1,0 @@
-@assert: result == "idempotent"
-
-const:idempotent:idempotency_header=X-Coverage-Key @{ value: "idempotent" }

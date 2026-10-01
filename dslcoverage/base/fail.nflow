@@ -1,4 +1,0 @@
-@description "Base typed failure with fallback"
-@assert: result == "recovered"
-
-fail @{ message: "coverage failure", kind: "Timeout" } || const @{ value: "recovered" }

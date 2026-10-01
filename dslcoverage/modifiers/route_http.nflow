@@ -1,3 +1,0 @@
-@assert: result == "route"
-
-const:route="POST /coverage":status=201 @{ value: "route" }

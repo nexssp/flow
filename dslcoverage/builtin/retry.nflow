@@ -1,7 +1,0 @@
-@retry cov.flaky {
-  attempts: 3
-  only: [Unavailable]
-}
-@assert: result != nil
-
-cov.flaky

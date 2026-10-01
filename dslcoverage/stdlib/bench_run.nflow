@@ -1,4 +1,0 @@
-@description "Standard bench.run"
-@assert: result != nil
-
-{ action: "noop", iterations: 1, payload: { value: "bench" } } -> bench.run

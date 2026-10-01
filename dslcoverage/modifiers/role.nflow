@@ -1,3 +1,0 @@
-@assert: result == "role"
-
-const:role=admin @{ value: "role" }

@@ -1,0 +1,64 @@
+@require github.com/nexssp/flow/extensions/macros
+
+@description "Proves @macro engine works end-to-end via @require"
+
+# ── Macro declarations ──────────────────────────────────────────────
+
+@macro hi() {
+  const @{ value: "hi" }
+}
+
+@macro echo(v) {
+  const @{ value: $v }
+}
+
+@macro pair(k, v) {
+  const @{ value: { key: $k, value: $v } }
+}
+
+@macro seq(a, b) {
+  $a -> $b
+}
+
+# ── Usage ───────────────────────────────────────────────────────────
+
+@pipeline t_hi
+  @hi()
+@end
+
+@pipeline t_echo_string
+  @echo("hello")
+@end
+
+@pipeline t_echo_number
+  @echo(42)
+@end
+
+@pipeline t_pair
+  @pair("id", 42)
+@end
+
+@pipeline t_seq
+  { x: 1 } -> @seq(noop, noop)
+@end
+
+@pipeline t_nested
+  { n: 5 } -> @seq(@echo("inner"), noop)
+@end
+
+@pipeline t_comma_arg
+  @echo("a,b")
+@end
+
+# ── Asserts ─────────────────────────────────────────────────────────
+
+@assert: result.t_hi == "hi"
+@assert: result.t_echo_string == "hello"
+@assert: result.t_echo_number == 42
+@assert: result.t_pair.key == "id"
+@assert: result.t_pair.value == 42
+@assert: result.t_seq.x == 1
+@assert: result.t_nested == "inner"
+@assert: result.t_comma_arg == "a,b"
+
+( t_hi & t_echo_string & t_echo_number & t_pair & t_seq & t_nested & t_comma_arg )

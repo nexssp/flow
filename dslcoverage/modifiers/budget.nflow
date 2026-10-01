@@ -1,3 +1,0 @@
-@assert: result == "budget"
-
-const:budget_micros=100 @{ value: "budget" }

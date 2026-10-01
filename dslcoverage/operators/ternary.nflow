@@ -1,4 +1,0 @@
-@description "Ternary operator without else"
-@assert: result == true
-
-const @{ value: true } ? noop

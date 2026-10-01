@@ -1,0 +1,5 @@
+@description "Projection array functions"
+@assert: len(result.top) == 2
+@assert: result.top[0].line == 30
+{ items: [ { line: 10, severity: "low" }, { line: 30, severity: "high" }, { line: 20, severity: "high" } ] }
+-> { top: items | filter(#.severity == "high") | sortBy(#.line, "desc") | take(2) }

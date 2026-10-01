@@ -1,4 +1,0 @@
-@description "Standard log.info"
-@assert: result.value == "info"
-
-{ value: "info" } -> log.info

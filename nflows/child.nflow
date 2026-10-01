@@ -1,0 +1,2 @@
+@llm helper { provider: "deepseek", model: "deepseek-chat" }
+@pipeline help  helper @{ user: .question }  @end

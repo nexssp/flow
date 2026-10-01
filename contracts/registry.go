@@ -11,21 +11,26 @@ type PipelineCompiler interface {
 	CompilePipeline(expr string) (action.Executable, error)
 }
 
-var (
-	registryKey = xctx.NewKey[*action.Registry]("flow.registry")
-	compilerKey = xctx.NewKey[PipelineCompiler]("flow.compiler")
-)
-
-func WithRegistry(ctx context.Context, reg *action.Registry) context.Context {
-	if reg == nil {
-		return ctx
-	}
-	return registryKey.With(ctx, reg)
+// ActionResolver abstracts capability lookups without coupling to a static Registry.
+type ActionResolver interface {
+	Action(name string) (action.AnyAction, bool)
 }
 
-func RegistryFromContext(ctx context.Context) *action.Registry {
-	reg, _ := registryKey.From(ctx)
-	return reg
+var (
+	actionResolverKey = xctx.NewKey[ActionResolver]("flow.action_resolver")
+	compilerKey       = xctx.NewKey[PipelineCompiler]("flow.compiler")
+)
+
+func WithActionResolver(ctx context.Context, resolver ActionResolver) context.Context {
+	if resolver == nil {
+		return ctx
+	}
+	return actionResolverKey.With(ctx, resolver)
+}
+
+func ActionResolverFromContext(ctx context.Context) ActionResolver {
+	r, _ := actionResolverKey.From(ctx)
+	return r
 }
 
 func WithCompiler(ctx context.Context, c PipelineCompiler) context.Context {

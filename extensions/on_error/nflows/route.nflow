@@ -1,0 +1,6 @@
+@description "@on_error routes to error.info on Internal"
+@on_error {
+  when error.kind == "Internal" -> error.info
+}
+@assert: result.kind == "Internal"
+fail @{ kind: "Internal", message: "boom" }

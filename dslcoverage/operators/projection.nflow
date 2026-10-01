@@ -1,4 +1,0 @@
-@description "Projection operator"
-@assert: result.name == "Ada"
-
-const @{ value: { name: "Ada", extra: true } } -> { name: .name }

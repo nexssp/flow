@@ -1,0 +1,3 @@
+@description "distribute.reduce collect"
+@assert: result.strategy == "collect"
+{ strategy: "collect", items: [ { ok: true, result: 1 }, { ok: true, result: 2 } ] } -> distribute.reduce

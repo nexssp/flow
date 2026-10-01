@@ -1,3 +1,0 @@
-@assert: result == "feature"
-
-const:feature=coverage_enabled @{ value: "feature" }

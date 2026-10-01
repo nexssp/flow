@@ -1,4 +1,0 @@
-@gate: on high_risk
-@assert: result == "gated"
-
-const @{ value: "gated" }

@@ -1,0 +1,20 @@
+@description "Control global logging and debug pipelines effortlessly"
+
+# 💡 TIP: You can control the log output by setting environment variables!
+# Try running this file in PowerShell with:
+# $env:LOG_LEVEL="debug"; go run ..\flow\cmd\nflow\ run .\00_flow_basics\01_logs_and_debug.nflow
+# $env:LOG_FORMAT="json"; go run ..\flow\cmd\nflow\ run .\00_flow_basics\01_logs_and_debug.nflow
+
+@assert: result.status == "done"
+
+{ user_id: 42, action: "login" }
+
+# Emit a structured INFO log (appears in stderr and all observability sinks)
+-> log.info @{ message: "User attempting login" }
+
+-> { ..., status: "verified" }
+
+# Dump the current state to the console beautifully without breaking the data pipe
+-> debug @{ label: "State After Verification" }
+
+-> { status: "done" }

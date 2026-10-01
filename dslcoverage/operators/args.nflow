@@ -1,4 +1,0 @@
-@description "Inline action arguments"
-@assert: result == "argument"
-
-{ value: "argument" } -> wrap @{ key: "outer" } -> pick @{ field: "outer.value" }

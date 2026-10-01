@@ -1,4 +1,0 @@
-@description "Pipe alias operator"
-@assert: result == "aliased"
-
-const @{ value: "aliased" } | noop

@@ -1,3 +1,0 @@
-@assert: result != nil
-
-cov.flaky:retry=2

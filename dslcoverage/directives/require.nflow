@@ -1,4 +1,0 @@
-@require github.com/nexssp/flow v1.0.0
-@assert: result == "required"
-
-const @{ value: "required" }

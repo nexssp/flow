@@ -1,0 +1,4 @@
+@require github.com/nexssp/ai/nexssflow v0.1.0 { api_key_env: "DEEPSEEK_API_KEY" }
+@include ./child.nflow
+@assert: result.content != ""
+{ question: "hi" } -> help

@@ -1,7 +1,0 @@
-@race coverage_race {
-  cov.echo
-  cov.value
-}
-@assert: result != nil
-
-{ n: 2 } -> coverage_race

@@ -3,125 +3,88 @@ package runner
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
+	"io"
+	"maps"
 
 	"github.com/expr-lang/expr"
 )
 
-// RunAssertions evaluates every assertion against the flow result.
+// JSONMapView applies JSON tags to struct outputs before expr evaluation.
+func JSONMapView(value any) any {
+	if value == nil {
+		return nil
+	}
+	if _, ok := value.(map[string]any); ok {
+		return value
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return value
+	}
+	var normalized any
+	if err := json.Unmarshal(data, &normalized); err != nil {
+		return value
+	}
+	return normalized
+}
+
+// RunAssertions ewaluuje @assert: z meta plus CLI --assert.
 //
-// The environment exposed to an assertion is built in this order:
+// Env dostępny dla asercji:
 //
-//  1. Every named node output, keyed by its final path segment
-//     (tasks.greet.output becomes env["greet"] and every field inside
-//     it is flattened one level up so { status: "ok" } becomes
-//     env["status"]).
-//  2. The final result of the flow, whose keys overwrite anything
-//     already present. This makes `n == 64` work whether `n` came from
-//     the last node or was threaded through the pipeline.
+//	result       — output ostatniej akcji w pipeline
+//	duration_ms  — całkowity czas wykonania
+//	actions      — lista nazw wykonanych akcji
 //
-// At verbosity 0, silence is success. At verbosity >= 1, every
-// assertion prints one line.
-func RunAssertions(result any, assertions []string, metrics *RunnerObserver, verbosity int) int {
-	if len(assertions) == 0 {
+// Verbosity < 1 → cisza przy sukcesie.
+func RunAssertions(w io.Writer, result any, durationMS int64, actions, asserts []string, verbosity int) int {
+	if len(asserts) == 0 {
 		return 0
 	}
 
-	env := make(map[string]any)
-
-	raw, err := json.Marshal(result)
-	if err != nil {
-		fmt.Printf("✗ cannot encode result: %v\n", err)
-		return 1
+	normalized := JSONMapView(result)
+	env := map[string]any{
+		"result":      normalized,
+		"duration_ms": durationMS,
+		"actions":     actions,
 	}
-	_ = json.Unmarshal(raw, &env)
-
-	// Layer 1: named node outputs.
-	if outputs, ok := env["outputs"].(map[string]any); ok {
-		for path, v := range outputs {
-			short := lastSegment(path)
-			env[short] = v
-
-			// Flatten one level for convenience: { status: "ok" }
-			// becomes env["status"] = "ok".
-			if m, isMap := v.(map[string]any); isMap {
-				for k, val := range m {
-					if _, exists := env[k]; !exists {
-						env[k] = val
-					}
-				}
-			}
-		}
-	}
-
-	// Layer 2: the flow result wins.
-	if r, ok := env["result"].(map[string]any); ok {
-		for k, v := range r {
-			env[k] = v
-		}
-	}
-
-	if metrics != nil {
-		env["spent_micros"] = metrics.TotalSpentMicros()
-		env["cost_usd"] = float64(metrics.TotalSpentMicros()) / 1_000_000.0
-		env["total_tokens"] = metrics.TotalTokens()
+	if normalizedMap, ok := normalized.(map[string]any); ok {
+		maps.Copy(env, normalizedMap)
 	}
 
 	if verbosity >= 1 {
-		fmt.Printf("\n🧪 ASSERTIONS (%d)\n", len(assertions))
+		_, _ = fmt.Fprintf(w, "\n🧪 ASSERTIONS (%d)\n", len(asserts))
 	}
 
-	var failed int
-
-	for _, src := range assertions {
+	failed := 0
+	for _, src := range asserts {
 		prog, cerr := expr.Compile(src, expr.Env(env))
 		if cerr != nil {
-			fmt.Printf("  ✗ %s  (syntax: %v)\n", src, cerr)
+			_, _ = fmt.Fprintf(w, "  ✗ %s  (syntax: %v)\n", src, cerr)
 			failed++
 			continue
 		}
-
 		out, rerr := expr.Run(prog, env)
 		if rerr != nil {
-			fmt.Printf("  ✗ %s  (runtime: %v)\n", src, rerr)
+			_, _ = fmt.Fprintf(w, "  ✗ %s  (runtime: %v)\n", src, rerr)
 			failed++
 			continue
 		}
-
-		if b, isBool := out.(bool); isBool && b {
+		if b, ok := out.(bool); ok && b {
 			if verbosity >= 1 {
-				fmt.Printf("  ✓ %s\n", src)
+				_, _ = fmt.Fprintf(w, "  ✓ %s\n", src)
 			}
 			continue
 		}
-
-		fmt.Printf("  ✗ %s  (got %v)\n", src, out)
+		_, _ = fmt.Fprintf(w, "  ✗ %s  (got %v)\n", src, out)
 		failed++
 	}
 
 	if failed > 0 {
-		if verbosity >= 1 {
-			fmt.Println(strings.Repeat("─", 80))
-		}
 		return 1
 	}
-
 	if verbosity >= 1 {
-		fmt.Println(strings.Repeat("─", 80))
-		fmt.Println("✓ all assertions passed")
+		_, _ = fmt.Fprintln(w, "✓ all assertions passed")
 	}
-
 	return 0
-}
-
-// lastSegment returns the last dot-separated segment of a path.
-// "tasks.math.square.output" -> "output" (called only on outputs so
-// callers use the field name, not the node name). If you would rather
-// key on the node name, change this to return the segment before the
-// final dot.
-func lastSegment(path string) string {
-	if i := strings.LastIndexByte(path, '.'); i >= 0 {
-		return path[i+1:]
-	}
-	return path
 }

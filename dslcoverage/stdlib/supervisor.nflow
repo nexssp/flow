@@ -1,4 +1,0 @@
-@description "Standard supervisor"
-@assert: result != nil
-
-{ tasks: [{ action: "noop", payload: { value: "supervised" } }] } -> supervisor

@@ -1,4 +1,0 @@
-@description "Fallback operator"
-@assert: result == "fallback"
-
-fail @{ message: "first branch", kind: "Unavailable" } || const @{ value: "fallback" }

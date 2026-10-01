@@ -1,0 +1,10 @@
+@description "Dynamic Fallback Routing - Self-Healing Pipelines"
+
+# 💡 TIP: Dispatch automatically tries candidates in order until one succeeds.
+# 'not_found' doesn't exist, 'broken_service' doesn't exist.
+# It gracefully falls back to 'const', successfully healing the request.
+
+@assert: result == "I am the fallback!"
+
+{ members: "not_found, broken_service, const", payload: { value: "I am the fallback!" } }
+-> dispatch

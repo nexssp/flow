@@ -1,3 +1,0 @@
-@assert: result == "cli"
-
-const:cli="coverage-fixture":cli_alias="cov":cli_desc="Coverage fixture" @{ value: "cli" }

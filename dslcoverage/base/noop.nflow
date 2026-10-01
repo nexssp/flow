@@ -1,4 +1,0 @@
-@description "Base noop action"
-@assert: result != nil
-
-const @{ value: "unchanged" } -> noop
