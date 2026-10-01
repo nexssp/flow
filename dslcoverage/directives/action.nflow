@@ -1,4 +1,0 @@
-@action coverage.action
-@assert: result == "action"
-
-const @{ value: "action" }

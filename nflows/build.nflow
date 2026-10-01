@@ -1,0 +1,15 @@
+@pipeline build
+  @config {
+    output: ""          :cli="o,output"
+    target: ""          :cli="target"
+    ldflags: ""         :cli="ldflags"
+    keep_source: false  :cli="keep-source"
+  }
+
+  build.preprocess:file=@config.source
+    -> build.requires
+    -> build.gomod
+    -> build.tidy
+    -> build.compile:output=@config.output:target=@config.target:ldflags=@config.ldflags
+    -> build.cleanup:keep=@config.keep_source
+@end

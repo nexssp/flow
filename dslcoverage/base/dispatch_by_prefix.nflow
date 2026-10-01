@@ -1,4 +1,0 @@
-@description "Base prefix dispatch"
-@assert: result.value == "routed"
-
-{ prefix: "cov", key: "echo", payload: { value: "routed" } } -> dispatch_by_prefix

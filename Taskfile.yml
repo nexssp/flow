@@ -1,0 +1,184 @@
+version: '3'
+
+# Every command in this file is meant to be run from flow/.
+# Run `task --list` to see the short descriptions.
+vars:
+  NFLOW: 'go run ./cmd/nflow'
+
+tasks:
+  default:
+    desc: Show every available task
+    cmds:
+      - task --list
+
+  # ── build ────────────────────────────────────────────────────────
+
+  build:
+    desc: Build every Go package
+    cmds:
+      - go build ./...
+
+  build:binary:
+    desc: Build the nflow executable into ./bin/
+    vars:
+      EXE_EXT:
+        sh: go env GOEXE
+    cmds:
+      - mkdir -p bin
+      - go build -trimpath -o "bin/nflow{{.EXE_EXT}}" ./cmd/nflow
+
+  # ── test ─────────────────────────────────────────────────────────
+
+  test:
+    desc: Fast Go test pass in short mode
+    cmds:
+      - go test -short ./... -count=1
+
+  test:race:
+    desc: Full Go test suite with the race detector
+    cmds:
+      - go test ./... -race -count=1
+
+  test:smoke:
+    desc: Run CLI smoke tests
+    cmds:
+      - go test ./cli/... -race -count=1 -v -run TestSmoke
+
+  test:extensions:
+    desc: Run extension package tests with the race detector
+    cmds:
+      - go test ./extensions/... -race -count=1
+
+  test:core:
+    desc: Run compiler core tests with the race detector
+    cmds:
+      - go test ./core/... -race -count=1
+
+  bench:
+    desc: Run Go benchmarks; no Benchmark functions exist yet
+    cmds:
+      - go test ./... -run '^$' -bench=. -benchmem -count=1
+
+  examples:
+    desc: Run the four verified Flow basics examples
+    cmds:
+      - '{{.NFLOW}} run examples/00_flow_basics/01_logs_and_debug.nflow'
+      - '{{.NFLOW}} run examples/00_flow_basics/02_sleep_and_timeout.nflow'
+      - '{{.NFLOW}} run examples/00_flow_basics/03_dynamic_routing.nflow'
+      - '{{.NFLOW}} run examples/00_flow_basics/04_data_transformation.nflow'
+
+  # ── quality ──────────────────────────────────────────────────────
+
+  vet:
+    desc: Run go vet across all packages
+    cmds:
+      - go vet ./...
+
+  fmt:
+    desc: Apply configured gofumpt and goimports formatters
+    cmds:
+      - golangci-lint fmt
+
+  fmt:check:
+    desc: Check gofumpt and goimports formatting without editing files
+    cmds:
+      - golangci-lint fmt --diff
+
+  lint:
+    desc: Run configured golangci-lint checks
+    cmds:
+      - golangci-lint run ./...
+
+  lint:errors:
+    desc: Find fmt.Errorf usages under extensions/
+    cmds:
+      - rg -n 'fmt\.Errorf' ./extensions/ || test $? -eq 1
+
+  check:
+    desc: Full local gate — format check, vet, lint, and race tests
+    cmds:
+      - task: fmt:check
+      - task: vet
+      - task: lint
+      - task: test:race
+
+  # ── self test ────────────────────────────────────────────────────
+
+  self:
+    desc: Run the full nflow feature self-test suite
+    cmds:
+      - '{{.NFLOW}} self test'
+
+  'self:filter':
+    desc: 'Run matching self-tests, e.g. task self:filter -- loop'
+    cmds:
+      - '{{.NFLOW}} self test {{.CLI_ARGS}}'
+
+  self:json:
+    desc: Run the self-test suite with JSON output
+    cmds:
+      - '{{.NFLOW}} self test --json'
+
+  # ── runner ───────────────────────────────────────────────────────
+
+  run:
+    desc: 'Run a .nflow file: task run -- examples/00_flow_basics/04_data_transformation.nflow'
+    cmds:
+      - '{{.NFLOW}} run {{.CLI_ARGS}}'
+
+  list:
+    desc: List actions, modifiers, directives, and operators
+    cmds:
+      - '{{.NFLOW}} list'
+
+  show:
+    desc: 'Show one item: task show -- fs.walk'
+    cmds:
+      - '{{.NFLOW}} show {{.CLI_ARGS}}'
+
+  catalog:
+    desc: Write the compiler catalog to catalog.json
+    cmds:
+      - '{{.NFLOW}} catalog > catalog.json'
+
+  lint:nflow:
+    desc: 'Lint a .nflow file: task lint:nflow -- examples/00_flow_basics/04_data_transformation.nflow'
+    cmds:
+      - '{{.NFLOW}} lint {{.CLI_ARGS}}'
+
+  # ── maintenance ──────────────────────────────────────────────────
+
+  tidy:
+    desc: Tidy this Flow module only
+    cmds:
+      - go mod tidy
+
+  tidy:kernel:
+    desc: Opt-in tidy for a matching sibling kernel checkout
+    preconditions:
+      - sh: test -f ../kernel/go.mod && grep -q '^module github.com/nexssp/kernel$' ../kernel/go.mod
+        msg: 'expected ../kernel/go.mod with module github.com/nexssp/kernel; Flow tidy is available as task tidy'
+    cmds:
+      - cd ../kernel && go mod tidy
+
+  clean:
+    desc: Remove only the generated Flow binary and catalog
+    cmds:
+      - rm -f bin/nflow bin/nflow.exe catalog.json
+      - rmdir bin 2>/dev/null || true
+
+  # ── composite ────────────────────────────────────────────────────
+
+  'ext:new':
+    desc: 'Scaffold a bundle: task ext:new -- my_extension'
+    vars:
+      NAME: '{{.CLI_ARGS}}'
+    preconditions:
+      - sh: test -n "{{.NAME}}"
+        msg: 'usage: task ext:new -- <go_package_name>'
+      - sh: echo "{{.NAME}}" | grep -Eq '^[A-Za-z_][A-Za-z0-9_]*$'
+        msg: 'bundle name must be a valid Go package identifier'
+      - sh: test ! -e "extensions/{{.NAME}}"
+        msg: 'extensions/{{.NAME}} already exists'
+    cmds:
+      - '{{.NFLOW}} init --bundle "extensions/{{.NAME}}"'

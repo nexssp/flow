@@ -1,0 +1,14 @@
+@description "Graceful Timeout Handling & Backpressure"
+
+# 💡 TIP: The :timeout modifier enforces an absolute SLA (Service Level Agreement) on any action.
+# This simulates a database query that takes 5 seconds, but we enforce a 1-second strict SLA!
+
+@assert: result.recovered == true
+
+{ query: "SELECT * FROM huge_table" }
+
+# This will forcefully timeout after 1 second
+-> sleep:timeout=1s @{ duration_ms: 5000 }
+
+# The || (fallback operator) seamlessly catches the timeout and returns a safe default.
+|| { recovered: true, error: "Database took too long, serving fallback data." }

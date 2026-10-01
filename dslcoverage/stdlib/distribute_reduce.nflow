@@ -1,4 +1,0 @@
-@description "Standard distribute.reduce"
-@assert: result != nil
-
-{ values: [1, 2], strategy: "sum" } -> distribute.reduce

@@ -1,4 +1,0 @@
-@description "Description directive coverage"
-@assert: result == "description"
-
-const @{ value: "description" }

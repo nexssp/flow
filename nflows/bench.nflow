@@ -1,0 +1,21 @@
+  @description "Benchmark mojej logiki biznesowej"
+
+  # 1. Definiujesz swoją logikę jako reużywalny pipeline
+  @pipeline my_heavy_logic
+    fs.walk:dir="."
+      -> fs.filter:ext="nflow"
+      -> fs.read
+      -> render.markdown
+      -> collect
+  @end
+
+  # 2. Odpalasz benchmark na tej skompilowanej akcji
+  {
+    action: "my_heavy_logic",
+    iterations: 10000,
+    warmup: 100,
+    payload: { user_id: 42 }
+  }
+  -> bench.run
+  -> bench.save:file=".bench/my_logic_results.json"
+  -> debug

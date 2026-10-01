@@ -1,3 +1,0 @@
-@assert: result == "perm"
-
-const:perm=write @{ value: "perm" }

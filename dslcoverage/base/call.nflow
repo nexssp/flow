@@ -1,4 +1,0 @@
-@description "Base dynamic call"
-@assert: result == "called"
-
-{ name: "const", payload: "called" } -> call

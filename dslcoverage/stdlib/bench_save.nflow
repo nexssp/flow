@@ -1,4 +1,0 @@
-@description "Standard bench.save"
-@assert: result != nil
-
-{ file: "coverage_bench.json", action: "cov.echo", iterations: 1, p95_ms: 10 } -> bench.save

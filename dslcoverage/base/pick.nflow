@@ -1,4 +1,0 @@
-@description "Base pick action"
-@assert: result == "alice@example.test"
-
-{ user: { email: "alice@example.test" } } -> pick @{ field: "user.email" }

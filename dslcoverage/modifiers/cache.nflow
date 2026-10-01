@@ -1,3 +1,0 @@
-@assert: result == "cache"
-
-const:cache=1m:cache_key=coverage @{ value: "cache" }

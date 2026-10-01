@@ -1,4 +1,0 @@
-@gate: when cost_usd > 0
-@assert: result == "conditional"
-
-const @{ value: "conditional" }

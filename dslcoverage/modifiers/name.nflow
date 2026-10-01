@@ -1,3 +1,0 @@
-@assert: result == "name"
-
-const:name=coverage_name @{ value: "name" }

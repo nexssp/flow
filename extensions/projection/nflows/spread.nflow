@@ -1,0 +1,5 @@
+@description "Spread { ..., ... }"
+@assert: result.id == 42
+@assert: result.status == "active"
+@assert: result.version == 2
+{ id: 42, status: "pending", version: 1 } -> { ..., status: "active", version: .version + 1 }

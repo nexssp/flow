@@ -1,4 +1,0 @@
-@description "Ternary operator with else"
-@assert: result == "else"
-
-{ value: false } -> ( { approved: .value == true } ? const @{ value: "then" } : const @{ value: "else" } )

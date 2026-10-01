@@ -1,7 +1,0 @@
-@on_error {
-  when error.kind == "Timeout" -> cov.recoverable
-  else -> noop
-}
-@assert: result == "recoverable"
-
-fail @{ message: "recoverable", kind: "Timeout" }

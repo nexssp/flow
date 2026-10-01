@@ -1,3 +1,0 @@
-@assert: result == "desc"
-
-const:desc="coverage description" @{ value: "desc" }

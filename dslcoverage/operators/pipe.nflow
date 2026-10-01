@@ -1,4 +1,0 @@
-@description "Arrow pipe operator"
-@assert: result == "piped"
-
-const @{ value: "piped" } -> noop

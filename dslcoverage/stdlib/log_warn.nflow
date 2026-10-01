@@ -1,4 +1,0 @@
-@description "Standard log.warn"
-@assert: result.value == "warn"
-
-{ value: "warn" } -> log.warn

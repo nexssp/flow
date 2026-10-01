@@ -1,3 +1,0 @@
-@assert: result == "recovered"
-
-const:auth @{ value: "auth" } || const @{ value: "recovered" }

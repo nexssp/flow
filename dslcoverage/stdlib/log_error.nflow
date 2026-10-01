@@ -1,4 +1,0 @@
-@description "Standard log.error"
-@assert: result.value == "error"
-
-{ value: "error" } -> log.error

@@ -1,0 +1,19 @@
+@description "Shape Shifting: Deep JSON Projection and Data Mapping"
+
+# 💡 TIP: The { ... } projection block lets you reshape complex JSON on the fly,
+# extracting fields, injecting new values, and merging state without writing any code.
+
+@assert: result.summary == "Ada (ID: 101) is active"
+
+{
+    user: { id: 101, name: "Ada", metadata: { status: "active" } },
+    system_flag: true
+}
+
+# Project and transform fields with expr-lang expressions, including string concatenation.
+-> {
+    id: .user.id,
+    name: .user.name,
+    status: .user.metadata.status,
+    summary: .user.name + " (ID: " + string(.user.id) + ") is " + .user.metadata.status
+}
