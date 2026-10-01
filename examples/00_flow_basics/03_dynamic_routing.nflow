@@ -1,8 +1,8 @@
-@description "Dynamic Fallback Routing - Self-Healing Pipelines"
+@description "Local fallback routing with dispatch"
 
-# 💡 TIP: Dispatch automatically tries candidates in order until one succeeds.
-# 'not_found' doesn't exist, 'broken_service' doesn't exist.
-# It gracefully falls back to 'const', successfully healing the request.
+# Dispatch tries configured member actions in order until one succeeds.
+# The first two names are deliberately absent; const is the local final candidate.
+# This exercises fallback routing only, not recovery of an external service.
 
 @assert: result == "I am the fallback!"
 

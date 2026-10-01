@@ -1,0 +1,15 @@
+@description "Enterprise Resilience: Automatic Retries and Catch Blocks"
+
+# Production pipelines break. @on_error routes matching failures to an action.
+# The error.info action returns the recovered error as a structured map.
+
+@on_error {
+  when error.kind == "Timeout" -> error.info
+  when error.kind == "Validation" -> error.info
+  else -> error.info
+}
+
+@assert: result.kind == "Validation"
+
+# This action intentionally fails with a Validation error.
+fail @{ kind: "Validation", message: "User email is invalid" }

@@ -1,0 +1,15 @@
+@description "Check required local intake fields before transforming a request"
+@assert: result.status == "checked"
+{
+  ticket: {
+    id: "REQ-42",
+    title: "Rotate staging key",
+    requester: "local@example.invalid"
+  }
+}
+-> assert(.ticket.id != nil && .ticket.title != nil && .ticket.requester != nil, "ticket id, title, and requester are required")
+-> {
+  status: "checked",
+  id: .ticket.id,
+  title: .ticket.title
+}

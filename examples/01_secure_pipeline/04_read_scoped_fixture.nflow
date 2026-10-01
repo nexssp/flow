@@ -1,0 +1,6 @@
+@description "Read only the checked-in text fixture from this example's directory"
+@assert: len(result) == 1
+@assert: result[0].rel_path == "sample.txt"
+fs.walk:dir="examples/01_secure_pipeline/fixtures":ext="txt"
+-> fs.read
+-> collect

@@ -1,0 +1,1 @@
+Static fixture for the local fs.walk and fs.read example; contains no credentials or personal data.

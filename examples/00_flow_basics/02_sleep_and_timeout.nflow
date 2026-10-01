@@ -1,14 +1,14 @@
-@description "Graceful Timeout Handling & Backpressure"
+@description "Per-action Timeout and Local Fallback"
 
-# 💡 TIP: The :timeout modifier enforces an absolute SLA (Service Level Agreement) on any action.
-# This simulates a database query that takes 5 seconds, but we enforce a 1-second strict SLA!
+# :timeout sets a deadline for one action; it is not a workflow-wide SLA or a cost cap.
+# This local sleep requests 5 seconds and uses a 1-second action deadline.
 
 @assert: result.recovered == true
 
 { query: "SELECT * FROM huge_table" }
 
-# This will forcefully timeout after 1 second
+# This action is configured with a 1-second timeout.
 -> sleep:timeout=1s @{ duration_ms: 5000 }
 
-# The || (fallback operator) seamlessly catches the timeout and returns a safe default.
+# If the action returns an error (including a timeout), || tries the local fallback.
 || { recovered: true, error: "Database took too long, serving fallback data." }

@@ -41,11 +41,9 @@ var helpRegistry = map[string]helpText{
 	"build": {
 		Summary: "Compile a .nflow file into a standalone executable with embedded source and @require modules.",
 		Usage:   "nflow build <file.nflow> -o <output> [flags]",
-		Flags: `  -o FILE             output binary (required)
-      --target=GOOS/ARCH  cross-compile target (default: host)`,
+		Flags:   `  -o FILE             output binary (required)`,
 		Examples: []string{
 			`nflow build flows/client.nflow -o client.exe`,
-			`nflow build flows/client.nflow -o client --target=linux/amd64`,
 		},
 	},
 	"serve": {
@@ -64,7 +62,6 @@ var helpRegistry = map[string]helpText{
 		Examples: []string{
 			`nflow list`,
 			`nflow list fs`,
-			`nflow list --flow ai/nflows/agents.nflow ai`,
 			`nflow list --json > catalog.json`,
 		},
 	},
@@ -72,9 +69,7 @@ var helpRegistry = map[string]helpText{
 		Summary: "Show details for one atom, modifier, directive, or operator.",
 		Usage:   "nflow show <name> [--flow FILE] [--no-color]",
 		Examples: []string{
-			`nflow show ai.planner`,
 			`nflow show fs.walk`,
-			`nflow show --flow ai/nflows/agents.nflow ai.planner`,
 		},
 	},
 	"info": {
@@ -85,10 +80,12 @@ var helpRegistry = map[string]helpText{
 		},
 	},
 	"lint": {
-		Summary: "Check a .nflow file against the live registry. Exits 1 and prints JSON issues on failure.",
-		Usage:   "nflow lint <file.nflow>",
+		Summary: "Check .nflow sources against the live registry. Exits 1 and prints JSON issues on failure.",
+		Usage:   "nflow lint <file.nflow | directory | ./...> [target...]",
 		Examples: []string{
 			`nflow lint flows/client.nflow`,
+			`nflow lint ./...`,
+			`nflow lint ./examples/...`,
 		},
 	},
 	"catalog": {

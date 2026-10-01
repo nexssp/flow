@@ -12,5 +12,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    uses: nexssp/.github/.github/workflows/go-ci.yml@v1
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Compile all Go packages
+        run: go build ./...
+      - name: Run Go tests
+        run: go test ./...
+      - name: Run go vet
+        run: go vet ./...
+      - name: Build nflow CLI
+        run: 'go build -o "$RUNNER_TEMP/nflow" ./cmd/nflow'
+      - name: Lint all user-facing Flow examples
+        run: '"$RUNNER_TEMP/nflow" lint ./examples/...'
+      - name: Run user-facing Flow examples
+        run: |
+          "$RUNNER_TEMP/nflow" run examples/00_flow_basics/01_logs_and_debug.nflow
+          "$RUNNER_TEMP/nflow" run examples/00_flow_basics/02_sleep_and_timeout.nflow
+          "$RUNNER_TEMP/nflow" run examples/00_flow_basics/03_dynamic_routing.nflow
+          "$RUNNER_TEMP/nflow" run examples/00_flow_basics/04_data_transformation.nflow
+          "$RUNNER_TEMP/nflow" run examples/00_flow_basics/05_error_fallback.nflow
+          "$RUNNER_TEMP/nflow" run examples/00_flow_basics/06_parallel_actions.nflow
+          "$RUNNER_TEMP/nflow" run examples/01_secure_pipeline/01_validate_intake.nflow
+          "$RUNNER_TEMP/nflow" run examples/01_secure_pipeline/02_conditional_hold_gate.nflow
+          "$RUNNER_TEMP/nflow" run examples/01_secure_pipeline/03_bounded_retry_fallback.nflow
+          "$RUNNER_TEMP/nflow" run examples/01_secure_pipeline/04_read_scoped_fixture.nflow

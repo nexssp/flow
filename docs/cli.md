@@ -10,9 +10,15 @@ go run ./cmd/nflow help run
 go run ./cmd/nflow run examples/00_flow_basics/04_data_transformation.nflow
 go run ./cmd/nflow run examples/00_flow_basics/04_data_transformation.nflow --assert='result.id == 101'
 go run ./cmd/nflow lint examples/00_flow_basics/04_data_transformation.nflow
+go run ./cmd/nflow lint ./...
+go run ./cmd/nflow lint ./examples/...
 ```
 
-`run` accepts a `.nflow` path and an optional JSON payload. Its documented flags include `-v`/`-vv`/`-vvv` for verbosity and `--assert=EXPR` for a post-run result check. `lint` checks a flow against the active registry.
+`run` accepts a `.nflow` path and an optional JSON payload. Its documented flags include `-v`/`-vv`/`-vvv` for verbosity and `--assert=EXPR` for a post-run result check. `lint` checks a flow against the active registry without executing it. Pass a file to retain the single-file check, an exact directory to check its sources recursively, or a Go-style `./...` / `./path/...` target. Multiple file, directory, and recursive targets may be supplied together. Quote or otherwise pass `./...` as a literal argument; shells do not expand this pattern.
+
+Directory discovery checks `.nflow` files in deterministic path order. It skips VCS metadata directories (`.git`, `.hg`, `.svn`), vendored dependencies (`vendor`), and installed JavaScript dependencies (`node_modules`). It does not follow symlinked directories and skips symlinked files during discovery, avoiding loops and duplicate paths. A direct single-file argument may still name a symlink. If a selected directory contains no `.nflow` files, lint reports that explicitly and exits nonzero. Batch failures return one JSON diagnostics array covering the discovered sources that failed; an all-valid batch prints `ok (N files)`.
+
+Use `nflow lint ./examples/...` (or `go run ./cmd/nflow lint ./examples/...` from this checkout) to check every user-facing `.nflow` example; CI uses this scoped command. The broader `nflow lint ./...` remains available and also discovers internal developer sources under `nflows/` and extension test fixtures. Some of those files currently produce context-specific parse or registry diagnostics, so a full-tree failure does not imply that the user-facing examples failed. CI intentionally scopes its lint gate to `examples/` rather than adding global discovery exclusions.
 
 ## Build a standalone executable
 
@@ -22,6 +28,8 @@ go run ./cmd/nflow build -o /tmp/flow-app examples/00_flow_basics/04_data_transf
 ```
 
 Put `-o FILE` before the input path. The current build parser stops reading flags when it reaches the positional path, so putting `-o` after the path does not select the requested output.
+
+`nflow build` currently targets the host platform. It does not provide a `--target` cross-compilation flag; for cross-compilation, build the generated Go harness with the required `GOOS` and `GOARCH` values.
 
 ## Inspect the active compiler surface
 

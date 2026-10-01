@@ -81,28 +81,18 @@ func withHarness(subcommand, flowPath string, args []string, inProcess func([]st
 	if flowPath == "" || isInlineSource(flowPath) {
 		return inProcess(args)
 	}
-
 	reqs, err := sourceRequiresFromFile(flowPath)
 	if err != nil {
 		return fatalf("%v", err)
 	}
+	return withHarnessRequirements(subcommand, flowPath, reqs, args, inProcess)
+}
 
+func withHarnessRequirements(subcommand, flowPath string, reqs []require.Requirement, args []string, inProcess func([]string) int) int {
 	if len(reqs) == 0 || os.Getenv(harnessEnv) != "" {
 		return inProcess(args)
 	}
-
-	allInternal := true
-	for i := range reqs {
-		r := &reqs[i]
-		targetID := require.NormalizeID(r.Import)
-		if _, ok := core.Lookup(targetID); !ok {
-			if _, ok := core.Lookup(r.Import); !ok {
-				allInternal = false
-				break
-			}
-		}
-	}
-	if allInternal {
+	if !requirementsNeedExternalHarness(reqs) {
 		return inProcess(args)
 	}
 
@@ -111,6 +101,21 @@ func withHarness(subcommand, flowPath string, args []string, inProcess func([]st
 		return fatalf("%v", err)
 	}
 	return ExecHarness(bin, append([]string{subcommand}, args...))
+}
+
+func requirementsNeedExternalHarness(reqs []require.Requirement) bool {
+	for i := range reqs {
+		r := &reqs[i]
+		targetID := require.NormalizeID(r.Import)
+		if _, ok := core.Lookup(targetID); ok {
+			continue
+		}
+		if _, ok := core.Lookup(r.Import); ok {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func runFlow(args []string) int {

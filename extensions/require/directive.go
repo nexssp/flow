@@ -9,7 +9,7 @@ import (
 
 var Directive = core.Directive{
 	Name:    "require",
-	Example: "@require ./locallib as mylib\n@require github.com/nexssp/ai v0.1.0 as ai",
+	Example: "@require ./locallib as mylib\n@require github.com/nexssp/text-tools v1.0.0 as text_tools",
 	Handler: handleDirective,
 }
 

@@ -60,12 +60,20 @@ tasks:
       - go test ./... -run '^$' -bench=. -benchmem -count=1
 
   examples:
-    desc: Run the four verified Flow basics examples
+    desc: Run curated Flow examples as runtime smoke checks
     cmds:
       - '{{.NFLOW}} run examples/00_flow_basics/01_logs_and_debug.nflow'
       - '{{.NFLOW}} run examples/00_flow_basics/02_sleep_and_timeout.nflow'
       - '{{.NFLOW}} run examples/00_flow_basics/03_dynamic_routing.nflow'
       - '{{.NFLOW}} run examples/00_flow_basics/04_data_transformation.nflow'
+      - '{{.NFLOW}} run examples/00_flow_basics/05_error_fallback.nflow'
+      - '{{.NFLOW}} run examples/00_flow_basics/06_error_handling_and_retry.nflow'
+      - '{{.NFLOW}} run examples/00_flow_basics/07_parallel_actions.nflow'
+      - '{{.NFLOW}} run examples/00_flow_basics/08_parallel_api_calls.nflow'
+      - '{{.NFLOW}} run examples/01_secure_pipeline/01_validate_intake.nflow'
+      - '{{.NFLOW}} run examples/01_secure_pipeline/02_conditional_hold_gate.nflow'
+      - '{{.NFLOW}} run examples/01_secure_pipeline/03_bounded_retry_fallback.nflow'
+      - '{{.NFLOW}} run examples/01_secure_pipeline/04_read_scoped_fixture.nflow'
 
   # ── quality ──────────────────────────────────────────────────────
 
@@ -142,7 +150,7 @@ tasks:
       - '{{.NFLOW}} catalog > catalog.json'
 
   lint:nflow:
-    desc: 'Lint a .nflow file: task lint:nflow -- examples/00_flow_basics/04_data_transformation.nflow'
+    desc: 'Run native nflow lint; e.g. task lint:nflow -- ./examples/... or ./...'
     cmds:
       - '{{.NFLOW}} lint {{.CLI_ARGS}}'
 

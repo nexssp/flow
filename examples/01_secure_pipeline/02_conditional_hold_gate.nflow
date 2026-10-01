@@ -1,0 +1,7 @@
+@description "Route a false local proceed flag to a hold marker"
+@assert: result == "held"
+{
+  task_id: "DOC-7",
+  review: { proceed: false }
+}
+-> (pick @{ field: "review.proceed" } ? noop : const @{ value: "held" })

@@ -59,8 +59,8 @@ By default, an extension lives in a `./nexssflow` subdirectory:
 In your `.nflow` workflow, omit the subfolder:
 
 ```nflow
-@require github.com/acme/my-project
-# Resolves automatically to github.com/acme/my-project/nexssflow
+@require github.com/nexssp/my-project
+# Resolves automatically to github.com/nexssp/my-project/nexssflow
 ```
 
 ### 2. Multi-Bundle Variants (`nexssflow_<variant>/`)
@@ -79,7 +79,7 @@ In `.nflow`, reference the specific target:
 
 ```nflow
 # Uses the custom variant directly without appending /nexssflow
-@require github.com/acme/my-project/nexssflow_dev
+@require github.com/nexssp/my-project/nexssflow_dev
 ```
 
 ### 3. Local Loose Packages (Zero Config / Scratch)

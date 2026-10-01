@@ -6,7 +6,7 @@ import (
 )
 
 // NormalizeID extracts the canonical bundle ID from any target path.
-// e.g. "github.com/nexssp/ai/nexssflow" -> "ai"
+// e.g. "github.com/nexssp/mybundle/nexssflow" -> "mybundle"
 // e.g. "nflow-harness/loose/localtest_e152bdd9" -> "localtest"
 func NormalizeID(target string) string {
 	clean := strings.ReplaceAll(target, `\`, "/")

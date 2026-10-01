@@ -20,7 +20,7 @@ The binary operators and their current descriptions are also available from `nfl
 ( const @{ value: "left" } & const @{ value: "right" } )
 ```
 
-The existing standalone parallel example is currently failing at its branch-result projection; do not rely on its assumed result-field names. For a verified end-to-end projection, see [data transformation](../examples/00_flow_basics/04_data_transformation.nflow). For a working timeout and fallback flow, see [sleep and timeout](../examples/00_flow_basics/02_sleep_and_timeout.nflow).
+Parallel results use each branch action's name as its gather key. A name used by only one branch keeps its existing key; repeated names get `name#1`, `name#2`, and so on in source order (for example, `echo#1` and `echo#2`). If a generated label is already in use, trailing `#` characters are added until it is unique. The checked [parallel actions example](../examples/00_flow_basics/07_parallel_actions.nflow) demonstrates this mapping with local actions and asserts the resulting map. For a verified end-to-end projection, see [data transformation](../examples/00_flow_basics/04_data_transformation.nflow). For a working timeout and fallback flow, see [sleep and timeout](../examples/00_flow_basics/02_sleep_and_timeout.nflow).
 
 ## Directives
 

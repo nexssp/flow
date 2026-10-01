@@ -88,8 +88,8 @@ func TestLookup_ModulePathVariants(t *testing.T) {
 		{"github.com/nexssp/" + id, true},
 		{fmt.Sprintf("github.com/nexssp/%s/nexssflow", id), true},
 		{fmt.Sprintf("github.com/nexssp/%s/nexssflow/", id), true},
-		{"github.com/acme/" + id, true},
-		{fmt.Sprintf("github.com/acme/%s/nexssflow", id), true},
+		{"github.com/nexssp/" + id, true},
+		{fmt.Sprintf("github.com/nexssp/%s/nexssflow", id), true},
 		{"github.com/any/nested/path/" + id, true},
 		{fmt.Sprintf("github.com/nexssp/%s2", id), false},
 		{id + "2", false},
@@ -116,8 +116,8 @@ func TestLookup_ForkSafe(t *testing.T) {
 
 	for _, target := range []string{
 		"github.com/nexssp/flow/extensions/" + id,
-		"github.com/acme/flow/extensions/" + id,
-		"github.com/acme/flow/extensions/" + id + "/nexssflow",
+		"github.com/nexssp/flow/extensions/" + id,
+		fmt.Sprintf("github.com/nexssp/flow/extensions/%s/nexssflow", id),
 	} {
 		if _, ok := core.LookupBundleForModule(target); !ok {
 			t.Errorf("target %q did not resolve", target)
@@ -144,9 +144,9 @@ func TestLookup_NormalizationEdges(t *testing.T) {
 	}{
 		{"bare ID", id, true},
 		{"module path", "github.com/x/" + id, true},
-		{"nexssflow marker", "github.com/x/" + id + "/nexssflow", true},
-		{"trailing slash", "github.com/x/" + id + "/nexssflow/", true},
-		{"windows backslash", `github.com\x\` + id + `\nexssflow`, true},
+		{"nexssflow marker", fmt.Sprintf("github.com/x/%s/nexssflow", id), true},
+		{"trailing slash", fmt.Sprintf("github.com/x/%s/nexssflow/", id), true},
+		{"windows backslash", fmt.Sprintf(`github.com\x\%s\nexssflow`, id), true},
 		{"windows local path", `.\custom\` + id, true},
 		{"empty", "", false},
 		{"slash only", "/", false},

@@ -106,8 +106,8 @@ Any repo can become a Flow extension by adding a `nexssflow/` package:
         ├── go.mod
         └── library.go      # exposes Bundle(opts) core.Bundle
 
-Then `@require github.com/acme/my-repo` resolves to
-`github.com/acme/my-repo/nexssflow`. The shim can be a thin wrapper
+Then `@require github.com/nexssp/my-repo` resolves to
+`github.com/nexssp/my-repo/nexssflow`. The shim can be a thin wrapper
 over `external.ExecAction`, a `sandbox` engine, or a direct Go import
 if the repo is already in Go.
 

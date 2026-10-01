@@ -29,7 +29,7 @@ task self
 task examples
 ```
 
-`task examples` runs only the four verified introductory examples in `examples/00_flow_basics/01_logs_and_debug.nflow` through `04_data_transformation.nflow`. The `05_error_handling_and_retry.nflow` and `06_parallel_api_calls.nflow` drafts are currently failing and are intentionally excluded.
+`task examples` runs the curated runtime smoke checks: six introductory flows in `examples/00_flow_basics/` and four practical secure-pipeline flows in `examples/01_secure_pipeline/`.
 
 The optional benchmark task is:
 

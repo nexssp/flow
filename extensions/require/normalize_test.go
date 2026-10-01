@@ -10,9 +10,9 @@ func TestNormalizeID(t *testing.T) {
 	}{
 		{"macros", "macros"},
 		{"github.com/nexssp/flow/extensions/macros", "macros"},
-		{"github.com/nexssp/ai", "ai"},
-		{"github.com/nexssp/ai/nexssflow", "ai"},
-		{"github.com/acme/ai/nexssflow/", "ai"},
+		{"github.com/nexssp/mybundle", "mybundle"},
+		{"github.com/nexssp/mybundle/nexssflow", "mybundle"},
+		{"github.com/nexssp/tools/nexssflow/", "tools"},
 		{"nexssflow", "nexssflow"},
 		{"", ""},
 		{"/", ""},

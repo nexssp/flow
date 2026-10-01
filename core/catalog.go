@@ -87,6 +87,41 @@ func BuildCatalog(
 }
 
 func collectAtoms(resolver CapabilityResolver) []AtomSpec {
+	if r, ok := resolver.(interface{ ActionNames() []string }); ok {
+		out := make([]AtomSpec, 0, len(r.ActionNames()))
+		for _, name := range r.ActionNames() {
+			act, exists := resolver.Action(name)
+			if !exists || act == nil {
+				continue
+			}
+			meta := act.Describe()
+			if meta == nil {
+				continue
+			}
+
+			spec := AtomSpec{
+				Name:        name,
+				Description: meta.Description,
+				Tags:        meta.Tags,
+				Scope:       string(meta.Scope),
+			}
+			if spec.Scope == "" {
+				spec.Scope = "public"
+			}
+			if meta.Example != nil {
+				if raw, err := json.Marshal(meta.Example); err == nil {
+					spec.Example = raw
+				}
+			}
+			if typed, ok := act.(action.TypedPayload); ok {
+				spec.ReqFields = fieldsOf(typed.ReqPayload())
+				spec.ResFields = fieldsOf(typed.ResPayload())
+			}
+			out = append(out, spec)
+		}
+		return out
+	}
+
 	r, ok := resolver.(interface{ Actions() []action.AnyAction })
 	if !ok {
 		return nil

@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"strings"
 
@@ -358,7 +359,66 @@ func (p *ParallelExpr) Build(ctx context.Context, bCtx *BuildContext) (action.An
 		}
 		branches[i] = act
 	}
+	disambiguateParallelBranchKeys(branches)
 	return action.ParallelAny("parallel", branches...).Build(), nil
+}
+
+func disambiguateParallelBranchKeys(branches []action.AnyAction) {
+	baseKeys := make([]string, len(branches))
+	counts := make(map[string]int, len(branches))
+	for i, branch := range branches {
+		key := fmt.Sprintf("branch_%d", i)
+		if meta := branch.Describe(); meta != nil && meta.Name != "" {
+			key = meta.Name
+		}
+		baseKeys[i] = key
+		counts[key]++
+	}
+
+	used := make(map[string]struct{}, len(branches))
+	for _, key := range baseKeys {
+		if counts[key] == 1 {
+			used[key] = struct{}{}
+		}
+	}
+
+	occurrences := make(map[string]int)
+	for i, key := range baseKeys {
+		if counts[key] == 1 {
+			continue
+		}
+		occurrences[key]++
+		label := fmt.Sprintf("%s#%d", key, occurrences[key])
+		for {
+			if _, exists := used[label]; !exists {
+				break
+			}
+			label += "#"
+		}
+		used[label] = struct{}{}
+		branches[i] = &parallelLabeledAction{AnyAction: branches[i], name: label}
+	}
+}
+
+type parallelLabeledAction struct {
+	action.AnyAction
+	name string
+}
+
+func (a *parallelLabeledAction) Describe() *action.Meta {
+	meta := &action.Meta{Name: a.name}
+	if original := a.AnyAction.Describe(); original != nil {
+		*meta = *original
+		meta.Name = a.name
+	}
+	return meta
+}
+
+func (a *parallelLabeledAction) CloneWithHooks(hooks ...action.AnyHook) action.AnyAction {
+	return &parallelLabeledAction{
+		AnyAction: a.AnyAction.CloneWithHooks(hooks...),
+		name:      a.name,
+	}
 }
 
 func flattenParallel(nodes []Expr) []Expr {
