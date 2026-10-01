@@ -1,12 +1,23 @@
 package core
 
-import "testing"
+import (
+	"fmt"
+	"sync/atomic"
+	"testing"
+)
+
+var bundleTestSequence atomic.Uint64
+
+func bundleTestID(prefix string) string {
+	return fmt.Sprintf("%s_%d", prefix, bundleTestSequence.Add(1))
+}
 
 func TestRegister_Success(t *testing.T) {
-	Register("test_register_success", func(_ map[string]string) Bundle {
-		return Bundle{ID: "test_register_success"}
+	id := bundleTestID("test_register_success")
+	Register(id, func(_ map[string]string) Bundle {
+		return Bundle{ID: id}
 	})
-	if _, ok := Lookup("test_register_success"); !ok {
+	if _, ok := Lookup(id); !ok {
 		t.Fatal("registered bundle not found")
 	}
 }
@@ -39,23 +50,25 @@ func TestRegister_PanicsOnWhitespaceID(t *testing.T) {
 }
 
 func TestRegister_PanicsOnDuplicateID(t *testing.T) {
+	id := bundleTestID("test_dup_internal")
 	factory := func(_ map[string]string) Bundle {
-		return Bundle{ID: "test_dup_internal"}
+		return Bundle{ID: id}
 	}
-	Register("test_dup_internal", factory)
+	Register(id, factory)
 	defer func() {
 		if r := recover(); r == nil {
 			t.Fatal("expected panic on duplicate ID")
 		}
 	}()
-	Register("test_dup_internal", factory)
+	Register(id, factory)
 }
 
 func TestLookup_ExactID(t *testing.T) {
-	Register("test_exact_internal", func(_ map[string]string) Bundle {
-		return Bundle{ID: "test_exact_internal"}
+	id := bundleTestID("test_exact_internal")
+	Register(id, func(_ map[string]string) Bundle {
+		return Bundle{ID: id}
 	})
-	if _, ok := Lookup("test_exact_internal"); !ok {
+	if _, ok := Lookup(id); !ok {
 		t.Fatal("exact ID lookup failed")
 	}
 }
@@ -70,13 +83,16 @@ func TestLookup_Unknown(t *testing.T) {
 // bundles in the registry because other tests in this binary add
 // their own. It registers two probe bundles whose IDs bookend the
 // alphabet and asserts that the returned slice is sorted, which is
-// the only contract RegisteredBundles documents.
+// the only contract RegisteredBundles documents. Unique IDs keep repeated
+// -count runs independent even though registrations live for the process.
 func TestRegisteredBundles_Sorted(t *testing.T) {
-	Register("zzz_sorted_probe", func(_ map[string]string) Bundle {
-		return Bundle{ID: "zzz_sorted_probe"}
+	lastID := bundleTestID("zzz_sorted_probe")
+	Register(lastID, func(_ map[string]string) Bundle {
+		return Bundle{ID: lastID}
 	})
-	Register("aaa_sorted_probe", func(_ map[string]string) Bundle {
-		return Bundle{ID: "aaa_sorted_probe"}
+	firstID := bundleTestID("aaa_sorted_probe")
+	Register(firstID, func(_ map[string]string) Bundle {
+		return Bundle{ID: firstID}
 	})
 
 	bundles := RegisteredBundles()

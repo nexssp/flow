@@ -1,11 +1,19 @@
 package core_test
 
 import (
+	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/nexssp/flow/core"
 )
+
+var bundleTestSequence atomic.Uint64
+
+func bundleTestID(prefix string) string {
+	return fmt.Sprintf("%s_%d", prefix, bundleTestSequence.Add(1))
+}
 
 // ── Register: input validation ─────────────────────────────────────
 
@@ -37,8 +45,9 @@ func TestRegister_RejectsWhitespaceID(t *testing.T) {
 }
 
 func TestRegister_DuplicatePanics(t *testing.T) {
-	factory := func(map[string]string) core.Bundle { return core.Bundle{} }
-	core.Register("test_dup_external", factory)
+	id := bundleTestID("test_dup_external")
+	factory := func(map[string]string) core.Bundle { return core.Bundle{ID: id} }
+	core.Register(id, factory)
 
 	defer func() {
 		r := recover()
@@ -50,38 +59,40 @@ func TestRegister_DuplicatePanics(t *testing.T) {
 			t.Fatalf("panic message = %v, want substring %q", r, "duplicate")
 		}
 	}()
-	core.Register("test_dup_external", factory)
+	core.Register(id, factory)
 }
 
 // ── Lookup: resolution rules ───────────────────────────────────────
 
 func TestLookup_ExactID(t *testing.T) {
-	core.Register("test_exact_external", func(map[string]string) core.Bundle {
-		return core.Bundle{ID: "test_exact_external"}
+	id := bundleTestID("test_exact_external")
+	core.Register(id, func(map[string]string) core.Bundle {
+		return core.Bundle{ID: id}
 	})
-	if _, ok := core.LookupBundleForModule("test_exact_external"); !ok {
+	if _, ok := core.LookupBundleForModule(id); !ok {
 		t.Fatal("exact ID lookup failed")
 	}
 }
 
 func TestLookup_ModulePathVariants(t *testing.T) {
-	core.Register("test_ai_external", func(map[string]string) core.Bundle {
-		return core.Bundle{ID: "test_ai_external"}
+	id := bundleTestID("test_module_external")
+	core.Register(id, func(map[string]string) core.Bundle {
+		return core.Bundle{ID: id}
 	})
 
 	cases := []struct {
 		query string
 		want  bool
 	}{
-		{"test_ai_external", true},
-		{"github.com/nexssp/test_ai_external", true},
-		{"github.com/nexssp/test_ai_external/nexssflow", true},
-		{"github.com/nexssp/test_ai_external/nexssflow/", true},
-		{"github.com/acme/test_ai_external", true},
-		{"github.com/acme/test_ai_external/nexssflow", true},
-		{"github.com/any/nested/path/test_ai_external", true},
-		{"github.com/nexssp/test_ai_external2", false},
-		{"test_ai_external2", false},
+		{id, true},
+		{fmt.Sprintf("github.com/nexssp/%s", id), true},
+		{fmt.Sprintf("github.com/nexssp/%s/nexssflow", id), true},
+		{fmt.Sprintf("github.com/nexssp/%s/nexssflow/", id), true},
+		{fmt.Sprintf("github.com/acme/%s", id), true},
+		{fmt.Sprintf("github.com/acme/%s/nexssflow", id), true},
+		{fmt.Sprintf("github.com/any/nested/path/%s", id), true},
+		{fmt.Sprintf("github.com/nexssp/%s2", id), false},
+		{fmt.Sprintf("%s2", id), false},
 		{"", false},
 		{"/", false},
 		{"//", false},
@@ -98,14 +109,15 @@ func TestLookup_ModulePathVariants(t *testing.T) {
 }
 
 func TestLookup_ForkSafe(t *testing.T) {
-	core.Register("test_macros_external", func(map[string]string) core.Bundle {
-		return core.Bundle{ID: "test_macros_external"}
+	id := bundleTestID("test_macros_external")
+	core.Register(id, func(map[string]string) core.Bundle {
+		return core.Bundle{ID: id}
 	})
 
 	for _, target := range []string{
-		"github.com/nexssp/flow/extensions/test_macros_external",
-		"github.com/acme/flow/extensions/test_macros_external",
-		"github.com/acme/flow/extensions/test_macros_external/nexssflow",
+		fmt.Sprintf("github.com/nexssp/flow/extensions/%s", id),
+		fmt.Sprintf("github.com/acme/flow/extensions/%s", id),
+		fmt.Sprintf("github.com/acme/flow/extensions/%s/nexssflow", id),
 	} {
 		if _, ok := core.LookupBundleForModule(target); !ok {
 			t.Errorf("target %q did not resolve", target)
@@ -120,8 +132,9 @@ func TestLookup_Unknown(t *testing.T) {
 }
 
 func TestLookup_NormalizationEdges(t *testing.T) {
-	core.Register("test_edge_external", func(map[string]string) core.Bundle {
-		return core.Bundle{ID: "test_edge_external"}
+	id := bundleTestID("test_edge_external")
+	core.Register(id, func(map[string]string) core.Bundle {
+		return core.Bundle{ID: id}
 	})
 
 	cases := []struct {
@@ -129,12 +142,12 @@ func TestLookup_NormalizationEdges(t *testing.T) {
 		query string
 		want  bool
 	}{
-		{"bare ID", "test_edge_external", true},
-		{"module path", "github.com/x/test_edge_external", true},
-		{"nexssflow marker", "github.com/x/test_edge_external/nexssflow", true},
-		{"trailing slash", "github.com/x/test_edge_external/nexssflow/", true},
-		{"windows backslash", `github.com\x\test_edge_external\nexssflow`, true},
-		{"windows local path", `.\custom\test_edge_external`, true},
+		{"bare ID", id, true},
+		{"module path", fmt.Sprintf("github.com/x/%s", id), true},
+		{"nexssflow marker", fmt.Sprintf("github.com/x/%s/nexssflow", id), true},
+		{"trailing slash", fmt.Sprintf("github.com/x/%s/nexssflow/", id), true},
+		{"windows backslash", fmt.Sprintf(`github.com\x\%s\nexssflow`, id), true},
+		{"windows local path", fmt.Sprintf(`.\custom\%s`, id), true},
 		{"empty", "", false},
 		{"slash only", "/", false},
 	}

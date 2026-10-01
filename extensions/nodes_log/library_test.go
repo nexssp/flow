@@ -25,7 +25,6 @@ func captureLogs(tb testing.TB, fn func()) string {
 }
 
 func TestLog_EmitsAndPassesThrough(t *testing.T) {
-	t.Parallel()
 	cases := []struct {
 		name  string
 		level string
@@ -37,7 +36,6 @@ func TestLog_EmitsAndPassesThrough(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
 			input := map[string]any{"value": c.name, "message": "test line"}
 
 			var output any
