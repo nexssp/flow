@@ -25,6 +25,18 @@ func (m *macroPrimary) Parse(p *core.Parser) (core.Expr, error) {
 
 	declaration, ok := m.byName[nameTok.Lit]
 	if !ok {
+		// User-declared macros take precedence; the built-ins are only a
+		// fallback so that a flow can rely on `@check_required(...)` etc.
+		// without having to redeclare them, while a user macro with the
+		// same name still shadows the built-in.
+		for _, builtin := range DefaultBuiltinMacros {
+			if builtin.Name == nameTok.Lit {
+				declaration, ok = builtin, true
+				break
+			}
+		}
+	}
+	if !ok {
 		return nil, p.Fail(nameTok.Line, "unknown macro @%s", nameTok.Lit)
 	}
 

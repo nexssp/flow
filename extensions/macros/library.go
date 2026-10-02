@@ -42,14 +42,20 @@ func Bundle(_ map[string]string) core.Bundle {
 		Libraries:  []action.Library{{Name: ID}},
 		Directives: []core.Directive{Directive},
 		OnPreprocess: func(meta map[string]any) core.PreprocessContributions {
-			declarations, _ := meta[DeclarationKey].([]Declaration)
-			if len(declarations) == 0 {
+			declarations, ok := meta[DeclarationKey].([]Declaration)
+			if !ok || len(declarations) == 0 {
 				return core.PreprocessContributions{}
 			}
+
+			// Only user-declared macros go into the primary. Built-in macros are
+			// resolved at parse time via macroPrimary's fallback to
+			// DefaultBuiltinMacros, so they never inflate the primary's namespace
+			// and never shadow a user declaration with the same name.
 			byName := make(map[string]Declaration, len(declarations))
 			for _, declaration := range declarations {
 				byName[declaration.Name] = declaration
 			}
+
 			return core.PreprocessContributions{
 				Primaries: []core.PrimaryExtension{&macroPrimary{byName: byName}},
 			}

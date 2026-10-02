@@ -9,6 +9,7 @@ import (
 	"github.com/nexssp/flow/extensions/fs"
 	"github.com/nexssp/flow/extensions/include"
 	"github.com/nexssp/flow/extensions/loop"
+	"github.com/nexssp/flow/extensions/match"
 	"github.com/nexssp/flow/extensions/modifiers_auth"
 	"github.com/nexssp/flow/extensions/modifiers_core"
 	"github.com/nexssp/flow/extensions/modifiers_meta"
@@ -34,6 +35,7 @@ func Bundles() []core.Bundle {
 	return []core.Bundle{
 		syntax.Bundle(nil),
 		runtime.Bundle(nil),
+		match.Bundle(nil),
 		modifiers_core.Bundle(nil),
 		modifiers_auth.Bundle(nil),
 		modifiers_meta.Bundle(nil),
