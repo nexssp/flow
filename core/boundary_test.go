@@ -181,7 +181,7 @@ func TestBoundary_CollectWithDownstreamAtom(t *testing.T) {
 	resolver, err := NewDynamicResolver(action.Library{
 		Name: "test",
 		Actions: []action.AnyAction{
-			action.New("count", func(_ context.Context, in []any) (int, error) {
+			action.New("test.count", func(_ context.Context, in []any) (int, error) {
 				return len(in), nil
 			}).Build(),
 		},
@@ -195,7 +195,7 @@ func TestBoundary_CollectWithDownstreamAtom(t *testing.T) {
 		context.Background(),
 		testTable(),
 		DefaultPrimaryExtensions(),
-		`test.source -> collect -> count`,
+		`test.source -> collect -> test.count`,
 		"",
 		0,
 	).Parse()

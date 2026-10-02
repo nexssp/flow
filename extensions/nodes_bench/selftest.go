@@ -9,7 +9,7 @@ func selftest() []core.SelfTestSection {
 			Features: []core.SelfTestFeature{
 				{
 					Name: "bench.run",
-					DSL: `@assert: result.action == "noop"
+					DSL: `@assert: result.action == "runtime.noop"
 @assert: result.iterations == 1
 { action: "noop", iterations: 1, payload: { value: "b" } } -> bench.run`,
 				},

@@ -1,3 +1,3 @@
 @description "Projection { ... }"
 @assert: result.name == "Ada"
-const @{ value: { name: "Ada", extra: true } } -> { name: .name }
+runtime.const @{ value: { name: "Ada", extra: true } } -> { name: .name }

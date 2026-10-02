@@ -45,13 +45,5 @@ func Library() action.Library {
 			StdoutOperator(),
 			OutFileOperator(),
 		},
-		Aliases: []action.Alias{
-			{Canonical: "fs.filter", Short: []string{"stream.filter", "filter"}},
-			{Canonical: "fs.read", Short: []string{"stream.read", "read"}},
-			{Canonical: "fs.sort", Short: []string{"sort"}},
-			{Canonical: "fs.write", Short: []string{"stream.write"}},
-			{Canonical: "out.stdout", Short: []string{"stdout"}},
-			{Canonical: "out.file", Short: []string{"write_file", "save"}},
-		},
 	}
 }

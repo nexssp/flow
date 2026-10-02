@@ -10,7 +10,7 @@ import (
 )
 
 // Pick extracts a single field or filters the map with an allowlist / denylist.
-var Pick = action.New("pick", func(_ context.Context, in any) (any, error) {
+var Pick = action.New("runtime.pick", func(_ context.Context, in any) (any, error) {
 	m, ok := in.(map[string]any)
 	if !ok {
 		return nil, xerr.BadRequest("pick: input must be an object")

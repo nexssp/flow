@@ -37,10 +37,5 @@ func Library() action.Library {
 			BenchSave,
 			BenchCompare,
 		},
-		Aliases: []action.Alias{
-			{Canonical: "bench.run", Short: []string{"bench", "benchmark"}},
-			{Canonical: "bench.save", Short: []string{"save_bench"}},
-			{Canonical: "bench.compare", Short: []string{"compare", "diff"}},
-		},
 	}
 }

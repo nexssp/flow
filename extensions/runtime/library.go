@@ -1,12 +1,13 @@
 // Package runtime ships the primitive actions every .nflow pipeline
-// starts from: const, noop, debug, fail, pick, wrap, with, env, uuid,
-// call, dispatch_by_prefix, json.clean. This is a native bundle —
+// starts from: runtime.const, runtime.noop, runtime.debug, runtime.fail,
+// runtime.pick, runtime.wrap, runtime.with, runtime.env, runtime.uuid,
+// runtime.call, runtime.dispatch_by_prefix, json.clean, runtime.sleep. This is a native bundle —
 // always mounted by native.Bundles().
 //
 // Typical use:
 //
-//	{ user_id: 42 } -> pick @{ field: "user_id" } -> wrap @{ key: "data" }
-//	fail @{ kind: "Timeout", message: "upstream" } || const @{ value: "fallback" }
+//	{ user_id: 42 } -> runtime.pick @{ field: "user_id" } -> runtime.wrap @{ key: "data" }
+//	runtime.fail @{ kind: "Timeout", message: "upstream" } || runtime.const @{ value: "fallback" }
 package runtime
 
 import (
@@ -48,20 +49,6 @@ func library() action.Library {
 			DispatchByPrefix,
 			JSONClean,
 			Sleep,
-		},
-		Aliases: []action.Alias{
-			{Canonical: "noop", Short: []string{"id", "identity", "pass"}},
-			{Canonical: "debug", Short: []string{"dump", "print"}},
-			{Canonical: "pick", Short: []string{"extract"}},
-			{Canonical: "wrap", Short: []string{"box", "nest"}},
-			{Canonical: "const", Short: []string{"literal"}},
-			{Canonical: "fail", Short: []string{"boom"}},
-			{Canonical: "env", Short: []string{"getenv"}},
-			{Canonical: "uuid", Short: []string{"newid"}},
-			{Canonical: "call", Short: []string{"invoke"}},
-			{Canonical: "dispatch_by_prefix", Short: []string{"dispatch_prefix"}},
-			{Canonical: "with", Short: []string{"merge", "update"}},
-			{Canonical: "sleep", Short: []string{"delay", "wait"}},
 		},
 	}
 }

@@ -24,8 +24,8 @@ func TestLibrary_ActionCount(t *testing.T) {
 func TestLibrary_ActionNames(t *testing.T) {
 	t.Parallel()
 	want := []string{
-		"const", "debug", "noop", "fail", "wrap", "pick",
-		"with", "env", "uuid", "call", "dispatch_by_prefix", "json.clean", "sleep",
+		"runtime.const", "runtime.debug", "runtime.noop", "runtime.fail", "runtime.wrap", "runtime.pick",
+		"runtime.with", "runtime.env", "runtime.uuid", "runtime.call", "runtime.dispatch_by_prefix", "json.clean", "runtime.sleep",
 	}
 	got := make(map[string]bool, len(want))
 	for _, a := range library().Actions {

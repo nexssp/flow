@@ -10,7 +10,7 @@ func selftest() []core.SelfTestSection {
 				{
 					Name: "supervisor",
 					DSL: `@assert: result.succeeded == 1
-{ tasks: [ { id: "t1", dsl: "noop", payload: { x: 1 } } ] } -> supervisor`,
+{ tasks: [ { id: "t1", dsl: "runtime.noop", payload: { x: 1 } } ] } -> supervisor.run`,
 				},
 			},
 		},

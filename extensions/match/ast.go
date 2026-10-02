@@ -89,7 +89,7 @@ func (m *Expr) Build(ctx context.Context, bCtx *core.BuildContext) (action.AnyAc
 		compiledCases[i] = cc
 	}
 
-	return action.New("match", func(execCtx context.Context, in any) (any, error) {
+	return action.New("match.evaluate", func(execCtx context.Context, in any) (any, error) {
 		env := core.BuildEnv(in)
 
 		if subjectProg != nil {

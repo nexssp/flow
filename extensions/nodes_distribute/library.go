@@ -40,10 +40,6 @@ func Library() action.Library {
 			DistributeMap,
 			DistributeReduce,
 		},
-		Aliases: []action.Alias{
-			{Canonical: "distribute.map", Short: []string{"map", "fanout", "parallel"}},
-			{Canonical: "distribute.reduce", Short: []string{"reduce", "fold"}},
-		},
 	}
 }
 

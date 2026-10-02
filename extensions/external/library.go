@@ -6,9 +6,9 @@
 //
 // Typical use:
 //
-//	exec @{ cmd: "python3 enhancer.py", input: .payload }
+//	external.exec @{ cmd: "python3 enhancer.py", input: .payload }
 //	http.request @{ url: "https://api.example/v1/items", method: "GET" }
-//	wasm @{ path: "plugins/transform.wasm", input: .data }
+//	external.wasm @{ path: "plugins/transform.wasm", input: .data }
 package external
 
 import (
@@ -38,11 +38,6 @@ func Library() action.Library {
 			Exec,
 			HTTPRequest,
 			WASM,
-		},
-		Aliases: []action.Alias{
-			{Canonical: "exec", Short: []string{"sh", "shell", "run.command"}},
-			{Canonical: "http.request", Short: []string{"http", "fetch"}},
-			{Canonical: "wasm", Short: []string{"wasm.run"}},
 		},
 	}
 }

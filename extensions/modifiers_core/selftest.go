@@ -23,7 +23,7 @@ func selftest() []core.SelfTestSection {
 func modifierFeature(name, value string) core.SelfTestFeature {
 	return core.SelfTestFeature{
 		Name: "Modifier :" + name + "=",
-		DSL: "const:" + name + "=" + value + ` @{ value: "ok" }` + "\n" +
+		DSL: "runtime.const:" + name + "=" + value + ` @{ value: "ok" }` + "\n" +
 			`@assert: result == "ok"`,
 	}
 }
@@ -31,7 +31,7 @@ func modifierFeature(name, value string) core.SelfTestFeature {
 func modifierFlag(name string) core.SelfTestFeature {
 	return core.SelfTestFeature{
 		Name: "Modifier :" + name,
-		DSL: "const:" + name + ` @{ value: "ok" }` + "\n" +
+		DSL: "runtime.const:" + name + ` @{ value: "ok" }` + "\n" +
 			`@assert: result == "ok"`,
 	}
 }

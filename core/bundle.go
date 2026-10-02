@@ -33,7 +33,7 @@ type SelfTestSection struct {
 // Bundle is one extension distribution.
 type Bundle struct {
 	ID           string
-	Alias        string // Dynamiczny namespace nadpisywany przez @require (np. "as ft")
+	Alias        string // Local @require qualifier replacing library namespaces for this compilation.
 	Libraries    []action.Library
 	Directives   []Directive
 	Modifiers    []Modifier
@@ -51,6 +51,9 @@ type Bundle struct {
 func ValidateBundle(b Bundle) error {
 	if strings.TrimSpace(b.ID) == "" {
 		return errors.New("bundle: ID is required")
+	}
+	if b.Alias != "" && !validNamespaceQualifier(b.Alias) {
+		return fmt.Errorf("bundle %q: invalid @require namespace qualifier %q", b.ID, b.Alias)
 	}
 	seen := make(map[string]struct{}, len(b.Libraries))
 	for i := range b.Libraries {

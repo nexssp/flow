@@ -12,7 +12,7 @@ import (
 
 // UUID generates a UUID v4. Without args it returns a bare string; with
 // @{ as: "field" } it merges the UUID into the input map under that key.
-var UUID = action.New("uuid", func(_ context.Context, in any) (any, error) {
+var UUID = action.New("runtime.uuid", func(_ context.Context, in any) (any, error) {
 	id, err := newUUIDv4()
 	if err != nil {
 		return nil, xerr.Internal("uuid: entropy source failed", err)

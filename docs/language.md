@@ -7,7 +7,7 @@ A `.nflow` file contains Flow directives and a pipeline expression. An atom name
 | Form | Meaning |
 |---|---|
 | `A -> B` | Pass the left result to the next action. |
-| `A | B` | Alias for `->`. |
+| `A | B` | Syntax sugar for `A -> B`; it does not introduce an action alias. |
 | `A || B` | Try the right expression if the left expression fails. |
 | `(A & B)` | Run the grouped branches in parallel. |
 | `{ key: expression }` | Project fields and expressions into a new object. |
@@ -17,10 +17,10 @@ A `.nflow` file contains Flow directives and a pipeline expression. An atom name
 The binary operators and their current descriptions are also available from `nflow list`. The built-in feature suite tests parallel composition with this expression:
 
 ```nflow
-( const @{ value: "left" } & const @{ value: "right" } )
+( runtime.const @{ value: "left" } & runtime.const @{ value: "right" } )
 ```
 
-Parallel results use each branch action's name as its gather key. A name used by only one branch keeps its existing key; repeated names get `name#1`, `name#2`, and so on in source order (for example, `echo#1` and `echo#2`). If a generated label is already in use, trailing `#` characters are added until it is unique. The checked [parallel actions example](../examples/00_flow_basics/07_parallel_actions.nflow) demonstrates this mapping with local actions and asserts the resulting map. For a verified end-to-end projection, see [data transformation](../examples/00_flow_basics/04_data_transformation.nflow). For a working timeout and fallback flow, see [sleep and timeout](../examples/00_flow_basics/02_sleep_and_timeout.nflow).
+Parallel results use each branch action's canonical name as its gather key. A name used by only one branch keeps its existing key; repeated names get `name#1`, `name#2`, and so on in source order (for example, `runtime.const#1` and `runtime.const#2`). If a generated label is already in use, trailing `#` characters are added until it is unique. The checked [parallel actions example](../examples/00_flow_basics/07_parallel_actions.nflow) demonstrates this mapping with local actions and asserts the resulting map. For a verified end-to-end projection, see [data transformation](../examples/00_flow_basics/04_data_transformation.nflow). For a working timeout and fallback flow, see [sleep and timeout](../examples/00_flow_basics/02_sleep_and_timeout.nflow).
 
 ## Directives
 
@@ -32,9 +32,11 @@ Directives are handled before the pipeline is compiled. Common directives in the
 | `@assert: expression` | Check the final result after the flow runs. |
 | `@pipeline name` … `@end` | Declare a named pipeline. |
 | `@include "path.nflow"` | Include another local Flow file. |
-| `@require ...` | Request an extension or library bundle for the flow. |
+| `@require ...` | Request an extension or library bundle for the flow; optional `as name` replaces its namespace locally. |
 
 For example, current example files use `@assert: result.summary == "Ada (ID: 101) is active"` to check their result. Directive and modifier availability can depend on the bundles loaded by a runner; use `nflow list` to inspect the active catalog rather than relying on a fixed feature list.
+
+Actions, stream sources, and stream operators have one canonical fully-qualified name, such as `runtime.const`, `fs.walk`, or `render.markdown`; extension libraries do not publish short-name synonyms. An explicit `@require ... as local` changes the first namespace segment to `local` for that flow. This local qualifier is the only Flow alias mechanism. The `|` character remains pipeline syntax sugar for `->`, not an action alias.
 
 ## Next steps
 

@@ -10,7 +10,7 @@ import (
 // Sleep pauses execution for the specified milliseconds.
 // It respects context cancellation, so if a pipeline times out or
 // is canceled, the sleep aborts immediately instead of holding the goroutine.
-var Sleep = action.New("sleep", func(ctx context.Context, in any) (any, error) {
+var Sleep = action.New("runtime.sleep", func(ctx context.Context, in any) (any, error) {
 	ms := 1000 // default 1 second
 	if m, ok := in.(map[string]any); ok {
 		if val, exists := m["duration_ms"]; exists {

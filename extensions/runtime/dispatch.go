@@ -11,7 +11,7 @@ import (
 	"github.com/nexssp/flow/contracts"
 )
 
-var DispatchByPrefix = action.New("dispatch_by_prefix", func(ctx context.Context, in any) (any, error) {
+var DispatchByPrefix = action.New("runtime.dispatch_by_prefix", func(ctx context.Context, in any) (any, error) {
 	m, ok := in.(map[string]any)
 	if !ok {
 		return nil, xerr.BadRequest("dispatch_by_prefix: input must be an object")

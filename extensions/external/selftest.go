@@ -12,7 +12,7 @@ func selftest() []core.SelfTestSection {
 		jsonCommand = `echo {"name":"Ada"}`
 	}
 	jsonDSL := `@assert: result.output.name == "Ada"
-exec @{ cmd: ` + "`" + jsonCommand + "`" + ` }`
+external.exec @{ cmd: ` + "`" + jsonCommand + "`" + ` }`
 
 	return []core.SelfTestSection{
 		{
@@ -21,7 +21,7 @@ exec @{ cmd: ` + "`" + jsonCommand + "`" + ` }`
 				{
 					Name: "exec echo",
 					DSL: `@assert: result.ok == true
-exec @{ cmd: "echo hello" }`,
+external.exec @{ cmd: "echo hello" }`,
 				},
 				{
 					Name: "exec json stdout",

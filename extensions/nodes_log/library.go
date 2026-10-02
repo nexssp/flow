@@ -41,10 +41,5 @@ func Library() action.Library {
 			LogWarn,
 			LogError,
 		},
-		Aliases: []action.Alias{
-			{Canonical: "log.info", Short: []string{"log", "info"}},
-			{Canonical: "log.warn", Short: []string{"warn"}},
-			{Canonical: "log.error", Short: []string{"error"}},
-		},
 	}
 }

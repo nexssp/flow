@@ -8,7 +8,7 @@ import (
 )
 
 // DecideAction evaluates a state against a registered backend.
-var DecideAction = action.New("decide", func(ctx context.Context, req Request) (Response, error) {
+var DecideAction = action.New("decide.run", func(ctx context.Context, req Request) (Response, error) {
 	if req.Backend == "" {
 		return Response{}, xerr.BadRequest("decide: backend is required")
 	}

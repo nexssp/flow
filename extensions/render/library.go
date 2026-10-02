@@ -31,8 +31,5 @@ func Library() action.Library {
 	return action.Library{
 		Name:      ID,
 		Operators: []action.NamedOperator{MarkdownOperator()},
-		Aliases: []action.Alias{
-			{Canonical: "render.markdown", Short: []string{"render", "markdown"}},
-		},
 	}
 }

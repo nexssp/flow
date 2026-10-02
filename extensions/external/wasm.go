@@ -29,7 +29,7 @@ var (
 // WASM executes a WebAssembly module compiled with WASI. The first
 // call compiles the module and caches it; every call instantiates a
 // fresh instance so module state does not leak between invocations.
-var WASM = action.New("wasm", func(ctx context.Context, in map[string]any) (ExecResult, error) {
+var WASM = action.New("external.wasm", func(ctx context.Context, in map[string]any) (ExecResult, error) {
 	path := readStringField(in, "path")
 	if path == "" {
 		return ExecResult{}, xerr.BadRequest("wasm: 'path' parameter is required")

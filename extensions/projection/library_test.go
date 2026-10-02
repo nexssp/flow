@@ -25,7 +25,7 @@ func TestLibrary_NilEvaluatorUsesDefault(t *testing.T) {
 	t.Parallel()
 	lib := Library(nil)
 	ktest.RequireEqual(t, len(lib.Actions), 1)
-	ktest.RequireEqual(t, lib.Actions[0].Describe().Name, "projection")
+	ktest.RequireEqual(t, lib.Actions[0].Describe().Name, "projection.project")
 }
 
 func TestFixtures_Discoverable(t *testing.T) {

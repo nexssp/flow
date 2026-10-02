@@ -3,4 +3,4 @@
   when error.kind == "Internal" -> error.info
 }
 @assert: result.kind == "Internal"
-fail @{ kind: "Internal", message: "boom" }
+runtime.fail @{ kind: "Internal", message: "boom" }

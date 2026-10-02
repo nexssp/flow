@@ -25,7 +25,7 @@ func TestBundle_WiresDirectiveMaterializeFixtures(t *testing.T) {
 func TestDirective_SingleLineHeader(t *testing.T) {
 	t.Parallel()
 	out := map[string]any{}
-	body := []string{`@pipeline p`, `  noop`, `@end`}
+	body := []string{`@pipeline p`, `  runtime.noop`, `@end`}
 	_, err := handleDirective(context.Background(), core.DirectiveReq{
 		Lines: body, Body: body, I: 0, Out: out, File: "<test>",
 	})
@@ -33,13 +33,13 @@ func TestDirective_SingleLineHeader(t *testing.T) {
 
 	pipelines, ok := out["pipelines"].(map[string]string)
 	ktest.RequireCondition(t, ok, "pipelines = %T, want map[string]string", out["pipelines"])
-	ktest.RequireEqual(t, pipelines["p"], "  noop")
+	ktest.RequireEqual(t, pipelines["p"], "  runtime.noop")
 }
 
 func TestDirective_IgnoresInlineModifiers(t *testing.T) {
 	t.Parallel()
 	out := map[string]any{}
-	body := []string{`@pipeline p:tag="fast"`, `  noop`, `@end`}
+	body := []string{`@pipeline p:tag="fast"`, `  runtime.noop`, `@end`}
 	_, err := handleDirective(context.Background(), core.DirectiveReq{
 		Lines: body, Body: body, I: 0, Out: out, File: "<test>",
 	})
@@ -53,7 +53,7 @@ func TestDirective_IgnoresInlineModifiers(t *testing.T) {
 
 func TestDirective_MissingName(t *testing.T) {
 	t.Parallel()
-	body := []string{`@pipeline`, `  noop`, `@end`}
+	body := []string{`@pipeline`, `  runtime.noop`, `@end`}
 	out := map[string]any{}
 	_, err := handleDirective(context.Background(), core.DirectiveReq{
 		Lines: body, Body: body, I: 0, Out: out, File: "<test>",
@@ -66,10 +66,10 @@ func TestDirective_MultiplePipelines(t *testing.T) {
 	out := map[string]any{}
 	lines := []string{
 		`@pipeline a`,
-		`  noop`,
+		`  runtime.noop`,
 		`@end`,
 		`@pipeline b`,
-		`  debug`,
+		`  runtime.debug`,
 		`@end`,
 	}
 	next := 0

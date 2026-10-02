@@ -13,7 +13,7 @@ import (
 // error, not a silent override.
 var Directive = core.Directive{
 	Name:    "macro",
-	Example: "@macro greet(name) {\n  const @{ value: $name }\n}",
+	Example: "@macro greet(name) {\n  runtime.const @{ value: $name }\n}",
 	Handler: handleDirective,
 }
 
@@ -77,7 +77,7 @@ func splitParams(raw string) []string {
 
 // readBody reads the body of a `@macro ... { ... }` declaration.
 //
-// Inline form on one line:  `@macro x { const @{ value: "hi" } }`
+// Inline form on one line:  `@macro x { runtime.const @{ value: "hi" } }`
 // Multi-line form:          opening brace ends the header line, body
 //
 //	spans until a line whose only content is

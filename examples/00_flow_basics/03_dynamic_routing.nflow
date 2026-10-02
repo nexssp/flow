@@ -1,10 +1,10 @@
-@description "Local fallback routing with dispatch"
+@description "Local fallback routing runtime.with dispatch.run"
 
 # Dispatch tries configured member actions in order until one succeeds.
-# The first two names are deliberately absent; const is the local final candidate.
+# The first two names are deliberately absent; runtime.const is the local final candidate.
 # This exercises fallback routing only, not recovery of an external service.
 
 @assert: result == "I am the fallback!"
 
-{ members: "not_found, broken_service, const", payload: { value: "I am the fallback!" } }
--> dispatch
+{ members: "not_found, broken_service, runtime.const", payload: { value: "I am the fallback!" } }
+-> dispatch.run

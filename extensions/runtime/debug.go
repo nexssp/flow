@@ -11,7 +11,7 @@ import (
 
 // Debug prints the input as JSON to stderr and returns it unchanged.
 // The optional @{ label: "..." } arg prefixes the printed line.
-var Debug = action.New("debug", func(_ context.Context, in any) (any, error) {
+var Debug = action.New("runtime.debug", func(_ context.Context, in any) (any, error) {
 	label := readStringArg(in, "label")
 	suffix := ""
 	if label != "" {

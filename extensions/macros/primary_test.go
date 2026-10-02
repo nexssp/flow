@@ -43,8 +43,8 @@ func TestSubstituteParams(t *testing.T) {
 		args   []string
 		want   string
 	}{
-		{"single", `const @{ value: $v }`, []string{"v"}, []string{`"hi"`}, `const @{ value: "hi" }`},
-		{"multiple", `$a -> $b`, []string{"a", "b"}, []string{"noop", "debug"}, `noop -> debug`},
+		{"single", `runtime.const @{ value: $v }`, []string{"v"}, []string{`"hi"`}, `runtime.const @{ value: "hi" }`},
+		{"multiple", `$a -> $b`, []string{"a", "b"}, []string{"runtime.noop", "runtime.debug"}, `runtime.noop -> runtime.debug`},
 		{"missing arg", `$a -> $b`, []string{"a", "b"}, []string{"noop"}, `noop -> `},
 		{"repeated", `$v + $v`, []string{"v"}, []string{"1"}, `1 + 1`},
 		{"no params", `noop`, nil, nil, `noop`},
@@ -61,17 +61,17 @@ func TestReadArgs(t *testing.T) {
 	t.Parallel()
 
 	// The macro body is chosen per case: parameterless calls cannot
-	// substitute $v (it would become `const @{ value:  }`, invalid
+	// substitute $v (it would become `runtime.const @{ value:  }`, invalid
 	// DSL) so they use a body that ignores the parameter.
 	cases := []struct {
 		name   string
 		source string
 		body   string
 	}{
-		{"no parens", `@echo`, `const @{ value: "default" }`},
-		{"empty parens", `@echo()`, `const @{ value: "default" }`},
-		{"single arg", `@echo("x")`, `const @{ value: $v }`},
-		{"comma in quotes", `@echo("a,b")`, `const @{ value: $v }`},
+		{"no parens", `@echo`, `runtime.const @{ value: "default" }`},
+		{"empty parens", `@echo()`, `runtime.const @{ value: "default" }`},
+		{"single arg", `@echo("x")`, `runtime.const @{ value: $v }`},
+		{"comma in quotes", `@echo("a,b")`, `runtime.const @{ value: $v }`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

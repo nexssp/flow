@@ -10,7 +10,7 @@ import (
 	"github.com/nexssp/flow/contracts"
 )
 
-var Call = action.New("call", func(ctx context.Context, in any) (any, error) {
+var Call = action.New("runtime.call", func(ctx context.Context, in any) (any, error) {
 	m, ok := in.(map[string]any)
 	if !ok {
 		return nil, xerr.BadRequest("call: input must be an object carrying 'name' and optional 'payload'")
@@ -18,7 +18,7 @@ var Call = action.New("call", func(ctx context.Context, in any) (any, error) {
 
 	name := strings.TrimSpace(readStringArg(m, "name"))
 	if name == "" {
-		return nil, xerr.BadRequest(`call: 'name' is required (use: { name: "log.info", payload: { ... } } -> call)`)
+		return nil, xerr.BadRequest(`call: 'name' is required (use: { name: "log.info", payload: { ... } } -> runtime.call)`)
 	}
 
 	resolver := contracts.ActionResolverFromContext(ctx)

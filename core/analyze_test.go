@@ -87,9 +87,9 @@ func TestAnalyze_SingleAtomAlwaysPasses(t *testing.T) {
 func TestAnalyze_PipeEdges(t *testing.T) {
 	t.Parallel()
 
-	producer := typedAction[any, analyzeOut]("producer")
-	consumerGood := typedAction[analyzeOut, any]("consumer_good")
-	consumerBad := typedAction[analyzeIn, any]("consumer_bad")
+	producer := typedAction[any, analyzeOut]("test.producer")
+	consumerGood := typedAction[analyzeOut, any]("test.consumer_good")
+	consumerBad := typedAction[analyzeIn, any]("test.consumer_bad")
 	resolver := mustResolver(t, action.Library{
 		Name:    "test",
 		Actions: []action.AnyAction{producer, consumerGood, consumerBad},
@@ -102,10 +102,10 @@ func TestAnalyze_PipeEdges(t *testing.T) {
 		wantErr bool
 		errHint string
 	}{
-		{"compatible types", "producer", "consumer_good", false, ""},
-		{"incompatible types", "producer", "consumer_bad", true, "contract mismatch"},
-		{"unknown left skipped", "missing", "consumer_good", false, ""},
-		{"unknown right skipped", "producer", "missing", false, ""},
+		{"compatible types", "test.producer", "test.consumer_good", false, ""},
+		{"incompatible types", "test.producer", "test.consumer_bad", true, "contract mismatch"},
+		{"unknown left skipped", "missing", "test.consumer_good", false, ""},
+		{"unknown right skipped", "test.producer", "missing", false, ""},
 	}
 
 	for _, tc := range cases {
@@ -128,8 +128,8 @@ func TestAnalyze_PipeEdges(t *testing.T) {
 func TestAnalyze_ParallelChecksEachChild(t *testing.T) {
 	t.Parallel()
 
-	producer := typedAction[any, analyzeOut]("producer")
-	bad := typedAction[analyzeIn, any]("bad")
+	producer := typedAction[any, analyzeOut]("test.producer")
+	bad := typedAction[analyzeIn, any]("test.bad")
 	resolver := mustResolver(t, action.Library{
 		Name:    "test",
 		Actions: []action.AnyAction{producer, bad},
@@ -137,8 +137,8 @@ func TestAnalyze_ParallelChecksEachChild(t *testing.T) {
 
 	ast := &ParallelExpr{
 		Branches: []Expr{
-			&PipeExpr{L: &Atom{Name: "producer"}, R: &Atom{Name: "bad"}},
-			&Atom{Name: "producer"},
+			&PipeExpr{L: &Atom{Name: "test.producer"}, R: &Atom{Name: "test.bad"}},
+			&Atom{Name: "test.producer"},
 		},
 	}
 
@@ -149,16 +149,16 @@ func TestAnalyze_ParallelChecksEachChild(t *testing.T) {
 func TestAnalyze_FallbackChecksBothArms(t *testing.T) {
 	t.Parallel()
 
-	producer := typedAction[any, analyzeOut]("producer")
-	bad := typedAction[analyzeIn, any]("bad")
+	producer := typedAction[any, analyzeOut]("test.producer")
+	bad := typedAction[analyzeIn, any]("test.bad")
 	resolver := mustResolver(t, action.Library{
 		Name:    "test",
 		Actions: []action.AnyAction{producer, bad},
 	})
 
 	ast := &FallbackExpr{
-		L: &Atom{Name: "producer"},
-		R: &PipeExpr{L: &Atom{Name: "producer"}, R: &Atom{Name: "bad"}},
+		L: &Atom{Name: "test.producer"},
+		R: &PipeExpr{L: &Atom{Name: "test.producer"}, R: &Atom{Name: "test.bad"}},
 	}
 
 	err := Analyze(resolver, ast)

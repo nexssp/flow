@@ -14,9 +14,9 @@ import (
 
 // Const returns a fixed literal. Numbers, bools, JSON objects, JSON
 // arrays, and JSON-quoted strings are auto-coerced from the string
-// representation so the DSL stays readable: const @{ value: 42 }
+// representation so the DSL stays readable: runtime.const @{ value: 42 }
 // produces int64(42), not "42".
-var Const = action.New("const", func(_ context.Context, in any) (any, error) {
+var Const = action.New("runtime.const", func(_ context.Context, in any) (any, error) {
 	if s, ok := in.(string); ok {
 		return coerceLiteral(s), nil
 	}

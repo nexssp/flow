@@ -27,7 +27,7 @@ func TestWith_MergesArgsIntoInput(t *testing.T) {
 	execution, err := runner.Execute(
 		context.Background(),
 		cfg,
-		`{ goal: "x", attempt: 1 } -> with @{ note: "bump", approved: true }`,
+		`{ goal: "x", attempt: 1 } -> runtime.with @{ note: "bump", approved: true }`,
 		"with_test.nflow",
 		nil,
 	)

@@ -4,4 +4,4 @@
   Email string `json:"email" validate:"email"`
 }
 @assert: result.name == "Ada"
-{ name: "Ada" } -> noop:schema=TestUser
+{ name: "Ada" } -> runtime.noop:schema=TestUser

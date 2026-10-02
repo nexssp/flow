@@ -18,7 +18,7 @@ type DispatchReq struct {
 	Payload  any    `json:"payload,omitempty"`
 }
 
-var Dispatch = action.New("dispatch", func(ctx context.Context, req DispatchReq) (any, error) {
+var Dispatch = action.New("dispatch.run", func(ctx context.Context, req DispatchReq) (any, error) {
 	resolver := contracts.ActionResolverFromContext(ctx)
 	if resolver == nil {
 		return nil, xerr.Internal("dispatch: no action resolver in context")

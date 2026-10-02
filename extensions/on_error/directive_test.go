@@ -25,7 +25,7 @@ func TestDirective_SingleRule(t *testing.T) {
 	t.Parallel()
 	out, err := runDirective(t,
 		`@on_error {`,
-		`  when error.kind == "Timeout" -> noop`,
+		`  when error.kind == "Timeout" -> runtime.noop`,
 		`}`,
 	)
 	ktest.RequireNoError(t, err)
@@ -34,7 +34,7 @@ func TestDirective_SingleRule(t *testing.T) {
 	ktest.RequireCondition(t, ok, "on_error type = %T, want Config", out["on_error"])
 	ktest.RequireEqual(t, len(cfg.Rules), 1)
 	ktest.RequireEqual(t, cfg.Rules[0].Condition, `error.kind == "Timeout"`)
-	ktest.RequireEqual(t, cfg.Rules[0].Target, "noop")
+	ktest.RequireEqual(t, cfg.Rules[0].Target, "runtime.noop")
 }
 
 func TestDirective_MultipleRulesAndElse(t *testing.T) {

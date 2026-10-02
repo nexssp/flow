@@ -12,7 +12,7 @@ func selftest() []core.SelfTestSection {
 					DSL: `@config:strict=true
 @config:silent=coverage
 @assert: result == "c"
-const @{ value: "c" }`,
+runtime.const @{ value: "c" }`,
 				},
 				{
 					Name: "@config block with inline modifiers",
@@ -22,13 +22,13 @@ const @{ value: "c" }`,
 }
 @assert: result.retries == "3"
 @assert: result.timeout == "10s"
-const @{ value: { retries: "@config.retries", timeout: "@config.timeout" } }`,
+runtime.const @{ value: { retries: "@config.retries", timeout: "@config.timeout" } }`,
 				},
 				{
 					Name: "@config.load YAML",
 					DSL: `@config.load:path="nexss.yml"
 @assert: result.host == "api.example.test"
-const @{ value: { host: "@config.host" } }`,
+runtime.const @{ value: { host: "@config.host" } }`,
 					Files: map[string]string{
 						"nexss.yml": "host: api.example.test\nport: 8443\n",
 					},

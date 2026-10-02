@@ -5,8 +5,8 @@
 //
 // Typical use:
 //
-//	{ members: "log.info,noop", payload: { value: "x" } } -> dispatch
-//	{ pool: "workers", chosen: "log.info", payload: .data } -> dispatch
+//	{ members: "log.info,runtime.noop", payload: { value: "x" } } -> dispatch.run
+//	{ pool: "workers", chosen: "log.info", payload: .data } -> dispatch.run
 package nodes_dispatch
 
 import (

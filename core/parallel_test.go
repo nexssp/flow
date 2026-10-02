@@ -13,10 +13,10 @@ func TestParallelExpr_DuplicateActionNamesHaveDeterministicGatherKeys(t *testing
 	resolver := mustResolver(t, action.Library{
 		Name: "parallel-test",
 		Actions: []action.AnyAction{
-			action.New("echo", func(_ context.Context, input map[string]any) (any, error) {
+			action.New("test.echo", func(_ context.Context, input map[string]any) (any, error) {
 				return input["value"], nil
 			}).Build(),
-			action.New("keep", func(_ context.Context, input map[string]any) (any, error) {
+			action.New("test.keep", func(_ context.Context, input map[string]any) (any, error) {
 				return input["value"], nil
 			}).Build(),
 		},
@@ -26,7 +26,7 @@ func TestParallelExpr_DuplicateActionNamesHaveDeterministicGatherKeys(t *testing
 		ctx,
 		testTable(),
 		DefaultPrimaryExtensions(),
-		`( echo @{ value: "first" } & keep @{ value: "solo" } & echo @{ value: "second" } & echo @{ value: "third" } )`,
+		`( test.echo @{ value: "first" } & test.keep @{ value: "solo" } & test.echo @{ value: "second" } & test.echo @{ value: "third" } )`,
 	).Parse()
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
@@ -38,10 +38,10 @@ func TestParallelExpr_DuplicateActionNamesHaveDeterministicGatherKeys(t *testing
 	}
 
 	want := map[string]any{
-		"echo#1": "first",
-		"keep":   "solo",
-		"echo#2": "second",
-		"echo#3": "third",
+		"test.echo#1": "first",
+		"test.keep":   "solo",
+		"test.echo#2": "second",
+		"test.echo#3": "third",
 	}
 	for run := range 20 {
 		output, invokeErr := action.InvokeAny(ctx, program, nil)

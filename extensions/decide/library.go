@@ -5,7 +5,7 @@
 //
 // Typical use:
 //
-//	{ backend: "http-judge", state: .state, questions: { verdict: { type: "label", labels: ["ok","bad"] } } } -> decide
+//	{ backend: "http-judge", state: .state, questions: { verdict: { type: "label", labels: ["ok","bad"] } } } -> decide.run
 package decide
 
 import (

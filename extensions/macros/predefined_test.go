@@ -28,7 +28,7 @@ func TestBuiltinMacros(t *testing.T) {
 	// Declare at least one macro to activate macro processor in OnPreprocess
 	dsl := `
 @macro init_check() {
-  noop
+  runtime.noop
 }
 
 @init_check()

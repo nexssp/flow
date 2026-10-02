@@ -49,7 +49,7 @@ type SupervisorRes struct {
 // Supervisor compiles and runs each task's DSL. All children run
 // concurrently; each child is isolated (panic, error, timeout). The
 // compiler is read from the execution context.
-var Supervisor = action.New("supervisor", func(ctx context.Context, req SupervisorReq) (SupervisorRes, error) {
+var Supervisor = action.New("supervisor.run", func(ctx context.Context, req SupervisorReq) (SupervisorRes, error) {
 	if len(req.Tasks) == 0 {
 		return SupervisorRes{}, xerr.BadRequest("supervisor: no child tasks provided")
 	}

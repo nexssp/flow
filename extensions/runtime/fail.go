@@ -11,7 +11,7 @@ import (
 // Fail always returns an error. The @{ kind: "..." } arg selects the
 // xerr kind; the default is Internal. It is the idiomatic way to
 // simulate a specific failure for fallback pipelines.
-var Fail = action.New("fail", func(_ context.Context, in any) (any, error) {
+var Fail = action.New("runtime.fail", func(_ context.Context, in any) (any, error) {
 	m, _ := in.(map[string]any)
 	msg := strings.TrimSpace(readStringArg(m, "message"))
 	if msg == "" {

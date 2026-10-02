@@ -460,7 +460,7 @@ func (*ProjectionExpr) Analyze(CapabilityResolver) error { return nil }
 
 func (p *ProjectionExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction, error) {
 	return (&Atom{
-		Name:   "projection",
+		Name:   "projection.project",
 		Params: map[string]string{"raw": p.Raw},
 	}).Build(ctx, bCtx)
 }

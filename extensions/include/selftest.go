@@ -11,10 +11,10 @@ func selftest() []core.SelfTestSection {
 					Name: "@include merges pipelines",
 					DSL: `@include ./inc.nflow
 @assert: result == "included"
-included_flow`,
+pipeline.included_flow`,
 					Files: map[string]string{
 						"inc.nflow": `@pipeline included_flow
-  const @{ value: "included" }
+  runtime.const @{ value: "included" }
 @end
 `,
 					},

@@ -10,7 +10,7 @@ import (
 
 // Wrap wraps the input object under a named key. The key is required:
 // wrap @{ key: "data" }.
-var Wrap = action.New("wrap", func(_ context.Context, in any) (any, error) {
+var Wrap = action.New("runtime.wrap", func(_ context.Context, in any) (any, error) {
 	m, ok := in.(map[string]any)
 	if !ok {
 		return nil, xerr.BadRequest("wrap: input must be an object carrying the `key` arg")

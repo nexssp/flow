@@ -2,6 +2,7 @@ package require
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
@@ -95,4 +96,55 @@ func TestDirective_TooManyArgs(t *testing.T) {
 	t.Parallel()
 	_, err := runDirective(t, `@require example.com/foo v1.0.0 extra`)
 	ktest.RequireErrorContains(t, err, "extraneous tokens")
+}
+
+func TestDirective_LocalNamespaceQualifier(t *testing.T) {
+	t.Parallel()
+	for _, line := range []string{
+		`@require example.com/foo as foo`,
+		`@require example.com/foo v1.2.3 as foo`,
+		`@require example.com/foo as foo v1.2.3`,
+	} {
+		out, err := runDirective(t, line)
+		ktest.RequireNoError(t, err)
+		requirements, _ := out["require"].([]Requirement)
+		ktest.RequireEqual(t, len(requirements), 1)
+		ktest.RequireEqual(t, requirements[0].Alias, "foo")
+		if strings.Contains(line, "v1.2.3") {
+			ktest.RequireEqual(t, requirements[0].Version, "v1.2.3")
+		}
+	}
+}
+
+func TestDirective_RejectsInvalidNamespaceQualifier(t *testing.T) {
+	t.Parallel()
+	for _, line := range []string{
+		`@require example.com/foo as`,
+		`@require example.com/foo as bad-name`,
+		`@require example.com/foo as package`,
+		`@require example.com/foo as _`,
+	} {
+		_, err := runDirective(t, line)
+		if err == nil {
+			t.Errorf("expected invalid qualifier error for %q", line)
+		}
+	}
+}
+
+func TestDirective_RejectsDuplicateNamespaceQualifier(t *testing.T) {
+	t.Parallel()
+	out := map[string]any{}
+	for _, line := range []string{
+		`@require example.com/first as shared`,
+		`@require example.com/second as shared`,
+	} {
+		_, err := handleDirective(context.Background(), core.DirectiveReq{
+			Lines: []string{line}, I: 0, Out: out, File: "<test>",
+		})
+		if strings.Contains(line, "second") {
+			ktest.RequireErrorContains(t, err, `namespace qualifier "shared" is already used`)
+		} else {
+			ktest.RequireNoError(t, err)
+		}
+	}
 }

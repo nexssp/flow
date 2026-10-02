@@ -25,14 +25,14 @@ func runDirective(tb testing.TB, lines ...string) (map[string]any, core.Directiv
 
 func TestDirective_InlineBody(t *testing.T) {
 	t.Parallel()
-	out, res, err := runDirective(t, `@macro hi() { const @{ value: "hi" } }`)
+	out, res, err := runDirective(t, `@macro hi() { runtime.const @{ value: "hi" } }`)
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, res.Next, 1)
 
 	decls, _ := out[DeclarationKey].([]Declaration)
 	ktest.RequireEqual(t, len(decls), 1)
 	ktest.RequireEqual(t, decls[0].Name, "hi")
-	ktest.RequireEqual(t, decls[0].Body, `const @{ value: "hi" }`)
+	ktest.RequireEqual(t, decls[0].Body, `runtime.const @{ value: "hi" }`)
 	ktest.RequireEqual(t, len(decls[0].Params), 0)
 }
 
@@ -40,7 +40,7 @@ func TestDirective_MultiLineBody(t *testing.T) {
 	t.Parallel()
 	lines := []string{
 		`@macro echo(v) {`,
-		`  const @{ value: $v }`,
+		`  runtime.const @{ value: $v }`,
 		`}`,
 	}
 	out, res, err := runDirective(t, lines...)
@@ -51,7 +51,7 @@ func TestDirective_MultiLineBody(t *testing.T) {
 	ktest.RequireEqual(t, len(decls), 1)
 	ktest.RequireEqual(t, decls[0].Name, "echo")
 	ktest.RequireEqual(t, decls[0].Params, []string{"v"})
-	ktest.RequireEqual(t, decls[0].Body, `const @{ value: $v }`)
+	ktest.RequireEqual(t, decls[0].Body, `runtime.const @{ value: $v }`)
 }
 
 func TestDirective_MultipleParams(t *testing.T) {

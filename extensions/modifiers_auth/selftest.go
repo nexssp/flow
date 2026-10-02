@@ -9,22 +9,22 @@ func selftest() []core.SelfTestSection {
 			Features: []core.SelfTestFeature{
 				{
 					Name: "Modifier :auth",
-					DSL: `const:auth @{ value: "ok" }
+					DSL: `runtime.const:auth @{ value: "ok" }
 @assert: result == "ok"`,
 				},
 				{
 					Name: "Modifier :role=",
-					DSL: `const:role=admin @{ value: "ok" }
+					DSL: `runtime.const:role=admin @{ value: "ok" }
 @assert: result == "ok"`,
 				},
 				{
 					Name: "Modifier :perm=",
-					DSL: `const:perm=read @{ value: "ok" }
+					DSL: `runtime.const:perm=read @{ value: "ok" }
 @assert: result == "ok"`,
 				},
 				{
 					Name: "Modifier :feature=",
-					DSL: `const:feature=test.flag @{ value: "ok" }
+					DSL: `runtime.const:feature=test.flag @{ value: "ok" }
 @assert: result == "ok"`,
 				},
 			},

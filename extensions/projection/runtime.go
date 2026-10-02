@@ -12,7 +12,7 @@ import (
 // eval. The action receives the raw projection body under "raw" plus
 // the current pipeline state as the remaining fields.
 func projectionAction(eval Evaluator) action.AnyAction {
-	return action.New("projection",
+	return action.New("projection.project",
 		func(ctx context.Context, input map[string]any) (any, error) {
 			raw, _ := input["raw"].(string)
 

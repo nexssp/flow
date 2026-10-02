@@ -5,9 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/nexssp/flow/core"
 )
@@ -52,14 +54,34 @@ func Parse(spec, baseDir string, opts map[string]string, file string, line int) 
 	importPath := strings.Trim(parts[0], `"'`)
 	parts = parts[1:]
 
-	alias := ""
-	if len(parts) >= 2 && parts[0] == "as" {
-		alias = parts[1]
-		parts = parts[2:]
-	}
-
 	version := ""
-	if len(parts) >= 1 {
+	alias := ""
+	for len(parts) > 0 {
+		if parts[0] == "as" {
+			if alias != "" {
+				return Requirement{}, core.SourceError(
+					core.Position{File: file, Line: line},
+					"@require: only one local namespace qualifier is allowed")
+			}
+			if len(parts) < 2 {
+				return Requirement{}, core.SourceError(
+					core.Position{File: file, Line: line},
+					"@require: missing local namespace qualifier after `as`")
+			}
+			alias = strings.Trim(parts[1], `"'`)
+			if !validNamespaceQualifier(alias) {
+				return Requirement{}, core.SourceError(
+					core.Position{File: file, Line: line},
+					"@require: invalid local namespace qualifier %q", alias)
+			}
+			parts = parts[2:]
+			continue
+		}
+		if version != "" {
+			return Requirement{}, core.SourceError(
+				core.Position{File: file, Line: line},
+				"@require: extraneous tokens after declaration: %v", parts)
+		}
 		version = strings.Trim(parts[0], `"'`)
 		if !strings.HasPrefix(version, "v") && !isLocal(importPath) {
 			return Requirement{}, core.SourceError(
@@ -67,12 +89,6 @@ func Parse(spec, baseDir string, opts map[string]string, file string, line int) 
 				"@require: remote @require needs a version: `@require %s v1.2.3`", importPath)
 		}
 		parts = parts[1:]
-	}
-
-	if len(parts) > 0 {
-		return Requirement{}, core.SourceError(
-			core.Position{File: file, Line: line},
-			"@require: extraneous tokens after declaration: %v", parts)
 	}
 
 	if isLocal(importPath) {
@@ -103,6 +119,24 @@ func isLocal(s string) bool {
 		strings.HasPrefix(s, `.\`) ||
 		strings.HasPrefix(s, `..\`) ||
 		filepath.IsAbs(s)
+}
+
+func validNamespaceQualifier(alias string) bool {
+	if alias == "" || alias == "_" || token.Lookup(alias).IsKeyword() {
+		return false
+	}
+	for i, r := range alias {
+		if i == 0 {
+			if r != '_' && !unicode.IsLetter(r) {
+				return false
+			}
+			continue
+		}
+		if r != '_' && !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
 }
 
 func resolveLocal(name, baseDir string, opts map[string]string, file string, line int) (Requirement, error) {

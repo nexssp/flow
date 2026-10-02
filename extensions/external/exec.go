@@ -13,7 +13,7 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
-var Exec = action.New("exec", func(ctx context.Context, in map[string]any) (ExecResult, error) {
+var Exec = action.New("external.exec", func(ctx context.Context, in map[string]any) (ExecResult, error) {
 	command := readStringField(in, "cmd", "command")
 	if command == "" {
 		return ExecResult{}, xerr.BadRequest("exec: 'cmd' parameter is required")

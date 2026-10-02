@@ -3,6 +3,7 @@ package pipeline
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/nexssp/kernel/action"
 
@@ -26,10 +27,14 @@ func materialize(req core.MaterializeReq) error {
 		if err != nil {
 			return fmt.Errorf("compile sub-pipeline %q: %w", name, err)
 		}
+		canonicalName := name
+		if !strings.Contains(canonicalName, ".") {
+			canonicalName = "pipeline." + canonicalName
+		}
 		err = req.Resolver.Mount(action.Library{
 			Name: "pipeline." + name,
 			Actions: []action.AnyAction{
-				action.Dynamic(program).Name(name).Build(),
+				action.Dynamic(program).Name(canonicalName).Build(),
 			},
 		})
 		if err != nil {

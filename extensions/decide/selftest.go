@@ -10,8 +10,8 @@ func selftest() []core.SelfTestSection {
 				{
 					Name: "decide requires a registered backend",
 					DSL: `@assert: result == "recovered"
-{ backend: "missing", questions: { x: { type: "label" } } } -> decide
-|| const @{ value: "recovered" }`,
+{ backend: "missing", questions: { x: { type: "label" } } } -> decide.run
+|| runtime.const @{ value: "recovered" }`,
 				},
 			},
 		},

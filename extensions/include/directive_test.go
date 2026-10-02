@@ -32,14 +32,14 @@ func runInclude(tb testing.TB, line, baseDir string, recurse func(string) (strin
 func TestDirective_MergesPipelines(t *testing.T) {
 	t.Parallel()
 	out, err := runInclude(t, `@include "child.nflow"`, "", func(_ string) (string, map[string]any, error) {
-		return `const @{ value: "x" }`, map[string]any{
-			"pipelines": map[string]string{"p": `const @{ value: "x" }`},
+		return `runtime.const @{ value: "x" }`, map[string]any{
+			"pipelines": map[string]string{"p": `runtime.const @{ value: "x" }`},
 		}, nil
 	})
 	ktest.RequireNoError(t, err)
 
 	pipelines, _ := out["pipelines"].(map[string]string)
-	ktest.RequireEqual(t, pipelines["p"], `const @{ value: "x" }`)
+	ktest.RequireEqual(t, pipelines["p"], `runtime.const @{ value: "x" }`)
 }
 
 func TestDirective_ConcatenatesRequire(t *testing.T) {

@@ -20,7 +20,7 @@ func TestIncludeDiamondIsNotACycle(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("common.nflow", "@pipeline c\n  const @{ value: \"c\" }\n@end\n")
+	write("common.nflow", "@pipeline c\n  runtime.const @{ value: \"c\" }\n@end\n")
 	write("b.nflow", "@include ./common.nflow\n")
 	write("c.nflow", "@include ./common.nflow\n")
 	write("a.nflow", "@include ./b.nflow\n@include ./c.nflow\n")

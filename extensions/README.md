@@ -53,7 +53,7 @@ grows with the DSL — no Go code to change when the feature evolves.
 
 Use inline `SelfTest()` only when the feature cannot be expressed in
 DSL: files from outside the repo (`Files:` map), a running process or
-network (`exec`, `http.request`), or runtime-only middleware where the
+network (`external.exec`, `http.request`), or runtime-only middleware where the
 DSL grammar accepts a modifier but no assertion can observe its effect
 (`:cache=`, `:retry=`).
 

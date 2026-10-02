@@ -20,7 +20,7 @@ func TestPick_AllowlistAndDenylist(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Allowlist mode
-	dslAllow := `pick @{ only: ["id", "status"] }`
+	dslAllow := `runtime.pick @{ only: ["id", "status"] }`
 	input := map[string]any{
 		"id":        101,
 		"status":    "active",
@@ -37,7 +37,7 @@ func TestPick_AllowlistAndDenylist(t *testing.T) {
 	ktest.RequireEqual(t, outMap["status"], "active")
 
 	// 2. Denylist mode
-	dslDrop := `pick @{ drop: ["internal", "temporary"] }`
+	dslDrop := `runtime.pick @{ drop: ["internal", "temporary"] }`
 	resDrop, err := runner.Execute(ctx, cfg, dslDrop, "drop", input)
 	ktest.RequireNoError(t, err)
 	outDrop, ok := resDrop.Output.(map[string]any)

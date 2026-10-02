@@ -30,6 +30,6 @@ func TestBundle_WiresDispatchAndFixtures(t *testing.T) {
 	ktest.RequireEqual(t, b.ID, ID)
 	ktest.RequireEqual(t, len(b.Libraries), 1)
 	ktest.RequireEqual(t, len(b.Libraries[0].Actions), 1)
-	ktest.RequireEqual(t, b.Libraries[0].Actions[0].Describe().Name, "dispatch")
+	ktest.RequireEqual(t, b.Libraries[0].Actions[0].Describe().Name, "dispatch.run")
 	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
 }

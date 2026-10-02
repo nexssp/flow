@@ -32,9 +32,9 @@ func TestMatch_SubjectEquality(t *testing.T) {
 
 	dsl := `
 match(.code) {
-  "URGENT"   -> const @{ value: "p1" },
-  "STANDARD" -> const @{ value: "p2" },
-  _          -> const @{ value: "p3" }
+  "URGENT"   -> runtime.const @{ value: "p1" },
+  "STANDARD" -> runtime.const @{ value: "p2" },
+  _          -> runtime.const @{ value: "p3" }
 }
 `
 	ctx := context.Background()
@@ -61,10 +61,10 @@ func TestMatch_BooleanPredicates(t *testing.T) {
 
 	dsl := `
 match {
-  .danger && .blocked     -> const @{ value: "critical" },
-  .danger && !.blocked    -> const @{ value: "urgent" },
-  !.danger && .blocked    -> const @{ value: "access_hold" },
-  _                       -> const @{ value: "routine" }
+  .danger && .blocked     -> runtime.const @{ value: "critical" },
+  .danger && !.blocked    -> runtime.const @{ value: "urgent" },
+  !.danger && .blocked    -> runtime.const @{ value: "access_hold" },
+  _                       -> runtime.const @{ value: "routine" }
 }
 `
 	ctx := context.Background()
@@ -91,8 +91,8 @@ func TestMatch_NoArmsMatch_PassThrough(t *testing.T) {
 
 	dsl := `
 match {
-  .score > 90 -> const @{ value: "A" },
-  .score > 80 -> const @{ value: "B" }
+  .score > 90 -> runtime.const @{ value: "A" },
+  .score > 80 -> runtime.const @{ value: "B" }
 }
 `
 	ctx := context.Background()
@@ -113,8 +113,8 @@ func TestMatch_ContextCancellation(t *testing.T) {
 
 	dsl := `
 match {
-  .slow == true -> sleep @{ duration_ms: 500 },
-  _             -> const @{ value: "fast" }
+  .slow == true -> runtime.sleep @{ duration_ms: 500 },
+  _             -> runtime.const @{ value: "fast" }
 }
 `
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
@@ -136,19 +136,19 @@ func TestMatch_SyntaxErrors(t *testing.T) {
 	}{
 		{
 			name: "missing opening brace",
-			dsl:  `match(.code) "A" -> noop }`,
+			dsl:  `match(.code) "A" -> runtime.noop }`,
 		},
 		{
 			name: "unclosed parentheses in subject",
-			dsl:  `match(.code { "A" -> noop }`,
+			dsl:  `match(.code { "A" -> runtime.noop }`,
 		},
 		{
 			name: "missing arrow",
-			dsl:  `match { .danger const @{ value: 1 } }`,
+			dsl:  `match { .danger runtime.const @{ value: 1 } }`,
 		},
 		{
 			name: "unclosed closing brace",
-			dsl:  `match { .danger -> const @{ value: 1 }`,
+			dsl:  `match { .danger -> runtime.const @{ value: 1 }`,
 		},
 	}
 
@@ -168,9 +168,9 @@ func TestMatch_ConcurrentExecutionRace(t *testing.T) {
 
 	dsl := `
 match(.role) {
-  "admin"  -> const @{ value: { auth: true, tier: "admin" } },
-  "user"   -> const @{ value: { auth: true, tier: "user" } },
-  _        -> const @{ value: { auth: false, tier: "guest" } }
+  "admin"  -> runtime.const @{ value: { auth: true, tier: "admin" } },
+  "user"   -> runtime.const @{ value: { auth: true, tier: "user" } },
+  _        -> runtime.const @{ value: { auth: false, tier: "guest" } }
 }
 `
 	const workers = 32

@@ -28,7 +28,7 @@ func TestExecutionResolver_AppliesPerExecutionHooks(t *testing.T) {
 	ctx := xctx.WithRequestID(context.Background(), "req-exec-isolated")
 	ctx = xctx.WithExecutionID(ctx, "exec-parent")
 
-	ex, err := runner.Execute(ctx, cfg, "const @{ value: 42 } -> noop", "test", nil)
+	ex, err := runner.Execute(ctx, cfg, "runtime.const @{ value: 42 } -> runtime.noop", "test", nil)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -74,13 +74,13 @@ func TestExecutionResolver_ConcurrentExecutions_DoNotLeakHooks(t *testing.T) {
 
 	go func() {
 		ctx := xctx.WithRequestID(context.Background(), "req-A")
-		_, err := runner.Execute(ctx, cfgA, "const @{ value: 'A' } -> noop", "testA", nil)
+		_, err := runner.Execute(ctx, cfgA, "runtime.const @{ value: 'A' } -> runtime.noop", "testA", nil)
 		errs <- err
 	}()
 
 	go func() {
 		ctx := xctx.WithRequestID(context.Background(), "req-B")
-		_, err := runner.Execute(ctx, cfgB, "const @{ value: 'B' } -> noop", "testB", nil)
+		_, err := runner.Execute(ctx, cfgB, "runtime.const @{ value: 'B' } -> runtime.noop", "testB", nil)
 		errs <- err
 	}()
 
@@ -116,7 +116,7 @@ func TestEventSink_ConfigurationOption(t *testing.T) {
 	cfg.Hooks = append(cfg.Hooks, observe.Hook(cfg.EventSink))
 
 	ctx := xctx.WithRequestID(context.Background(), "req-event-sink")
-	_, err = runner.Execute(ctx, cfg, "const @{ value: 'sink-test' } -> noop", "test", nil)
+	_, err = runner.Execute(ctx, cfg, "runtime.const @{ value: 'sink-test' } -> runtime.noop", "test", nil)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestJSONLSink_WritesNewlineDelimitedJSON(t *testing.T) {
 	ctx = xctx.WithExecutionID(ctx, "exec-jsonl")
 	ctx = xctx.WithTraceID(ctx, "trace-jsonl")
 
-	_, err = runner.Execute(ctx, cfg, "const @{ value: 'jsonl' } -> noop", "test", nil)
+	_, err = runner.Execute(ctx, cfg, "runtime.const @{ value: 'jsonl' } -> runtime.noop", "test", nil)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestPrometheusSink_ExposesMetrics(t *testing.T) {
 	cfg.Hooks = []action.AnyHook{observe.Hook(promSink)}
 
 	ctx := context.Background()
-	_, err = runner.Execute(ctx, cfg, "const @{ value: 1 } -> noop", "test", nil)
+	_, err = runner.Execute(ctx, cfg, "runtime.const @{ value: 1 } -> runtime.noop", "test", nil)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -200,8 +200,8 @@ func TestPrometheusSink_ExposesMetrics(t *testing.T) {
 	if !strings.Contains(output, "nexss_action_events_total") {
 		t.Errorf("output does not contain metric name:\n%s", output)
 	}
-	if !strings.Contains(output, `action="const"`) {
-		t.Errorf("output does not contain action=\"const\":\n%s", output)
+	if !strings.Contains(output, `action="runtime.const"`) {
+		t.Errorf("output does not contain action=\"runtime.const\":\n%s", output)
 	}
 	if !strings.Contains(output, `kind="success"`) {
 		t.Errorf("output does not contain kind=\"success\":\n%s", output)
@@ -272,7 +272,7 @@ func TestContextPropagation_FromParentToChild(t *testing.T) {
 	ctx = xctx.WithTenantID(ctx, "tenant-42")
 	ctx = xctx.WithUserID(ctx, "user-bob")
 
-	_, err = runner.Execute(ctx, cfg, "const @{ value: 'propagate' } -> noop", "test", nil)
+	_, err = runner.Execute(ctx, cfg, "runtime.const @{ value: 'propagate' } -> runtime.noop", "test", nil)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}

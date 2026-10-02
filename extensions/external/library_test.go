@@ -17,7 +17,7 @@ func TestBundle_WiresLibrary(t *testing.T) {
 
 func TestLibrary_ActionNames(t *testing.T) {
 	t.Parallel()
-	want := map[string]bool{"exec": false, "http.request": false, "wasm": false}
+	want := map[string]bool{"external.exec": false, "http.request": false, "external.wasm": false}
 	for _, a := range Library().Actions {
 		meta := a.Describe()
 		if _, ok := want[meta.Name]; ok {

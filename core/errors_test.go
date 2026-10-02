@@ -24,10 +24,10 @@ func TestAnalyze_ContractMismatchIsValidation(t *testing.T) {
 	type in struct{ ID string }
 	type out struct{ ID int }
 
-	producer := action.New("producer", func(context.Context, any) (out, error) {
+	producer := action.New("validation.producer", func(context.Context, any) (out, error) {
 		return out{}, nil
 	}).Build()
-	consumer := action.New("consumer", func(context.Context, in) (any, error) {
+	consumer := action.New("validation.consumer", func(context.Context, in) (any, error) {
 		return nil, nil
 	}).Build()
 
@@ -37,7 +37,7 @@ func TestAnalyze_ContractMismatchIsValidation(t *testing.T) {
 	})
 	ktest.RequireNoError(t, err)
 
-	ast := &PipeExpr{L: &Atom{Name: "producer"}, R: &Atom{Name: "consumer"}}
+	ast := &PipeExpr{L: &Atom{Name: "validation.producer"}, R: &Atom{Name: "validation.consumer"}}
 	err = Analyze(resolver, ast)
 	ktest.RequireErrorKind(t, err, xerr.KindValidation)
 }

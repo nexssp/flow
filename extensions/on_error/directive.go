@@ -25,7 +25,7 @@ var Directive = core.Directive{
 	Name: "on_error",
 	Example: `@on_error {
   when error.kind == "Timeout" -> cov.recoverable
-  else -> noop
+  else -> runtime.noop
 }`,
 	Handler: handleDirective,
 }

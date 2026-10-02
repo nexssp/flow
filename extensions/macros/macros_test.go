@@ -23,7 +23,7 @@ func TestMacroEngineEndToEnd(t *testing.T) {
 			"no_args",
 			requireLine + `
 @macro hi() {
-  const @{ value: "hi" }
+  runtime.const @{ value: "hi" }
 }
 @assert: result == "hi"
 @hi()`,
@@ -32,7 +32,7 @@ func TestMacroEngineEndToEnd(t *testing.T) {
 			"string_arg",
 			requireLine + `
 @macro echo(v) {
-  const @{ value: $v }
+  runtime.const @{ value: $v }
 }
 @assert: result == "hello"
 @echo("hello")`,
@@ -41,7 +41,7 @@ func TestMacroEngineEndToEnd(t *testing.T) {
 			"number_arg",
 			requireLine + `
 @macro echo(v) {
-  const @{ value: $v }
+  runtime.const @{ value: $v }
 }
 @assert: result == 42
 @echo(42)`,
@@ -50,7 +50,7 @@ func TestMacroEngineEndToEnd(t *testing.T) {
 			"two_args_object",
 			requireLine + `
 @macro pair(k, v) {
-  const @{ value: { key: $k, value: $v } }
+  runtime.const @{ value: { key: $k, value: $v } }
 }
 @assert: result.key == "id"
 @assert: result.value == 42
@@ -63,25 +63,25 @@ func TestMacroEngineEndToEnd(t *testing.T) {
   $a -> $b
 }
 @assert: result.x == 1
-{ x: 1 } -> @seq(noop, noop)`,
+{ x: 1 } -> @seq(runtime.noop, runtime.noop)`,
 		},
 		{
 			"nested_call",
 			requireLine + `
 @macro echo(v) {
-  const @{ value: $v }
+  runtime.const @{ value: $v }
 }
 @macro seq(a, b) {
   $a -> $b
 }
 @assert: result == "inner"
-@seq(@echo("inner"), noop)`,
+@seq(@echo("inner"), runtime.noop)`,
 		},
 		{
 			"comma_in_quoted_arg",
 			requireLine + `
 @macro echo(v) {
-  const @{ value: $v }
+  runtime.const @{ value: $v }
 }
 @assert: result == "a,b"
 @echo("a,b")`,
@@ -90,13 +90,13 @@ func TestMacroEngineEndToEnd(t *testing.T) {
 			"pipeline_body_sees_macros",
 			requireLine + `
 @macro greet() {
-  const @{ value: "g" }
+  runtime.const @{ value: "g" }
 }
 @pipeline wrap_greet
   @greet()
 @end
 @assert: result == "g"
-wrap_greet`,
+pipeline.wrap_greet`,
 		},
 	}
 

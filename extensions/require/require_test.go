@@ -38,6 +38,25 @@ func TestParseLocalRequirement(t *testing.T) {
 	}
 }
 
+func TestParseLocalRequirementWithNamespaceQualifier(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/localapp\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "transport"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	req, err := Parse("./transport as nats", root, nil, "main.nflow", 1)
+	if err != nil {
+		t.Fatalf("Parse local requirement: %v", err)
+	}
+	if req.Alias != "nats" || req.Import != "example.com/localapp/transport" || !req.IsLocal() {
+		t.Fatalf("unexpected qualified local requirement: %+v", req)
+	}
+}
+
 // TestParseRemoteRequirement covers the three forms a remote requirement
 // can take: same-module subpackage without a version, a versioned
 // module, and a version that does not start with 'v'.

@@ -12,7 +12,7 @@ func TestBundle_WiresSupervisor(t *testing.T) {
 	ktest.RequireEqual(t, b.ID, ID)
 	ktest.RequireEqual(t, len(b.Libraries), 1)
 	ktest.RequireEqual(t, len(b.Libraries[0].Actions), 1)
-	ktest.RequireEqual(t, b.Libraries[0].Actions[0].Describe().Name, "supervisor")
+	ktest.RequireEqual(t, b.Libraries[0].Actions[0].Describe().Name, "supervisor.run")
 	ktest.RequireCondition(t, b.SelfTest != nil, "SelfTest is nil")
 }
 

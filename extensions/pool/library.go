@@ -7,7 +7,7 @@
 // Typical use:
 //
 //	@pool workers [const, noop] { strategy: "failover" }
-//	{ pool: "workers", payload: { value: "x" } } -> dispatch
+//	{ pool: "workers", payload: { value: "x" } } -> dispatch.run
 package pool
 
 import (

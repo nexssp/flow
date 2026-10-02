@@ -14,6 +14,7 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 	unique := make([]core.Bundle, 0, len(bundles))
 	seenBundles := make(map[string]struct{}, len(bundles))
 	seenLibraries := make(map[string]string)
+	seenAliases := make(map[string]string)
 
 	for i := range bundles {
 		b := bundles[i]
@@ -24,6 +25,12 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 			return Config{}, fmt.Errorf("duplicate bundle %q", b.ID)
 		}
 		seenBundles[b.ID] = struct{}{}
+		if b.Alias != "" {
+			if previous, ok := seenAliases[b.Alias]; ok {
+				return Config{}, fmt.Errorf("duplicate @require namespace qualifier %q in bundles %q and %q", b.Alias, previous, b.ID)
+			}
+			seenAliases[b.Alias] = b.ID
+		}
 		for j := range b.Libraries {
 			lib := b.Libraries[j]
 			if prev, ok := seenLibraries[lib.Name]; ok {
@@ -55,7 +62,7 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 		extraPrimaries = append(extraPrimaries, bundle.Primaries...)
 		for j := range bundle.Libraries {
 			lib := bundle.Libraries[j]
-			// Aplikacja aliasu za pomocą nowego mechanizmu w resolverze
+			// Mount with the bundle's compilation-local namespace qualifier.
 			if bundle.Alias != "" {
 				if err := resolver.MountWithAlias(lib, bundle.Alias); err != nil {
 					return Config{}, fmt.Errorf("bundle %q library %q: mount: %w", bundle.ID, lib.Name, err)

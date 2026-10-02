@@ -10,7 +10,7 @@ func selftest() []core.SelfTestSection {
 				{
 					Name: "Assert assert(...)",
 					DSL: `@assert: result.score == 95
-{ score: 95 } -> assert(.score >= 50, "score must be at least 50") -> noop`,
+{ score: 95 } -> assert(.score >= 50, "score must be at least 50") -> runtime.noop`,
 				},
 			},
 		},
@@ -21,7 +21,7 @@ func selftest() []core.SelfTestSection {
 					Name: "@assert (single + multiple)",
 					DSL: `@assert: result == "ok"
 @assert: 1 + 1 == 2
-const @{ value: "ok" }`,
+runtime.const @{ value: "ok" }`,
 				},
 			},
 		},

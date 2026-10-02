@@ -11,7 +11,7 @@ import (
 
 // Env reads an environment variable. Accepts either a bare string
 // (env "HOME") or an object with name and required fields.
-var Env = action.New("env", func(_ context.Context, in any) (any, error) {
+var Env = action.New("runtime.env", func(_ context.Context, in any) (any, error) {
 	name := ""
 	required := false
 

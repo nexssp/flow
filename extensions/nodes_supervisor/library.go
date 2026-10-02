@@ -7,7 +7,7 @@
 //	{ tasks: [
 //	    { id: "a", dsl: "noop", payload: { x: 1 } },
 //	    { id: "b", dsl: "log.info", timeout_ms: 500 }
-//	]} -> supervisor
+//	]} -> supervisor.run
 package nodes_supervisor
 
 import (

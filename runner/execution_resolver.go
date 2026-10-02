@@ -1,8 +1,8 @@
 package runner
 
 import (
-	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 
@@ -20,10 +20,32 @@ type executionResolver struct {
 	mountedActions   map[string]action.AnyAction
 	mountedStreams   map[string]action.AnyStreamAction
 	mountedOperators map[string]action.NamedOperator
+	owners           map[string]executionOwner
+	mounts           map[string]string
 
 	actionsSnapshot   []action.AnyAction
 	streamsSnapshot   []action.AnyStreamAction
 	operatorsSnapshot []action.NamedOperator
+}
+
+type executionOwner struct {
+	kind    string
+	library string
+}
+
+const baseResolverOwner = "base resolver"
+
+func (r *executionResolver) baseOwner(name string) (executionOwner, bool) {
+	if _, ok := r.base.Action(name); ok {
+		return executionOwner{kind: "action", library: baseResolverOwner}, true
+	}
+	if _, ok := r.base.Stream(name); ok {
+		return executionOwner{kind: "source", library: baseResolverOwner}, true
+	}
+	if _, ok := r.base.Operator(name); ok {
+		return executionOwner{kind: "operator", library: baseResolverOwner}, true
+	}
+	return executionOwner{}, false
 }
 
 func newExecutionResolver(base core.CapabilityResolver, hooks []action.AnyHook) (core.CapabilityResolver, error) {
@@ -33,13 +55,37 @@ func newExecutionResolver(base core.CapabilityResolver, hooks []action.AnyHook) 
 	if len(hooks) == 0 {
 		return base, nil
 	}
-	return &executionResolver{
+	r := &executionResolver{
 		base:             base,
 		hooks:            slices.Clone(hooks),
 		mountedActions:   make(map[string]action.AnyAction),
 		mountedStreams:   make(map[string]action.AnyStreamAction),
 		mountedOperators: make(map[string]action.NamedOperator),
-	}, nil
+		owners:           make(map[string]executionOwner),
+		mounts:           make(map[string]string),
+	}
+	if lister, ok := base.(interface{ Actions() []action.AnyAction }); ok {
+		for _, act := range lister.Actions() {
+			if act != nil && act.Describe() != nil {
+				r.owners[act.Describe().Name] = executionOwner{kind: "action", library: baseResolverOwner}
+			}
+		}
+	}
+	if lister, ok := base.(interface {
+		Streams() []action.AnyStreamAction
+	}); ok {
+		for _, src := range lister.Streams() {
+			if src != nil && src.Describe() != nil {
+				r.owners[src.Describe().Name] = executionOwner{kind: "source", library: baseResolverOwner}
+			}
+		}
+	}
+	if lister, ok := base.(interface{ Operators() []action.NamedOperator }); ok {
+		for _, op := range lister.Operators() {
+			r.owners[op.Name] = executionOwner{kind: "operator", library: baseResolverOwner}
+		}
+	}
+	return r, nil
 }
 
 func (r *executionResolver) Action(name string) (action.AnyAction, bool) {
@@ -191,118 +237,103 @@ func buildSnapshot[T any](baseNames []string, mounted map[string]T, getLocked fu
 func (r *executionResolver) Mount(lib action.Library) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.mountLocked(lib, "")
+	if err := r.mountLocked(lib, ""); err != nil {
+		return err
+	}
 	r.invalidateAllSnapshotsLocked()
 	return nil
 }
 
 func (r *executionResolver) MountWithAlias(lib action.Library, alias string) error {
-	if alias == "" {
-		return r.Mount(lib)
-	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.mountLocked(lib, alias+".")
+	if err := r.mountLocked(lib, alias); err != nil {
+		return err
+	}
 	r.invalidateAllSnapshotsLocked()
 	return nil
 }
 
-func (r *executionResolver) mountLocked(lib action.Library, prefix string) {
-	combined := combineHooks(lib.Hooks, r.hooks)
+func (r *executionResolver) mountLocked(lib action.Library, alias string) error {
+	stage, err := core.NewDynamicResolver()
+	if err != nil {
+		return err
+	}
+	if alias == "" {
+		err = stage.Mount(lib)
+	} else {
+		err = stage.MountWithAlias(lib, alias)
+	}
+	if err != nil {
+		return err
+	}
+	mountKey := lib.Name
+	owner := lib.Name
+	if alias != "" {
+		mountKey += "\x00" + alias
+		owner = fmt.Sprintf("%s as %s", lib.Name, alias)
+	}
+	if previous, exists := r.mounts[mountKey]; exists {
+		return fmt.Errorf("duplicate mount of library %q with qualifier %q (previous owner %q)", lib.Name, alias, previous)
+	}
 
-	for i := range lib.Actions {
-		act := lib.Actions[i]
-		if act == nil {
-			continue
+	pending := make(map[string]executionOwner)
+	check := func(name, kind string) error {
+		previous, exists := r.owners[name]
+		if !exists {
+			previous, exists = r.baseOwner(name)
 		}
+		if exists {
+			return fmt.Errorf("canonical collision: name %q kind %s owner %q conflicts with kind %s owner %q",
+				name, kind, owner, previous.kind, previous.library)
+		}
+		if previous, exists := pending[name]; exists {
+			return fmt.Errorf("canonical collision: name %q kind %s owner %q conflicts with kind %s owner %q in the same library mount",
+				name, kind, owner, previous.kind, previous.library)
+		}
+		pending[name] = executionOwner{kind: kind, library: owner}
+		return nil
+	}
+	for _, act := range stage.Actions() {
 		name := act.Describe().Name
-		if prefix != "" {
-			act = action.Dynamic(act).Name(prefix + name).Build()
+		if err := check(name, "action"); err != nil {
+			return err
 		}
-		r.mountedActions[prefix+name] = act.CloneWithHooks(combined...)
+	}
+	for _, src := range stage.Streams() {
+		name := src.Describe().Name
+		if err := check(name, "source"); err != nil {
+			return err
+		}
+	}
+	for _, op := range stage.Operators() {
+		if err := check(op.Name, "operator"); err != nil {
+			return err
+		}
 	}
 
-	for i := range lib.Sources {
-		s := lib.Sources[i]
-		if s == nil {
-			continue
-		}
-		name := s.Describe().Name
-		clone := s.CloneWithHooks(combined...)
-		if prefix != "" {
-			clone = &aliasedStream{inner: clone, alias: prefix[:len(prefix)-1]}
-		}
-		r.mountedStreams[prefix+name] = clone
+	for _, act := range stage.Actions() {
+		name := act.Describe().Name
+		r.mountedActions[name] = act.CloneWithHooks(r.hooks...)
+		r.owners[name] = pending[name]
 	}
-
-	for i := range lib.Operators {
-		op := lib.Operators[i]
-		cloned := op.Clone()
-		if prefix != "" {
-			cloned.Name = prefix + cloned.Name
-		}
-		r.mountedOperators[cloned.Name] = cloned
+	for _, src := range stage.Streams() {
+		name := src.Describe().Name
+		r.mountedStreams[name] = src.CloneWithHooks(r.hooks...)
+		r.owners[name] = pending[name]
 	}
-
-	for i := range lib.Aliases {
-		al := lib.Aliases[i]
-		canonical := prefix + al.Canonical
-		target, ok := r.mountedActions[canonical]
-		if !ok {
-			continue
-		}
-		for _, short := range al.Short {
-			if short == "" || short == al.Canonical {
-				continue
-			}
-			r.mountedActions[prefix+short] = target
-		}
+	for _, op := range stage.Operators() {
+		r.mountedOperators[op.Name] = op.Clone()
+		r.owners[op.Name] = pending[op.Name]
 	}
+	r.mounts[mountKey] = owner
+	return nil
 }
 
 func (r *executionResolver) invalidateAllSnapshotsLocked() {
 	r.actionsSnapshot = nil
 	r.streamsSnapshot = nil
 	r.operatorsSnapshot = nil
-}
-
-func combineHooks(libHooks, execHooks []action.AnyHook) []action.AnyHook {
-	switch {
-	case len(libHooks) == 0 && len(execHooks) == 0:
-		return nil
-	case len(libHooks) == 0:
-		return execHooks
-	case len(execHooks) == 0:
-		return libHooks
-	default:
-		out := make([]action.AnyHook, 0, len(libHooks)+len(execHooks))
-		out = append(out, libHooks...)
-		out = append(out, execHooks...)
-		return out
-	}
-}
-
-type aliasedStream struct {
-	inner action.AnyStreamAction
-	alias string
-}
-
-func (a *aliasedStream) Describe() *action.Meta {
-	m := *a.inner.Describe()
-	m.Name = a.alias + "." + m.Name
-	return &m
-}
-func (a *aliasedStream) ReqPayload() any                { return a.inner.ReqPayload() }
-func (a *aliasedStream) ResPayload() any                { return a.inner.ResPayload() }
-func (a *aliasedStream) GetBindings() []action.Binding  { return a.inner.GetBindings() }
-func (a *aliasedStream) GetAnyHooks() []action.AnyHook  { return a.inner.GetAnyHooks() }
-func (a *aliasedStream) AddAnyHook(h ...action.AnyHook) { a.inner.AddAnyHook(h...) }
-func (a *aliasedStream) CloneWithHooks(h ...action.AnyHook) action.AnyStreamAction {
-	return &aliasedStream{inner: a.inner.CloneWithHooks(h...), alias: a.alias}
-}
-
-func (a *aliasedStream) DoStreamAny(ctx context.Context, req any) (action.AnyStream, error) {
-	return a.inner.DoStreamAny(ctx, req)
 }
 
 var _ core.CapabilityResolver = (*executionResolver)(nil)

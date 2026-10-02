@@ -38,22 +38,22 @@ func selftest() []core.SelfTestSection {
 				{
 					Name: "Sequential pipe ->",
 					DSL: `@assert: result == "piped"
-const @{ value: "piped" } -> noop`,
+runtime.const @{ value: "piped" } -> runtime.noop`,
 				},
 				{
-					Name: "Pipe alias |",
-					DSL: `@assert: result == "aliased"
-const @{ value: "aliased" } | noop`,
+					Name: "Pipe syntax sugar |",
+					DSL: `@assert: result == "same pipeline result"
+runtime.const @{ value: "same pipeline result" } | runtime.noop`,
 				},
 				{
 					Name: "Parallel &",
 					DSL: `@assert: result != nil
-( const @{ value: "left" } & const @{ value: "right" } )`,
+( runtime.const @{ value: "left" } & runtime.const @{ value: "right" } )`,
 				},
 				{
 					Name: "Fallback ||",
 					DSL: `@assert: result == "recovered"
-fail @{ message: "boom", kind: "Unavailable" } || const @{ value: "recovered" }`,
+runtime.fail @{ message: "boom", kind: "Unavailable" } || runtime.const @{ value: "recovered" }`,
 				},
 			},
 		},
@@ -67,7 +67,7 @@ var pipe = core.Operator{
 		Precedence:    7,
 		Associativity: core.Left,
 		Description:   "Pass left output to right input",
-		Example:       `const(value=hi) -> debug`,
+		Example:       `runtime.const(value=hi) -> runtime.debug`,
 	},
 	Handler: pipeHandler,
 }
@@ -78,8 +78,8 @@ var pipeAlias = core.Operator{
 		Token:         core.TokPipe,
 		Precedence:    7,
 		Associativity: core.Left,
-		Description:   "Alias for ->",
-		Example:       `const(value=hi) | debug`,
+		Description:   "Syntax sugar for ->; uses the same pipeline semantics",
+		Example:       `runtime.const(value=hi) | runtime.debug`,
 	},
 	Handler: pipeHandler,
 }

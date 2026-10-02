@@ -13,6 +13,6 @@ func TestBundle_WiresActionAndSelfTest(t *testing.T) {
 	ktest.RequireEqual(t, len(b.Libraries), 1)
 	ktest.RequireEqual(t, b.Libraries[0].Name, ID)
 	ktest.RequireEqual(t, len(b.Libraries[0].Actions), 1)
-	ktest.RequireEqual(t, b.Libraries[0].Actions[0].Describe().Name, "decide")
+	ktest.RequireEqual(t, b.Libraries[0].Actions[0].Describe().Name, "decide.run")
 	ktest.RequireCondition(t, b.SelfTest != nil, "SelfTest is nil")
 }
