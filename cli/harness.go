@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -17,10 +18,23 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/nexssp/flow/core"
 	"github.com/nexssp/flow/extensions/require"
 )
+
+// defaultGoCommandTimeout bounds a single `go` invocation. Long enough
+// for a cold `go mod tidy` on a slow network; short enough that a hung
+// proxy or a stuck credential prompt does not lock the CLI forever.
+// Override with NFLOW_GO_TIMEOUT (any time.ParseDuration value).
+const defaultGoCommandTimeout = 10 * time.Minute
+
+// maxCapturedOutputBytes caps the amount of compiler output retained in
+// memory for diagnostics. Only the tail is kept — compiler errors are
+// emitted after the progress lines, so the tail is what actually matters
+// when the command fails.
+const maxCapturedOutputBytes = 8 * 1024
 
 // EnsureHarness builds or reuses a runner binary linked with exactly
 // the external modules declared by reqs.
@@ -76,20 +90,24 @@ func EnsureHarness(reqs []require.Requirement, flowPath ...string) (string, erro
 	}
 
 	fmt.Fprintf(os.Stderr, "⚙️  nflow: resolving dependencies (go mod tidy)...\n")
+	startTidy := time.Now()
 	if err := runGo(buildDir, "mod", "tidy"); err != nil {
 		return "", explainBuildError(err, external)
 	}
+	slog.Debug("harness: mod tidy finished", "elapsed", time.Since(startTidy))
 
 	tmp := bin + ".tmp." + strconv.Itoa(os.Getpid())
 	fmt.Fprintf(os.Stderr, "🔨 nflow: compiling runner binary [%s]...\n", key[:8])
+	startBuild := time.Now()
 	if err := runGo(buildDir, "build", "-trimpath", "-o", tmp, "."); err != nil {
 		return "", explainBuildError(err, external)
 	}
+
 	if err := os.Rename(tmp, bin); err != nil {
 		_ = os.Remove(tmp)
 		return "", fmt.Errorf("harness: install: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "✓ nflow: runner ready\n")
+	fmt.Fprintf(os.Stderr, "✓ nflow: runner ready in %s\n", time.Since(startBuild).Round(time.Millisecond))
 	return bin, nil
 }
 
@@ -259,17 +277,97 @@ func exeSuffix() string {
 	return ""
 }
 
+// runGo executes a go toolchain command in dir and returns its error.
+//
+// Both stdout and stderr are streamed live to os.Stderr so that first-time
+// module downloads and compiler progress are visible to the developer, and
+// fanned out into a bounded tail buffer for diagnostics on failure. On
+// error the returned error carries the command line and the captured tail
+// (capped at maxCapturedOutputBytes) so explainBuildError can inspect it
+// without the caller needing a second I/O channel.
+//
+// The command runs under a context with a default timeout of
+// defaultGoCommandTimeout, overridable via NFLOW_GO_TIMEOUT. A slow or
+// dead GOPROXY, a stuck credential prompt, or a misconfigured sum DB
+// cannot hang the CLI indefinitely.
 func runGo(dir string, args ...string) error {
-	cmd := exec.CommandContext(context.Background(), "go", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), goCommandTimeout())
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir = dir
-	var stderr strings.Builder
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = &stderr
-	cmd.Env = append(os.Environ(), "GOWORK=off")
+	cmd.Stdin = os.Stdin
+
+	capture := newTailBuffer(maxCapturedOutputBytes)
+	stream := io.MultiWriter(os.Stderr, capture)
+	cmd.Stdout = stream
+	cmd.Stderr = stream
+
+	cmd.Env = append(os.Environ(),
+		"GOWORK=off",
+		"GIT_TERMINAL_PROMPT=0", // fail fast instead of hanging on credentials
+	)
+
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("go %s: %w: %s", strings.Join(args, " "), err, stderr.String())
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return fmt.Errorf("go %s: timed out after %s", strings.Join(args, " "), goCommandTimeout())
+		}
+		return fmt.Errorf("go %s: %w\n%s", strings.Join(args, " "), err, capture.String())
 	}
 	return nil
+}
+
+// goCommandTimeout returns the configured timeout for a single go
+// toolchain invocation: NFLOW_GO_TIMEOUT if set and parseable, otherwise
+// defaultGoCommandTimeout. A malformed value is logged and ignored.
+func goCommandTimeout() time.Duration {
+	if raw := os.Getenv("NFLOW_GO_TIMEOUT"); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
+			return d
+		}
+		slog.Warn("harness: ignoring invalid NFLOW_GO_TIMEOUT", "value", raw)
+	}
+	return defaultGoCommandTimeout
+}
+
+// tailBuffer keeps the most recent max bytes written to it, discarding
+// older bytes once the cap is reached. It is the streaming counterpart
+// of a bounded log tail: unbounded writes, bounded memory.
+//
+// Not safe for concurrent writes; the exec package serializes both
+// stdout and stderr through the io.Writer we hand it, so writes arrive
+// on the reader goroutines sequentially.
+type tailBuffer struct {
+	buf     []byte
+	max     int
+	dropped bool
+}
+
+func newTailBuffer(maxBytes int) *tailBuffer {
+	return &tailBuffer{max: maxBytes}
+}
+
+func (b *tailBuffer) Write(p []byte) (int, error) {
+	if len(p) >= b.max {
+		// A single chunk larger than the cap: keep only its tail.
+		b.buf = append(b.buf[:0], p[len(p)-b.max:]...)
+		b.dropped = true
+		return len(p), nil
+	}
+	if over := len(b.buf) + len(p) - b.max; over > 0 {
+		// Shift the surviving tail to the front of the same array.
+		b.buf = append(b.buf[:0], b.buf[over:]...)
+		b.dropped = true
+	}
+	b.buf = append(b.buf, p...)
+	return len(p), nil
+}
+
+func (b *tailBuffer) String() string {
+	if !b.dropped {
+		return string(b.buf)
+	}
+	return "… (earlier output truncated)\n" + string(b.buf)
 }
 
 func writeHarness(directory, driverRoot, driverVersion, goworkPath string, requirements []require.Requirement) error {
