@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/expr-lang/expr v1.17.8
-	github.com/nexssp/kernel v0.24.0
+	github.com/nexssp/kernel v0.25.0
 	github.com/nexssp/validation v0.2.4
 	github.com/tetratelabs/wazero v1.8.2
 	golang.org/x/sync v0.23.0
