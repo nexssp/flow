@@ -23,10 +23,13 @@ func TestFilterInheritable_DropsDeclaredNonInheritable(t *testing.T) {
 		testModifier("inherit", true),
 		testModifier("meta", false),
 	)
-	fn := func(int) []string {
-		return []string{"inherit=1", "meta=2", "unknown=3"}
+	lk := LineLookup{
+		Source: ModifierSource{Kind: "test"},
+		Fn: func(int) []string {
+			return []string{"inherit=1", "meta=2", "unknown=3"}
+		},
 	}
-	got := filterInheritable(fn, table)(0)
+	got := filterInheritable(lk, table).Fn(0)
 
 	want := []string{"inherit=1", "unknown=3"}
 	if !slices.Equal(got, want) {
@@ -35,12 +38,15 @@ func TestFilterInheritable_DropsDeclaredNonInheritable(t *testing.T) {
 }
 
 func TestFilterInheritable_NilTableReturnsFn(t *testing.T) {
-	fn := func(int) []string { return []string{"x=1"} }
-	got := filterInheritable(fn, nil)
-	if got == nil {
-		t.Fatal("nil table must return fn unchanged")
+	lk := LineLookup{
+		Source: ModifierSource{Kind: "test"},
+		Fn:     func(int) []string { return []string{"x=1"} },
 	}
-	if out := got(0); !slices.Equal(out, []string{"x=1"}) {
+	got := filterInheritable(lk, nil)
+	if got.Fn == nil {
+		t.Fatal("nil table must return lookup unchanged")
+	}
+	if out := got.Fn(0); !slices.Equal(out, []string{"x=1"}) {
 		t.Fatalf("passthrough broken: %v", out)
 	}
 }
@@ -54,8 +60,9 @@ func TestPrependInherited_AtomWinsByName(t *testing.T) {
 		"",
 		0,
 	)
-	parser.WithLineModifiers([]func(int) []string{
-		func(int) []string { return []string{"retry=3", "timeout=1s"} },
+	parser.WithLineModifiers(LineLookup{
+		Source: ModifierSource{Kind: "test"},
+		Fn:     func(int) []string { return []string{"retry=3", "timeout=1s"} },
 	})
 
 	ast, err := parser.Parse()
@@ -82,10 +89,16 @@ func TestPrependInherited_LaterLookupWins(t *testing.T) {
 		"",
 		0,
 	)
-	parser.WithLineModifiers([]func(int) []string{
-		func(int) []string { return []string{"timeout=1ms"} },
-		func(int) []string { return []string{"timeout=1s"} },
-	})
+	parser.WithLineModifiers(
+		LineLookup{
+			Source: ModifierSource{Kind: "outer"},
+			Fn:     func(int) []string { return []string{"timeout=1ms"} },
+		},
+		LineLookup{
+			Source: ModifierSource{Kind: "inner"},
+			Fn:     func(int) []string { return []string{"timeout=1s"} },
+		},
+	)
 
 	ast, err := parser.Parse()
 	if err != nil {

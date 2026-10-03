@@ -411,31 +411,36 @@ func ModifiersToMap(modifiers []string) map[string]any {
 	return out
 }
 
-// filterInheritable returns a line-modifier lookup that keeps only
-// entries whose modifier is declared Inheritable in the given table.
-// Non-inheritable modifiers (metadata: :tag, :status, :route, …) are
-// dropped, so @scope / @pipeline / @profile never leak them into body
-// atoms.
+// filterInheritable returns a line-modifier lookup that keeps:
 //
-// A nil table or nil inner function returns the inner function
-// unchanged — useful for tests that install their own lookup.
-func filterInheritable(fn func(int) []string, mt *ModifierTable) func(int) []string {
-	if fn == nil || mt == nil {
-		return fn
+//   - modifiers declared Inheritable in mt, and
+//   - modifiers unknown to mt.
+//
+// Unknown modifiers are passed through so ModifierTable.ApplyAll can
+// reject them with its standard "unknown modifier" error. Only
+// declared-but-not-inheritable modifiers are dropped — those are
+// metadata (tag, status, route, …) and must not leak into body atoms.
+//
+// A nil table or nil inner function returns the lookup unchanged.
+// Sources are preserved.
+func filterInheritable(lk LineLookup, mt *ModifierTable) LineLookup {
+	if lk.Fn == nil || mt == nil {
+		return lk
 	}
-	return func(line int) []string {
-		raw := fn(line)
+	inner := lk.Fn
+	lk.Fn = func(line int) []string {
+		raw := inner(line)
 		if len(raw) == 0 {
 			return nil
 		}
 		var kept []string
 		for _, m := range raw {
-			name := ModifierName(m)
-			mod, ok := mt.ByName(name)
+			mod, ok := mt.ByName(ModifierName(m))
 			if !ok || mod.Inheritable {
 				kept = append(kept, m)
 			}
 		}
 		return kept
 	}
+	return lk
 }

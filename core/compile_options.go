@@ -23,7 +23,7 @@ type compileConfig struct {
 	config       map[string]string
 	cliArgs      []string
 	argSchemas   map[string][]ArgFieldSpec
-	lineMods     []func(line int) []string
+	lineMods     []LineLookup
 }
 
 type CompileOption func(*compileConfig)
@@ -67,14 +67,16 @@ func WithConfigMap(cfg map[string]string, cliArgs []string) CompileOption {
 	}
 }
 
-// WithLineModifiers appends a line-indexed modifier lookup. Multiple
-// options accumulate; later ones override earlier ones on the same
+// WithLineModifiers appends line-indexed modifier lookups. Multiple
+// options accumulate; later lookups override earlier ones on the same
 // modifier name. Extensions compose lookups this way — a pipeline's
 // inherited policy is registered before nested @scope spans.
-func WithLineModifiers(fn func(line int) []string) CompileOption {
+func WithLineModifiers(lookups ...LineLookup) CompileOption {
 	return func(c *compileConfig) {
-		if fn != nil {
-			c.lineMods = append(c.lineMods, fn)
+		for _, lk := range lookups {
+			if lk.Fn != nil {
+				c.lineMods = append(c.lineMods, lk)
+			}
 		}
 	}
 }
@@ -142,23 +144,23 @@ func compileConfigFromCtx(ctx context.Context) (config map[string]string, cliArg
 // LineModifiersFromOptions returns the line-indexed modifier lookups
 // that the given CompileOptions would install, each filtered through
 // mt so non-inheritable metadata modifiers are dropped and unknown
-// modifiers pass through for ApplyAll to reject.
+// modifiers pass through for ApplyAll to reject. Sources are preserved.
 //
 // Used by nflow lint to parse a source with the same inherited
 // modifiers the runtime compiler would apply. Extensions publish their
 // lookups through Bundle.OnPreprocess as CompileOptions; this function
 // is the only way to extract them outside CompileAction.
-func LineModifiersFromOptions(mt *ModifierTable, opts []CompileOption) []func(int) []string {
+func LineModifiersFromOptions(mt *ModifierTable, opts []CompileOption) []LineLookup {
 	return filterLineMods(mt, applyCompileOptions(opts).lineMods)
 }
 
-func filterLineMods(mt *ModifierTable, fns []func(int) []string) []func(int) []string {
-	if len(fns) == 0 {
+func filterLineMods(mt *ModifierTable, lookups []LineLookup) []LineLookup {
+	if len(lookups) == 0 {
 		return nil
 	}
-	out := make([]func(int) []string, len(fns))
-	for i, fn := range fns {
-		out[i] = filterInheritable(fn, mt)
+	out := make([]LineLookup, len(lookups))
+	for i, lk := range lookups {
+		out[i] = filterInheritable(lk, mt)
 	}
 	return out
 }

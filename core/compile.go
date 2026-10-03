@@ -91,7 +91,7 @@ func runCompile(
 
 	lineMods := filterLineMods(mt, effectiveCfg.lineMods)
 	ast, err := NewParserWithFileOffset(ctx, ot, ptEffective, clean, req.Name, 0).
-		WithLineModifiers(lineMods).
+		WithLineModifiers(lineMods...).
 		Parse()
 	if err != nil {
 		return CompileRes{}, err

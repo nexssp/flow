@@ -2,6 +2,7 @@ package scope
 
 import (
 	"embed"
+	"strconv"
 
 	"github.com/nexssp/kernel/action"
 
@@ -28,25 +29,34 @@ func Bundle(_ map[string]string) core.Bundle {
 				return core.PreprocessContributions{}
 			}
 			return core.PreprocessContributions{
-				CompileOpts: []core.CompileOption{core.WithLineModifiers(makeLookup(spans))},
+				CompileOpts: []core.CompileOption{core.WithLineModifiers(makeLookups(spans)...)},
 			}
 		},
 		Fixtures: fixturesFS,
 	}
 }
 
-// makeLookup returns a line-indexed modifier function. Spans are
-// visited in append order (outer-to-inner), so later modifiers override
-// earlier ones on the same name. prependInherited handles the override;
-// this function just concatenates.
-func makeLookup(spans []span) func(int) []string {
-	return func(line int) []string {
-		var out []string
-		for _, s := range spans {
-			if s.start <= line && line <= s.end {
-				out = append(out, s.modifiers...)
-			}
-		}
-		return out
+// makeLookups returns one lookup per span. Spans are visited in append
+// order (outer-to-inner), so later lookups win on modifier-name
+// collision inside prependInherited. Each lookup carries its own
+// source so `nflow explain` can attribute a modifier to the specific
+// @scope block that produced it.
+func makeLookups(spans []span) []core.LineLookup {
+	out := make([]core.LineLookup, 0, len(spans))
+	for _, s := range spans {
+		s := s
+		out = append(out, core.LineLookup{
+			Source: core.ModifierSource{
+				Kind:  "scope",
+				Label: "line " + strconv.Itoa(s.start),
+			},
+			Fn: func(line int) []string {
+				if s.start <= line && line <= s.end {
+					return s.modifiers
+				}
+				return nil
+			},
+		})
 	}
+	return out
 }

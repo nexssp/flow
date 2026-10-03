@@ -61,8 +61,14 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 		subOpts := append([]core.CompileOption(nil), cfg.CompileOpts...)
 		if len(bodyMods) > 0 {
 			captured := append([]string(nil), bodyMods...)
-			subOpts = append(subOpts, core.WithLineModifiers(func(int) []string {
-				return captured
+			subOpts = append(subOpts, core.WithLineModifiers(core.LineLookup{
+				Source: core.ModifierSource{
+					Kind:  "pipeline",
+					Label: subName,
+				},
+				Fn: func(int) []string {
+					return captured
+				},
 			}))
 		}
 

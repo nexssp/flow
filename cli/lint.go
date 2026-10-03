@@ -293,7 +293,7 @@ func registrySurface(cfg runner.Config) (known map[string]struct{}, modifiers ma
 // of the pipeline applied inside CompileAction: read Preprocess
 // contributions, extract the line lookups, filter through the modifier
 // table.
-func computeLineMods(cfg runner.Config, meta map[string]any) []func(int) []string {
+func computeLineMods(cfg runner.Config, meta map[string]any) []core.LineLookup {
 	opts := append([]core.CompileOption(nil), cfg.CompileOpts...)
 	contribs := core.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
 	opts = append(opts, contribs.CompileOpts...)
@@ -377,8 +377,14 @@ func lintFile(
 			_, bodyMods := runner.SplitPipelineModifiers(cfg.Modifiers, mods)
 			if len(bodyMods) > 0 {
 				captured := append([]string(nil), bodyMods...)
-				fragmentOpts = append(fragmentOpts, core.WithLineModifiers(func(int) []string {
-					return captured
+				fragmentOpts = append(fragmentOpts, core.WithLineModifiers(core.LineLookup{
+					Source: core.ModifierSource{
+						Kind:  "pipeline",
+						Label: name,
+					},
+					Fn: func(int) []string {
+						return captured
+					},
 				}))
 			}
 		}
@@ -400,7 +406,7 @@ func lintFragment(
 	cfg runner.Config,
 	known map[string]struct{},
 	modifiers map[string]core.Modifier,
-	lineMods []func(int) []string,
+	lineMods []core.LineLookup,
 ) []LintIssue {
 	ast, err := core.NewParserWithFileOffset(
 		context.Background(),
@@ -410,7 +416,7 @@ func lintFragment(
 		path,
 		0,
 	).
-		WithLineModifiers(lineMods).
+		WithLineModifiers(lineMods...).
 		Parse()
 	if err != nil {
 		return []LintIssue{{

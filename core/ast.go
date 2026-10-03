@@ -18,13 +18,29 @@ type Expr interface {
 
 // Atom is a single runtime action call.
 type Atom struct {
-	Name      string
-	Params    map[string]string
-	Modifiers []string
-	Args      map[string]*Value
-	Prompt    string
-	Targets   []string
-	Excludes  []string
+	Name            string
+	Params          map[string]string
+	Modifiers       []string
+	ModifierSources []ModifierSource // parallel to Modifiers; same length
+	Args            map[string]*Value
+	Prompt          string
+	Targets         []string
+	Excludes        []string
+}
+
+// ModifierSource records where a modifier came from. Both fields are
+// free-form strings: core never interprets them. Extensions and the
+// parser populate them; `nflow explain` renders them.
+//
+// Kind is a short category. Reserved values: "atom" for a modifier
+// written directly on the atom. Extensions add their own
+// ("scope", "profile", "pipeline", …).
+//
+// Label identifies the specific origin within a kind — a profile name,
+// a pipeline name. Empty when the kind alone is enough.
+type ModifierSource struct {
+	Kind  string
+	Label string
 }
 
 func (*Atom) Node()            {}

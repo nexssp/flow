@@ -7,20 +7,31 @@ import (
 	"strings"
 )
 
+const maxParseDepth = 64
+
 type Parser struct {
-	ctx           context.Context
-	file          string
-	lineBase      int
-	src           string
-	toks          []Token
-	pos           int
-	ops           *OperatorTable
-	primaries     *PrimaryExtensionTable
-	depth         int
-	lineModifiers []func(line int) []string
+	ctx       context.Context
+	file      string
+	lineBase  int
+	src       string
+	toks      []Token
+	pos       int
+	ops       *OperatorTable
+	primaries *PrimaryExtensionTable
+	depth     int
+	// lineModifiers is the parser's line-indexed modifier lookup chain.
+	// Called for every atom during parseAtom. Later lookups win over
+	// earlier ones on modifier-name collision. The Source field of each
+	// lookup is recorded alongside every modifier it produces.
+	lineModifiers []LineLookup
 }
 
-const maxParseDepth = 64
+// LineLookup pairs a line-indexed modifier function with the source
+// that produced it. Every modifier Fn returns is attributed to Source.
+type LineLookup struct {
+	Source ModifierSource
+	Fn     func(line int) []string
+}
 
 // NewParser is the no-file convenience used in tests. Parse errors
 // report only the line number.
@@ -326,26 +337,42 @@ func (p *Parser) parseAtom() (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	if a, ok := expr.(*Atom); ok {
-		p.prependInherited(a, startLine)
+	a, ok := expr.(*Atom)
+	if !ok {
+		return expr, nil
 	}
+	// Every modifier produced by parseAtomInner is written directly on
+	// the atom, so its source is "atom".
+	a.ModifierSources = make([]ModifierSource, len(a.Modifiers))
+	for i := range a.ModifierSources {
+		a.ModifierSources[i] = ModifierSource{Kind: "atom"}
+	}
+	p.prependInherited(a, startLine)
 	return expr, nil
 }
 
-// prependInherited prepends the lookup's modifiers to a, skipping any
-// name the atom already declares. Later entries win over earlier ones
-// on collision, so an inner scope overrides an outer one.
+// prependInherited prepends the lookup chain's modifiers to a,
+// skipping any name the atom already declares. Later lookups win over
+// earlier ones on collision, so an inner scope overrides an outer one.
+// Sources are recorded in parallel so `nflow explain` can attribute
+// each modifier to its producer.
 func (p *Parser) prependInherited(a *Atom, line int) {
 	if len(p.lineModifiers) == 0 {
 		return
 	}
 
-	var inherited []string
-	for _, fn := range p.lineModifiers {
-		if fn == nil {
+	type sourced struct {
+		raw    string
+		source ModifierSource
+	}
+	var inherited []sourced
+	for _, lk := range p.lineModifiers {
+		if lk.Fn == nil {
 			continue
 		}
-		inherited = append(inherited, fn(line)...)
+		for _, raw := range lk.Fn(line) {
+			inherited = append(inherited, sourced{raw: raw, source: lk.Source})
+		}
 	}
 	if len(inherited) == 0 {
 		return
@@ -357,23 +384,27 @@ func (p *Parser) prependInherited(a *Atom, line int) {
 	}
 
 	index := make(map[string]int, len(inherited))
-	applied := make([]string, 0, len(inherited))
-	for _, raw := range inherited {
-		n := ModifierName(raw)
+	var appliedRaw []string
+	var appliedSrc []ModifierSource
+	for _, s := range inherited {
+		n := ModifierName(s.raw)
 		if atomNames[n] {
 			continue
 		}
 		if i, ok := index[n]; ok {
-			applied[i] = raw
+			appliedRaw[i] = s.raw
+			appliedSrc[i] = s.source
 		} else {
-			index[n] = len(applied)
-			applied = append(applied, raw)
+			index[n] = len(appliedRaw)
+			appliedRaw = append(appliedRaw, s.raw)
+			appliedSrc = append(appliedSrc, s.source)
 		}
 	}
-	if len(applied) == 0 {
+	if len(appliedRaw) == 0 {
 		return
 	}
-	a.Modifiers = append(applied, a.Modifiers...)
+	a.Modifiers = append(appliedRaw, a.Modifiers...)
+	a.ModifierSources = append(appliedSrc, a.ModifierSources...)
 }
 
 func (p *Parser) parseLegacyParams(a *Atom) error {
@@ -508,8 +539,9 @@ func (p *Parser) appendList(dst []string) []string {
 }
 
 // WithLineModifiers replaces the parser's line-modifier lookup chain.
-// The parser calls them in order and concatenates the results.
-func (p *Parser) WithLineModifiers(fns []func(line int) []string) *Parser {
-	p.lineModifiers = fns
+// The parser calls them in order; later lookups win over earlier ones
+// on modifier-name collision.
+func (p *Parser) WithLineModifiers(lookups ...LineLookup) *Parser {
+	p.lineModifiers = lookups
 	return p
 }
