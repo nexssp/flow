@@ -228,6 +228,15 @@ func splitRawModifier(raw string) (name, value string) {
 	return raw, ""
 }
 
+// ModifierName returns the name portion of a raw modifier string,
+// before any '='.
+func ModifierName(raw string) string {
+	if i := strings.IndexByte(raw, '='); i > 0 {
+		return raw[:i]
+	}
+	return raw
+}
+
 // ── Typed constructors ──────────────────────────────────────────────
 //
 // Every modifier in the ecosystem parses its DSL text through one of

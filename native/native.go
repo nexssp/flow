@@ -28,6 +28,7 @@ import (
 	"github.com/nexssp/flow/extensions/retry"
 	"github.com/nexssp/flow/extensions/runtime"
 	"github.com/nexssp/flow/extensions/schema"
+	"github.com/nexssp/flow/extensions/scope"
 	"github.com/nexssp/flow/extensions/syntax"
 )
 
@@ -60,6 +61,7 @@ func Bundles() []core.Bundle {
 		nodes_distribute.Bundle(nil),
 		nodes_dispatch.Bundle(nil),
 		nodes_supervisor.Bundle(nil),
+		scope.Bundle(nil),
 	}
 }
 

@@ -8,15 +8,16 @@ import (
 )
 
 type Parser struct {
-	ctx       context.Context
-	file      string
-	lineBase  int
-	src       string
-	toks      []Token
-	pos       int
-	ops       *OperatorTable
-	primaries *PrimaryExtensionTable
-	depth     int
+	ctx           context.Context
+	file          string
+	lineBase      int
+	src           string
+	toks          []Token
+	pos           int
+	ops           *OperatorTable
+	primaries     *PrimaryExtensionTable
+	depth         int
+	lineModifiers func(line int) []string
 }
 
 const maxParseDepth = 64
@@ -263,7 +264,7 @@ func (p *Parser) parsePrimary() (Expr, error) {
 
 // parseAtom czyta atom wraz z całą otoczką: params w nawiasach,
 // modyfikatory, targets, excludes, prompt i blok @{...}.
-func (p *Parser) parseAtom() (Expr, error) {
+func (p *Parser) parseAtomInner() (Expr, error) {
 	name := p.Cur().Lit
 	p.Next()
 	if canonical, ok := TranslateKeyword(name); ok {
@@ -317,6 +318,55 @@ func (p *Parser) parseAtom() (Expr, error) {
 			return a, nil
 		}
 	}
+}
+
+func (p *Parser) parseAtom() (Expr, error) {
+	startLine := p.Cur().Line
+	expr, err := p.parseAtomInner()
+	if err != nil {
+		return nil, err
+	}
+	if a, ok := expr.(*Atom); ok {
+		p.prependInherited(a, startLine)
+	}
+	return expr, nil
+}
+
+// prependInherited prepends the lookup's modifiers to a, skipping any
+// name the atom already declares. Later entries win over earlier ones
+// on collision, so an inner scope overrides an outer one.
+func (p *Parser) prependInherited(a *Atom, line int) {
+	if p.lineModifiers == nil {
+		return
+	}
+	inherited := p.lineModifiers(line)
+	if len(inherited) == 0 {
+		return
+	}
+
+	atomNames := make(map[string]bool, len(a.Modifiers))
+	for _, raw := range a.Modifiers {
+		atomNames[ModifierName(raw)] = true
+	}
+
+	index := make(map[string]int, len(inherited))
+	applied := make([]string, 0, len(inherited))
+	for _, raw := range inherited {
+		n := ModifierName(raw)
+		if atomNames[n] {
+			continue
+		}
+		if i, ok := index[n]; ok {
+			applied[i] = raw
+		} else {
+			index[n] = len(applied)
+			applied = append(applied, raw)
+		}
+	}
+	if len(applied) == 0 {
+		return
+	}
+	a.Modifiers = append(applied, a.Modifiers...)
 }
 
 func (p *Parser) parseLegacyParams(a *Atom) error {
@@ -448,4 +498,11 @@ func (p *Parser) appendList(dst []string) []string {
 		}
 		p.Next()
 	}
+}
+
+// WithLineModifiers attaches a line-indexed modifier lookup. A nil
+// lookup, or one returning nil for a line, contributes nothing.
+func (p *Parser) WithLineModifiers(fn func(line int) []string) *Parser {
+	p.lineModifiers = fn
+	return p
 }

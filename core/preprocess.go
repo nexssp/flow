@@ -73,13 +73,16 @@ func preprocess(
 
 	lines := strings.Split(source, "\n")
 	body := make([]string, len(lines))
+	blanked := make(map[int]bool)
 
 	i := 0
 	for i < len(lines) {
 		line := strings.TrimSpace(lines[i])
 
 		if !strings.HasPrefix(line, "@") || strings.HasPrefix(line, "@{") {
-			body[i] = lines[i]
+			if !blanked[i] {
+				body[i] = lines[i]
+			}
 			i++
 			continue
 		}
@@ -87,7 +90,9 @@ func preprocess(
 		name := directiveName(line)
 		handler, ok := dt.ByName(name)
 		if !ok {
-			body[i] = lines[i]
+			if !blanked[i] {
+				body[i] = lines[i]
+			}
 			i++
 			continue
 		}
@@ -99,6 +104,7 @@ func preprocess(
 			Out:     meta,
 			File:    file,
 			BaseDir: baseDir,
+			Table:   dt,
 			Recurse: func(absPath string) (string, map[string]any, error) {
 				if !stack.push(absPath) {
 					return "", nil, SourceError(
@@ -117,6 +123,13 @@ func preprocess(
 		res, err := handler.Do(ctx, req)
 		if err != nil {
 			return "", nil, err
+		}
+
+		for _, bl := range res.BlankLines {
+			if bl >= 0 && bl < len(body) {
+				blanked[bl] = true
+				body[bl] = ""
+			}
 		}
 
 		next := res.Next

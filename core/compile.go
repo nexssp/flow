@@ -89,7 +89,9 @@ func runCompile(
 
 	effectiveCfg, ctx, ptEffective := applyPreprocessContributions(ctx, cfg, opts, pt, meta, req)
 
-	ast, err := NewParserWithFileOffset(ctx, ot, ptEffective, clean, req.Name, 0).Parse()
+	ast, err := NewParserWithFileOffset(ctx, ot, ptEffective, clean, req.Name, 0).
+		WithLineModifiers(effectiveCfg.lineMods).
+		Parse()
 	if err != nil {
 		return CompileRes{}, err
 	}

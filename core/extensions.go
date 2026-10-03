@@ -15,6 +15,7 @@ type DirectiveReq struct {
 	Out     map[string]any
 	File    string
 	BaseDir string
+	Table   *DirectiveTable
 
 	// Recurse runs the full preprocess on another .nflow file and
 	// returns its cleaned body plus merged metadata. Used by @include
@@ -25,6 +26,13 @@ type DirectiveReq struct {
 
 type DirectiveRes struct {
 	Next int
+
+	// BlankLines lists 0-based line indices whose output must be empty
+	// even when the source line has content. Block directives use it
+	// to remove their own delimiter lines (e.g. @scope's header and
+	// closing brace) without consuming the body, so nested directives
+	// inside the body still run through the outer preprocess loop.
+	BlankLines []int
 }
 
 type Directive struct {

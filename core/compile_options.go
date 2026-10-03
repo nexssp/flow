@@ -23,6 +23,7 @@ type compileConfig struct {
 	config       map[string]string
 	cliArgs      []string
 	argSchemas   map[string][]ArgFieldSpec
+	lineMods     func(line int) []string
 }
 
 type CompileOption func(*compileConfig)
@@ -63,6 +64,18 @@ func WithConfigMap(cfg map[string]string, cliArgs []string) CompileOption {
 	return func(c *compileConfig) {
 		c.config = cfg
 		c.cliArgs = cliArgs
+	}
+}
+
+// WithLineModifiers installs a line-indexed modifier lookup that the
+// parser consults for every atom. Later options replace earlier ones,
+// so an extension that wants to compose lookups must do so inside its
+// own closure.
+func WithLineModifiers(fn func(line int) []string) CompileOption {
+	return func(c *compileConfig) {
+		if fn != nil {
+			c.lineMods = fn
+		}
 	}
 }
 
