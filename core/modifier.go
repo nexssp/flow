@@ -43,12 +43,13 @@ const (
 // is reserved by the Kernel or the grammar must be declared by its
 // owner; NewModifierTable panics on a mismatch.
 type Modifier struct {
-	Name      string
-	Owner     ModifierOwner
-	ValueKind ModifierKind
-	Unique    bool
-	Example   string
-	Apply     func(b *action.Builder[any, any], raw string) error
+	Name        string
+	Owner       ModifierOwner
+	ValueKind   ModifierKind
+	Unique      bool
+	Inheritable bool
+	Example     string
+	Apply       func(b *action.Builder[any, any], raw string) error
 }
 
 // String returns a stable identifier for the kind, suitable for JSON
@@ -90,6 +91,15 @@ func WithOwner(m Modifier, owner ModifierOwner) Modifier {
 // to the same atom is a compile-time error.
 func WithUnique(m Modifier) Modifier {
 	m.Unique = true
+	return m
+}
+
+// WithInheritable marks a modifier as eligible for scope inheritance.
+// @scope and @pipeline propagate only inheritable modifiers to nested
+// atoms; metadata modifiers (tags, status, route) stay on the wrapper
+// they were declared on.
+func WithInheritable(m Modifier) Modifier {
+	m.Inheritable = true
 	return m
 }
 
@@ -399,4 +409,33 @@ func ModifiersToMap(modifiers []string) map[string]any {
 		}
 	}
 	return out
+}
+
+// filterInheritable returns a line-modifier lookup that keeps only
+// entries whose modifier is declared Inheritable in the given table.
+// Non-inheritable modifiers (metadata: :tag, :status, :route, …) are
+// dropped, so @scope / @pipeline / @profile never leak them into body
+// atoms.
+//
+// A nil table or nil inner function returns the inner function
+// unchanged — useful for tests that install their own lookup.
+func filterInheritable(fn func(int) []string, mt *ModifierTable) func(int) []string {
+	if fn == nil || mt == nil {
+		return fn
+	}
+	return func(line int) []string {
+		raw := fn(line)
+		if len(raw) == 0 {
+			return nil
+		}
+		var kept []string
+		for _, m := range raw {
+			name := ModifierName(m)
+			mod, ok := mt.ByName(name)
+			if !ok || mod.Inheritable {
+				kept = append(kept, m)
+			}
+		}
+		return kept
+	}
 }

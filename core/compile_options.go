@@ -23,7 +23,7 @@ type compileConfig struct {
 	config       map[string]string
 	cliArgs      []string
 	argSchemas   map[string][]ArgFieldSpec
-	lineMods     func(line int) []string
+	lineMods     []func(line int) []string
 }
 
 type CompileOption func(*compileConfig)
@@ -67,14 +67,14 @@ func WithConfigMap(cfg map[string]string, cliArgs []string) CompileOption {
 	}
 }
 
-// WithLineModifiers installs a line-indexed modifier lookup that the
-// parser consults for every atom. Later options replace earlier ones,
-// so an extension that wants to compose lookups must do so inside its
-// own closure.
+// WithLineModifiers appends a line-indexed modifier lookup. Multiple
+// options accumulate; later ones override earlier ones on the same
+// modifier name. Extensions compose lookups this way — a pipeline's
+// inherited policy is registered before nested @scope spans.
 func WithLineModifiers(fn func(line int) []string) CompileOption {
 	return func(c *compileConfig) {
 		if fn != nil {
-			c.lineMods = fn
+			c.lineMods = append(c.lineMods, fn)
 		}
 	}
 }

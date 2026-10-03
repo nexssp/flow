@@ -56,9 +56,19 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 
 	// Variadic signature to accept modifiers for sub-pipelines:
 	compileSub := func(subName, subSource string, mods ...string) (action.AnyAction, error) {
+		wrapperMods, bodyMods := splitPipelineModifiers(cfg.Modifiers, mods)
+
+		subOpts := append([]core.CompileOption(nil), cfg.CompileOpts...)
+		if len(bodyMods) > 0 {
+			captured := append([]string(nil), bodyMods...)
+			subOpts = append(subOpts, core.WithLineModifiers(func(int) []string {
+				return captured
+			}))
+		}
+
 		subRes, subErr := core.CompileAction(
 			resolver, cfg.Directives, cfg.Modifiers,
-			cfg.Operators, cfg.Primaries, cfg.CompileOpts...,
+			cfg.Operators, cfg.Primaries, subOpts...,
 		).Do(ctx, core.CompileReq{
 			Source:             subSource,
 			Name:               subName,
@@ -69,10 +79,10 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 		}
 
 		program := subRes.Program
-		if len(mods) > 0 && cfg.Modifiers != nil {
-			applied, applyErr := cfg.Modifiers.ApplyAll(program, mods)
-			if applyErr != nil {
-				return nil, applyErr
+		if len(wrapperMods) > 0 && cfg.Modifiers != nil {
+			applied, merr := cfg.Modifiers.ApplyAll(program, wrapperMods)
+			if merr != nil {
+				return nil, merr
 			}
 			program = applied
 		}
@@ -179,4 +189,27 @@ func (a compilerAdapter) CompilePipeline(expr string) (action.Executable, error)
 		return nil, errors.New("runner: compiled child is not Executable")
 	}
 	return exec, nil
+}
+
+// splitPipelineModifiers separates the pipeline header's modifiers.
+// Inheritable policy modifiers propagate to the body atoms; everything
+// else stays on the wrapper. The two sets are disjoint: no modifier
+// applies twice.
+func splitPipelineModifiers(table *core.ModifierTable, mods []string) (wrapper, body []string) {
+	if len(mods) == 0 {
+		return nil, nil
+	}
+	for _, raw := range mods {
+		if table == nil {
+			wrapper = append(wrapper, raw)
+			continue
+		}
+		name := core.ModifierName(raw)
+		if m, ok := table.ByName(name); ok && m.Inheritable {
+			body = append(body, raw)
+			continue
+		}
+		wrapper = append(wrapper, raw)
+	}
+	return wrapper, body
 }

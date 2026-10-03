@@ -17,7 +17,7 @@ type Parser struct {
 	ops           *OperatorTable
 	primaries     *PrimaryExtensionTable
 	depth         int
-	lineModifiers func(line int) []string
+	lineModifiers []func(line int) []string
 }
 
 const maxParseDepth = 64
@@ -336,10 +336,17 @@ func (p *Parser) parseAtom() (Expr, error) {
 // name the atom already declares. Later entries win over earlier ones
 // on collision, so an inner scope overrides an outer one.
 func (p *Parser) prependInherited(a *Atom, line int) {
-	if p.lineModifiers == nil {
+	if len(p.lineModifiers) == 0 {
 		return
 	}
-	inherited := p.lineModifiers(line)
+
+	var inherited []string
+	for _, fn := range p.lineModifiers {
+		if fn == nil {
+			continue
+		}
+		inherited = append(inherited, fn(line)...)
+	}
 	if len(inherited) == 0 {
 		return
 	}
@@ -500,9 +507,9 @@ func (p *Parser) appendList(dst []string) []string {
 	}
 }
 
-// WithLineModifiers attaches a line-indexed modifier lookup. A nil
-// lookup, or one returning nil for a line, contributes nothing.
-func (p *Parser) WithLineModifiers(fn func(line int) []string) *Parser {
-	p.lineModifiers = fn
+// WithLineModifiers replaces the parser's line-modifier lookup chain.
+// The parser calls them in order and concatenates the results.
+func (p *Parser) WithLineModifiers(fns []func(line int) []string) *Parser {
+	p.lineModifiers = fns
 	return p
 }

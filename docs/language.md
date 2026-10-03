@@ -63,6 +63,47 @@ For example, current example files use `@assert: result.summary == "Ada (ID: 101
 
 Actions, stream sources, and stream operators have one canonical fully-qualified name, such as `const`, `fs.walk`, or `render.markdown`; extension libraries do not publish short-name synonyms. An explicit `@require ... as local` changes the first namespace segment to `local` for that flow. This local qualifier is the only Flow alias mechanism. The `|` character remains pipeline syntax sugar for `->`, not an action alias.
 
+## Policy inheritance
+
+Two directives govern inherited policy:
+
+- `@scope :mods { ... }` — anonymous; applies to atoms inside the block.
+- `@profile NAME :mods` — named; reused via `:profile=NAME` on `@pipeline` or `@scope`.
+
+### Precedence
+
+From highest priority to lowest:
+
+1. Atom-local modifier (`atom:mod`)
+2. Innermost `@scope`
+3. Outer `@scope`
+4. `@pipeline` local modifiers
+5. `@pipeline :profile=NAME`
+6. Kernel defaults
+
+More local wins. Later-declared (inner) scope spans override earlier (outer) spans on the same modifier name.
+
+### Explicit disable
+
+An atom-local `:retry=0` is an explicit disable. It overrides any inherited `:retry=N` from scope or profile. `:retry=0` means "off"; absent means "inherit".
+
+### What inherits
+
+Only policy modifiers propagate from `@scope`/`@profile` to atoms:
+
+```
+:timeout  :retry  :cache  :dedup  :coalesce  :rate_limit  :concurrency  :idempotent  :breaker
+```
+
+Metadata modifiers — `:tag`, `:status`, `:route`, `:name`, `:scope`, `:desc` — stay on the atom or `@pipeline` wrapper where they are declared. They do not inherit.
+
+### Known limitations
+
+- Top-level `@scope` does not reach into a `@pipeline` body. Scope inside a pipeline only affects atoms in that pipeline.
+- A profile must be declared before its first use in the file. No forward references.
+- Inherited policy modifiers on stream sources and operators are silently ignored (the source's config struct is authoritative). Dedicated stream semantics are not yet implemented.
+- `nflow lint` does not yet apply scope inheritance.
+
 ## Next steps
 
 See the [CLI guide](cli.md) for run, lint, build, and catalog commands, or the [extension guide](../extensions/README.md) for how bundles add compiler features.

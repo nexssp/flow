@@ -1,0 +1,9 @@
+@description "Profile-driven pipeline runs end to end"
+@profile reliable :tag="prof"
+
+@pipeline work :profile=reliable
+  const @{ value: "ok" }
+@end
+
+@assert: result == "ok"
+{} -> pipeline.work

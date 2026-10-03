@@ -69,8 +69,10 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 	mods := parseScopeHeader(header)
 
 	endLine := -1
+	depth := 1
 	for j := req.I + 1; j < len(req.Lines); j++ {
-		if strings.TrimSpace(req.Lines[j]) == "}" {
+		depth += braceDelta(req.Lines[j])
+		if depth <= 0 {
 			endLine = j
 			break
 		}
@@ -163,4 +165,58 @@ func readQuotedModValue(rest string) (value, remaining string) {
 		sb.WriteByte(c)
 	}
 	return sb.String(), ""
+}
+
+func braceDelta(line string) int {
+	delta := 0
+	var quote byte
+	i := 0
+	for i < len(line) {
+		c := line[i]
+
+		if quote != 0 {
+			if c == '\\' && i+1 < len(line) {
+				i += 2
+				continue
+			}
+			if c == quote {
+				quote = 0
+			}
+			i++
+			continue
+		}
+
+		if c == '#' {
+			break
+		}
+		if c == '/' && i+1 < len(line) && line[i+1] == '/' {
+			break
+		}
+
+		if c == '@' && i+1 < len(line) && line[i+1] == '{' {
+			depth := 1
+			i += 2
+			for i < len(line) && depth > 0 {
+				switch line[i] {
+				case '{':
+					depth++
+				case '}':
+					depth--
+				}
+				i++
+			}
+			continue
+		}
+
+		switch c {
+		case '"', '\'', '`':
+			quote = c
+		case '{':
+			delta++
+		case '}':
+			delta--
+		}
+		i++
+	}
+	return delta
 }

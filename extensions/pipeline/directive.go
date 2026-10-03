@@ -26,14 +26,19 @@ var Directive = core.Directive{
 }
 
 func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
+	pos := core.Position{File: req.File, Line: req.I + 1}
 	header := strings.TrimSpace(req.Lines[req.I])
+
 	name, mods := parsePipelineHeader(header)
 	if name == "" {
-		return core.DirectiveRes{}, core.SourceError(
-			core.Position{File: req.File, Line: req.I + 1},
-			"@pipeline requires a name",
-		)
+		return core.DirectiveRes{}, core.SourceError(pos, "@pipeline requires a name")
 	}
+
+	expanded, err := expandProfiles(mods, req.Out, pos)
+	if err != nil {
+		return core.DirectiveRes{}, err
+	}
+	mods = expanded
 
 	next := req.I + 1
 	var bodyLines []string
@@ -63,6 +68,60 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 	}
 
 	return core.DirectiveRes{Next: next}, nil
+}
+
+// expandProfiles replaces every `:profile=NAME` entry with the profile's
+// modifiers. Local modifiers win over profile-supplied modifiers on the
+// same name; a profile-supplied name wins over an earlier
+// profile-supplied name. The result preserves first-seen order.
+//
+// A reference to an undeclared profile is a compile error, not a
+// silent no-op.
+func expandProfiles(mods []string, meta map[string]any, pos core.Position) ([]string, error) {
+	if len(mods) == 0 {
+		return nil, nil
+	}
+
+	profiles, _ := meta["scope.profiles"].(map[string][]string)
+
+	var expanded []string
+	index := make(map[string]int)
+	add := func(raw string) {
+		n := core.ModifierName(raw)
+		if i, ok := index[n]; ok {
+			expanded[i] = raw
+			return
+		}
+		index[n] = len(expanded)
+		expanded = append(expanded, raw)
+	}
+
+	for _, raw := range mods {
+		name := core.ModifierName(raw)
+		if name != "profile" {
+			add(raw)
+			continue
+		}
+
+		value := ""
+		if i := strings.IndexByte(raw, '='); i > 0 {
+			value = raw[i+1:]
+		}
+		if value == "" {
+			return nil, core.SourceError(pos,
+				"@pipeline: :profile requires a name (use :profile=NAME)")
+		}
+
+		profileMods, ok := profiles[value]
+		if !ok {
+			return nil, core.SourceError(pos,
+				"@pipeline: unknown profile %q (declare with @profile before use)", value)
+		}
+		for _, pm := range profileMods {
+			add(pm)
+		}
+	}
+	return expanded, nil
 }
 
 func parsePipelineHeader(line string) (name string, mods []string) {
