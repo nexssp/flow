@@ -89,9 +89,9 @@ func EnsureHarness(reqs []require.Requirement, flowPath ...string) (string, erro
 		return "", err
 	}
 
-	fmt.Fprintf(os.Stderr, "⚙️  nflow: resolving dependencies (go mod tidy)...\n")
+	fmt.Fprintf(os.Stderr, "⚙️  nflow: resolving dependencies (go mod tidy -e)...\n")
 	startTidy := time.Now()
-	if err := runGo(buildDir, "mod", "tidy"); err != nil {
+	if err := runGo(buildDir, "mod", "tidy", "-e"); err != nil {
 		return "", explainBuildError(err, external)
 	}
 	slog.Debug("harness: mod tidy finished", "elapsed", time.Since(startTidy))
