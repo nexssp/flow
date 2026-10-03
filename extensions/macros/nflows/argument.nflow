@@ -1,0 +1,7 @@
+@description "Macro: parameter substitution into a shape"
+@macro labeled(name, amount) {
+  const @{ value: { label: $name, amount: $amount } }
+}
+@assert: result.label == "total"
+@assert: result.amount == 42
+@labeled("total", 42)

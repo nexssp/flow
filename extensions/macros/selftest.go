@@ -5,7 +5,7 @@ import "github.com/nexssp/flow/core"
 func selftest() []core.SelfTestSection {
 	return []core.SelfTestSection{
 		{
-			Name: "Macros",
+			Name: "macros",
 			Features: []core.SelfTestFeature{
 				{
 					Name: "basic expansion",

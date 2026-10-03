@@ -1,0 +1,6 @@
+@description "Macro: expands to a multi-atom pipeline"
+@macro user_card(name) {
+  const @{ value: { name: $name } } -> wrap @{ key: "card" }
+}
+@assert: result.card.name == "Ada"
+@user_card("Ada")

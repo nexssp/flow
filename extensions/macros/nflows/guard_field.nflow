@@ -1,0 +1,6 @@
+@description "Macro: guards a required field before continuing"
+@macro require_id() {
+  assert(.id != nil, "id is required")
+}
+@assert: result.ok == true
+{ id: "usr_1" } -> @require_id() -> { ok: true }
