@@ -223,3 +223,36 @@ func SplitPipelineModifiers(table *core.ModifierTable, mods []string) (wrapper, 
 	}
 	return wrapper, body
 }
+
+// SourcedModifier is a modifier together with the origin that produced
+// it. SplitPipelineModifiersWithSources returns these so `nflow explain`
+// can attribute modifiers to a pipeline or a profile.
+type SourcedModifier struct {
+	Raw    string
+	Source core.ModifierSource
+}
+
+// SplitPipelineModifiersWithSources is SplitPipelineModifiers with the
+// per-modifier origin preserved. Sources must be parallel to mods;
+// missing entries default to Kind "pipeline" with no label.
+func SplitPipelineModifiersWithSources(
+	table *core.ModifierTable,
+	mods []string,
+	sources []core.ModifierSource,
+) (wrapper, body []SourcedModifier) {
+	for i, raw := range mods {
+		src := core.ModifierSource{Kind: "pipeline"}
+		if i < len(sources) {
+			src = sources[i]
+		}
+		entry := SourcedModifier{Raw: raw, Source: src}
+		if table != nil {
+			if mod, ok := table.ByName(core.ModifierName(raw)); ok && mod.Inheritable {
+				body = append(body, entry)
+				continue
+			}
+		}
+		wrapper = append(wrapper, entry)
+	}
+	return wrapper, body
+}

@@ -37,10 +37,11 @@ func paint(s, color string, enabled bool) string {
 	return color + s + ansiReset
 }
 
-func bold(s string, enabled bool) string { return paint(s, ansiBold, enabled) }
-func dim(s string, enabled bool) string  { return paint(s, ansiDim, enabled) }
-func cyan(s string, enabled bool) string { return paint(s, ansiCyan, enabled) }
-func red(s string, enabled bool) string  { return paint(s, ansiRed, enabled) }
+func bold(s string, enabled bool) string  { return paint(s, ansiBold, enabled) }
+func dim(s string, enabled bool) string   { return paint(s, ansiDim, enabled) }
+func cyan(s string, enabled bool) string  { return paint(s, ansiCyan, enabled) }
+func red(s string, enabled bool) string   { return paint(s, ansiRed, enabled) }
+func green(s string, enabled bool) string { return paint(s, ansiGreen, enabled) }
 
 func padRight(s string, n int) string {
 	if len(s) >= n {

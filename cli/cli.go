@@ -39,6 +39,7 @@ var commands = map[string]func([]string) int{
 	"build":      runBuild,
 	"serve":      runServe,
 	"lint":       runLint,
+	"explain":    runExplain,
 	"catalog":    runCatalog,
 	"list":       runList,
 	"show":       runShow,

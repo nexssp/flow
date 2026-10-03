@@ -88,6 +88,13 @@ var helpRegistry = map[string]helpText{
 			`nflow lint ./examples/...`,
 		},
 	},
+	"explain": {
+		Summary: "Show the effective modifiers for each atom, with source attribution.",
+		Usage:   "nflow explain <file.nflow>",
+		Examples: []string{
+			`nflow explain flows/client.nflow`,
+		},
+	},
 	"catalog": {
 		Summary: "Dump the compiler surface (atoms, modifiers, directives, operators) as JSON.",
 		Usage:   "nflow catalog [--flow FILE]",

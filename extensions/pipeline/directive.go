@@ -26,6 +26,14 @@ var Directive = core.Directive{
 	Handler: handleDirective,
 }
 
+// AppliedModifier is a modifier together with the origin that produced
+// it. Pipeline directive handlers build these so `nflow explain` can
+// attribute every effective modifier to a pipeline or profile.
+type AppliedModifier struct {
+	Raw    string
+	Source core.ModifierSource
+}
+
 func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
 	pos := core.Position{File: req.File, Line: req.I + 1}
 	header := strings.TrimSpace(req.Lines[req.I])
@@ -35,11 +43,10 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 		return core.DirectiveRes{}, core.SourceError(pos, "@pipeline requires a name")
 	}
 
-	expanded, err := expandProfiles(mods, req.Out, pos)
+	applied, err := expandProfiles(mods, req.Out, pos, name)
 	if err != nil {
 		return core.DirectiveRes{}, err
 	}
-	mods = expanded
 
 	next := req.I + 1
 	var bodyLines []string
@@ -59,46 +66,63 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 	}
 	pipelines[name] = strings.Join(bodyLines, "\n")
 
-	if len(mods) > 0 {
+	if len(applied) > 0 {
 		pipelineMods, _ := req.Out["pipeline_modifiers"].(map[string][]string)
 		if pipelineMods == nil {
 			pipelineMods = make(map[string][]string)
 			req.Out["pipeline_modifiers"] = pipelineMods
 		}
-		pipelineMods[name] = mods
+		raw := make([]string, len(applied))
+		for i, am := range applied {
+			raw[i] = am.Raw
+		}
+		pipelineMods[name] = raw
+
+		sources, _ := req.Out["pipeline_modifier_sources"].(map[string][]core.ModifierSource)
+		if sources == nil {
+			sources = make(map[string][]core.ModifierSource)
+			req.Out["pipeline_modifier_sources"] = sources
+		}
+		srcs := make([]core.ModifierSource, len(applied))
+		for i, am := range applied {
+			srcs[i] = am.Source
+		}
+		sources[name] = srcs
 	}
 
 	return core.DirectiveRes{Next: next}, nil
 }
 
-// expandProfiles replaces every `:profile=NAME` entry with the
-// profile's effective modifiers (parent chain already resolved). Local
-// modifiers win over profile-supplied modifiers on the same name; a
-// profile-supplied name wins over an earlier profile-supplied name.
-// The result preserves first-seen order.
+// expandProfiles replaces every `:profile=NAME` entry with the profile's
+// modifiers, tagging each with its origin. Local modifiers win over
+// profile-supplied modifiers on the same name; a profile-supplied name
+// wins over an earlier profile-supplied name. The result preserves
+// first-seen order.
 //
 // A reference to an undeclared profile, an unresolved parent, or a
 // parent cycle is a compile error, not a silent no-op.
-func expandProfiles(mods []string, meta map[string]any, pos core.Position) ([]string, error) {
+func expandProfiles(mods []string, meta map[string]any, pos core.Position, pipelineName string) ([]AppliedModifier, error) {
 	if len(mods) == 0 {
 		return nil, nil
 	}
 
-	var expanded []string
+	localSource := core.ModifierSource{Kind: "pipeline", Label: pipelineName}
+
+	var expanded []AppliedModifier
 	index := make(map[string]int)
-	add := func(raw string) {
+	add := func(raw string, src core.ModifierSource) {
 		n := core.ModifierName(raw)
 		if i, ok := index[n]; ok {
-			expanded[i] = raw
+			expanded[i] = AppliedModifier{Raw: raw, Source: src}
 			return
 		}
 		index[n] = len(expanded)
-		expanded = append(expanded, raw)
+		expanded = append(expanded, AppliedModifier{Raw: raw, Source: src})
 	}
 
 	for _, raw := range mods {
 		if core.ModifierName(raw) != "profile" {
-			add(raw)
+			add(raw, localSource)
 			continue
 		}
 
@@ -115,8 +139,9 @@ func expandProfiles(mods []string, meta map[string]any, pos core.Position) ([]st
 		if err != nil {
 			return nil, core.SourceError(pos, "@pipeline: %v", err)
 		}
+		profileSource := core.ModifierSource{Kind: "profile", Label: value}
 		for _, pm := range profileMods {
-			add(pm)
+			add(pm, profileSource)
 		}
 	}
 	return expanded, nil

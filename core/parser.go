@@ -180,6 +180,7 @@ func (p *Parser) SubParse(src string) (Expr, error) {
 	}
 	sub := NewParserWithFileOffset(p.ctx, p.ops, p.primaries, src, p.file, p.lineBase)
 	sub.depth = p.depth + 1
+	sub.lineModifiers = p.lineModifiers
 	return sub.Parse()
 }
 

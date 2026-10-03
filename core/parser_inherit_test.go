@@ -114,3 +114,30 @@ func TestPrependInherited_LaterLookupWins(t *testing.T) {
 		t.Fatalf("want %v, got %v", want, atom.Modifiers)
 	}
 }
+
+func TestSubParse_InheritsLineModifiers(t *testing.T) {
+	parser := NewParserWithFileOffset(
+		context.Background(),
+		NewOperatorTable(),
+		nil,
+		"noop",
+		"",
+		0,
+	)
+	parser.WithLineModifiers(LineLookup{
+		Source: ModifierSource{Kind: "scope"},
+		Fn:     func(int) []string { return []string{"timeout=5s"} },
+	})
+
+	sub, err := parser.SubParse("noop")
+	if err != nil {
+		t.Fatalf("sub-parse: %v", err)
+	}
+	atom, ok := sub.(*Atom)
+	if !ok {
+		t.Fatalf("expected *Atom, got %T", sub)
+	}
+	if len(atom.Modifiers) == 0 || atom.Modifiers[0] != "timeout=5s" {
+		t.Fatalf("sub-parse did not inherit lineModifiers, got %v", atom.Modifiers)
+	}
+}

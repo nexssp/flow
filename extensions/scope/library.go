@@ -44,7 +44,6 @@ func Bundle(_ map[string]string) core.Bundle {
 func makeLookups(spans []span) []core.LineLookup {
 	out := make([]core.LineLookup, 0, len(spans))
 	for _, s := range spans {
-		s := s
 		out = append(out, core.LineLookup{
 			Source: core.ModifierSource{
 				Kind:  "scope",
