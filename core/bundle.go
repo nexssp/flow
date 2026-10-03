@@ -46,6 +46,8 @@ type Bundle struct {
 
 	ArgSchemas map[string][]ArgFieldSpec
 
+	AcceptedOptions []string
+
 	SelfTest func() []SelfTestSection
 	Fixtures fs.FS
 }

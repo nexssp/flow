@@ -35,7 +35,10 @@ func TestApplyAll_ConstantAllocs(t *testing.T) {
 		_, _ = table.ApplyAll(target, hundred)
 	})
 
-	if oneAllocs != hundredAllocs {
+	// AllocsPerRun returns a rounded average; a ±1 wobble between runs
+	// is expected. The contract is "does not scale with modifier
+	// count", not bit-identical counts.
+	if hundredAllocs > oneAllocs+1 {
 		t.Fatalf("allocs scale with modifier count: one=%.0f hundred=%.0f", oneAllocs, hundredAllocs)
 	}
 }

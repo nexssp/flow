@@ -50,8 +50,9 @@ type OperatorSpec struct {
 }
 
 type ModifierSpec struct {
-	Name    string `json:"name"`
-	Example string `json:"example,omitempty"`
+	Name      string `json:"name"`
+	ValueKind string `json:"value_kind"`
+	Example   string `json:"example,omitempty"`
 }
 
 type DirectiveSpec struct {
@@ -254,7 +255,11 @@ func collectModifiers(mt *ModifierTable) []ModifierSpec {
 
 	out := make([]ModifierSpec, 0, len(all))
 	for _, m := range all {
-		out = append(out, ModifierSpec{Name: m.Name, Example: m.Example})
+		out = append(out, ModifierSpec{
+			Name:      m.Name,
+			ValueKind: m.ValueKind.String(),
+			Example:   m.Example,
+		})
 	}
 
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })

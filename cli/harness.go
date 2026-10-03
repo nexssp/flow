@@ -185,7 +185,6 @@ func harnessKey(reqs []require.Requirement, goworkPath string) string {
 			}
 		}
 		if r.IsLocal() {
-			fmt.Fprintf(h, "  local=%s\n", r.LocalPath)
 			fmt.Fprintf(h, "  fingerprint=%s\n", moduleSourceFingerprint(r.LocalPath))
 		}
 	}

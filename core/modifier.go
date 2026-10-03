@@ -11,6 +11,26 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
+// ModifierKind describes the compiler-level value shape of a modifier.
+// The typed constructors (Duration, Int, Flag, ...) set it
+// automatically, so most code never references it directly.
+type ModifierKind uint8
+
+const (
+	// ModifierKindAny accepts any value. It is the zero value, so a
+	// modifier built via a raw struct literal (not a typed constructor)
+	// performs no value validation.
+	ModifierKindAny ModifierKind = iota
+	ModifierKindFlag
+	ModifierKindString
+	ModifierKindStringList
+	ModifierKindInt
+	ModifierKindInt32
+	ModifierKindInt64
+	ModifierKindFloat64
+	ModifierKindDuration
+)
+
 // Modifier is one `:name` or `:name=value` annotation on an atom.
 //
 // Name is the identifier without the leading colon. Apply runs once per
@@ -23,10 +43,39 @@ import (
 // is reserved by the Kernel or the grammar must be declared by its
 // owner; NewModifierTable panics on a mismatch.
 type Modifier struct {
-	Name    string
-	Owner   ModifierOwner
-	Example string
-	Apply   func(b *action.Builder[any, any], raw string) error
+	Name      string
+	Owner     ModifierOwner
+	ValueKind ModifierKind
+	Unique    bool
+	Example   string
+	Apply     func(b *action.Builder[any, any], raw string) error
+}
+
+// String returns a stable identifier for the kind, suitable for JSON
+// catalogs, lint messages, and CLI output.
+func (k ModifierKind) String() string {
+	switch k {
+	case ModifierKindAny:
+		return "any"
+	case ModifierKindFlag:
+		return "flag"
+	case ModifierKindString:
+		return "string"
+	case ModifierKindStringList:
+		return "string_list"
+	case ModifierKindInt:
+		return "int"
+	case ModifierKindInt32:
+		return "int32"
+	case ModifierKindInt64:
+		return "int64"
+	case ModifierKindFloat64:
+		return "float64"
+	case ModifierKindDuration:
+		return "duration"
+	default:
+		return "unknown"
+	}
 }
 
 // WithOwner returns m with the given owner. The Kernel policy bundle
@@ -35,6 +84,54 @@ type Modifier struct {
 func WithOwner(m Modifier, owner ModifierOwner) Modifier {
 	m.Owner = owner
 	return m
+}
+
+// WithUnique marks a modifier as single-use: applying it more than once
+// to the same atom is a compile-time error.
+func WithUnique(m Modifier) Modifier {
+	m.Unique = true
+	return m
+}
+
+// ValidateModifierValue checks that value matches the modifier's kind.
+// It does not run Apply; callers that mutate a builder use it to fail
+// fast with a stable message before invoking the handler.
+func ValidateModifierValue(kind ModifierKind, value string) error {
+	switch kind {
+	case ModifierKindAny:
+		return nil
+	case ModifierKindFlag:
+		if value != "" {
+			return fmt.Errorf("flag does not take a value, got %q", value)
+		}
+	case ModifierKindString:
+		// Any string is valid.
+	case ModifierKindStringList:
+		if strings.TrimSpace(value) == "" {
+			return errors.New("expected at least one value")
+		}
+	case ModifierKindInt:
+		if _, err := strconv.Atoi(value); err != nil {
+			return fmt.Errorf("expected integer, got %q", value)
+		}
+	case ModifierKindInt32:
+		if _, err := strconv.ParseInt(value, 10, 32); err != nil {
+			return fmt.Errorf("expected int32, got %q", value)
+		}
+	case ModifierKindInt64:
+		if _, err := strconv.ParseInt(value, 10, 64); err != nil {
+			return fmt.Errorf("expected int64, got %q", value)
+		}
+	case ModifierKindFloat64:
+		if _, err := strconv.ParseFloat(value, 64); err != nil {
+			return fmt.Errorf("expected number, got %q", value)
+		}
+	case ModifierKindDuration:
+		if _, err := time.ParseDuration(value); err != nil {
+			return fmt.Errorf("expected duration (e.g. 5s, 1m), got %q", value)
+		}
+	}
+	return nil
 }
 
 // ModifierTable indexes modifiers by name. Construction is eager: a
@@ -93,7 +190,7 @@ func (t *ModifierTable) ApplyAll(target action.AnyAction, raws []string) (action
 		return target, nil
 	}
 	builder := action.Dynamic(target)
-	for _, raw := range raws {
+	for i, raw := range raws {
 		name, value := splitRawModifier(raw)
 		modifier, ok := t.ByName(name)
 		if !ok {
@@ -101,6 +198,19 @@ func (t *ModifierTable) ApplyAll(target action.AnyAction, raws []string) (action
 				return nil, xerr.Validation(hint)
 			}
 			return nil, xerr.BadRequest("unknown modifier :" + name)
+		}
+
+		if modifier.Unique {
+			for j := range i {
+				prevName, _ := splitRawModifier(raws[j])
+				if prevName == name {
+					return nil, xerr.Validation("modifier :" + name + " is not repeatable")
+				}
+			}
+		}
+
+		if err := ValidateModifierValue(modifier.ValueKind, value); err != nil {
+			return nil, xerr.Validation("modifier :" + name + ": " + err.Error())
 		}
 		if err := modifier.Apply(builder, value); err != nil {
 			return nil, xerr.Validation("modifier :"+name+": "+err.Error(), err)
@@ -134,7 +244,8 @@ func splitRawModifier(raw string) (name, value string) {
 
 func Duration(name string, apply func(*action.Builder[any, any], time.Duration) *action.Builder[any, any]) Modifier {
 	return Modifier{
-		Name: name,
+		Name:      name,
+		ValueKind: ModifierKindDuration,
 		Apply: func(b *action.Builder[any, any], raw string) error {
 			d, err := time.ParseDuration(raw)
 			if err != nil {
@@ -148,7 +259,8 @@ func Duration(name string, apply func(*action.Builder[any, any], time.Duration) 
 
 func Int(name string, apply func(*action.Builder[any, any], int) *action.Builder[any, any]) Modifier {
 	return Modifier{
-		Name: name,
+		Name:      name,
+		ValueKind: ModifierKindInt,
 		Apply: func(b *action.Builder[any, any], raw string) error {
 			n, err := strconv.Atoi(raw)
 			if err != nil {
@@ -162,7 +274,8 @@ func Int(name string, apply func(*action.Builder[any, any], int) *action.Builder
 
 func Int32(name string, apply func(*action.Builder[any, any], int32) *action.Builder[any, any]) Modifier {
 	return Modifier{
-		Name: name,
+		Name:      name,
+		ValueKind: ModifierKindInt32,
 		Apply: func(b *action.Builder[any, any], raw string) error {
 			n, err := strconv.ParseInt(raw, 10, 32)
 			if err != nil {
@@ -176,7 +289,8 @@ func Int32(name string, apply func(*action.Builder[any, any], int32) *action.Bui
 
 func Int64(name string, apply func(*action.Builder[any, any], int64) *action.Builder[any, any]) Modifier {
 	return Modifier{
-		Name: name,
+		Name:      name,
+		ValueKind: ModifierKindInt64,
 		Apply: func(b *action.Builder[any, any], raw string) error {
 			n, err := strconv.ParseInt(raw, 10, 64)
 			if err != nil {
@@ -190,7 +304,8 @@ func Int64(name string, apply func(*action.Builder[any, any], int64) *action.Bui
 
 func Float64(name string, apply func(*action.Builder[any, any], float64) *action.Builder[any, any]) Modifier {
 	return Modifier{
-		Name: name,
+		Name:      name,
+		ValueKind: ModifierKindFloat64,
 		Apply: func(b *action.Builder[any, any], raw string) error {
 			f, err := strconv.ParseFloat(raw, 64)
 			if err != nil {
@@ -204,7 +319,8 @@ func Float64(name string, apply func(*action.Builder[any, any], float64) *action
 
 func String(name string, apply func(*action.Builder[any, any], string) *action.Builder[any, any]) Modifier {
 	return Modifier{
-		Name: name,
+		Name:      name,
+		ValueKind: ModifierKindString,
 		Apply: func(b *action.Builder[any, any], raw string) error {
 			apply(b, raw)
 			return nil
@@ -214,7 +330,8 @@ func String(name string, apply func(*action.Builder[any, any], string) *action.B
 
 func StringList(name string, apply func(*action.Builder[any, any], []string) *action.Builder[any, any]) Modifier {
 	return Modifier{
-		Name: name,
+		Name:      name,
+		ValueKind: ModifierKindStringList,
 		Apply: func(b *action.Builder[any, any], raw string) error {
 			items := splitListValue(raw)
 			if len(items) == 0 {
@@ -231,7 +348,8 @@ func StringList(name string, apply func(*action.Builder[any, any], []string) *ac
 // mistake the author should see, not silently accept.
 func Flag(name string, apply func(*action.Builder[any, any]) *action.Builder[any, any]) Modifier {
 	return Modifier{
-		Name: name,
+		Name:      name,
+		ValueKind: ModifierKindFlag,
 		Apply: func(b *action.Builder[any, any], raw string) error {
 			if raw != "" {
 				return fmt.Errorf("flag does not take a value, got %q", raw)

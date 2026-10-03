@@ -257,11 +257,10 @@ func runLintBatchInProcessWithHarnessError(paths []string, harnessErr error) int
 
 // registrySurface snapshots the names the compiler knows about. Four
 // categories share one flat namespace at parse time: atoms, sources,
-// operators, and boundaries. Modifiers are validated only for atoms —
-// sources, operators, and boundaries either take no modifiers or
-// receive them as config through ModifiersToMap, not as modifiers to
-// the builder.
-func registrySurface(cfg runner.Config) (known, modifiers map[string]struct{}) {
+// operators, and boundaries. Modifiers are returned as full values so
+// the linter can validate their declared value kinds against the DSL
+// text, not just check that the name exists.
+func registrySurface(cfg runner.Config) (known map[string]struct{}, modifiers map[string]core.Modifier) {
 	cat := core.BuildCatalog(cfg.Resolver, cfg.Modifiers, cfg.Directives, cfg.Operators)
 
 	known = make(map[string]struct{},
@@ -280,9 +279,11 @@ func registrySurface(cfg runner.Config) (known, modifiers map[string]struct{}) {
 		known[b.Name] = struct{}{}
 	}
 
-	modifiers = make(map[string]struct{}, len(cat.Modifiers))
-	for _, m := range cat.Modifiers {
-		modifiers[m.Name] = struct{}{}
+	modifiers = make(map[string]core.Modifier, len(cat.Modifiers))
+	if cfg.Modifiers != nil {
+		for _, m := range cfg.Modifiers.All() {
+			modifiers[m.Name] = m
+		}
 	}
 	return known, modifiers
 }
@@ -291,7 +292,12 @@ func registrySurface(cfg runner.Config) (known, modifiers map[string]struct{}) {
 // pipeline if present, then lint every @pipeline fragment in
 // isolation. Library files (only @pipeline blocks, no top-level) are
 // valid — the emptiness of the top-level body is not an error.
-func lintFile(path, src string, cfg runner.Config, atoms, modifiers map[string]struct{}) []LintIssue {
+func lintFile(
+	path, src string,
+	cfg runner.Config,
+	atoms map[string]struct{},
+	modifiers map[string]core.Modifier,
+) []LintIssue {
 	clean, meta, err := core.Preprocess(context.Background(), cfg.Directives, src, path)
 	if err != nil {
 		return []LintIssue{{
@@ -314,7 +320,7 @@ func lintFile(path, src string, cfg runner.Config, atoms, modifiers map[string]s
 	var issues []LintIssue
 
 	if strings.TrimSpace(clean) != "" {
-		issues = append(issues, lintFragment(path, clean, 0, cfg, known, modifiers)...)
+		issues = append(issues, lintFragment(path, clean, cfg, known, modifiers)...)
 	}
 
 	pipelineNames := make([]string, 0, len(pipelines))
@@ -338,20 +344,25 @@ func lintFile(path, src string, cfg runner.Config, atoms, modifiers map[string]s
 		}
 
 		label := fmt.Sprintf("%s:@pipeline[%s]", path, name)
-		issues = append(issues, lintFragment(label, fragmentClean, 0, cfg, known, modifiers)...)
+		issues = append(issues, lintFragment(label, fragmentClean, cfg, known, modifiers)...)
 	}
 
 	return issues
 }
 
-func lintFragment(path, src string, lineBase int, cfg runner.Config, known, modifiers map[string]struct{}) []LintIssue {
+func lintFragment(
+	path, src string,
+	cfg runner.Config,
+	known map[string]struct{},
+	modifiers map[string]core.Modifier,
+) []LintIssue {
 	ast, err := core.NewParserWithFileOffset(
 		context.Background(),
 		cfg.Operators,
 		cfg.Primaries,
 		src,
 		path,
-		lineBase,
+		0,
 	).Parse()
 	if err != nil {
 		return []LintIssue{{
@@ -385,26 +396,31 @@ func lintFragment(path, src string, lineBase int, cfg runner.Config, known, modi
 		action, _ := cfg.Resolver.Action(atom.Name)
 
 		for _, raw := range atom.Modifiers {
-			name := raw
-			if i := strings.IndexByte(name, '='); i > 0 {
-				name = name[:i]
-			}
-			if _, ok := modifiers[name]; ok {
+			name, value := splitRawModifier(raw)
+
+			modifier, ok := modifiers[name]
+			if !ok {
+				message := fmt.Sprintf("modifier :%s is not registered", name)
+				if action != nil {
+					if hint := core.SuggestModifierFix(action, name); hint != "" {
+						message = hint
+					}
+				}
+				issues = append(issues, LintIssue{
+					File:    path,
+					Kind:    "unknown_modifier",
+					Message: message,
+				})
 				continue
 			}
 
-			message := fmt.Sprintf("modifier :%s is not registered", name)
-			if action != nil {
-				if hint := core.SuggestModifierFix(action, name); hint != "" {
-					message = hint
-				}
+			if err := core.ValidateModifierValue(modifier.ValueKind, value); err != nil {
+				issues = append(issues, LintIssue{
+					File:    path,
+					Kind:    "invalid_modifier_value",
+					Message: fmt.Sprintf("modifier :%s: %v", name, err),
+				})
 			}
-
-			issues = append(issues, LintIssue{
-				File:    path,
-				Kind:    "unknown_modifier",
-				Message: message,
-			})
 		}
 	})
 
@@ -454,4 +470,11 @@ func walkLintAST(node core.Expr, visit func(*core.Atom)) {
 		// Assert and projection carry raw expressions, not atom
 		// references. Nothing to validate at this layer.
 	}
+}
+
+func splitRawModifier(raw string) (name, value string) {
+	if i := strings.IndexByte(raw, '='); i > 0 {
+		return raw[:i], raw[i+1:]
+	}
+	return raw, ""
 }

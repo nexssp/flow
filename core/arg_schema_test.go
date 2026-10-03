@@ -7,6 +7,7 @@ import (
 	"github.com/nexssp/kernel/xtest/ktest"
 
 	"github.com/nexssp/flow/core"
+	"github.com/nexssp/flow/extensions/modifiers_core"
 	"github.com/nexssp/flow/extensions/nodes_distribute"
 	"github.com/nexssp/flow/extensions/runtime"
 	"github.com/nexssp/flow/extensions/syntax"
@@ -80,4 +81,32 @@ func TestBareToken_KeywordIsNotAutoResolved(t *testing.T) {
 	ex, err := runner.Execute(context.Background(), cfg, src, "ok.nflow", nil)
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, ex.Output, "const")
+}
+
+func TestModifierValue_DurationRejectedAtCompile(t *testing.T) {
+	cfg, err := runner.BuildConfig([]core.Bundle{
+		syntax.Bundle(nil),
+		runtime.Bundle(nil),
+		modifiers_core.Bundle(nil),
+	})
+	ktest.RequireNoError(t, err)
+
+	src := `noop:timeout=abc`
+	_, err = runner.Execute(context.Background(), cfg, src, "bad.nflow", nil)
+	ktest.RequireCondition(t, err != nil, "expected compile-time error")
+	ktest.RequireStringContains(t, err.Error(), "expected duration")
+}
+
+func TestModifierValue_IntRejectedAtCompile(t *testing.T) {
+	cfg, err := runner.BuildConfig([]core.Bundle{
+		syntax.Bundle(nil),
+		runtime.Bundle(nil),
+		modifiers_core.Bundle(nil),
+	})
+	ktest.RequireNoError(t, err)
+
+	src := `noop:retry=abc`
+	_, err = runner.Execute(context.Background(), cfg, src, "bad.nflow", nil)
+	ktest.RequireCondition(t, err != nil, "expected compile-time error")
+	ktest.RequireStringContains(t, err.Error(), "expected integer")
 }

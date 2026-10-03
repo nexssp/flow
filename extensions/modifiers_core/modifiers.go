@@ -13,17 +13,17 @@ import (
 // this bundle.
 func Modifiers() []core.Modifier {
 	return []core.Modifier{
-		kernel(core.Duration("timeout", (*action.Builder[any, any]).Timeout)),
+		kernel(core.WithUnique(core.Duration("timeout", (*action.Builder[any, any]).Timeout))),
 
 		kernel(core.Int("retry", func(b *action.Builder[any, any], n int) *action.Builder[any, any] {
 			return b.Retry(n, action.ExponentialJitter(100*time.Millisecond, 30*time.Second))
 		})),
 
-		kernel(core.Int32("concurrency", (*action.Builder[any, any]).ConcurrencyLimit)),
+		kernel(core.WithUnique(core.Int32("concurrency", (*action.Builder[any, any]).ConcurrencyLimit))),
 
-		kernel(core.Duration("cache", func(b *action.Builder[any, any], ttl time.Duration) *action.Builder[any, any] {
+		kernel(core.WithUnique(core.Duration("cache", func(b *action.Builder[any, any], ttl time.Duration) *action.Builder[any, any] {
 			return b.Cache(ttl, defaultKey)
-		})),
+		}))),
 
 		kernel(core.Flag("coalesce", func(b *action.Builder[any, any]) *action.Builder[any, any] {
 			return b.Coalesce(action.NewCoalescer(), defaultKey)
@@ -35,9 +35,9 @@ func Modifiers() []core.Modifier {
 
 		kernel(core.Flag("idempotent", (*action.Builder[any, any]).Idempotent)),
 
-		kernel(core.Int("rate_limit", func(b *action.Builder[any, any], n int) *action.Builder[any, any] {
+		kernel(core.WithUnique(core.Int("rate_limit", func(b *action.Builder[any, any], n int) *action.Builder[any, any] {
 			return b.RateLimit(float64(n), n)
-		})),
+		}))),
 	}
 }
 

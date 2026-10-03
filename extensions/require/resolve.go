@@ -2,6 +2,7 @@ package require
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/nexssp/flow/core"
 )
@@ -22,10 +23,27 @@ func ResolveBundles(reqs []Requirement) ([]core.Bundle, error) {
 		}
 
 		bundle := factory(r.Options)
+		if err := validateOptions(r, bundle); err != nil {
+			return nil, err
+		}
 		if r.Alias != "" {
 			bundle.Alias = r.Alias
 		}
 		out = append(out, bundle)
 	}
 	return out, nil
+}
+
+func validateOptions(r *Requirement, bundle core.Bundle) error {
+	if bundle.AcceptedOptions == nil {
+		return nil
+	}
+	for k := range r.Options {
+		if !slices.Contains(bundle.AcceptedOptions, k) {
+			return fmt.Errorf(
+				"@require %s: unknown option %q (accepted: %v)",
+				r.Import, k, bundle.AcceptedOptions)
+		}
+	}
+	return nil
 }

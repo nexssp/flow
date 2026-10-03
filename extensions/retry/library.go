@@ -29,7 +29,9 @@ func init() {
 // Options come from the @require block, or from BundleWithConfig when
 // the caller wants to pin the policy in code.
 func Bundle(opts map[string]string) core.Bundle {
-	return BundleWithConfig(ConfigFromOptions(opts))
+	cfg := BundleWithConfig(ConfigFromOptions(opts))
+	cfg.AcceptedOptions = []string{"default_max"}
+	return cfg
 }
 
 // BundleWithConfig returns the retry extension with an explicit policy.
