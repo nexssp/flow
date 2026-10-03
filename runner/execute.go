@@ -56,7 +56,7 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 
 	// Variadic signature to accept modifiers for sub-pipelines:
 	compileSub := func(subName, subSource string, mods ...string) (action.AnyAction, error) {
-		wrapperMods, bodyMods := splitPipelineModifiers(cfg.Modifiers, mods)
+		wrapperMods, bodyMods := SplitPipelineModifiers(cfg.Modifiers, mods)
 
 		subOpts := append([]core.CompileOption(nil), cfg.CompileOpts...)
 		if len(bodyMods) > 0 {
@@ -191,11 +191,15 @@ func (a compilerAdapter) CompilePipeline(expr string) (action.Executable, error)
 	return exec, nil
 }
 
-// splitPipelineModifiers separates the pipeline header's modifiers.
-// Inheritable policy modifiers propagate to the body atoms; everything
-// else stays on the wrapper. The two sets are disjoint: no modifier
-// applies twice.
-func splitPipelineModifiers(table *core.ModifierTable, mods []string) (wrapper, body []string) {
+// SplitPipelineModifiers separates a pipeline header's modifiers into
+// those that belong on the wrapper action and those that propagate to
+// the pipeline body. Inheritable policy modifiers (:timeout, :retry, …)
+// propagate; metadata modifiers (:tag, :status, :route, …) stay on the
+// wrapper.
+//
+// Exported so nflow lint can parse pipeline bodies with the same
+// inherited modifiers the runtime compiler would apply.
+func SplitPipelineModifiers(table *core.ModifierTable, mods []string) (wrapper, body []string) {
 	if len(mods) == 0 {
 		return nil, nil
 	}

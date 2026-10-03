@@ -288,10 +288,29 @@ func registrySurface(cfg runner.Config) (known map[string]struct{}, modifiers ma
 	return known, modifiers
 }
 
+// computeLineMods returns the line-indexed modifier lookups a source
+// with the given meta would install. It is the lint-side counterpart
+// of the pipeline applied inside CompileAction: read Preprocess
+// contributions, extract the line lookups, filter through the modifier
+// table.
+func computeLineMods(cfg runner.Config, meta map[string]any) []func(int) []string {
+	opts := append([]core.CompileOption(nil), cfg.CompileOpts...)
+	contribs := core.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
+	opts = append(opts, contribs.CompileOpts...)
+	return core.LineModifiersFromOptions(cfg.Modifiers, opts)
+}
+
 // lintFile processes one source: preprocess, lint the top-level
 // pipeline if present, then lint every @pipeline fragment in
 // isolation. Library files (only @pipeline blocks, no top-level) are
 // valid — the emptiness of the top-level body is not an error.
+//
+// Each fragment is parsed with the line-indexed modifier lookups the
+// runtime compiler would apply: @scope spans from the fragment body,
+// @pipeline :profile-derived policy modifiers, and top-level @scope
+// spans that reach into the fragment. This makes lint agree with the
+// compiler on inherited modifiers, so a typo inside @scope or
+// @profile fails at lint time, not just at run time.
 func lintFile(
 	path, src string,
 	cfg runner.Config,
@@ -315,13 +334,20 @@ func lintFile(
 	pipelines, _ := meta["pipelines"].(map[string]string)
 	for name := range pipelines {
 		known[name] = struct{}{}
+		if !strings.Contains(name, ".") {
+			known["pipeline."+name] = struct{}{}
+		}
 	}
+
+	topLineMods := computeLineMods(cfg, meta)
 
 	var issues []LintIssue
 
 	if strings.TrimSpace(clean) != "" {
-		issues = append(issues, lintFragment(path, clean, cfg, known, modifiers)...)
+		issues = append(issues, lintFragment(path, clean, cfg, known, modifiers, topLineMods)...)
 	}
+
+	pipelineMods, _ := meta["pipeline_modifiers"].(map[string][]string)
 
 	pipelineNames := make([]string, 0, len(pipelines))
 	for name := range pipelines {
@@ -330,7 +356,7 @@ func lintFile(
 	sort.Strings(pipelineNames)
 	for _, name := range pipelineNames {
 		body := pipelines[name]
-		fragmentClean, _, perr := core.Preprocess(context.Background(), cfg.Directives, body, name)
+		fragmentClean, fragmentMeta, perr := core.Preprocess(context.Background(), cfg.Directives, body, name)
 		if perr != nil {
 			issues = append(issues, LintIssue{
 				File:    path,
@@ -343,18 +369,38 @@ func lintFile(
 			continue
 		}
 
+		fragmentOpts := append([]core.CompileOption(nil), cfg.CompileOpts...)
+		fragmentContribs := core.PreprocessContributionsFromMeta(fragmentMeta, cfg.CompileOpts...)
+		fragmentOpts = append(fragmentOpts, fragmentContribs.CompileOpts...)
+
+		if mods, ok := pipelineMods[name]; ok && len(mods) > 0 {
+			_, bodyMods := runner.SplitPipelineModifiers(cfg.Modifiers, mods)
+			if len(bodyMods) > 0 {
+				captured := append([]string(nil), bodyMods...)
+				fragmentOpts = append(fragmentOpts, core.WithLineModifiers(func(int) []string {
+					return captured
+				}))
+			}
+		}
+
+		fragmentLineMods := core.LineModifiersFromOptions(cfg.Modifiers, fragmentOpts)
 		label := fmt.Sprintf("%s:@pipeline[%s]", path, name)
-		issues = append(issues, lintFragment(label, fragmentClean, cfg, known, modifiers)...)
+		issues = append(issues, lintFragment(label, fragmentClean, cfg, known, modifiers, fragmentLineMods)...)
 	}
 
 	return issues
 }
 
+// lintFragment parses one source fragment with the given line-indexed
+// modifier lookups installed. The parser consults the lookups for
+// every atom, so inherited modifiers are validated exactly as the
+// runtime compiler would.
 func lintFragment(
 	path, src string,
 	cfg runner.Config,
 	known map[string]struct{},
 	modifiers map[string]core.Modifier,
+	lineMods []func(int) []string,
 ) []LintIssue {
 	ast, err := core.NewParserWithFileOffset(
 		context.Background(),
@@ -363,7 +409,9 @@ func lintFragment(
 		src,
 		path,
 		0,
-	).Parse()
+	).
+		WithLineModifiers(lineMods).
+		Parse()
 	if err != nil {
 		return []LintIssue{{
 			File:    path,

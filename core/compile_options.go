@@ -138,3 +138,27 @@ func compileConfigFromCtx(ctx context.Context) (config map[string]string, cliArg
 	v, _ := compileConfigKey.From(ctx)
 	return v.config, v.cliArgs
 }
+
+// LineModifiersFromOptions returns the line-indexed modifier lookups
+// that the given CompileOptions would install, each filtered through
+// mt so non-inheritable metadata modifiers are dropped and unknown
+// modifiers pass through for ApplyAll to reject.
+//
+// Used by nflow lint to parse a source with the same inherited
+// modifiers the runtime compiler would apply. Extensions publish their
+// lookups through Bundle.OnPreprocess as CompileOptions; this function
+// is the only way to extract them outside CompileAction.
+func LineModifiersFromOptions(mt *ModifierTable, opts []CompileOption) []func(int) []string {
+	return filterLineMods(mt, applyCompileOptions(opts).lineMods)
+}
+
+func filterLineMods(mt *ModifierTable, fns []func(int) []string) []func(int) []string {
+	if len(fns) == 0 {
+		return nil
+	}
+	out := make([]func(int) []string, len(fns))
+	for i, fn := range fns {
+		out[i] = filterInheritable(fn, mt)
+	}
+	return out
+}

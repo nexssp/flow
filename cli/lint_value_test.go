@@ -23,7 +23,7 @@ func TestLint_RejectsInvalidModifierValue(t *testing.T) {
 	known, modifiers := registrySurface(cfg)
 
 	src := `noop:timeout=abc`
-	issues := lintFragment("test.nflow", src, cfg, known, modifiers)
+	issues := lintFragment("test.nflow", src, cfg, known, modifiers, nil)
 
 	ktest.RequireCondition(t, len(issues) >= 1, "expected at least one issue")
 	found := false
@@ -47,6 +47,6 @@ func TestLint_AcceptsValidModifierValue(t *testing.T) {
 	known, modifiers := registrySurface(cfg)
 
 	src := `noop:timeout=5s`
-	issues := lintFragment("test.nflow", src, cfg, known, modifiers)
+	issues := lintFragment("test.nflow", src, cfg, known, modifiers, nil)
 	ktest.RequireEqual(t, len(issues), 0)
 }

@@ -89,10 +89,7 @@ func runCompile(
 
 	effectiveCfg, ctx, ptEffective := applyPreprocessContributions(ctx, cfg, opts, pt, meta, req)
 
-	lineMods := make([]func(int) []string, len(effectiveCfg.lineMods))
-	for i, fn := range effectiveCfg.lineMods {
-		lineMods[i] = filterInheritable(fn, mt)
-	}
+	lineMods := filterLineMods(mt, effectiveCfg.lineMods)
 	ast, err := NewParserWithFileOffset(ctx, ot, ptEffective, clean, req.Name, 0).
 		WithLineModifiers(lineMods).
 		Parse()
