@@ -32,9 +32,9 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 
 	name := strings.TrimSpace(rest[:openBracket])
 
-	members := core.ParseList(rest)
-	if len(members) == 0 {
-		return core.DirectiveRes{}, core.SourceError(pos, "@pool %s: member list is empty", name)
+	members, err := core.ParseCapabilityRefList(rest)
+	if err != nil {
+		return core.DirectiveRes{}, core.SourceError(pos, "@pool %s: %v", name, err)
 	}
 
 	var options map[string]string

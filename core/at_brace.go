@@ -230,7 +230,7 @@ func (b *braceScanner) readNumber() (*Value, error) {
 	if f, err := strconv.ParseFloat(raw, 64); err == nil {
 		return &Value{Kind: ValueNumber, Num: f}, nil
 	}
-	return &Value{Kind: ValueString, Str: raw}, nil
+	return &Value{Kind: ValueBare, Str: raw}, nil
 }
 
 func (b *braceScanner) readKeyword() (*Value, error) {
@@ -243,7 +243,7 @@ func (b *braceScanner) readKeyword() (*Value, error) {
 	case "null":
 		return &Value{Kind: ValueNull}, nil
 	}
-	return &Value{Kind: ValueString, Str: raw}, nil
+	return &Value{Kind: ValueBare, Str: raw}, nil
 }
 
 func (b *braceScanner) readBare() (*Value, error) {
@@ -251,7 +251,7 @@ func (b *braceScanner) readBare() (*Value, error) {
 	if raw == "" {
 		return nil, b.errf("empty value")
 	}
-	return &Value{Kind: ValueString, Str: raw}, nil
+	return &Value{Kind: ValueBare, Str: raw}, nil
 }
 
 func (b *braceScanner) readBareToken() string {

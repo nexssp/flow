@@ -13,10 +13,11 @@ import (
 // buildPoolAction produces the runtime action for one declaration.
 func buildPoolAction(declaration Declaration, resolver core.CapabilityResolver) (action.AnyAction, error) {
 	members := make([]action.AnyAction, 0, len(declaration.Members))
-	for _, name := range declaration.Members {
-		member, ok := resolver.Action(name)
+	for _, ref := range declaration.Members {
+		member, ok := resolver.Action(ref.Canonical)
 		if !ok {
-			return nil, xerr.NotFound("member " + name + " not registered")
+			return nil, xerr.NotFound(
+				"member " + ref.Canonical + " not registered (declared as " + ref.Raw + ")")
 		}
 		members = append(members, member)
 	}

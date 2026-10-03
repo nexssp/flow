@@ -574,7 +574,7 @@ func resolveConfigRefsInValue(cfg map[string]string, cliArgs []string, value *Va
 		for _, item := range value.Slice {
 			resolveConfigRefsInValue(cfg, cliArgs, item)
 		}
-	case ValueNumber, ValueBool, ValueNull, ValueRef:
+	case ValueNumber, ValueBool, ValueNull, ValueRef, ValueBare:
 	}
 }
 
@@ -638,6 +638,8 @@ func resolveValue(v *Value, state map[string]any) any {
 	}
 	switch v.Kind {
 	case ValueString:
+		return v.Str
+	case ValueBare:
 		return v.Str
 	case ValueNumber:
 		return v.Num

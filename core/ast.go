@@ -91,6 +91,7 @@ type ValueKind uint8
 
 const (
 	ValueString ValueKind = iota
+	ValueBare
 	ValueNumber
 	ValueBool
 	ValueNull

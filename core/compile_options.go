@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"maps"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xctx"
@@ -21,9 +22,22 @@ type compileConfig struct {
 	onPreprocess []OnPreprocessFunc
 	config       map[string]string
 	cliArgs      []string
+	argSchemas   map[string][]ArgFieldSpec
 }
 
 type CompileOption func(*compileConfig)
+
+func WithArgSchemas(schemas map[string][]ArgFieldSpec) CompileOption {
+	return func(c *compileConfig) {
+		if len(schemas) == 0 {
+			return
+		}
+		if c.argSchemas == nil {
+			c.argSchemas = make(map[string][]ArgFieldSpec, len(schemas))
+		}
+		maps.Copy(c.argSchemas, schemas)
+	}
+}
 
 func WithAtomAdvisors(fns ...AtomAdviseFunc) CompileOption {
 	return func(c *compileConfig) {
@@ -59,6 +73,7 @@ func BundleConfig(bundles ...Bundle) []CompileOption {
 		advisors []AtomAdviseFunc
 		wrappers []PipelineWrapFunc
 		onPre    []OnPreprocessFunc
+		schemas  = map[string][]ArgFieldSpec{}
 	)
 	for i := range bundles {
 		b := &bundles[i]
@@ -71,9 +86,10 @@ func BundleConfig(bundles ...Bundle) []CompileOption {
 		if b.OnPreprocess != nil {
 			onPre = append(onPre, b.OnPreprocess)
 		}
+		maps.Copy(schemas, b.ArgSchemas)
 	}
 
-	opts := make([]CompileOption, 0, 3)
+	opts := make([]CompileOption, 0, 4)
 	if len(advisors) > 0 {
 		opts = append(opts, WithAtomAdvisors(advisors...))
 	}
@@ -82,6 +98,9 @@ func BundleConfig(bundles ...Bundle) []CompileOption {
 	}
 	if len(onPre) > 0 {
 		opts = append(opts, WithOnPreprocess(onPre...))
+	}
+	if len(schemas) > 0 {
+		opts = append(opts, WithArgSchemas(schemas))
 	}
 	return opts
 }

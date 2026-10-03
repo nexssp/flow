@@ -44,6 +44,8 @@ type Bundle struct {
 	AtomAdvise   func(atom *Atom, builder *action.Builder[any, any]) error
 	WrapPipeline func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error)
 
+	ArgSchemas map[string][]ArgFieldSpec
+
 	SelfTest func() []SelfTestSection
 	Fixtures fs.FS
 }

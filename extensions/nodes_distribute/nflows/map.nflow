@@ -1,3 +1,3 @@
 @description "distribute.map preserves order"
 @assert: result.succeeded == 3
-{ action: "runtime.noop", items: [1, 2, 3] } -> distribute.map
+distribute.map @{ action: noop, items: [1, 2, 3] }

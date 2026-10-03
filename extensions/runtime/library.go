@@ -26,7 +26,10 @@ func Bundle(_ map[string]string) core.Bundle {
 	return core.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{library()},
-		SelfTest:  selftest,
+		ArgSchemas: map[string][]core.ArgFieldSpec{
+			"runtime.call": {{Name: "name", Kind: core.ArgCapabilityRef}},
+		},
+		SelfTest: selftest,
 	}
 }
 

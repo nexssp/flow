@@ -29,7 +29,7 @@ func TestExecute_DispatchSeesHooks(t *testing.T) {
 	_, err = Execute(
 		context.Background(),
 		cfg,
-		`{ members: "cov.echo", payload: { value: 42 } } -> dispatch.run`,
+		`dispatch.run @{ members: [cov.echo], payload: { value: 42 } }`,
 		"dispatch_test.nflow",
 		nil,
 	)

@@ -29,7 +29,12 @@ func Bundle(_ map[string]string) core.Bundle {
 	return core.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{Library()},
-		Fixtures:  fixturesFS,
+		ArgSchemas: map[string][]core.ArgFieldSpec{
+			"distribute.map": {
+				{Name: "action", Kind: core.ArgCapabilityRef},
+			},
+		},
+		Fixtures: fixturesFS,
 	}
 }
 

@@ -21,6 +21,17 @@ func runDirective(tb testing.TB, lines ...string) (map[string]any, error) {
 	return out, err
 }
 
+// memberRaw extracts the source form of every capability reference so
+// tests can assert on what the directive parsed without depending on
+// keyword translation.
+func memberRaw(refs []core.CapabilityRef) []string {
+	out := make([]string, len(refs))
+	for i, r := range refs {
+		out[i] = r.Raw
+	}
+	return out
+}
+
 func TestDirective_BasicDeclaration(t *testing.T) {
 	t.Parallel()
 	out, err := runDirective(t, `@pool fast [a, b, c]`)
@@ -29,7 +40,7 @@ func TestDirective_BasicDeclaration(t *testing.T) {
 	declarations := DeclarationsFromMeta(out)
 	ktest.RequireEqual(t, len(declarations), 1)
 	ktest.RequireEqual(t, declarations[0].Name, "fast")
-	ktest.RequireEqual(t, declarations[0].Members, []string{"a", "b", "c"})
+	ktest.RequireEqual(t, memberRaw(declarations[0].Members), []string{"a", "b", "c"})
 }
 
 func TestDirective_WithStrategy(t *testing.T) {
@@ -73,7 +84,7 @@ func TestDirective_MissingName(t *testing.T) {
 func TestDirective_EmptyMembers(t *testing.T) {
 	t.Parallel()
 	_, err := runDirective(t, `@pool empty []`)
-	ktest.RequireErrorContains(t, err, "member list is empty")
+	ktest.RequireErrorContains(t, err, "empty capability reference list")
 }
 
 func TestDirective_Duplicate(t *testing.T) {
@@ -96,8 +107,13 @@ func TestPoolsFromMeta(t *testing.T) {
 	t.Parallel()
 	meta := map[string]any{
 		"pools": []Declaration{
-			{Name: "a", Members: []string{"x", "y"}},
-			{Name: "b", Members: []string{"z"}},
+			{Name: "a", Members: []core.CapabilityRef{
+				{Raw: "x", Canonical: "x"},
+				{Raw: "y", Canonical: "y"},
+			}},
+			{Name: "b", Members: []core.CapabilityRef{
+				{Raw: "z", Canonical: "z"},
+			}},
 		},
 	}
 	pools := PoolsFromMeta(meta)

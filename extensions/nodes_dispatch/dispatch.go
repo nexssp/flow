@@ -11,11 +11,11 @@ import (
 )
 
 type DispatchReq struct {
-	Pool     string `json:"pool,omitempty"`
-	Members  string `json:"members,omitempty"`
-	Chosen   string `json:"chosen,omitempty"`
-	Fallback string `json:"fallback,omitempty"`
-	Payload  any    `json:"payload,omitempty"`
+	Pool     string   `json:"pool,omitempty"`
+	Members  []string `json:"members,omitempty"`
+	Chosen   string   `json:"chosen,omitempty"`
+	Fallback string   `json:"fallback,omitempty"`
+	Payload  any      `json:"payload,omitempty"`
 }
 
 var Dispatch = action.New("dispatch.run", func(ctx context.Context, req DispatchReq) (any, error) {
@@ -24,8 +24,8 @@ var Dispatch = action.New("dispatch.run", func(ctx context.Context, req Dispatch
 		return nil, xerr.Internal("dispatch: no action resolver in context")
 	}
 
-	members := req.Members
-	if members == "" && req.Pool != "" {
+	names := req.Members
+	if len(names) == 0 && req.Pool != "" {
 		pools := contracts.PoolsFromContext(ctx)
 		if pools == nil {
 			return nil, xerr.Internal("dispatch: pool table not available in context")
@@ -34,10 +34,8 @@ var Dispatch = action.New("dispatch.run", func(ctx context.Context, req Dispatch
 		if !ok {
 			return nil, xerr.NotFound("dispatch: pool not declared: " + req.Pool)
 		}
-		members = strings.Join(listed, ",")
+		names = listed
 	}
-
-	names := splitMembers(members)
 	if len(names) == 0 {
 		return nil, xerr.BadRequest("dispatch: members is empty")
 	}

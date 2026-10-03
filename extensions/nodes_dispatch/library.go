@@ -30,6 +30,13 @@ func Bundle(_ map[string]string) core.Bundle {
 	return core.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{Dispatch}}},
-		Fixtures:  fixturesFS,
+		ArgSchemas: map[string][]core.ArgFieldSpec{
+			"dispatch.run": {
+				{Name: "members", Kind: core.ArgCapabilityRefList},
+				{Name: "chosen", Kind: core.ArgCapabilityRef},
+				{Name: "fallback", Kind: core.ArgCapabilityRef},
+			},
+		},
+		Fixtures: fixturesFS,
 	}
 }
