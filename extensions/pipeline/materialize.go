@@ -11,8 +11,7 @@ import (
 )
 
 // materialize compiles every pipeline declared in meta and mounts it
-// on the resolver. Re-declared names are a compile-time error; they
-// would otherwise silently shadow each other.
+// on the resolver.
 func materialize(req core.MaterializeReq) error {
 	pipelines, _ := req.Meta["pipelines"].(map[string]string)
 	if len(pipelines) == 0 {
@@ -22,19 +21,30 @@ func materialize(req core.MaterializeReq) error {
 		return errors.New("@pipeline: compiler is not available")
 	}
 
+	pipelineMods, _ := req.Meta["pipeline_modifiers"].(map[string][]string)
+
 	for name, source := range pipelines {
-		program, err := req.Compile(name, source)
-		if err != nil {
-			return fmt.Errorf("compile sub-pipeline %q: %w", name, err)
-		}
+		mods := pipelineMods[name]
+
 		canonicalName := name
 		if !strings.Contains(canonicalName, ".") {
 			canonicalName = "pipeline." + canonicalName
 		}
+
+		program, err := req.Compile(canonicalName, source, mods...)
+		if err != nil {
+			return fmt.Errorf("compile sub-pipeline %q: %w", name, err)
+		}
+
+		// Rename the action to its canonical name ("pipeline.<name>")
+		// so it does not collide with the root atom's name ("runtime.const").
+		// Dynamic preserves all modifiers, status codes, tags, and route bindings.
+		act := action.Dynamic(program).Name(canonicalName).Build()
+
 		err = req.Resolver.Mount(action.Library{
 			Name: "pipeline." + name,
 			Actions: []action.AnyAction{
-				action.Dynamic(program).Name(canonicalName).Build(),
+				act,
 			},
 		})
 		if err != nil {

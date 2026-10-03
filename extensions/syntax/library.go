@@ -9,6 +9,7 @@ package syntax
 
 import (
 	"context"
+	"embed"
 
 	"github.com/nexssp/kernel/action"
 
@@ -16,6 +17,9 @@ import (
 )
 
 const ID = "syntax"
+
+//go:embed nflows
+var fixturesFS embed.FS
 
 func init() {
 	core.Register(ID, Bundle)
@@ -27,6 +31,7 @@ func Bundle(_ map[string]string) core.Bundle {
 		Libraries: []action.Library{{Name: ID}},
 		Operators: []core.Operator{pipe, pipeAlias, parallel, fallback},
 		SelfTest:  selftest,
+		Fixtures:  fixturesFS,
 	}
 }
 

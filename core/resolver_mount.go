@@ -188,6 +188,9 @@ func addStagedName(staged *stagedLibraryMount, library, owner, kind, declared, m
 	if !validQualifiedCapabilityName(declared) {
 		return fmt.Errorf("library %q: %s %q must declare one canonical fully-qualified name", library, kind, declared)
 	}
+	if IsReservedActionName(mounted) {
+		return fmt.Errorf("library %q: %s %q is a reserved language name", library, kind, mounted)
+	}
 	if previous, exists := staged.owners[mounted]; exists {
 		return fmt.Errorf("canonical collision: name %q kind %s owner %q conflicts with kind %s owner %q in the same library mount",
 			mounted, kind, owner, previous.kind, previous.library)

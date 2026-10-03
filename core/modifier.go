@@ -18,14 +18,28 @@ import (
 // the DSL text after `=`, or "" for a flag. The parser has already
 // stripped surrounding quotes and expanded adjacent tokens, so no
 // modifier needs to worry about either.
+//
+// Owner declares which subsystem owns the name. A modifier whose name
+// is reserved by the Kernel or the grammar must be declared by its
+// owner; NewModifierTable panics on a mismatch.
 type Modifier struct {
 	Name    string
+	Owner   ModifierOwner
 	Example string
 	Apply   func(b *action.Builder[any, any], raw string) error
 }
 
+// WithOwner returns m with the given owner. The Kernel policy bundle
+// uses it to declare its modifiers as OwnerKernel without a
+// package-level constructor for every policy.
+func WithOwner(m Modifier, owner ModifierOwner) Modifier {
+	m.Owner = owner
+	return m
+}
+
 // ModifierTable indexes modifiers by name. Construction is eager: a
-// duplicate name panics, so a bundle cannot silently shadow another.
+// duplicate name, or a reserved name declared by the wrong owner,
+// panics.
 type ModifierTable struct {
 	byName  map[string]Modifier
 	ordered []Modifier
@@ -42,6 +56,9 @@ func NewModifierTable(modifiers ...Modifier) *ModifierTable {
 		}
 		if _, duplicate := table.byName[modifier.Name]; duplicate {
 			panic("core: duplicate modifier " + modifier.Name)
+		}
+		if required := RequiredModifierOwner(modifier.Name); required != OwnerBundle && modifier.Owner != required {
+			panic("core: modifier " + modifier.Name + " is reserved for " + ModifierOwnerName(required))
 		}
 		table.byName[modifier.Name] = modifier
 	}

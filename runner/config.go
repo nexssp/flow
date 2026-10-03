@@ -87,6 +87,14 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 		}
 	}
 
+	for _, km := range core.KeywordMappings() {
+		if _, ok := resolver.Action(km.Target); !ok {
+			return Config{}, fmt.Errorf(
+				"core: native keyword %q targets missing action %q",
+				km.Keyword, km.Target)
+		}
+	}
+
 	return Config{
 		Resolver:      resolver,
 		Directives:    core.NewDirectiveTable(extraDirectives...),

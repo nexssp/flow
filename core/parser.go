@@ -266,6 +266,9 @@ func (p *Parser) parsePrimary() (Expr, error) {
 func (p *Parser) parseAtom() (Expr, error) {
 	name := p.Cur().Lit
 	p.Next()
+	if canonical, ok := TranslateKeyword(name); ok {
+		name = canonical
+	}
 	a := &Atom{Name: name, Params: map[string]string{}}
 
 	if p.Cur().Type == TokLParen {

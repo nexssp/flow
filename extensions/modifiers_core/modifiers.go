@@ -8,32 +8,40 @@ import (
 	"github.com/nexssp/flow/core"
 )
 
+// Modifiers returns the Kernel-owned policy modifiers. Every entry is
+// tagged OwnerKernel so NewModifierTable permits registration only from
+// this bundle.
 func Modifiers() []core.Modifier {
 	return []core.Modifier{
-		core.Duration("timeout", (*action.Builder[any, any]).Timeout),
+		kernel(core.Duration("timeout", (*action.Builder[any, any]).Timeout)),
 
-		core.Int("retry", func(b *action.Builder[any, any], n int) *action.Builder[any, any] {
+		kernel(core.Int("retry", func(b *action.Builder[any, any], n int) *action.Builder[any, any] {
 			return b.Retry(n, action.ExponentialJitter(100*time.Millisecond, 30*time.Second))
-		}),
+		})),
 
-		core.Int32("concurrency", (*action.Builder[any, any]).ConcurrencyLimit),
+		kernel(core.Int32("concurrency", (*action.Builder[any, any]).ConcurrencyLimit)),
 
-		core.Duration("cache", func(b *action.Builder[any, any], ttl time.Duration) *action.Builder[any, any] {
+		kernel(core.Duration("cache", func(b *action.Builder[any, any], ttl time.Duration) *action.Builder[any, any] {
 			return b.Cache(ttl, defaultKey)
-		}),
+		})),
 
-		core.Flag("coalesce", func(b *action.Builder[any, any]) *action.Builder[any, any] {
+		kernel(core.Flag("coalesce", func(b *action.Builder[any, any]) *action.Builder[any, any] {
 			return b.Coalesce(action.NewCoalescer(), defaultKey)
-		}),
+		})),
 
-		core.Flag("dedup", func(b *action.Builder[any, any]) *action.Builder[any, any] {
+		kernel(core.Flag("dedup", func(b *action.Builder[any, any]) *action.Builder[any, any] {
 			return b.Dedup(defaultKey)
-		}),
+		})),
 
-		core.Flag("idempotent", (*action.Builder[any, any]).Idempotent),
+		kernel(core.Flag("idempotent", (*action.Builder[any, any]).Idempotent)),
 
-		core.Int("rate_limit", func(b *action.Builder[any, any], n int) *action.Builder[any, any] {
+		kernel(core.Int("rate_limit", func(b *action.Builder[any, any], n int) *action.Builder[any, any] {
 			return b.RateLimit(float64(n), n)
-		}),
+		})),
 	}
+}
+
+// kernel marks a modifier as OwnerKernel.
+func kernel(m core.Modifier) core.Modifier {
+	return core.WithOwner(m, core.OwnerKernel)
 }

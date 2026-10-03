@@ -6,14 +6,14 @@ import (
 	"github.com/nexssp/kernel/action"
 )
 
-// MaterializeReq przekazuje kontekst, metadane i kompilator do fazy materializacji.
+// MaterializeReq passes context, metadata, and compiler to the materialization phase.
 type MaterializeReq struct {
 	Ctx      context.Context
 	Meta     map[string]any
 	Resolver CapabilityResolver
-	Compile  func(name, source string) (action.AnyAction, error)
+	Compile  func(name, source string, modifiers ...string) (action.AnyAction, error)
 	Alias    string
 }
 
-// Materializer zamienia deklaracje z meta na działające akcje w resolverze.
+// Materializer converts declarations from meta into executable actions in the resolver.
 type Materializer func(req MaterializeReq) error

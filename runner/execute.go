@@ -17,6 +17,7 @@ import (
 type Execution struct {
 	Output          any
 	Meta            map[string]any
+	Resolver        core.CapabilityResolver
 	CompileDuration time.Duration
 	RunDuration     time.Duration
 
@@ -34,7 +35,6 @@ var defaultRunAction = core.RunAction()
 
 // Execute compiles and runs a .nflow source under the given configuration.
 func Execute(ctx context.Context, cfg Config, src, name string, payload map[string]any) (Execution, error) {
-	// The true compile phase begins at the very first line of Execute.
 	compileStart := time.Now()
 
 	var startStats, compileStats, runStats runtime.MemStats
@@ -49,12 +49,13 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 
 	_, meta, err := core.Preprocess(ctx, cfg.Directives, src, name)
 	if err != nil {
-		return Execution{}, err
+		return Execution{Resolver: resolver}, err
 	}
 
 	topContribs := core.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
 
-	compileSub := func(subName, subSource string) (action.AnyAction, error) {
+	// Variadic signature to accept modifiers for sub-pipelines:
+	compileSub := func(subName, subSource string, mods ...string) (action.AnyAction, error) {
 		subRes, subErr := core.CompileAction(
 			resolver, cfg.Directives, cfg.Modifiers,
 			cfg.Operators, cfg.Primaries, cfg.CompileOpts...,
@@ -66,7 +67,17 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 		if subErr != nil {
 			return nil, subErr
 		}
-		return subRes.Program, nil
+
+		program := subRes.Program
+		if len(mods) > 0 && cfg.Modifiers != nil {
+			applied, applyErr := cfg.Modifiers.ApplyAll(program, mods)
+			if applyErr != nil {
+				return nil, applyErr
+			}
+			program = applied
+		}
+
+		return program, nil
 	}
 
 	for _, m := range cfg.Materializers {
@@ -79,15 +90,13 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 			Resolver: resolver,
 			Compile:  compileSub,
 		}); matErr != nil {
-			return Execution{Meta: meta}, fmt.Errorf("materialize: %w", matErr)
+			return Execution{Meta: meta, Resolver: resolver}, fmt.Errorf("materialize: %w", matErr)
 		}
 	}
 
 	compileCfg := cfg
 	compileCfg.Resolver = resolver
 	ctx = contracts.WithCompiler(ctx, compilerAdapter{cfg: compileCfg})
-
-	// Inject the dynamic resolver directly instead of building a static registry
 	ctx = contracts.WithActionResolver(ctx, resolver)
 
 	compileAct := core.CompileAction(
@@ -106,7 +115,7 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 		readMemStats(&compileStats)
 	}
 	if err != nil {
-		result := Execution{Meta: meta, CompileDuration: compileDuration}
+		result := Execution{Meta: meta, Resolver: resolver, CompileDuration: compileDuration}
 		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
 		return result, err
 	}
@@ -125,6 +134,7 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 	result := Execution{
 		Output:          runRes.Output,
 		Meta:            meta,
+		Resolver:        resolver,
 		CompileDuration: compileDuration,
 		RunDuration:     runDuration,
 	}
