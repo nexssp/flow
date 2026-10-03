@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/nexssp/flow/core"
+	"github.com/nexssp/flow/extensions/scope"
 )
 
 // Directive parses `@pipeline NAME ... @end` and stores the block body in
@@ -70,19 +71,18 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 	return core.DirectiveRes{Next: next}, nil
 }
 
-// expandProfiles replaces every `:profile=NAME` entry with the profile's
-// modifiers. Local modifiers win over profile-supplied modifiers on the
-// same name; a profile-supplied name wins over an earlier
-// profile-supplied name. The result preserves first-seen order.
+// expandProfiles replaces every `:profile=NAME` entry with the
+// profile's effective modifiers (parent chain already resolved). Local
+// modifiers win over profile-supplied modifiers on the same name; a
+// profile-supplied name wins over an earlier profile-supplied name.
+// The result preserves first-seen order.
 //
-// A reference to an undeclared profile is a compile error, not a
-// silent no-op.
+// A reference to an undeclared profile, an unresolved parent, or a
+// parent cycle is a compile error, not a silent no-op.
 func expandProfiles(mods []string, meta map[string]any, pos core.Position) ([]string, error) {
 	if len(mods) == 0 {
 		return nil, nil
 	}
-
-	profiles, _ := meta["scope.profiles"].(map[string][]string)
 
 	var expanded []string
 	index := make(map[string]int)
@@ -97,8 +97,7 @@ func expandProfiles(mods []string, meta map[string]any, pos core.Position) ([]st
 	}
 
 	for _, raw := range mods {
-		name := core.ModifierName(raw)
-		if name != "profile" {
+		if core.ModifierName(raw) != "profile" {
 			add(raw)
 			continue
 		}
@@ -112,10 +111,9 @@ func expandProfiles(mods []string, meta map[string]any, pos core.Position) ([]st
 				"@pipeline: :profile requires a name (use :profile=NAME)")
 		}
 
-		profileMods, ok := profiles[value]
-		if !ok {
-			return nil, core.SourceError(pos,
-				"@pipeline: unknown profile %q (declare with @profile before use)", value)
+		profileMods, err := scope.ExpandProfile(meta, value)
+		if err != nil {
+			return nil, core.SourceError(pos, "@pipeline: %v", err)
 		}
 		for _, pm := range profileMods {
 			add(pm)

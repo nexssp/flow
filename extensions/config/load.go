@@ -5,13 +5,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/nexssp/flow/core"
 )
@@ -119,7 +118,9 @@ func parseConfigLoadSpec(spec string) configLoadSpec {
 }
 
 // decodeConfigFile dispatches by extension: .json → encoding/json,
-// .toml → minimal TOML parser, everything else → YAML.
+// .toml → minimal TOML parser, .yaml/.yml → the registered YAML
+// loader (from extensions/config_yaml). Any other extension is an
+// error.
 func decodeConfigFile(data []byte, ext string) (map[string]any, error) {
 	switch ext {
 	case ".json":
@@ -130,12 +131,14 @@ func decodeConfigFile(data []byte, ext string) (map[string]any, error) {
 		return out, nil
 	case ".toml":
 		return parseSimpleTOML(data)
-	default:
-		var out map[string]any
-		if err := yaml.Unmarshal(data, &out); err != nil {
-			return nil, err
+	case ".yaml", ".yml":
+		loader := yamlLoader.Load()
+		if loader == nil {
+			return nil, errors.New("@config.load: YAML requires @require config_yaml")
 		}
-		return out, nil
+		return (*loader)(data)
+	default:
+		return nil, fmt.Errorf("unsupported config extension: %s", ext)
 	}
 }
 

@@ -24,15 +24,6 @@ runtime.const @{ value: "c" }`,
 @assert: result.timeout == "10s"
 runtime.const @{ value: { retries: "@config.retries", timeout: "@config.timeout" } }`,
 				},
-				{
-					Name: "@config.load YAML",
-					DSL: `@config.load:path="nexss.yml"
-@assert: result.host == "api.example.test"
-runtime.const @{ value: { host: "@config.host" } }`,
-					Files: map[string]string{
-						"nexss.yml": "host: api.example.test\nport: 8443\n",
-					},
-				},
 			},
 		},
 	}

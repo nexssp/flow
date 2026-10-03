@@ -32,14 +32,6 @@ func writeFixture(tb testing.TB, name, content string) string {
 	return path
 }
 
-func TestLoad_YAML(t *testing.T) {
-	path := writeFixture(t, "nexss.yml", "host: api.example.test\nport: 8443\n")
-	cfg, err := runLoad(t, "", `@config.load:path="`+path+`"`)
-	ktest.RequireNoError(t, err)
-	ktest.RequireEqual(t, cfg["host"], "api.example.test")
-	ktest.RequireEqual(t, cfg["port"], "8443")
-}
-
 func TestLoad_JSON(t *testing.T) {
 	path := writeFixture(t, "nexss.json", `{"host":"x","nested":{"deep":"y"}}`)
 	cfg, err := runLoad(t, "", `@config.load:path="`+path+`"`)
@@ -57,27 +49,27 @@ func TestLoad_TOML(t *testing.T) {
 }
 
 func TestLoad_Prefix(t *testing.T) {
-	path := writeFixture(t, "a.yml", "x: 1\n")
+	path := writeFixture(t, "a.json", `{"x":1}`)
 	cfg, err := runLoad(t, "", `@config.load:path="`+path+`" :prefix="app"`)
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, cfg["app.x"], "1")
 }
 
 func TestLoad_MissingOptional(t *testing.T) {
-	cfg, err := runLoad(t, "", `@config.load:path="/nonexistent/x.yml" :required=false`)
+	cfg, err := runLoad(t, "", `@config.load:path="/nonexistent/x.json" :required=false`)
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, len(cfg), 0)
 }
 
 func TestLoad_MissingRequired(t *testing.T) {
-	_, err := runLoad(t, "", `@config.load:path="/nonexistent/x.yml"`)
+	_, err := runLoad(t, "", `@config.load:path="/nonexistent/x.json"`)
 	ktest.RequireErrorContains(t, err, "read")
 }
 
 func TestLoad_RelativeToBaseDir(t *testing.T) {
 	dir := t.TempDir()
-	ktest.RequireNoError(t, os.WriteFile(filepath.Join(dir, "c.yml"), []byte("k: v\n"), 0o600))
-	cfg, err := runLoad(t, dir, `@config.load:path="c.yml"`)
+	ktest.RequireNoError(t, os.WriteFile(filepath.Join(dir, "c.json"), []byte(`{"k":"v"}`), 0o600))
+	cfg, err := runLoad(t, dir, `@config.load:path="c.json"`)
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, cfg["k"], "v")
 }
@@ -88,8 +80,14 @@ func TestLoad_MissingPath(t *testing.T) {
 }
 
 func TestLoad_MalformedDirective(t *testing.T) {
-	_, err := runLoad(t, "", `@config.loa:path="x.yml"`)
+	_, err := runLoad(t, "", `@config.loa:path="x.json"`)
 	ktest.RequireErrorContains(t, err, "malformed")
+}
+
+func TestLoad_YAMLWithoutBundle(t *testing.T) {
+	path := writeFixture(t, "cfg.yml", "k: v\n")
+	_, err := runLoad(t, "", `@config.load:path="`+path+`"`)
+	ktest.RequireErrorContains(t, err, "requires @require config_yaml")
 }
 
 func TestParseSpec(t *testing.T) {

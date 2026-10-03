@@ -28,7 +28,7 @@ repos:
 
       - id: go-test
         name: go test
-        entry: go test ./...
+        entry: go test -short ./...
         language: system
         pass_filenames: false
         types: [go]

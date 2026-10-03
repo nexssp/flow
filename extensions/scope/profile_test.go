@@ -107,3 +107,118 @@ func TestProfile_InvalidNameRejected(t *testing.T) {
 	ktest.RequireCondition(t, err != nil, "expected invalid name error")
 	ktest.RequireStringContains(t, err.Error(), "invalid name")
 }
+
+func TestProfile_ParentInherits(t *testing.T) {
+	cfg := buildConfig(t)
+	src := `
+@profile base :tag="from-base"
+@profile child :parent=base
+
+@pipeline work :profile=child
+  const @{ value: "ok" }
+@end
+
+{} -> pipeline.work
+`
+	ex := mustRun(t, cfg, src)
+
+	act, found := ex.Resolver.Action("pipeline.work")
+	ktest.RequireCondition(t, found, "pipeline.work not mounted")
+
+	hasTag := false
+	for _, tag := range act.Describe().Tags {
+		if tag == "from-base" {
+			hasTag = true
+		}
+	}
+	ktest.RequireCondition(t, hasTag,
+		"parent :tag must reach pipeline.work, got %v", act.Describe().Tags)
+}
+
+func TestProfile_ChildOverridesParent(t *testing.T) {
+	cfg := buildConfig(t)
+	src := `
+@profile base :tag="base-tag"
+@profile child :parent=base :tag="child-tag"
+
+@pipeline work :profile=child
+  const @{ value: "ok" }
+@end
+
+{} -> pipeline.work
+`
+	ex := mustRun(t, cfg, src)
+
+	act, found := ex.Resolver.Action("pipeline.work")
+	ktest.RequireCondition(t, found, "pipeline.work not mounted")
+
+	hasChild, hasBase := false, false
+	for _, tag := range act.Describe().Tags {
+		switch tag {
+		case "child-tag":
+			hasChild = true
+		case "base-tag":
+			hasBase = true
+		}
+	}
+	ktest.RequireCondition(t, hasChild, "child tag must win, got %v", act.Describe().Tags)
+	ktest.RequireCondition(t, !hasBase,
+		"parent tag must be overridden by child, got %v", act.Describe().Tags)
+}
+
+func TestProfile_CycleRejected(t *testing.T) {
+	cfg := buildConfig(t)
+	src := `
+@profile a :parent=b
+@profile b :parent=a
+
+@pipeline work :profile=a
+  const @{ value: "ok" }
+@end
+
+{} -> pipeline.work
+`
+	_, err := run(t, cfg, src)
+	ktest.RequireCondition(t, err != nil, "expected cycle error")
+	ktest.RequireStringContains(t, err.Error(), "cycle")
+}
+
+func TestProfile_SelfParentRejected(t *testing.T) {
+	cfg := buildConfig(t)
+	src := `
+@profile self :parent=self
+
+@pipeline work :profile=self
+  const @{ value: "ok" }
+@end
+
+{} -> pipeline.work
+`
+	_, err := run(t, cfg, src)
+	ktest.RequireCondition(t, err != nil, "expected cycle error")
+	ktest.RequireStringContains(t, err.Error(), "cycle")
+}
+
+func TestProfile_UnknownParentRejected(t *testing.T) {
+	cfg := buildConfig(t)
+	src := `
+@profile child :parent=missing
+
+@pipeline work :profile=child
+  const @{ value: "ok" }
+@end
+
+{} -> pipeline.work
+`
+	_, err := run(t, cfg, src)
+	ktest.RequireCondition(t, err != nil, "expected unknown parent error")
+	ktest.RequireStringContains(t, err.Error(), "unknown parent")
+}
+
+func TestProfile_DuplicateParentRejected(t *testing.T) {
+	cfg := buildConfig(t)
+	src := `@profile bad :parent=a :parent=b`
+	_, err := run(t, cfg, src)
+	ktest.RequireCondition(t, err != nil, "expected duplicate parent error")
+	ktest.RequireStringContains(t, err.Error(), "at most once")
+}
