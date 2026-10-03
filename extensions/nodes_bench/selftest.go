@@ -11,7 +11,7 @@ func selftest() []core.SelfTestSection {
 					Name: "bench.run",
 					DSL: `@assert: result.action == "runtime.noop"
 @assert: result.iterations == 1
-{ action: "noop", iterations: 1, payload: { value: "b" } } -> bench.run`,
+{ action: "runtime.noop", iterations: 1, payload: { value: "b" } } -> bench.run`,
 				},
 				{
 					Name: "bench.save",

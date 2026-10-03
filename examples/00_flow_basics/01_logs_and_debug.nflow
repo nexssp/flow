@@ -1,9 +1,9 @@
 @description "Control global logging and runtime.debug pipelines effortlessly"
 
 # 💡 TIP: You can control the log output by setting environment variables!
-# Try running this file in PowerShell runtime.with:
-# $runtime.env:LOG_LEVEL="runtime.debug"; go run ..\flow\cmd\nflow\ run .\00_flow_basics\01_logs_and_debug.nflow
-# $runtime.env:LOG_FORMAT="json"; go run ..\flow\cmd\nflow\ run .\00_flow_basics\01_logs_and_debug.nflow
+# Try running this file in PowerShell with:
+# $env:LOG_LEVEL="runtime.debug"; go run ..\flow\cmd\nflow\ run .\00_flow_basics\01_logs_and_debug.nflow
+# $env:LOG_FORMAT="json"; go run ..\flow\cmd\nflow\ run .\00_flow_basics\01_logs_and_debug.nflow
 
 @assert: result.status == "done"
 

@@ -1,2 +1,2 @@
 @description "assert(cond, msg) keyword"
-{ score: 95 } -> assert(.score >= 50, "score too low") -> assert(.score == 95, "exact") -> runtime.noop
+{ score: 95 } -> assert(.score >= 50, "score too low") -> assert(.score == 95, "exact") -> noop

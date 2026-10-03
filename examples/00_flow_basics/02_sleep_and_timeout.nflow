@@ -1,14 +1,14 @@
 @description "Per-action Timeout and Local Fallback"
 
 # :timeout sets a deadline for one action; it is not a workflow-wide SLA or a cost cap.
-# This local runtime.sleep requests 5 seconds and uses a 1-second action deadline.
+# This local sleep requests 5 seconds and uses a 1-second action deadline.
 
 @assert: result.recovered == true
 
 { query: "SELECT * FROM huge_table" }
 
-# This action is configured runtime.with a 1-second timeout.
--> runtime.sleep:timeout=1s @{ duration_ms: 5000 }
+# This action is configured with a 1-second timeout.
+-> sleep:timeout=1s @{ duration_ms: 5000 }
 
 # If the action returns an error (including a timeout), || tries the local fallback.
 || { recovered: true, error: "Database took too long, serving fallback data." }

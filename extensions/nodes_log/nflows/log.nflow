@@ -1,3 +1,3 @@
 @description "log.* pass-through"
 @assert: result.value == "info"
-{ value: "info" } -> log.info -> runtime.noop
+{ value: "info" } -> log.info -> noop

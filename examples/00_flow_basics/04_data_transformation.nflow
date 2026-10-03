@@ -10,7 +10,7 @@
     system_flag: true
 }
 
-# Project and transform fields runtime.with expr-lang expressions, including string concatenation.
+# Project and transform fields with expr-lang expressions, including string concatenation.
 -> {
     id: .user.id,
     name: .user.name,

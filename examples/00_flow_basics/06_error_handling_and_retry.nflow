@@ -11,5 +11,5 @@
 
 @assert: result.kind == "Validation"
 
-# This action intentionally fails runtime.with a Validation error.
-runtime.fail @{ kind: "Validation", message: "User email is invalid" }
+# This action intentionally fails with a Validation error.
+fail @{ kind: "Validation", message: "User email is invalid" }

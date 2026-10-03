@@ -21,12 +21,14 @@ func buildPoolAction(declaration Declaration, resolver core.CapabilityResolver) 
 		members = append(members, member)
 	}
 
+	canonical := "pool." + declaration.Name
+
 	switch declaration.Strategy {
 	case "", "round_robin":
-		return action.RoundRobinAny(declaration.Name, members...).Build(), nil
+		return action.RoundRobinAny(canonical, members...).Build(), nil
 
 	case "failover":
-		return action.FirstSuccessAny(declaration.Name, members...).Build(), nil
+		return action.FirstSuccessAny(canonical, members...).Build(), nil
 
 	case "hash":
 		keyPath := declaration.Options["key"]
@@ -34,7 +36,7 @@ func buildPoolAction(declaration Declaration, resolver core.CapabilityResolver) 
 			return nil, xerr.BadRequest(`strategy hash requires option key=".field.path"`)
 		}
 		extractor := makeStringPathExtractor(keyPath)
-		return action.HashRouterAny(declaration.Name, extractor, members...).Build(), nil
+		return action.HashRouterAny(canonical, extractor, members...).Build(), nil
 
 	default:
 		return nil, xerr.BadRequest(

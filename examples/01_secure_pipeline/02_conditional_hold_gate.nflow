@@ -4,4 +4,4 @@
   task_id: "DOC-7",
   review: { proceed: false }
 }
--> (runtime.pick @{ field: "review.proceed" } ? runtime.noop : runtime.const @{ value: "held" })
+-> (pick @{ field: "review.proceed" } ? noop : const @{ value: "held" })

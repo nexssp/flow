@@ -5,15 +5,15 @@
 # ── Macro declarations ──────────────────────────────────────────────
 
 @macro hi() {
-  runtime.const @{ value: "hi" }
+  const @{ value: "hi" }
 }
 
 @macro echo(v) {
-  runtime.const @{ value: $v }
+  const @{ value: $v }
 }
 
 @macro pair(k, v) {
-  runtime.const @{ value: { key: $k, value: $v } }
+  const @{ value: { key: $k, value: $v } }
 }
 
 @macro seq(a, b) {
@@ -39,11 +39,11 @@
 @end
 
 @pipeline t_seq
-  { x: 1 } -> @seq(runtime.noop, runtime.noop)
+  { x: 1 } -> @seq(noop, noop)
 @end
 
 @pipeline t_nested
-  { n: 5 } -> @seq(@echo("inner"), runtime.noop)
+  { n: 5 } -> @seq(@echo("inner"), noop)
 @end
 
 @pipeline t_comma_arg
