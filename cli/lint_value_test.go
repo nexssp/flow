@@ -115,3 +115,27 @@ func TestLintFragment_ParseError(t *testing.T) {
 	ktest.RequireLen(t, issues, 1)
 	ktest.RequireEqual(t, issues[0].Kind, "parse")
 }
+
+func TestLintMacroSyntaxError(t *testing.T) {
+	// A macro body with a syntax error must surface through lint as a
+	// parse diagnostic carrying the macro name and its definition
+	// line. The macro primary wraps the sub-parse error; this test is
+	// the contract that the wrapping survives all the way to the CLI.
+	//
+	// This test drives lintFile, not lintFragment. lintFragment parses
+	// an already-preprocessed fragment, so it never sees @macro — the
+	// directive strips itself during Preprocess and the parser sees
+	// only the invocation. Only lintFile runs the full preprocess →
+	// parse path, which is what `nflow lint` does. A test that used
+	// lintFragment here would be testing the wrong layer.
+	src := `@macro broken() { noop -> ) }
+@broken()
+`
+	cfg, _, known, modifiers := lintFixture(t)
+	issues := lintFile("test.nflow", src, cfg, known, modifiers)
+
+	ktest.RequireLen(t, issues, 1)
+	ktest.RequireEqual(t, issues[0].Kind, "parse")
+	ktest.RequireStringContains(t, issues[0].Message, "in macro @broken")
+	ktest.RequireStringContains(t, issues[0].Message, "defined at")
+}
