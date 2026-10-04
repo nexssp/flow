@@ -184,29 +184,142 @@ func stageBuildDir(nflowPath string, src []byte, reqs []require.Requirement) (st
 	if err != nil {
 		return "", fmt.Errorf("temp: %w", err)
 	}
+	cleanupBuildDir := true
+	defer func() {
+		if cleanupBuildDir {
+			_ = os.RemoveAll(buildDir)
+		}
+	}()
 
-	//nolint:gosec // buildDir is a temp directory we just created; src is file content, not a path.
-	err = os.WriteFile(filepath.Join(buildDir, "workflow.nflow"), src, 0o600)
+	external := filterExternalRequires(reqs)
+	imports, err := prepareBundleImports(buildDir, external)
 	if err != nil {
-		_ = os.RemoveAll(buildDir)
+		return "", fmt.Errorf("bundles: %w", err)
+	}
+	buildRoot, err := os.OpenRoot(buildDir)
+	if err != nil {
+		return "", fmt.Errorf("open build directory: %w", err)
+	}
+	defer func() { _ = buildRoot.Close() }()
+
+	embeddedSource := rewriteEmbeddedRequires(string(src), filepath.Dir(nflowPath), reqs)
+	if err := writeBuildFile(buildRoot, "workflow.nflow", []byte(embeddedSource)); err != nil {
 		return "", fmt.Errorf("embed: %w", err)
 	}
 
-	err = os.WriteFile(filepath.Join(buildDir, "main.go"), []byte(buildMain()), 0o600)
-	if err != nil {
-		_ = os.RemoveAll(buildDir)
+	if err := writeBuildFile(buildRoot, "main.go", []byte(buildMain(imports))); err != nil {
 		return "", fmt.Errorf("main.go: %w", err)
 	}
 
 	mod := harnessGoMod(driverRoot, driverVersion, goworkPath, reqs)
-
-	err = os.WriteFile(filepath.Join(buildDir, "go.mod"), []byte(mod), 0o600)
-	if err != nil {
-		_ = os.RemoveAll(buildDir)
+	if err := writeBuildFile(buildRoot, "go.mod", []byte(mod)); err != nil {
 		return "", fmt.Errorf("go.mod: %w", err)
 	}
 
+	cleanupBuildDir = false
 	return buildDir, nil
+}
+
+func writeBuildFile(root *os.Root, name string, contents []byte) error {
+	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	_, writeErr := file.Write(contents)
+	closeErr := file.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
+}
+
+func rewriteEmbeddedRequires(source, flowDir string, requirements []require.Requirement) string {
+	localImports := embeddedLocalImports(requirements)
+	if len(localImports) == 0 {
+		return source
+	}
+
+	lines := strings.SplitAfter(source, "\n")
+	for i, line := range lines {
+		if rewritten, ok := rewriteEmbeddedRequireLine(line, flowDir, localImports); ok {
+			lines[i] = rewritten
+		}
+	}
+	return strings.Join(lines, "")
+}
+
+func embeddedLocalImports(requirements []require.Requirement) map[string]string {
+	imports := make(map[string]string)
+	for i := range requirements {
+		r := &requirements[i]
+		if r.IsLocal() {
+			imports[filepath.Clean(r.LocalPath)] = r.Import
+		}
+	}
+	return imports
+}
+
+func rewriteEmbeddedRequireLine(line, flowDir string, localImports map[string]string) (string, bool) {
+	start, end, ok := embeddedRequireTargetBounds(line)
+	if !ok {
+		return "", false
+	}
+	rawTarget := line[start:end]
+	resolved, err := resolveEmbeddedRequireTarget(rawTarget, flowDir)
+	if err != nil {
+		return "", false
+	}
+	importPath, ok := localImports[resolved]
+	if !ok {
+		return "", false
+	}
+	if quote := embeddedRequireQuote(rawTarget); quote != 0 {
+		importPath = string(quote) + importPath + string(quote)
+	}
+	return line[:start] + importPath + line[end:], true
+}
+
+func embeddedRequireTargetBounds(line string) (start, end int, ok bool) {
+	trimmed := strings.TrimLeft(line, " \t")
+	if !strings.HasPrefix(trimmed, "@require") {
+		return 0, 0, false
+	}
+	targetStart := len(line) - len(trimmed) + len("@require")
+	for targetStart < len(line) && (line[targetStart] == ' ' || line[targetStart] == '\t') {
+		targetStart++
+	}
+	targetEnd := targetStart
+	for targetEnd < len(line) && !isEmbeddedRequireDelimiter(line[targetEnd]) {
+		targetEnd++
+	}
+	return targetStart, targetEnd, targetStart != targetEnd
+}
+
+func isEmbeddedRequireDelimiter(char byte) bool {
+	return char == ' ' || char == '\t' || char == '{' || char == '\n' || char == '\r'
+}
+
+func resolveEmbeddedRequireTarget(rawTarget, flowDir string) (string, error) {
+	target := strings.Trim(rawTarget, `"'`)
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(flowDir, target)
+	}
+	resolved, err := filepath.Abs(target)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(resolved), nil
+}
+
+func embeddedRequireQuote(rawTarget string) byte {
+	if len(rawTarget) < 2 {
+		return 0
+	}
+	quote := rawTarget[0]
+	if (quote == '"' || quote == '\'') && rawTarget[len(rawTarget)-1] == quote {
+		return quote
+	}
+	return 0
 }
 
 // linkBinary resolves the version metadata, builds the argv, announces
@@ -435,9 +548,11 @@ func buildFail(step string, err error) int {
 
 // buildMain is the source of the generated main.go that lives in the
 // temp build directory. It embeds the .nflow file and hands control to
-// cli.RunEmbedded, which reads the source, compiles, and runs it.
-func buildMain() string {
-	return `package main
+// cli.RunEmbeddedWithBundles, which compiles and runs it with the statically
+// linked @require bundles.
+func buildMain(imports []bundleImport) string {
+	var mainBuilder strings.Builder
+	mainBuilder.WriteString(`package main
 
 import (
 	"context"
@@ -445,13 +560,19 @@ import (
 	"os"
 
 	"github.com/nexssp/flow/cli"
-)
+	"github.com/nexssp/flow/core"
+`)
+	writeBundleImports(&mainBuilder, imports)
+	mainBuilder.WriteString(`)
 
 //go:embed workflow.nflow
 var embedded string
 
 func main() {
-	os.Exit(cli.RunEmbedded(context.Background(), embedded, os.Args[1:]))
+`)
+	writeBundleConstruction(&mainBuilder, imports)
+	mainBuilder.WriteString(`	os.Exit(cli.RunEmbeddedWithBundles(context.Background(), embedded, os.Args[1:], bundles))
 }
-`
+`)
+	return mainBuilder.String()
 }

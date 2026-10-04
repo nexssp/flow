@@ -369,23 +369,16 @@ func (b *tailBuffer) String() string {
 	return "… (earlier output truncated)\n" + string(b.buf)
 }
 
-func writeHarness(directory, driverRoot, driverVersion, goworkPath string, requirements []require.Requirement) error {
-	var mainBuilder strings.Builder
-	mainBuilder.WriteString("package main\n\n")
-	mainBuilder.WriteString("import (\n")
-	mainBuilder.WriteString("\t\"os\"\n\n")
-	mainBuilder.WriteString("\t\"github.com/nexssp/flow/cli\"\n")
-	mainBuilder.WriteString("\t\"github.com/nexssp/flow/core\"\n")
+type bundleImport struct {
+	alias    string
+	path     string
+	options  string
+	reqAlias string
+}
 
+func prepareBundleImports(directory string, requirements []require.Requirement) ([]bundleImport, error) {
 	seen := make(map[string]bool)
-	type bundleImport struct {
-		alias    string
-		path     string
-		options  string
-		reqAlias string
-	}
 	imports := make([]bundleImport, 0, len(requirements))
-
 	for i := range requirements {
 		r := &requirements[i]
 		importPath := bundleImportPath(*r)
@@ -397,32 +390,57 @@ func writeHarness(directory, driverRoot, driverVersion, goworkPath string, requi
 		if r.IsLoose {
 			targetDir := filepath.Join(directory, "loose", r.LooseID)
 			if err := copyLoosePackage(*r, targetDir); err != nil {
-				return fmt.Errorf("harness: copy loose package %s: %w", r.LocalPath, err)
+				return nil, fmt.Errorf("copy loose package %s: %w", r.LocalPath, err)
 			}
 		}
 
-		alias := fmt.Sprintf("nflowbundle%d", i)
 		imports = append(imports, bundleImport{
-			alias:    alias,
+			alias:    fmt.Sprintf("nflowbundle%d", i),
 			path:     importPath,
 			options:  optionsLiteral(r.Options),
 			reqAlias: r.Alias,
 		})
-		fmt.Fprintf(&mainBuilder, "\t%s %q\n", alias, importPath)
 	}
-	mainBuilder.WriteString(")\n\n")
-	mainBuilder.WriteString("func main() {\n")
+	return imports, nil
+}
+
+func writeBundleImports(mainBuilder *strings.Builder, imports []bundleImport) {
+	for i := range imports {
+		item := &imports[i]
+		fmt.Fprintf(mainBuilder, "\t%s %q\n", item.alias, item.path)
+	}
+}
+
+func writeBundleConstruction(mainBuilder *strings.Builder, imports []bundleImport) {
 	mainBuilder.WriteString("\tvar bundles []core.Bundle\n")
 	for i := range imports {
 		item := &imports[i]
 		mainBuilder.WriteString("\t{\n")
-		fmt.Fprintf(&mainBuilder, "\t\tb := %s.Bundle(%s)\n", item.alias, item.options)
+		fmt.Fprintf(mainBuilder, "\t\tb := %s.Bundle(%s)\n", item.alias, item.options)
 		if item.reqAlias != "" {
-			fmt.Fprintf(&mainBuilder, "\t\tb.Alias = %q\n", item.reqAlias)
+			fmt.Fprintf(mainBuilder, "\t\tb.Alias = %q\n", item.reqAlias)
 		}
 		mainBuilder.WriteString("\t\tbundles = append(bundles, b)\n")
 		mainBuilder.WriteString("\t}\n")
 	}
+}
+
+func writeHarness(directory, driverRoot, driverVersion, goworkPath string, requirements []require.Requirement) error {
+	imports, err := prepareBundleImports(directory, requirements)
+	if err != nil {
+		return fmt.Errorf("harness: %w", err)
+	}
+
+	var mainBuilder strings.Builder
+	mainBuilder.WriteString("package main\n\n")
+	mainBuilder.WriteString("import (\n")
+	mainBuilder.WriteString("\t\"os\"\n\n")
+	mainBuilder.WriteString("\t\"github.com/nexssp/flow/cli\"\n")
+	mainBuilder.WriteString("\t\"github.com/nexssp/flow/core\"\n")
+	writeBundleImports(&mainBuilder, imports)
+	mainBuilder.WriteString(")\n\n")
+	mainBuilder.WriteString("func main() {\n")
+	writeBundleConstruction(&mainBuilder, imports)
 	mainBuilder.WriteString("\tos.Exit(cli.RunWithBundles(os.Args[1:], bundles))\n")
 	mainBuilder.WriteString("}\n")
 

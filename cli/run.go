@@ -164,11 +164,14 @@ func isInlineSource(target string) bool {
 func RunEmbeddedWithBundles(ctx context.Context, source string, args []string, bundles []core.Bundle) int {
 	injectedBundles = append([]core.Bundle(nil), bundles...)
 	defer func() { injectedBundles = nil }()
-	fmt.Fprintf(os.Stderr, "nexssflow %s %s (built %s)\n", Version, Commit, BuiltAt)
-	return runSourceInProcess(ctx, source, "<embedded>", args)
+	return runEmbedded(ctx, source, args)
 }
 
 func RunEmbedded(ctx context.Context, source string, args []string) int {
+	return runEmbedded(ctx, source, args)
+}
+
+func runEmbedded(ctx context.Context, source string, args []string) int {
 	if len(args) > 0 {
 		switch args[0] {
 		case "version", "--version":
