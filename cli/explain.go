@@ -29,9 +29,12 @@ func runExplain(args []string) int {
 
 func runExplainInProcess(args []string) int {
 	if len(args) < 1 {
-		return fatalf("usage: nflow explain <file.nflow>")
+		return fatalf("usage: nflow explain <file.nflow> [--ast] [--json]")
 	}
 	path := args[0]
+
+	wantAST := hasFlag(args[1:], "--ast")
+	wantJSON := hasFlag(args[1:], "--json")
 
 	src, err := os.ReadFile(path)
 	if err != nil {
@@ -48,12 +51,30 @@ func runExplainInProcess(args []string) int {
 		return fatalf("config: %v", err)
 	}
 
+	// --json has no meaning for the policy view; it exists only for
+	// the AST view, which carries a machine-readable shape. Refusing
+	// the combination explicitly is better than silently ignoring
+	// one of the two flags.
+	if wantJSON && !wantAST {
+		return fatalf("--json requires --ast (the policy view has no JSON shape)")
+	}
+
+	if wantAST {
+		if err := renderExplainAST(os.Stdout, cfg, string(src), path, wantJSON); err != nil {
+			return fatalf("%v", err)
+		}
+		return 0
+	}
+
 	if err := renderExplain(os.Stdout, cfg, string(src), path); err != nil {
 		return fatalf("%v", err)
 	}
 	return 0
 }
 
+// renderExplain is the pure function behind runExplainInProcess. It
+// takes a source string and writes the report to w. Tests drive it
+// directly, without touching disk.
 // renderExplain is the pure function behind runExplainInProcess. It
 // takes a source string and writes the report to w. Tests drive it
 // directly, without touching disk.
@@ -67,18 +88,28 @@ func renderExplain(w io.Writer, cfg runner.Config, src, path string) error {
 
 	fmt.Fprintf(w, "%s\n\n", bold(path, useColor))
 
+	topContribs := core.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
+
 	topLineMods := computeLineMods(cfg, meta)
-	renderExplainTopLevel(w, cfg, clean, path, topLineMods, useColor)
-	renderExplainPipelines(w, cfg, meta, useColor)
+	renderExplainTopLevel(w, cfg, clean, meta, path, topLineMods, useColor)
+	renderExplainPipelines(w, cfg, meta, topContribs.Primaries, useColor)
 	return nil
 }
 
-func renderExplainTopLevel(w io.Writer, cfg runner.Config, clean, path string, lineMods []core.LineLookup, useColor bool) {
+func renderExplainTopLevel(
+	w io.Writer,
+	cfg runner.Config,
+	clean string,
+	meta map[string]any,
+	path string,
+	lineMods []core.LineLookup,
+	useColor bool,
+) {
 	if strings.TrimSpace(clean) == "" {
 		return
 	}
 	ast, err := core.NewParserWithFileOffset(
-		context.Background(), cfg.Operators, cfg.Primaries, clean, path, 0,
+		context.Background(), cfg.Operators, cfg.PrimariesFor(meta), clean, path, 0,
 	).
 		WithLineModifiers(lineMods...).
 		Parse()
@@ -91,7 +122,13 @@ func renderExplainTopLevel(w io.Writer, cfg runner.Config, clean, path string, l
 	fmt.Fprintln(w)
 }
 
-func renderExplainPipelines(w io.Writer, cfg runner.Config, meta map[string]any, useColor bool) {
+func renderExplainPipelines(
+	w io.Writer,
+	cfg runner.Config,
+	meta map[string]any,
+	parentPrimaries []core.PrimaryExtension,
+	useColor bool,
+) {
 	pipelines, _ := meta["pipelines"].(map[string]string)
 	if len(pipelines) == 0 {
 		return
@@ -107,7 +144,11 @@ func renderExplainPipelines(w io.Writer, cfg runner.Config, meta map[string]any,
 	sort.Strings(names)
 
 	for _, name := range names {
-		renderExplainPipeline(w, cfg, name, pipelines[name], pipelineMods[name], pipelineModSources[name], useColor)
+		renderExplainPipeline(
+			w, cfg, name, pipelines[name],
+			pipelineMods[name], pipelineModSources[name],
+			parentPrimaries, useColor,
+		)
 	}
 }
 
@@ -117,6 +158,7 @@ func renderExplainPipeline(
 	name, body string,
 	mods []string,
 	modSources []core.ModifierSource,
+	parentPrimaries []core.PrimaryExtension,
 	useColor bool,
 ) {
 	canonical := name
@@ -175,8 +217,15 @@ func renderExplainPipeline(
 
 	lineMods := core.LineModifiersFromOptions(cfg.Modifiers, opts)
 
+	// A pipeline body sees its own macros plus the parent's, the same
+	// way the runtime compiler stacks CompileReq.InheritedPrimaries.
+	// Reading cfg.Primaries here would drop every macro declared at the
+	// top of the file, and the policy view would reject a file the AST
+	// view renders correctly.
+	fragPrimaries := cfg.PrimariesFor(fragMeta, parentPrimaries...)
+
 	ast, perr := core.NewParserWithFileOffset(
-		context.Background(), cfg.Operators, cfg.Primaries, clean, name, 0,
+		context.Background(), cfg.Operators, fragPrimaries, clean, name, 0,
 	).
 		WithLineModifiers(lineMods...).
 		Parse()

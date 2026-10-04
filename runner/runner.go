@@ -43,6 +43,13 @@ type Config struct {
 	// Execute already reports per-phase diagnostics, and this is the
 	// allocation counterpart.
 	MeasureAllocs bool
+
+	// ArgSchemas is the merged per-action argument schema published by
+	// every mounted bundle. It is exposed so diagnostics (nflow lint
+	// today) can validate @{...} capability references without building
+	// the action tree. Build-time advisors are the runtime counterpart;
+	// this field makes the same checks reachable from a pure parse.
+	ArgSchemas map[string][]core.ArgFieldSpec
 }
 
 // Opts controls execution options for a single runner invocation.
@@ -92,7 +99,9 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 			fmt.Fprintf(stderr, "❌ preprocess: %v\n", err)
 			return 1
 		}
-		ast, parseErr := core.NewParserWithPrimaries(ctx, cfg.Operators, cfg.Primaries, clean).Parse()
+		ast, parseErr := core.NewParserWithFileOffset(
+			ctx, cfg.Operators, cfg.PrimariesFor(meta), clean, name, 0,
+		).Parse()
 		if parseErr != nil {
 			fmt.Fprintf(stderr, "❌ parse: %v\n", parseErr)
 			return 1
