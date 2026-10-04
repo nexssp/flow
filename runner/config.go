@@ -3,6 +3,7 @@ package runner
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/nexssp/flow/core"
@@ -15,6 +16,7 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 	seenBundles := make(map[string]struct{}, len(bundles))
 	seenLibraries := make(map[string]string)
 	seenAliases := make(map[string]string)
+	argSchemas := make(map[string][]core.ArgFieldSpec)
 
 	for i := range bundles {
 		b := bundles[i]
@@ -37,6 +39,9 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 				return Config{}, fmt.Errorf("duplicate library %q in bundles %q and %q", lib.Name, prev, b.ID)
 			}
 			seenLibraries[lib.Name] = b.ID
+		}
+		if len(b.ArgSchemas) > 0 {
+			maps.Copy(argSchemas, b.ArgSchemas)
 		}
 		unique = append(unique, b)
 	}
@@ -103,5 +108,6 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 		Primaries:     core.NewPrimaryExtensionTable(extraPrimaries...),
 		Materializers: materializers,
 		CompileOpts:   core.BundleConfig(unique...),
+		ArgSchemas:    argSchemas,
 	}, nil
 }

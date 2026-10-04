@@ -155,3 +155,43 @@ func kindName(k ValueKind) string {
 		return "unknown"
 	}
 }
+
+// ValidateAtomArgs walks an AST and runs the ArgSchema check on every
+// atom that carries @{...} arguments. It is the parse-time counterpart
+// of argSchemaAdvisor: same rules, same error messages, no builder.
+//
+// nflow lint calls this so that capability references written in
+// @{...} are verified at check time, not only when the pipeline is
+// compiled for execution.
+//
+// Projections and other runtime values are not covered. A projection's
+// output shape is not statically known; the runtime Coerce is the
+// check there, and the error it produces names the field.
+func ValidateAtomArgs(
+	resolver CapabilityResolver,
+	expr Expr,
+	schemas map[string][]ArgFieldSpec,
+) error {
+	if expr == nil || len(schemas) == 0 {
+		return nil
+	}
+
+	var firstErr error
+	walkExpr(expr, func(node Expr) {
+		if firstErr != nil {
+			return
+		}
+		atom, ok := node.(*Atom)
+		if !ok || atom == nil {
+			return
+		}
+		schema, ok := schemas[atom.Name]
+		if !ok || len(atom.Args) == 0 {
+			return
+		}
+		if err := resolveArgSchema(resolver, atom, schema); err != nil {
+			firstErr = err
+		}
+	})
+	return firstErr
+}

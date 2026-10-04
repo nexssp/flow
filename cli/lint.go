@@ -435,6 +435,15 @@ func lintFragment(
 	}
 
 	var issues []LintIssue
+
+	if err := core.ValidateAtomArgs(cfg.Resolver, ast, cfg.ArgSchemas); err != nil {
+		issues = append(issues, LintIssue{
+			File:    path,
+			Kind:    "invalid_args",
+			Message: err.Error(),
+		})
+	}
+
 	walkLintAST(ast, func(atom *core.Atom) {
 		_, isKnown := known[atom.Name]
 		if !isKnown {
