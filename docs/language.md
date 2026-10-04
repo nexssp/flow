@@ -501,6 +501,20 @@ modules. A local path (`./helpers`) works if the directory has a `go.mod`
 ancestor or contains Go files directly. Options passed in `{ ... }` are
 validated by the bundle: an unrecognized key is a compile error.
 
+For a versioned remote requirement, the complete `PATH` and `vX` identify
+the Go module exactly; Flow does not shorten a nested path to a parent
+module. For example, `@require github.com/example/mono/nexssflow v1.2.3`
+requires module `github.com/example/mono/nexssflow` at `v1.2.3`. A bare
+repository target such as `@require github.com/example/my-repo v1.2.3`
+still maps its Flow bundle import to
+`github.com/example/my-repo/nexssflow`, while requiring the named module
+`github.com/example/my-repo` at `v1.2.3`, provided `/nexssflow` is a
+package inside that module. If `/nexssflow` has its own `go.mod`, name
+that separate module directly, such as
+`@require github.com/example/my-repo/nexssflow v1.2.3`. An unversioned
+remote package path can continue to refer to a subpackage of a module
+already available through the current module or workspace.
+
 ---
 
 ## 13. Modifiers you'll use

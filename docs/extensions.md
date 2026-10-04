@@ -571,16 +571,26 @@ Any repository — any language — becomes a Flow extension by adding a
 
 ```
 my-repo/
-├── (Python, Rust, Go, shell, anything)
+├── go.mod                  # module github.com/example/my-repo
 └── nexssflow/
-    ├── go.mod
     └── library.go            # exposes Bundle(opts) core.Bundle
 ```
 
 Then `@require github.com/example/my-repo` resolves to
-`github.com/example/my-repo/nexssflow` at build time. The shim can wrap
-`external.exec` (shell), `external.wasm` (Wazero WASI), `http.request`
-(network), or a direct Go import if the repo is already in Go.
+`github.com/example/my-repo/nexssflow` at build time. For a versioned
+remote requirement, the complete path and version written in `@require`
+are the exact Go module identity; Flow does not truncate a nested path to
+its parent. Thus `@require github.com/example/my-repo v1.2.3` requires
+that module at `v1.2.3` while keeping the `/nexssflow` bundle import
+convention when `nexssflow/` is a package within that module. If
+`nexssflow/` has its own `go.mod` and is a separate module, name that full
+module path and version instead, for example
+`@require github.com/example/my-repo/nexssflow v1.2.3`; the module's own
+path and version are not inferred from its parent repository.
+
+The shim can wrap `external.exec` (shell), `external.wasm` (Wazero WASI),
+`http.request` (network), or a direct Go import if the repo is already in
+Go.
 
 For a monorepo with multiple bundles, name each subdirectory
 explicitly:

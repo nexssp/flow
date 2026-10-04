@@ -125,3 +125,68 @@ func Bundle(opts map[string]string) core.Bundle {
 		t.Fatalf("embedded info unexpectedly printed the version banner; stderr:\n%s", stderr)
 	}
 }
+
+func TestBuild_LocalNestedPackage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping standalone local-package build integration test in short mode")
+	}
+
+	workDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte("module example.invalid/localrepo\n\ngo 1.23\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bundleDir := filepath.Join(workDir, "sub", "worker")
+	if err := os.MkdirAll(bundleDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bundleSource := `package worker
+
+import (
+	"context"
+
+	"github.com/nexssp/flow/core"
+	"github.com/nexssp/kernel/action"
+)
+
+const ID = "worker"
+
+func init() {
+	core.Register(ID, Bundle)
+}
+
+func Bundle(opts map[string]string) core.Bundle {
+	prefix := opts["prefix"]
+	act := action.New("worker.echo", func(_ context.Context, _ any) (map[string]any, error) {
+		return map[string]any{"value": prefix + ":ok"}, nil
+	}).Build()
+	return core.Bundle{
+		ID:        ID,
+		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{act}}},
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(bundleDir, "library.go"), []byte(bundleSource), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	flowPath := filepath.Join(workDir, "local.nflow")
+	flow := `@require ./sub/worker as local { prefix: "nested" }
+@assert: result.value == "nested:ok"
+{} -> local.echo
+`
+	if err := os.WriteFile(flowPath, []byte(flow), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	binaryPath := filepath.Join(workDir, "local-flow"+exeSuffix())
+	if code := runBuild([]string{flowPath, "-o", binaryPath}); code != 0 {
+		t.Fatalf("nflow build with a local nested package returned %d", code)
+	}
+	cmd := exec.CommandContext(t.Context(), binaryPath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("built local flow failed: %v\noutput:\n%s", err, output)
+	}
+	if !strings.Contains(string(output), `"value":"nested:ok"`) {
+		t.Fatalf("built flow did not preserve aliased option-configured local bundle output:\n%s", output)
+	}
+}

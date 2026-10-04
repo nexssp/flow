@@ -647,7 +647,6 @@ func writeRequires(b *strings.Builder, reqs []require.Requirement, driverVersion
 	b.WriteString("require (\n")
 	fmt.Fprintf(b, "\tgithub.com/nexssp/flow %s\n", flowVersion)
 
-	skipPrefixes := []string{"github.com/nexssp/flow", "nflow-harness"}
 	seen := map[string]bool{}
 
 	for i := range reqs {
@@ -655,23 +654,16 @@ func writeRequires(b *strings.Builder, reqs []require.Requirement, driverVersion
 		if r.IsLoose {
 			continue
 		}
-		mod := r.ModulePath
-		if mod == "" {
-			mod = moduleRootOf(r.Import)
-		}
+		mod := modulePathForRequirement(*r)
 		if mod == "" || seen[mod] {
 			continue
 		}
 		seen[mod] = true
 
-		skip := false
-		for _, p := range skipPrefixes {
-			if mod == p || strings.HasPrefix(mod, p+"/") {
-				skip = true
-				break
-			}
-		}
-		if skip {
+		// The Flow module is already required above. Skip that exact module
+		// identity, not every module path beneath it: a versioned nested path
+		// is an independent Go module under @require's exact-path semantics.
+		if mod == "github.com/nexssp/flow" || mod == "nflow-harness" {
 			continue
 		}
 
@@ -712,10 +704,7 @@ func writeReplaces(b *strings.Builder, driverRoot string, reqs []require.Require
 		if r.IsLoose || !r.IsLocal() || r.LocalPath == "" {
 			continue
 		}
-		mod := r.ModulePath
-		if mod == "" {
-			mod = moduleRootOf(r.Import)
-		}
+		mod := modulePathForRequirement(*r)
 		if !replacedModules[mod] {
 			replacedModules[mod] = true
 			fmt.Fprintf(b, "replace %s => %s\n", mod, r.ModuleRoot)
@@ -897,6 +886,21 @@ func moduleRootOf(importPath string) string {
 		return strings.Join(parts[:2], "/")
 	}
 	return parts[0]
+}
+
+// modulePathForRequirement returns the Go module identity used by the
+// generated harness. A versioned remote @require names that identity
+// explicitly; an unversioned remote subpackage retains the historical
+// same-module inference, and local requirements use the module path read
+// from their nearest go.mod.
+func modulePathForRequirement(r require.Requirement) string {
+	if r.ModulePath != "" {
+		return r.ModulePath
+	}
+	if !r.IsLocal() && r.Version != "" {
+		return r.Import
+	}
+	return moduleRootOf(r.Import)
 }
 
 func absolutizeReplace(dir, line string) string {

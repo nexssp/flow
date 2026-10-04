@@ -1,8 +1,12 @@
 package cli
 
 import (
+	"archive/zip"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nexssp/flow/extensions/require"
@@ -370,5 +374,180 @@ func TestInit_BundleScaffolding(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(tempDir, "nexssflow_dev", "library.go")); err != nil {
 		t.Fatalf("expected nexssflow_dev/library.go: %v", err)
+	}
+}
+
+func TestHarness_RemoteModulePathIdentity(t *testing.T) {
+	cases := []struct {
+		name string
+		req  require.Requirement
+		want string
+	}{
+		{
+			name: "versioned nested module uses full path",
+			req:  require.Requirement{Import: "github.com/nexssp/cost/nexssflow", Version: "v1.2.3"},
+			want: "github.com/nexssp/cost/nexssflow",
+		},
+		{
+			name: "bare repository keeps named module path",
+			req:  require.Requirement{Import: "github.com/example/my-repo", Version: "v1.2.3"},
+			want: "github.com/example/my-repo",
+		},
+		{
+			name: "unversioned same-module package keeps root inference",
+			req:  require.Requirement{Import: "github.com/example/my-repo/internal/worker"},
+			want: "github.com/example/my-repo",
+		},
+		{
+			name: "local package uses parsed module path",
+			req:  require.Requirement{Import: "example.invalid/local/mod/nested", ModulePath: "example.invalid/local/mod", LocalPath: "/tmp/local"},
+			want: "example.invalid/local/mod",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := modulePathForRequirement(tc.req); got != tc.want {
+				t.Fatalf("modulePathForRequirement(%+v) = %q, want %q", tc.req, got, tc.want)
+			}
+		})
+	}
+
+	versionedNested := require.Requirement{Import: "github.com/nexssp/cost/nexssflow", Version: "v1.2.3"}
+	mod := harnessGoMod("", "v0.14.0", "", []require.Requirement{versionedNested})
+	if !strings.Contains(mod, "\tgithub.com/nexssp/cost/nexssflow v1.2.3\n") {
+		t.Fatalf("generated go.mod omitted the exact nested module requirement:\n%s", mod)
+	}
+	if strings.Contains(mod, "\tgithub.com/nexssp/cost v1.2.3\n") {
+		t.Fatalf("generated go.mod truncated the nested module path:\n%s", mod)
+	}
+
+	unversionedSameModule := require.Requirement{Import: "github.com/nexssp/flow/extensions/macros"}
+	mod = harnessGoMod("", "v0.14.0", "", []require.Requirement{unversionedSameModule})
+	if strings.Contains(mod, "\tgithub.com/nexssp/flow/extensions/macros ") {
+		t.Fatalf("unversioned Flow subpackage was treated as an independent module:\n%s", mod)
+	}
+	versionedFlowSubmodule := require.Requirement{
+		Import:  "github.com/nexssp/flow/extensions/macros",
+		Version: "v1.2.3",
+	}
+	mod = harnessGoMod("", "v0.14.0", "", []require.Requirement{versionedFlowSubmodule})
+	if !strings.Contains(mod, "\tgithub.com/nexssp/flow/extensions/macros v1.2.3\n") {
+		t.Fatalf("versioned nested module beneath Flow was suppressed as a same-module package:\n%s", mod)
+	}
+	if got := bundleImportPath(require.Requirement{Import: "github.com/example/my-repo", Version: "v1.2.3"}); got != "github.com/example/my-repo/nexssflow" {
+		t.Fatalf("bare repository bundle import = %q; want /nexssflow convention", got)
+	}
+}
+
+func TestHarness_NestedRemoteModule_UsesExactVersionForRunAndBuild(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping local-proxy run/build integration test in short mode")
+	}
+
+	workDir := t.TempDir()
+	proxyDir := filepath.Join(workDir, "proxy")
+	const modulePath = "example.invalid/nested/parent/nexssflow"
+	const version = "v1.2.4"
+	writeGoModuleProxy(t, proxyDir, modulePath, version, map[string]string{
+		"library.go": `package nexssflow
+
+import (
+	"context"
+
+	"github.com/nexssp/flow/core"
+	"github.com/nexssp/kernel/action"
+)
+
+const ID = "parent"
+
+func init() {
+	core.Register(ID, Bundle)
+}
+
+func Bundle(opts map[string]string) core.Bundle {
+	prefix := opts["prefix"]
+	act := action.New("parent.echo", func(_ context.Context, _ any) (map[string]any, error) {
+		return map[string]any{"value": prefix + ":ok"}, nil
+	}).Build()
+	return core.Bundle{
+		ID:        ID,
+		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{act}}},
+	}
+}
+`,
+	})
+
+	proxyURL := (&url.URL{Scheme: "file", Path: proxyDir}).String()
+	t.Setenv("GOPROXY", proxyURL)
+	t.Setenv("GOSUMDB", "off")
+	t.Setenv(harnessCacheEnv, filepath.Join(workDir, "cache"))
+
+	flowPath := filepath.Join(workDir, "nested.nflow")
+	flow := "@require " + modulePath + " " + version + ` as named { prefix: "proxy" }
+@assert: result.value == "proxy:ok"
+{} -> named.echo
+`
+	if err := os.WriteFile(flowPath, []byte(flow), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if code := runFlow([]string{flowPath}); code != 0 {
+		t.Fatalf("nflow run with nested module from local proxy returned %d", code)
+	}
+
+	binaryPath := filepath.Join(workDir, "nested-flow"+exeSuffix())
+	if code := runBuild([]string{flowPath, "-o", binaryPath}); code != 0 {
+		t.Fatalf("nflow build with nested module from local proxy returned %d", code)
+	}
+	cmd := exec.CommandContext(t.Context(), binaryPath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("built flow failed: %v\noutput:\n%s", err, output)
+	}
+	if !strings.Contains(string(output), `"value":"proxy:ok"`) {
+		t.Fatalf("built flow did not preserve aliased option-configured bundle output:\n%s", output)
+	}
+}
+
+func writeGoModuleProxy(t *testing.T, proxyDir, modulePath, version string, files map[string]string) {
+	t.Helper()
+	versionDir := filepath.Join(proxyDir, filepath.FromSlash(modulePath), "@v")
+	if err := os.MkdirAll(versionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	info := `{"Version":"` + version + `","Time":"2026-10-04T00:00:00Z"}`
+	if err := os.WriteFile(filepath.Join(versionDir, version+".info"), []byte(info), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	moduleFile := "module " + modulePath + "\n\ngo 1.23\n"
+	if err := os.WriteFile(filepath.Join(versionDir, version+".mod"), []byte(moduleFile), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	archivePath := filepath.Join(versionDir, version+".zip")
+	archive, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zipWriter := zip.NewWriter(archive)
+	for name, contents := range files {
+		entry, err := zipWriter.Create(modulePath + "@" + version + "/" + filepath.ToSlash(name))
+		if err != nil {
+			_ = zipWriter.Close()
+			_ = archive.Close()
+			t.Fatal(err)
+		}
+		if _, err := entry.Write([]byte(contents)); err != nil {
+			_ = zipWriter.Close()
+			_ = archive.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := zipWriter.Close(); err != nil {
+		_ = archive.Close()
+		t.Fatal(err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
 	}
 }

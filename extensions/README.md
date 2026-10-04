@@ -101,15 +101,20 @@ justified by the rule above.
 Any repo can become a Flow extension by adding a `nexssflow/` package:
 
     my-repo/
-    ├── (anything: Python, Rust, Go, shell)
+    ├── go.mod                  # module github.com/nexssp/my-repo
     └── nexssflow/
-        ├── go.mod
         └── library.go      # exposes Bundle(opts) core.Bundle
 
 Then `@require github.com/nexssp/my-repo` resolves to
 `github.com/nexssp/my-repo/nexssflow`. The shim can be a thin wrapper
 over `external.ExecAction`, a `sandbox` engine, or a direct Go import
 if the repo is already in Go.
+
+For a versioned remote requirement, the complete path and version name
+the exact Go module. If `nexssflow/` has its own `go.mod`, use its full
+module path, for example
+`@require github.com/nexssp/my-repo/nexssflow v1.2.3`; a parent module
+path is not inferred from the bundle import.
 
 ## Rules
 
