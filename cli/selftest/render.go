@@ -348,16 +348,19 @@ func (r *Renderer) ScoreSummary(s Score, host HostInfo) {
 
 	r.printf("  %-14s %s\n", r.bold("HOST"), r.dim(host.FormatBanner()))
 
-	r.printf("  %-14s %s  %s\n",
-		r.bold("SCORE"),
+	// Correctness.
+	r.printf("  %-14s %s  %s  %s\n",
+		r.bold("CORRECTNESS"),
 		r.green(r.bold(fmt.Sprintf("%.1f / 100", s.Value()))),
 		r.cyan(s.Grade()),
+		r.dim(fmt.Sprintf("(%d passed, %d failed, %d skipped)",
+			s.Passed, s.Failed, s.Skipped)),
 	)
-	r.printf("  %-14s %s\n", r.bold("FINGERPRINT"), r.dim(s.Fingerprint))
 
+	// Performance — the raw measurements, split by phase.
 	if s.TotalAllocs > 0 {
 		r.printf("  %-14s %s allocs · %s\n",
-			r.bold("ALLOCATIONS"),
+			r.bold("PERFORMANCE"),
 			formatCount(s.TotalAllocs),
 			formatBytes(s.TotalAllocBytes),
 		)
@@ -367,6 +370,23 @@ func (r *Renderer) ScoreSummary(s Score, host HostInfo) {
 			r.dim(formatCount(s.TotalRunAllocs)),
 		)
 	}
+
+	// Baseline delta, when the baseline was recorded on this host.
+	if pb := s.PerfBaseline; pb != nil {
+		marker := ""
+		if pb.Regressed {
+			marker = "  " + r.yellow("⚠ regression")
+		}
+		r.printf("  %-14s %s%s\n",
+			r.dim("  delta"),
+			r.dim(fmt.Sprintf("allocs %+.1f%%, bytes %+.1f%%, compile %+.1f%%, run %+.1f%%",
+				pb.AllocsDeltaPct, pb.BytesDeltaPct,
+				pb.CompileDeltaPct, pb.RunDeltaPct)),
+			marker,
+		)
+	}
+
+	r.printf("  %-14s %s\n", r.bold("FINGERPRINT"), r.dim(s.Fingerprint))
 
 	switch {
 	case !s.BaselinePresent:
@@ -384,6 +404,7 @@ func (r *Renderer) ScoreSummary(s Score, host HostInfo) {
 			r.dim("(was "+s.BaselineFingerprint+", now "+s.Fingerprint+")"),
 		)
 	}
+
 	r.printf("%s\n", r.mag(line))
 }
 
