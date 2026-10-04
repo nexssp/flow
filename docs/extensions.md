@@ -376,7 +376,7 @@ resolves a name supplied in its runtime input.
 A flow can pass options to your bundle:
 
 ```nflow
-@require github.com/example/fancy { endpoint: "https://api.example", retries: "3" }
+@require github.com/example/fancy v1.2.3 { endpoint: "https://api.example", retries: "3" }
 ```
 
 If `AcceptedOptions` is `nil`, your bundle accepts any key. If it is a
@@ -393,7 +393,7 @@ func Bundle(opts map[string]string) core.Bundle {
 ```
 
 ```
-@require github.com/example/fancy { endpont: "..." }
+@require github.com/example/fancy v1.2.3 { endpont: "..." }
   error: @require github.com/example/fancy: unknown option "endpont"
          (accepted: [endpoint, retries])
 ```
@@ -576,17 +576,17 @@ my-repo/
     └── library.go            # exposes Bundle(opts) core.Bundle
 ```
 
-Then `@require github.com/example/my-repo` resolves to
-`github.com/example/my-repo/nexssflow` at build time. For a versioned
-remote requirement, the complete path and version written in `@require`
-are the exact Go module identity; Flow does not truncate a nested path to
-its parent. Thus `@require github.com/example/my-repo v1.2.3` requires
-that module at `v1.2.3` while keeping the `/nexssflow` bundle import
-convention when `nexssflow/` is a package within that module. If
-`nexssflow/` has its own `go.mod` and is a separate module, name that full
-module path and version instead, for example
-`@require github.com/example/my-repo/nexssflow v1.2.3`; the module's own
-path and version are not inferred from its parent repository.
+Then `@require github.com/example/my-repo v1.2.3` selects the package
+`github.com/example/my-repo/nexssflow`. Go determines whether that package
+is provided by the root module or by a nested `nexssflow` module; the
+requested version applies to whichever module provides it. An explicit
+target such as
+`@require github.com/example/my-repo/nexssflow_v2 v1.4.0` selects that
+package variant, with Go again determining its module provider. Flow does
+not infer or truncate module paths from repository URL shape, and remote
+requirements remain version-pinned. An unversioned remote subpackage is
+reserved for packages already available through the current module or Go
+workspace; it does not request `latest`.
 
 The shim can wrap `external.exec` (shell), `external.wasm` (Wazero WASI),
 `http.request` (network), or a direct Go import if the repo is already in
@@ -602,8 +602,8 @@ my-repo/
 └── nexssflow_prod/      # production hardened
 ```
 
-Then `@require github.com/example/my-repo/nexssflow_dev` resolves to
-that subdirectory directly.
+Then `@require github.com/example/my-repo/nexssflow_dev v1.2.3` selects
+that package path directly.
 
 For rapid local iteration, a directory with `.go` files and no
 `go.mod` is accepted as a loose package:

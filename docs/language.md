@@ -501,19 +501,19 @@ modules. A local path (`./helpers`) works if the directory has a `go.mod`
 ancestor or contains Go files directly. Options passed in `{ ... }` are
 validated by the bundle: an unrecognized key is a compile error.
 
-For a versioned remote requirement, the complete `PATH` and `vX` identify
-the Go module exactly; Flow does not shorten a nested path to a parent
-module. For example, `@require github.com/example/mono/nexssflow v1.2.3`
-requires module `github.com/example/mono/nexssflow` at `v1.2.3`. A bare
-repository target such as `@require github.com/example/my-repo v1.2.3`
-still maps its Flow bundle import to
-`github.com/example/my-repo/nexssflow`, while requiring the named module
-`github.com/example/my-repo` at `v1.2.3`, provided `/nexssflow` is a
-package inside that module. If `/nexssflow` has its own `go.mod`, name
-that separate module directly, such as
-`@require github.com/example/my-repo/nexssflow v1.2.3`. An unversioned
-remote package path can continue to refer to a subpackage of a module
-already available through the current module or workspace.
+For a versioned remote requirement, Flow asks Go to resolve the selected
+bundle **package path** at the requested version. A bare repository target
+such as `@require github.com/example/my-repo v1.2.3` defaults to package
+`github.com/example/my-repo/nexssflow`; Go determines whether that package
+is provided by the root module or by an independently versioned nested
+`nexssflow` module. The requested version is applied by Go to the module
+that provides the package. An explicit target such as
+`@require github.com/example/my-repo/nexssflow_v2 v1.4.0` selects that
+package path; it may be provided by the root module or a nested module.
+Flow does not guess a parent module from the path. Remote targets remain
+version-pinned; an unversioned remote package path is supported only for
+the existing same-module or Go-workspace subpackage case, not as a request
+to use `latest`.
 
 ---
 

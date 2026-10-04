@@ -105,16 +105,19 @@ Any repo can become a Flow extension by adding a `nexssflow/` package:
     └── nexssflow/
         └── library.go      # exposes Bundle(opts) core.Bundle
 
-Then `@require github.com/nexssp/my-repo` resolves to
-`github.com/nexssp/my-repo/nexssflow`. The shim can be a thin wrapper
-over `external.ExecAction`, a `sandbox` engine, or a direct Go import
-if the repo is already in Go.
+Then `@require github.com/nexssp/my-repo v1.2.3` selects package
+`github.com/nexssp/my-repo/nexssflow`. Go determines whether the package
+comes from the root module or an independently versioned nested module;
+the requested version applies to the module that provides it. An explicit
+variant such as
+`@require github.com/nexssp/my-repo/nexssflow_v2 v1.4.0` selects that Go
+package path, and Go determines its provider. Flow does not infer or
+truncate module paths from repository URL shape. Remote requirements are
+version-pinned; unversioned subpackages are only for the current module or
+Go workspace, not an implicit `latest` request.
 
-For a versioned remote requirement, the complete path and version name
-the exact Go module. If `nexssflow/` has its own `go.mod`, use its full
-module path, for example
-`@require github.com/nexssp/my-repo/nexssflow v1.2.3`; a parent module
-path is not inferred from the bundle import.
+The shim can be a thin wrapper over `external.ExecAction`, a `sandbox`
+engine, or a direct Go import if the repo is already in Go.
 
 ## Rules
 

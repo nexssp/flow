@@ -17,11 +17,28 @@ import (
 
 const harnessEnv = "NFLOW_HARNESS"
 
-var injectedBundles []core.Bundle
+var (
+	injectedBundles            []core.Bundle
+	injectedRequirementTargets map[string]struct{}
+)
 
 func RunWithBundles(args []string, bundles []core.Bundle) int {
+	return RunWithBundlesForRequirements(args, bundles, nil)
+}
+
+// RunWithBundlesForRequirements injects bundles linked to their original
+// @require targets. This preserves bundle IDs when an explicit package variant
+// has a different import-path suffix.
+func RunWithBundlesForRequirements(args []string, bundles []core.Bundle, targets []string) int {
 	injectedBundles = append([]core.Bundle(nil), bundles...)
-	defer func() { injectedBundles = nil }()
+	injectedRequirementTargets = make(map[string]struct{}, len(targets))
+	for _, target := range targets {
+		injectedRequirementTargets[target] = struct{}{}
+	}
+	defer func() {
+		injectedBundles = nil
+		injectedRequirementTargets = nil
+	}()
 	return Run(args)
 }
 
@@ -46,6 +63,9 @@ func buildConfig(reqs []require.Requirement) (runner.Config, error) {
 }
 
 func isAlreadyInjected(r require.Requirement, injected []core.Bundle) bool {
+	if _, ok := injectedRequirementTargets[r.Import]; ok {
+		return true
+	}
 	if len(injected) == 0 {
 		return false
 	}
@@ -162,8 +182,21 @@ func isInlineSource(target string) bool {
 }
 
 func RunEmbeddedWithBundles(ctx context.Context, source string, args []string, bundles []core.Bundle) int {
+	return RunEmbeddedWithBundlesForRequirements(ctx, source, args, bundles, nil)
+}
+
+// RunEmbeddedWithBundlesForRequirements is the embedded-flow counterpart of
+// RunWithBundlesForRequirements.
+func RunEmbeddedWithBundlesForRequirements(ctx context.Context, source string, args []string, bundles []core.Bundle, targets []string) int {
 	injectedBundles = append([]core.Bundle(nil), bundles...)
-	defer func() { injectedBundles = nil }()
+	injectedRequirementTargets = make(map[string]struct{}, len(targets))
+	for _, target := range targets {
+		injectedRequirementTargets[target] = struct{}{}
+	}
+	defer func() {
+		injectedBundles = nil
+		injectedRequirementTargets = nil
+	}()
 	return runEmbedded(ctx, source, args)
 }
 

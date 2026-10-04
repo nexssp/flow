@@ -2,9 +2,11 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -30,6 +32,8 @@ import (
 // Override with NFLOW_GO_TIMEOUT (any time.ParseDuration value).
 const defaultGoCommandTimeout = 10 * time.Minute
 
+const defaultAdapterDirectory = "nexssflow"
+
 // maxCapturedOutputBytes caps the amount of compiler output retained in
 // memory for diagnostics. Only the tail is kept — compiler errors are
 // emitted after the progress lines, so the tail is what actually matters
@@ -50,6 +54,12 @@ func EnsureHarness(reqs []require.Requirement, flowPath ...string) (string, erro
 	}
 	flowDir := flowDirectory(flowFile)
 	goworkPath := findGoWork(flowDir)
+	driverRoot, driverVersion := resolveDriverInfo()
+	resolved, err := resolveRequirementPackages(external, driverRoot, driverVersion, goworkPath, flowDir)
+	if err != nil {
+		return "", err
+	}
+	external = resolved
 
 	key := harnessKey(external, goworkPath)
 
@@ -72,12 +82,12 @@ func EnsureHarness(reqs []require.Requirement, flowPath ...string) (string, erro
 			fmt.Fprintf(os.Stderr, "   • loose package: %s (auto-bundling as %s)\n", r.LocalPath, r.LooseID)
 		case r.IsLocal():
 			fmt.Fprintf(os.Stderr, "   • local module: %s (root: %s)\n", r.Import, r.ModuleRoot)
+		case r.Version == "" && r.ModulePath != "":
+			fmt.Fprintf(os.Stderr, "   • same-module package: %s (module: %s)\n", r.PackagePath, r.ModulePath)
 		default:
 			fmt.Fprintf(os.Stderr, "   • remote module: %s@%s\n", r.Import, r.Version)
 		}
 	}
-
-	driverRoot, driverVersion := resolveDriverInfo()
 
 	buildDir, err := os.MkdirTemp("", "nflow-harness-")
 	if err != nil {
@@ -85,7 +95,7 @@ func EnsureHarness(reqs []require.Requirement, flowPath ...string) (string, erro
 	}
 	defer func() { _ = os.RemoveAll(buildDir) }()
 
-	if err := writeHarness(buildDir, driverRoot, driverVersion, goworkPath, external); err != nil {
+	if err := writeHarness(buildDir, driverRoot, driverVersion, goworkPath, external, flowDir); err != nil {
 		return "", err
 	}
 
@@ -164,13 +174,21 @@ func ExecHarness(bin string, args []string) int {
 func harnessKey(reqs []require.Requirement, goworkPath string) string {
 	sorted := append([]require.Requirement(nil), reqs...)
 	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Import < sorted[j].Import
+		if sorted[i].Import != sorted[j].Import {
+			return sorted[i].Import < sorted[j].Import
+		}
+		if sorted[i].Version != sorted[j].Version {
+			return sorted[i].Version < sorted[j].Version
+		}
+		return sorted[i].PackagePath < sorted[j].PackagePath
 	})
 
 	h := sha256.New()
+	fmt.Fprintln(h, "resolver=go-package-provider-v1")
 	for i := range sorted {
 		r := &sorted[i]
 		fmt.Fprintf(h, "%s@%s\n", r.Import, r.Version)
+		fmt.Fprintf(h, "  package=%s\n  provider=%s@%s\n", r.PackagePath, r.ModulePath, r.ResolvedVersion)
 		if r.Alias != "" {
 			fmt.Fprintf(h, "  as=%s\n", r.Alias)
 		}
@@ -316,6 +334,175 @@ func runGo(dir string, args ...string) error {
 	return nil
 }
 
+// runGoOutput captures stdout for commands whose machine-readable output is
+// needed while keeping progress and diagnostics visible on stderr.
+func runGoOutput(dir string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), goCommandTimeout())
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "go", args...)
+	cmd.Dir = dir
+	cmd.Stdin = os.Stdin
+	var stdout bytes.Buffer
+	capture := newTailBuffer(maxCapturedOutputBytes)
+	cmd.Stdout = &stdout
+	cmd.Stderr = io.MultiWriter(os.Stderr, capture)
+	cmd.Env = append(os.Environ(), "GOWORK=off", "GIT_TERMINAL_PROMPT=0")
+	if err := cmd.Run(); err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, fmt.Errorf("go %s: timed out after %s", strings.Join(args, " "), goCommandTimeout())
+		}
+		return nil, fmt.Errorf("go %s: %w\n%s", strings.Join(args, " "), err, capture.String())
+	}
+	return stdout.Bytes(), nil
+}
+
+// resolveRequirementPackages records the import path and module provider that
+// Go resolves for each bundle. Versioned remote packages are queried with
+// `go get package@version` in a temporary module; Go decides whether the
+// package is provided by a root or nested module.
+func resolveRequirementPackages(reqs []require.Requirement, driverRoot, driverVersion, goworkPath string, sourceDirs ...string) ([]require.Requirement, error) {
+	sourceDir := ""
+	if len(sourceDirs) > 0 {
+		sourceDir = sourceDirs[0]
+	}
+	resolved := append([]require.Requirement(nil), reqs...)
+	for i := range resolved {
+		r := &resolved[i]
+		if _, ok := core.Lookup(require.NormalizeID(r.Import)); ok {
+			continue
+		}
+		if _, ok := core.Lookup(r.Import); ok {
+			continue
+		}
+		switch {
+		case r.IsLoose:
+			r.PackagePath = bundleImportPath(*r)
+		case r.IsLocal():
+			if err := resolveLocalBundlePackage(r); err != nil {
+				return nil, err
+			}
+		case r.Version == "":
+			// Preserve same-module/workspace package resolution, but do not
+			// treat an arbitrary remote target as @latest or v0.0.0.
+			packagePath := bundleImportPath(*r)
+			providerPath := unversionedPackageProvider(packagePath, driverRoot, goworkPath, sourceDir)
+			if providerPath == "" {
+				return nil, fmt.Errorf("@require %s: remote packages outside the current module or Go workspace need an explicit version", r.Import)
+			}
+			r.PackagePath = packagePath
+			r.ModulePath = providerPath
+		default:
+			packagePath := bundleImportPath(*r)
+			providerPath, providerVersion, err := resolveRemotePackageProvider(
+				packagePath, r.Version, driverRoot, driverVersion, goworkPath,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("@require %s: resolve bundle package %s@%s: %w", r.Import, packagePath, r.Version, err)
+			}
+			r.PackagePath = packagePath
+			r.ModulePath = providerPath
+			r.ResolvedVersion = providerVersion
+		}
+	}
+	return resolved, nil
+}
+
+func unversionedPackageProvider(packagePath, driverRoot, goworkPath, sourceDir string) string {
+	var providers []string
+	add := func(modulePath string) {
+		if modulePath != "" && (packagePath == modulePath || strings.HasPrefix(packagePath, modulePath+"/")) {
+			providers = append(providers, modulePath)
+		}
+	}
+	if driverRoot != "" {
+		if modulePath, err := require.ReadModuleLine(filepath.Join(driverRoot, "go.mod")); err == nil {
+			add(modulePath)
+		}
+	}
+	for modulePath := range parseGoWork(goworkPath).replaces {
+		add(modulePath)
+	}
+	if sourceDir != "" {
+		if abs, err := filepath.Abs(sourceDir); err == nil {
+			if root := findModuleRoot(abs); root != "" {
+				if modulePath, err := require.ReadModuleLine(filepath.Join(root, "go.mod")); err == nil {
+					add(modulePath)
+				}
+			}
+		}
+	}
+	if len(providers) == 0 {
+		return ""
+	}
+	sort.Slice(providers, func(i, j int) bool { return len(providers[i]) > len(providers[j]) })
+	return providers[0]
+}
+
+func resolveLocalBundlePackage(r *require.Requirement) error {
+	r.PackagePath = bundleImportPath(*r)
+	if r.IsLoose || r.ModuleRoot == "" || r.LocalPath == "" || hasAdapterFolderSuffix(r.Import) {
+		return nil
+	}
+	if filepath.Clean(r.LocalPath) != filepath.Clean(r.ModuleRoot) {
+		return nil
+	}
+
+	adapterDir := filepath.Join(r.LocalPath, defaultAdapterDirectory)
+	if !require.HasGoFiles(adapterDir) {
+		return nil
+	}
+	goModPath := filepath.Join(adapterDir, "go.mod")
+	if info, err := os.Stat(goModPath); err == nil && !info.IsDir() {
+		modulePath, err := require.ReadModuleLine(goModPath)
+		if err != nil {
+			return fmt.Errorf("@require %s: read nested adapter module: %w", r.Import, err)
+		}
+		r.ModuleRoot = adapterDir
+		r.ModulePath = modulePath
+		r.PackagePath = modulePath
+		return nil
+	}
+	r.PackagePath = strings.TrimSuffix(r.Import, "/") + "/" + defaultAdapterDirectory
+	return nil
+}
+
+func resolveRemotePackageProvider(packagePath, version, driverRoot, driverVersion, goworkPath string) (providerPath, providerVersion string, resolveErr error) {
+	if packagePath == "" || version == "" {
+		return "", "", errors.New("package path and explicit version are required")
+	}
+	dir, createErr := os.MkdirTemp("", "nflow-resolve-")
+	if createErr != nil {
+		return "", "", fmt.Errorf("create resolver context: %w", createErr)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+
+	mod := harnessGoMod(driverRoot, driverVersion, goworkPath, nil)
+	if writeErr := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(mod), 0o600); writeErr != nil {
+		return "", "", fmt.Errorf("write resolver go.mod: %w", writeErr)
+	}
+	if _, getErr := runGoOutput(dir, "get", packagePath+"@"+version); getErr != nil {
+		return "", "", getErr
+	}
+	data, listErr := runGoOutput(dir, "list", "-json", packagePath)
+	if listErr != nil {
+		return "", "", listErr
+	}
+	var pkg struct {
+		Module *struct {
+			Path    string `json:"Path"`
+			Version string `json:"Version"`
+		} `json:"Module"`
+	}
+	if decodeErr := json.Unmarshal(data, &pkg); decodeErr != nil {
+		return "", "", fmt.Errorf("decode go list package metadata: %w", decodeErr)
+	}
+	if pkg.Module == nil || pkg.Module.Path == "" {
+		return "", "", errors.New("go list did not report a providing module")
+	}
+	return pkg.Module.Path, pkg.Module.Version, nil
+}
+
 // goCommandTimeout returns the configured timeout for a single go
 // toolchain invocation: NFLOW_GO_TIMEOUT if set and parseable, otherwise
 // defaultGoCommandTimeout. A malformed value is logged and ignored.
@@ -372,6 +559,7 @@ func (b *tailBuffer) String() string {
 type bundleImport struct {
 	alias    string
 	path     string
+	target   string
 	options  string
 	reqAlias string
 }
@@ -397,6 +585,7 @@ func prepareBundleImports(directory string, requirements []require.Requirement) 
 		imports = append(imports, bundleImport{
 			alias:    fmt.Sprintf("nflowbundle%d", i),
 			path:     importPath,
+			target:   r.Import,
 			options:  optionsLiteral(r.Options),
 			reqAlias: r.Alias,
 		})
@@ -425,7 +614,15 @@ func writeBundleConstruction(mainBuilder *strings.Builder, imports []bundleImpor
 	}
 }
 
-func writeHarness(directory, driverRoot, driverVersion, goworkPath string, requirements []require.Requirement) error {
+func writeBundleTargets(mainBuilder *strings.Builder, imports []bundleImport) {
+	mainBuilder.WriteString("\ttargets := []string{\n")
+	for i := range imports {
+		fmt.Fprintf(mainBuilder, "\t\t%q,\n", imports[i].target)
+	}
+	mainBuilder.WriteString("\t}\n")
+}
+
+func writeHarness(directory, driverRoot, driverVersion, goworkPath string, requirements []require.Requirement, sourceDirs ...string) error {
 	imports, err := prepareBundleImports(directory, requirements)
 	if err != nil {
 		return fmt.Errorf("harness: %w", err)
@@ -441,14 +638,15 @@ func writeHarness(directory, driverRoot, driverVersion, goworkPath string, requi
 	mainBuilder.WriteString(")\n\n")
 	mainBuilder.WriteString("func main() {\n")
 	writeBundleConstruction(&mainBuilder, imports)
-	mainBuilder.WriteString("\tos.Exit(cli.RunWithBundles(os.Args[1:], bundles))\n")
+	writeBundleTargets(&mainBuilder, imports)
+	mainBuilder.WriteString("\tos.Exit(cli.RunWithBundlesForRequirements(os.Args[1:], bundles, targets))\n")
 	mainBuilder.WriteString("}\n")
 
 	if err := os.WriteFile(filepath.Join(directory, "main.go"), []byte(mainBuilder.String()), 0o600); err != nil {
 		return fmt.Errorf("harness: write main.go: %w", err)
 	}
 
-	moduleDefinition := harnessGoMod(driverRoot, driverVersion, goworkPath, requirements)
+	moduleDefinition := harnessGoMod(driverRoot, driverVersion, goworkPath, requirements, sourceDirs...)
 	if err := os.WriteFile(filepath.Join(directory, "go.mod"), []byte(moduleDefinition), 0o600); err != nil {
 		return fmt.Errorf("harness: write go.mod: %w", err)
 	}
@@ -457,7 +655,7 @@ func writeHarness(directory, driverRoot, driverVersion, goworkPath string, requi
 
 func copyLoosePackage(r require.Requirement, dstDir string) error {
 	srcDir := r.LocalPath
-	candidate := filepath.Join(srcDir, "nexssflow")
+	candidate := filepath.Join(srcDir, defaultAdapterDirectory)
 	if require.HasGoFiles(candidate) {
 		srcDir = candidate
 	}
@@ -513,6 +711,9 @@ func isPackageMain(data []byte) bool {
 }
 
 func bundleImportPath(r require.Requirement) string {
+	if r.PackagePath != "" {
+		return r.PackagePath
+	}
 	if r.IsLoose {
 		return r.Import
 	}
@@ -521,12 +722,12 @@ func bundleImportPath(r require.Requirement) string {
 		return ""
 	}
 
-	if strings.HasSuffix(base, "/nexssflow") || strings.Contains(base, "/nexssflow_") {
+	if hasAdapterFolderSuffix(base) {
 		return base
 	}
 
 	if r.IsLocal() {
-		if !require.HasGoFiles(filepath.Join(r.LocalPath, "nexssflow")) && require.HasGoFiles(r.LocalPath) {
+		if !require.HasGoFiles(filepath.Join(r.LocalPath, defaultAdapterDirectory)) && require.HasGoFiles(r.LocalPath) {
 			return base
 		}
 	}
@@ -536,6 +737,15 @@ func bundleImportPath(r require.Requirement) string {
 		return base
 	}
 	return base + "/nexssflow"
+}
+
+func hasAdapterFolderSuffix(importPath string) bool {
+	clean := strings.TrimSuffix(strings.ReplaceAll(importPath, `\`, "/"), "/")
+	segment := clean
+	if slash := strings.LastIndexByte(clean, '/'); slash >= 0 {
+		segment = clean[slash+1:]
+	}
+	return segment == defaultAdapterDirectory || strings.HasPrefix(segment, defaultAdapterDirectory+"_")
 }
 
 func explainBuildError(err error, requirements []require.Requirement) error {
@@ -614,7 +824,7 @@ func optionsLiteral(opts map[string]string) string {
 	return b.String()
 }
 
-func harnessGoMod(driverRoot, driverVersion, goworkPath string, reqs []require.Requirement) string {
+func harnessGoMod(driverRoot, driverVersion, goworkPath string, reqs []require.Requirement, sourceDirs ...string) string {
 	var b strings.Builder
 	b.WriteString("module nflow-harness\n\n")
 
@@ -634,6 +844,9 @@ func harnessGoMod(driverRoot, driverVersion, goworkPath string, reqs []require.R
 	writeRequires(&b, reqs, driverVersion)
 	writeReplaces(&b, driverRoot, reqs)
 	writeWorkspaceReplaces(&b, goworkPath)
+	if len(sourceDirs) > 0 {
+		writeCurrentModuleReplace(&b, sourceDirs[0], driverRoot, goworkPath, reqs)
+	}
 
 	return b.String()
 }
@@ -660,14 +873,17 @@ func writeRequires(b *strings.Builder, reqs []require.Requirement, driverVersion
 		}
 		seen[mod] = true
 
-		// The Flow module is already required above. Skip that exact module
-		// identity, not every module path beneath it: a versioned nested path
-		// is an independent Go module under @require's exact-path semantics.
+		// The Flow module is already required above. Skip that exact provider
+		// identity, not every module path beneath it: Go may select a distinct
+		// nested module to provide a requested package.
 		if mod == "github.com/nexssp/flow" || mod == "nflow-harness" {
 			continue
 		}
 
-		version := r.Version
+		version := r.ResolvedVersion
+		if version == "" {
+			version = r.Version
+		}
 		if version == "" {
 			version = "v0.0.0"
 		}
@@ -727,6 +943,72 @@ func writeWorkspaceReplaces(b *strings.Builder, goworkPath string) {
 	for _, mod := range workKeys {
 		fmt.Fprintf(b, "replace %s => %s\n", mod, replacesFromWork[mod])
 	}
+}
+
+func writeCurrentModuleReplace(b *strings.Builder, sourceDir, driverRoot, goworkPath string, reqs []require.Requirement) {
+	modulePath, root := currentModuleRequirement(sourceDir, reqs)
+	if modulePath == "" || moduleReplacementExists(modulePath, driverRoot, goworkPath, reqs) {
+		return
+	}
+	fmt.Fprintf(b, "replace %s => %s\n", modulePath, root)
+}
+
+func currentModuleRequirement(sourceDir string, reqs []require.Requirement) (resolvedModulePath, resolvedRoot string) {
+	if sourceDir == "" {
+		return "", ""
+	}
+	abs, err := filepath.Abs(sourceDir)
+	if err != nil {
+		return "", ""
+	}
+	root := findModuleRoot(abs)
+	if root == "" {
+		return "", ""
+	}
+	modulePath, err := require.ReadModuleLine(filepath.Join(root, "go.mod"))
+	if err != nil || modulePath == "" {
+		return "", ""
+	}
+	for i := range reqs {
+		r := &reqs[i]
+		if !r.IsLocal() && !r.IsLoose && r.Version == "" && r.ModulePath == modulePath {
+			return modulePath, root
+		}
+	}
+	return "", ""
+}
+
+func moduleReplacementExists(modulePath, driverRoot, goworkPath string, reqs []require.Requirement) bool {
+	if driverRoot != "" {
+		if driverPath, err := require.ReadModuleLine(filepath.Join(driverRoot, "go.mod")); err == nil && driverPath == modulePath {
+			return true
+		}
+		if driverModuleReplaces(driverRoot, modulePath) {
+			return true
+		}
+	}
+	for i := range reqs {
+		r := &reqs[i]
+		if r.IsLocal() && modulePathForRequirement(*r) == modulePath {
+			return true
+		}
+	}
+	_, exists := parseGoWork(goworkPath).replaces[modulePath]
+	return exists
+}
+
+func driverModuleReplaces(driverRoot, modulePath string) bool {
+	data, err := os.ReadFile(filepath.Join(driverRoot, "go.mod"))
+	if err != nil {
+		return false
+	}
+	for line := range strings.SplitSeq(string(data), "\n") {
+		parts := strings.Fields(strings.TrimSpace(line))
+		if len(parts) >= 2 && parts[0] == "replace" && parts[1] == modulePath {
+			return true
+		}
+	}
+	return false
 }
 
 type goWorkInfo struct {
@@ -889,10 +1171,10 @@ func moduleRootOf(importPath string) string {
 }
 
 // modulePathForRequirement returns the Go module identity used by the
-// generated harness. A versioned remote @require names that identity
-// explicitly; an unversioned remote subpackage retains the historical
-// same-module inference, and local requirements use the module path read
-// from their nearest go.mod.
+// generated harness. Resolved remote requirements carry Go's reported
+// provider path; unresolved explicit paths are preserved rather than
+// truncated, unversioned same-module imports retain their provider, and
+// local requirements use the module path read from their nearest go.mod.
 func modulePathForRequirement(r require.Requirement) string {
 	if r.ModulePath != "" {
 		return r.ModulePath

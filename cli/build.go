@@ -191,7 +191,12 @@ func stageBuildDir(nflowPath string, src []byte, reqs []require.Requirement) (st
 		}
 	}()
 
-	external := filterExternalRequires(reqs)
+	flowDir := filepath.Dir(nflowPath)
+	resolvedReqs, err := resolveRequirementPackages(reqs, driverRoot, driverVersion, goworkPath, flowDir)
+	if err != nil {
+		return "", err
+	}
+	external := filterExternalRequires(resolvedReqs)
 	imports, err := prepareBundleImports(buildDir, external)
 	if err != nil {
 		return "", fmt.Errorf("bundles: %w", err)
@@ -202,7 +207,7 @@ func stageBuildDir(nflowPath string, src []byte, reqs []require.Requirement) (st
 	}
 	defer func() { _ = buildRoot.Close() }()
 
-	embeddedSource := rewriteEmbeddedRequires(string(src), filepath.Dir(nflowPath), reqs)
+	embeddedSource := rewriteEmbeddedRequires(string(src), filepath.Dir(nflowPath), resolvedReqs)
 	if err := writeBuildFile(buildRoot, "workflow.nflow", []byte(embeddedSource)); err != nil {
 		return "", fmt.Errorf("embed: %w", err)
 	}
@@ -211,7 +216,7 @@ func stageBuildDir(nflowPath string, src []byte, reqs []require.Requirement) (st
 		return "", fmt.Errorf("main.go: %w", err)
 	}
 
-	mod := harnessGoMod(driverRoot, driverVersion, goworkPath, reqs)
+	mod := harnessGoMod(driverRoot, driverVersion, goworkPath, resolvedReqs, flowDir)
 	if err := writeBuildFile(buildRoot, "go.mod", []byte(mod)); err != nil {
 		return "", fmt.Errorf("go.mod: %w", err)
 	}
@@ -569,9 +574,10 @@ import (
 var embedded string
 
 func main() {
-`)
+	`)
 	writeBundleConstruction(&mainBuilder, imports)
-	mainBuilder.WriteString(`	os.Exit(cli.RunEmbeddedWithBundles(context.Background(), embedded, os.Args[1:], bundles))
+	writeBundleTargets(&mainBuilder, imports)
+	mainBuilder.WriteString(`	os.Exit(cli.RunEmbeddedWithBundlesForRequirements(context.Background(), embedded, os.Args[1:], bundles, targets))
 }
 `)
 	return mainBuilder.String()

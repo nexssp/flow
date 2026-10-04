@@ -15,15 +15,23 @@ import (
 )
 
 type Requirement struct {
-	Import     string
-	Alias      string
-	Version    string
-	LocalPath  string
-	ModuleRoot string
-	ModulePath string
-	IsLoose    bool
-	LooseID    string
-	Options    map[string]string
+	Import string
+	// PackagePath is the Go import path selected for the bundle package.
+	// It may differ from Import when a bare repository target defaults to
+	// its nexssflow package or when Go resolves a package to a nested module.
+	PackagePath string
+	Alias       string
+	Version     string
+	// ResolvedVersion is the provider module version selected by Go for a
+	// versioned remote bundle package. Local and workspace replacements may
+	// leave it empty.
+	ResolvedVersion string
+	LocalPath       string
+	ModuleRoot      string
+	ModulePath      string
+	IsLoose         bool
+	LooseID         string
+	Options         map[string]string
 }
 
 func (r Requirement) IsLocal() bool { return r.LocalPath != "" }
@@ -167,6 +175,30 @@ func resolveLocal(name, baseDir string, opts map[string]string, file string, lin
 		return Requirement{}, core.SourceError(
 			core.Position{File: file, Line: line},
 			"@require %s: path %q is a file, directory required", name, abs)
+	}
+
+	// A repo root may contain only a nested adapter module. Recognize it
+	// before the loose-package fallback so its own go.mod and module identity
+	// remain authoritative even when the parent directory has no go.mod.
+	adapterDir := filepath.Join(abs, "nexssflow")
+	adapterGoMod := filepath.Join(adapterDir, "go.mod")
+	if HasGoFiles(adapterDir) {
+		if adapterInfo, statErr := os.Stat(adapterGoMod); statErr == nil && !adapterInfo.IsDir() {
+			modulePath, readErr := ReadModuleLine(adapterGoMod)
+			if readErr != nil {
+				return Requirement{}, core.SourceError(
+					core.Position{File: file, Line: line},
+					"@require %s: read nested adapter module: %v", name, readErr)
+			}
+			return Requirement{
+				Import:      modulePath,
+				PackagePath: modulePath,
+				LocalPath:   abs,
+				ModuleRoot:  adapterDir,
+				ModulePath:  modulePath,
+				Options:     opts,
+			}, nil
+		}
 	}
 
 	moduleRoot, modulePath, err := findModuleRoot(abs)
