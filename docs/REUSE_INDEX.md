@@ -1,293 +1,350 @@
 # Nexss Reuse Index
 
-**Purpose:** Fast navigation for contributors and agents before adding code.
+**Purpose:** the first place to look before adding code.
 
-This is a **navigation index**, not a replacement for reading the actual contract. Verify signatures against the checked-out source and the pinned dependency version before use. Prefer existing Kernel and Flow primitives over local helpers.
+This is a **navigation aid**, not a replacement for reading the actual
+package. Verify signatures against the pinned dependency version before
+use. Prefer existing Kernel and Flow primitives over local helpers.
 
 ## Priority rule
 
-1. Search `github.com/nexssp/kernel` first for domainless runtime behavior.
-2. Search this Flow repository for compiler, runner, registry, transport, and DSL behavior.
-3. Search the relevant Nexss domain package (`cost`, `validation`, `transport`, `ai`, etc.).
-4. Add new code only when no existing contract fits.
+1. `github.com/nexssp/kernel` — domainless runtime behavior.
+2. This repository (`flow/`) — DSL, compiler, runner, registry, harness.
+3. A focused Nexss sibling package (`cost`, `validation`, `transport`,
+   `ai`, etc.).
+4. A new extension under `extensions/<name>/` — only when nothing fits.
 
-Do not copy an existing primitive into an extension, node, runner, or transport.
+Do not copy an existing primitive into an extension. If Kernel is
+missing a reusable domainless primitive, propose the smallest Kernel
+change first.
 
 ---
 
-## Kernel: actions and registries
+## Kernel
 
-Package: `github.com/nexssp/kernel/action`
+The Kernel is a separate module (`github.com/nexssp/kernel`) with its
+own release cycle. Confirm the pinned version before relying on any
+signature. The set below reflects the surface Flow depends on; for the
+full API, read the source.
+
+### `kernel/action` — typed actions
 
 | API | Use | Do not reimplement |
 |---|---|---|
-| `action.New[Req, Res]` | Build a typed action | Local action wrappers with duplicate lifecycle behavior |
-| `action.NewStream[Req, Item]` | Build a typed stream source | Custom source goroutines |
-| `action.NewStreamOp[Req, In, Out]` | Attach a typed stream operator | Local stream plumbing |
-| `action.NewOperator[In, Out, Cfg]` | Declare a typed runtime stream operator | Reflection-based operator registries |
-| `action.NewSimpleOperator[In, Out]` | Declare a simple operator without custom config | Repeated trivial operator builders |
-| `action.Dynamic` | Bridge a typed action to `any` | Unsafe ad-hoc type erasure |
-| `action.InvokeAny` | Invoke an action through the erased boundary | Direct type switches over actions |
-| `action.NewProxy` | Decorate/compose an action | Custom proxy wrappers |
-| `action.NewStreamProxy` | Decorate/compose a stream | Custom stream proxy wrappers |
-| `action.NewTypedStreamProxy` | Typed stream proxy composition | Repeated typed proxy code |
-| `action.NewRegistry` | Register Kernel libraries | A second action registry |
-| `action.Registry.Get` / `GetStream` / `GetOperator` | Resolve registered capabilities | Direct access to registry internals |
-| `action.Registry.Names` | Enumerate registered capabilities | Unstable map iteration |
-| `action.Library` | Package actions, streams, operators, hooks, aliases | Flow-specific library structures |
-| `action.CloneWithHooks` | Attach execution hooks safely | Mutating shared action instances |
+| `action.New[Req, Res](name, fn)` | Build a typed action | Local action wrappers |
+| `action.NewStream[Req, Item](name, fn)` | Lazy stream source (`iter.Seq2`) | Custom source goroutines |
+| `action.NewOperator[In, Out, Cfg]` | Typed stream operator | Reflection-based operator registries |
+| `action.NewSimpleOperator[In, Out]` | Operator without config | Repeated trivial builders |
+| `action.Dynamic(act)` | Bridge a typed action to `any` | Ad-hoc type erasure |
+| `action.InvokeAny(ctx, act, req)` | Invoke through the erased boundary | Direct type switches |
+| `action.Coerce[T](input)` | Convert dynamic input to a typed `T` | Local reflection decoders |
+| `action.Assign(target, source)` | The underlying coerce | — |
+| `action.Registry` / `action.Library` | Register and mount capabilities | A second registry |
+| `action.CloneWithHooks(hooks...)` | Attach hooks without mutating shared actions | Mutating a shared instance |
 
-## Kernel: composition and resilience
+Builder methods Flow relies on (all on `*action.Builder[Req, Res]`):
 
-Use the current Kernel action composition/resilience APIs before writing Flow-specific equivalents. Confirm exact names in the pinned Kernel source before use.
+- `Timeout(d)`
+- `Retry(n, backoff)`, `RetryIf(n, backoff, pred)`, `RetryAll(n, backoff)`
+- `Cache(ttl, keyFn, layers...)`
+- `Dedup(keyFn)`, `Coalesce(coalescer, keyFn)`
+- `RateLimit(rps, burst)`, `RateLimitWithKey`, `RateLimitDistributed`
+- `ConcurrencyLimit(limit)`
+- `Idempotent()`, `IdempotentWithConfig(cfg)`
+- `Adaptive(cfg)`, `Resilient(cfg)`, `InferredResilient()`
+- `RequireAuth()`, `RequireRole`, `RequirePermission`, `RequireFeature`
+- `Exclusive`, `ExclusiveFenced`, `LeaderOnly`, `LeaderOnlyFenced`
+- `Transactional(runner)`
+- `Validate(fn)` — request validation
 
-- action pipe/composition helpers;
-- parallel and fan-out helpers;
-- retry and timeout middleware;
-- cache, idempotency, coalescing, and circuit-breaker middleware;
-- action hooks and lifecycle callbacks;
-- stream collection boundaries.
+Backoff constructors: `action.ExponentialBackoff`, `ExponentialJitter`,
+`LinearBackoff`, `ConstantBackoff`.
 
-**Rule:** Flow describes and assembles these capabilities; Kernel executes them.
+Composition helpers:
 
-## Kernel: streams
+- `action.Pipe`, `PipeAny`, `PipeWith`
+- `action.Parallel`, `ParallelAny`, `ParallelNamed`, `ParallelMap`
+- `action.Branch`, `BranchAny`
+- `action.FirstSuccess`, `FirstSuccessAny`
+- `action.TernaryAny`
+- `action.SagaAny`
+- `action.RoundRobinAny`, `HashRouterAny`
+- `action.LoopAny`
+- `action.AssertAny`
+- `action.CatchAny`
+- `action.RaceAny`
+- `action.TapAny`
 
-Package: `github.com/nexssp/kernel/stream`
+Resilience primitives: `action.NewCoalescer`, `action.MemoryIdempotencyStore`,
+`action.NewHistory`, `action.Admission` middleware, `action.LoadShedConfig`.
+
+### `kernel/stream` — lazy operators
 
 | API | Use |
 |---|---|
-| `stream.Map` | Transform every item |
-| `stream.MapE` | Transform every item with an error result |
+| `stream.Map`, `MapE` | Transform each item |
 | `stream.Filter` | Keep items matching a predicate |
-| `stream.Take` | Bound the number of items |
-| `stream.Batch` | Group items into fixed-size batches |
-| `stream.Collect` | Materialize a bounded stream into a slice |
-| `stream.Reduce` | Fold items into an accumulator |
-| `stream.FlatMap` | Expand each item into another sequence |
-| `stream.WithContext` | Bind stream processing to a context |
+| `stream.Take` | Bound the stream |
+| `stream.Batch` | Group items into fixed-size slices |
+| `stream.Collect` | Materialize to a slice (bounded) |
+| `stream.Reduce` | Fold |
+| `stream.FlatMap` | Expand each item into a sequence |
+| `stream.WithContext` | Bind processing to a context |
+| `stream.Window`, `Throttle`, `Debounce`, `BatchByTime` | Time-based operators |
 
-These are lazy typed operators. Do not replace them with channels, slice-shifting loops, or custom goroutine pipelines without a measured Kernel gap.
+Do not replace these with channels or bespoke pipelines without a
+measured Kernel gap.
 
-## Kernel: observability
-
-Package: `github.com/nexssp/kernel/observe`
-
-| API | Use |
-|---|---|
-| `observe.Hook` | Convert a sink into action lifecycle hooks |
-| `observe.Sink` | Neutral event destination contract |
-| `observe.NewMemorySink` | Test/event inspection sink |
-| `observe.NewMetricsSink` | In-process metrics aggregation |
-| `observe.NewSlogSink` | Structured log sink |
-| `observe.NewPrometheusSink` | Prometheus-compatible metrics sink |
-| `observe.NewJSONLSink` | Bounded JSONL event output |
-| `observe.Event` | Lifecycle event payload |
-
-Do not add domain-specific fields to Kernel lifecycle events for one Flow extension. Add a typed domain trace beside the neutral sink when necessary.
-
-## Kernel: context and scope
-
-Package: `github.com/nexssp/kernel/xctx`
+### `kernel/observe` — lifecycle events
 
 | API | Use |
 |---|---|
-| `xctx.NewKey[T]` | Declare a typed context key |
-| `xctx.Key.With` / `From` / `MustFrom` | Store and read typed context values |
-| `xctx.NewScope` | Create a request scope |
-| `xctx.ScopeFrom` | Read the active request scope |
-| `xctx.CloneForAsync` | Safely detach/copy scope for async work |
+| `observe.Hook(sink)` | Convert a sink into action hooks |
+| `observe.Sink` | Neutral event destination |
+| `observe.NewSlogSink(logger)` | Structured log sink |
+| `observe.NewMemorySink(cap)` | Test / inspection sink |
+| `observe.NewMetricsSink()` | In-process counters |
+| `observe.NewPrometheusSink()` | Prometheus text output |
+| `observe.NewJSONLSink(w, maxBytes)` | Bounded JSONL writer |
+| `observe.Event` | Event payload (`Kind`, `Action`, `Duration`, `Request`, ...) |
+
+Event kinds: `KindSuccess`, `KindError`, `KindTimeout`, `KindRetry`,
+`KindCacheHit`, `KindCacheMiss`, `KindCanceled`, `KindPanic`,
+`KindCoalesced`, `KindDeduplicated`.
+
+### `kernel/xctx` — typed context
+
+| API | Use |
+|---|---|
+| `xctx.NewKey[T](name)` | Declare a typed context key |
+| `xctx.Key.With` / `From` / `MustFrom` | Store and read |
+| `xctx.NewScope(parent)` | Pooled request scope + cleanup |
+| `xctx.ScopeFrom(ctx)` | Read the active scope |
+| `xctx.CloneForAsync(ctx)` | Detach for background work |
 | `xctx.WithRequestID` / `RequestIDFrom` | Request identity |
 | `xctx.WithExecutionID` / `ExecutionIDFrom` | Execution identity |
-| `xctx.WithTraceID` / `TraceIDFrom` | Trace identity |
-| `xctx.WithSpanID` / `SpanIDFrom` | Span identity |
-| `xctx.WithTenantID` / `TenantIDFrom` | Tenant identity |
-| `xctx.WithUserID` / `UserIDFrom` | User identity |
-| `xctx.WithRoles` / `RolesFrom` | Authorization roles |
-| `xctx.WithPermissions` / `PermissionsFrom` | Authorization permissions |
+| `xctx.WithTraceID` / `SpanIDFrom` etc. | Trace identity |
+| `xctx.WithTenantID`, `WithUserID` | Identity |
+| `xctx.WithRoles`, `WithPermissions`, `WithFeatures` | Authorization |
+| `xctx.WithApprovalToken`, `ApprovalTokenFrom` | HITL approval |
+| `xctx.HasRole`, `HasAnyRole`, `HasPermission`, `HasFeature` | Checks |
 
-Never use string context keys or store request-scoped mutable state in package globals.
+Never use string context keys.
 
-## Kernel: errors
+### `kernel/xerr` — categorized errors
 
-Package: `github.com/nexssp/kernel/xerr`
+Constructors: `xerr.BadRequest`, `Unauthorized`, `Forbidden`,
+`NotFound`, `Conflict`, `Validation`, `TooManyRequests`, `Timeout`,
+`Unavailable`, `Internal`, `Canceled`, `RateLimit`, `CircuitBreaker`,
+`Database`, `Shutdown`.
 
-| API | Use |
-|---|---|
-| `xerr.BadRequest` | Invalid request/input |
-| `xerr.Unauthorized` / `Forbidden` | Authentication/authorization violations |
-| `xerr.NotFound` | Missing resource |
-| `xerr.Conflict` | Duplicate or conflicting state |
-| `xerr.Unavailable` | Transient upstream failure |
-| `xerr.Timeout` | Deadline exceeded |
-| `xerr.RateLimit` | Rate limiting |
-| `xerr.CircuitBreaker` | Circuit state prevents execution |
-| `xerr.Canceled` | Explicit cancellation |
-| `xerr.Internal` | Unexpected implementation failure |
-| `xerr.From` | Normalize an error to `*xerr.AppError` |
-| `xerr.IsTransient` / `IsPermanent` | Retry classification |
-| `xerr.KindFrom` | Read the error kind |
-| `xerr.Sprint` / `Print` | Safe error presentation |
+Classifiers: `xerr.IsTransient(err)`, `xerr.IsPermanent(err)`,
+`xerr.KindFrom(err)`, `xerr.From(err)`, `xerr.PanicRecovery(r)`.
 
-Do not leak bare `errors.New` or unclassified `fmt.Errorf` across public package boundaries.
+Presentation: `xerr.Sprint(err)`, `xerr.Print(err)`, `(*AppError).Public(requestID)`.
 
-## Kernel: filesystem
-
-Package: `github.com/nexssp/kernel/xfs`
+### `kernel/xfs` — filesystem safety
 
 | API | Use |
 |---|---|
-| `xfs.Rel` | Validate a relative untrusted path |
-| `xfs.OpenRoot` | Open a contained filesystem root |
-| `xfs.WriteFile` | Write a file through the safe filesystem helper |
-| `xfs.WriteFileAtomic` | Durable atomic write |
-| `xfs.Root.Open` / `ReadFile` / `Stat` / `Lstat` | Rooted reads and metadata |
-| `xfs.Root.Create` / `WriteFile` | Rooted writes |
-| `xfs.Root.WriteFileAtomic` | Rooted durable atomic write |
-| `xfs.Root.Mkdir` / `MkdirAll` | Rooted directory creation |
-| `xfs.Root.Rename` / `Remove` / `RemoveAll` | Rooted mutation |
+| `xfs.Rel(p)` | Validate an untrusted relative path |
+| `xfs.OpenRoot(dir)` | Open a confined filesystem root |
+| `xfs.WriteFileAtomic`, `xfs.WriteFile` | Non-rooted variants (trusted path) |
+| `xfs.Root.Open`, `ReadFile`, `Stat`, `Lstat` | Rooted reads |
+| `xfs.Root.Create`, `WriteFile`, `WriteFileAtomic` | Rooted writes |
+| `xfs.Root.Mkdir`, `MkdirAll`, `Rename`, `Remove`, `RemoveAll` | Rooted mutation |
 
-Never concatenate user-controlled paths. Reject absolute paths, traversal, and escaping symlinks.
+Rule: any path derived from user input, HTTP, config, or a plugin
+manifest goes through `Root`. Reject absolute paths, `..`, and
+symlinks that escape the root.
 
-## Kernel: AI DAG
-
-Package: `github.com/nexssp/kernel/ai/dag`
+### `kernel/ai/dag` — compiled DAGs
 
 | API | Use |
 |---|---|
-| `dag.New` | Start a typed DAG builder |
-| `dag.Builder.AddNode` | Add an action node |
-| `dag.Builder.AddEdge` | Add a dependency edge |
-| `dag.Builder.Compile` | Validate and compile the graph |
-| `dag.DAG.Execute` | Execute a compiled DAG |
-| `dag.DAG.AsAction` | Expose a DAG as a Kernel action |
-| `dag.AcquireState` / `State.Release` | Pool DAG state safely |
-| `dag.ReadState.Get` / `Data` / `Clone` | Read isolated state |
-| `dag.State.Get` / `Set` / `Clone` | Mutate owned state |
-| `dag.GetNodeOutput[T]` | Typed node-output access |
-| `dag.DAG.ToMermaid` | Deterministic graph visualization |
+| `dag.New(name)` | Start a builder |
+| `dag.Builder.AddNode`, `AddEdge`, `Compile` | Build the graph |
+| `dag.DAG.Execute`, `AsAction`, `ToMermaid` | Run, embed, visualize |
+| `dag.AcquireState`, `State.Release` | Pooled state |
+| `dag.ReadState.Get`, `Data`, `Clone` | Read |
+| `dag.GetNodeOutput[T]` | Typed node output |
+| `dag.Suspend(reason, payload)`, `dag.ErrSuspended` | HITL pause |
 
-Do not write another topological sorter or graph executor in Flow.
+Do not write another topological sorter in Flow.
 
-## Kernel: testing
+### `kernel/xtest` and `kernel/xtest/ktest` — tests
 
-Package: `github.com/nexssp/kernel/xtest` and `github.com/nexssp/kernel/xtest/ktest`
+Use `xtest` and `ktest` throughout. Never `testify`, never ad-hoc
+polling loops, never `time.Sleep` for synchronization.
 
-Use the existing assertion, eventual, parallel, latch, trace, and simulation helpers. Do not add `testify`, ad-hoc polling loops, or `time.Sleep` synchronization.
+`xtest`: `RequireNoError`, `RequireEqual`, `RequireErrorIs`,
+`RequireErrorContains`, `RequireErrorKind`, `RequireCondition`,
+`RequireStringContains`, `Eventually`, `Never`, `WaitForSignal`,
+`WaitForValue`, `RunParallel`, `NewGate`, `NewLatch`, `AllocsPerRun`,
+`RequireZeroAlloc`, `RequireMaxAlloc`, `ExpectFatal`, `RequireNoGoroutineLeak`.
+
+`ktest`: `Run`, `RequireEqual`, `RequireErrorKind`, `Recorder`,
+`Script`, `Simulate`, `Fake*` builders, `RequestContext`, `Ctx`,
+`CtxWithAuth`.
 
 ---
 
-## Flow: compiler and parsing
+## Flow
 
-Package paths are relative to this repository.
+This repository. Packages are top-level; there is no `compiler/`
+wrapper.
 
-| API | Use |
-|---|---|
-| `compiler.NewCompiler` | Construct the current Flow compiler |
-| `compiler/core.CompileAction` | Compile source into an action |
-| `compiler/core.RunAction` | Run compiled Flow source |
-| `compiler/core.CompileAndRun` | Compile and execute in one action |
-| `compiler/core.Build` | Lower an AST expression through the current registry |
-| `compiler.NewLexer` | Lex source |
-| `compiler.NewParser` / `NewParserWithFile` | Parse source |
-| `compiler/core.NewDirectiveTable` | Build directive registry |
-| `compiler/core.NewModifierTable` | Build modifier registry |
-| `compiler/core.NewOperatorTable` | Build compiler-operator registry |
-| `compiler/core.NewPrimaryTable` | Build primary-extension registry |
-
-Do not add compiler grammar or lowering logic to nodes or transports.
-
-## Flow: registry and actions
-
-Package: `github.com/nexssp/flow`
+### `flow/core` — compiler internals
 
 | API | Use |
 |---|---|
-| `flow.NewRegistry` | Create the Flow capability registry |
-| `flow.Registry.Register` | Register actions, sources, and runtime operators |
-| `flow.Registry.Get` | Resolve an action |
-| `flow.Registry.GetStream` | Resolve a stream source |
-| `flow.Registry.GetOperator` | Resolve a stream operator |
-| `flow.Registry.Resolve` | Determine the registered capability kind |
-| `flow.Registry.Names` | Enumerate registered names |
-| `flow.RegistryFromActionRegistry` | Bridge a Kernel registry to Flow |
-| `flow.CompilePipeline` | Compile a pipeline expression using a Kernel registry |
-| `flow.CompileSaga` | Compile a saga expression |
-| `flow.RegisterPipelines` | Register named Flow pipelines |
-| `flow.NewTypedStreamOperator` | Adapt a typed stream operator |
+| `core.Bundle` | The extension contract — see `docs/extensions.md` |
+| `core.Register(id, factory)` | Register a bundle at `init()` |
+| `core.CompileAction(...)` | Lower a source string to a runnable action |
+| `core.CompileReq` / `core.CompileRes` | Compile request/result |
+| `core.Build(ctx, resolver, table, expr)` | Lower an AST fragment |
+| `core.Preprocess(ctx, dt, src, name)` | Run directives, return `(clean, meta, err)` |
+| `core.NewParserWithFileOffset(ctx, ops, primaries, src, file, lineBase)` | Parse with position tracking |
+| `core.Directive` / `DirectiveTable` | Directive contract and registry |
+| `core.Modifier` / `ModifierTable` | Modifier contract and registry |
+| `core.Operator` / `OperatorTable` | Compiler-level operators (`->`, `&`, `||`) |
+| `core.PrimaryExtension` | Parser extension contract (`TokenPrimary`, `KeywordPrimary`) |
+| `core.CapabilityResolver` | Runtime capability lookup (`Action`, `Stream`, `Operator`) |
+| `core.DynamicResolver` | Default resolver; supports `Mount`, `MountWithAlias` |
+| `core.CapabilityRef` / `ParseCapabilityRef` | Bare-identifier capability references |
+| `core.ArgFieldSpec` / `ArgKind` | Argument schemas for capability arguments |
+| `core.LineLookup` / `ModifierSource` | Line-indexed modifier chain and its provenance |
+| `core.WithLineModifiers(...)` | Compile option that installs the chain |
+| `core.LineModifiersFromOptions(mt, opts)` | Extract the chain from compile options |
+| `core.ModifierName(raw)` | Name portion of a raw modifier |
+| `core.SourceError(pos, ...)` | Compile-time error with a position |
+| `core.BuildCatalog(...)` | Dump the compiler surface |
+| `core.KeywordMappings()` / `TranslateKeyword` | Native keyword grammar |
+| `core.IsReservedActionName`, `RequiredModifierOwner` | Reserved-name policy |
 
-Duplicate names must fail. Do not depend on short aliases; use canonical qualified names.
-
-## Flow: nodes and reusable adapters
-
-Package: `github.com/nexssp/flow/nodes`
-
-| API | Use |
-|---|---|
-| `nodes.NewNoopAction` | Identity/no-op action |
-| `nodes.NewConstAction` | Constant result action |
-| `nodes.NewPickAction` | Select a field |
-| `nodes.NewWrapAction` | Wrap a value |
-| `nodes.NewFailAction` | Explicit failure action |
-| `nodes.NewLogInfoAction` / `NewLogWarnAction` / `NewLogErrorAction` | Structured logging actions |
-| `nodes.NewProjectionAction` | Projection action |
-| `nodes.NewLoopAction` | Flow loop adapter |
-| `nodes.NewDispatchAction` | Dispatch action |
-| `nodes.NewDistributeMapAction` / `NewDistributeReduceAction` | Distribution actions |
-| `nodes.NewPromptNode` | Prompt/domain adapter; use only when the AI contract is intended |
-| `nodes.NewAssertAction` | Runtime assertion action |
-
-These are Flow adapters. If the behavior is domainless or resilience-related, prefer Kernel directly.
-
-## Flow: runner and tests
+### `flow/runner` — execution assembly
 
 | API | Use |
 |---|---|
-| `runner.RunFlow` | Execute a Flow request through the standard runner |
-| `runner.RunFlowTest` | Execute a Flow test command |
-| `runner.NewRunnerObserver` | Standard runner metrics/trace observer |
-| `runner.NewRunnerObserverWithHooks` | Runner observer with lifecycle hooks |
-| `runner.NewMemoryCheckpointStore` | In-memory checkpoint store |
-| `runner.NewFileCheckpointStore` | File-backed checkpoint store |
-| `flow/testkit.New` | Build a Flow test harness |
-| `flow.NewWorkflowTest` | Build a workflow test fixture |
-| `runner/testkit.RunDSL` | Run DSL through the runner test harness |
+| `runner.BuildConfig(bundles)` | Build a `Config` from bundles |
+| `runner.Config` | The execution configuration passed to `Execute` |
+| `runner.Execute(ctx, cfg, src, name, payload)` | Compile and run |
+| `runner.Execution` | Result: `Output`, `Meta`, `Resolver`, timings, allocs |
+| `runner.RunSource(ctx, cfg, src, name, payload, opts)` | CLI-oriented wrapper with `--info` and observer |
+| `runner.SplitPipelineModifiers(table, mods)` | Split wrapper vs. body modifiers |
+| `runner.SplitPipelineModifiersWithSources(table, mods, srcs)` | Same, sources preserved |
+| `runner.NewObserver(w, verbosity)` | Live per-action observer |
+| `runner.PrintInfo` | Render a pipeline shape |
+| `runner.RunAssertions` | Evaluate `@assert:` directives |
 
-## Flow: transport and external capabilities
+### `flow/native` — built-in bundles
 
-| API | Use |
-|---|---|
-| `transport.Register` | Register a transport factory by prefix |
-| `transport.Resolve` | Resolve a transport binding |
-| `transport.OnDSL` / `transport.OnTrigger` | Declare transport binding points |
-| `runner/capability.NewResolver` | Resolve HTTP, exec, and WASM capability bindings |
-| `flow.RegisterMaterializer` | Register a declared materializer |
-| `flow.RegisterBoundary` | Register a stream/materialization boundary |
-
-Concrete NATS, Redis, PostgreSQL, HTTP, and provider behavior belongs in its own package or extension. Do not add transport-specific logic to the compiler.
-
----
-
-## Naming and alias policy
-
-Use one canonical name per capability, normally qualified by domain:
-
-```text
-fs.read
-ai.route
-transport.request
-sandbox.run
-cost.record
+```go
+native.Bundles()      // all standard extensions as []core.Bundle
+native.Directives()   // the standard DirectiveTable
+native.Primaries()    // the standard primary extensions
 ```
 
-Do not introduce new short aliases such as `read`, `route`, or `invoke`. They create collisions, make search incomplete, and hide which package owns the capability. `@require ... as local` is a file-local namespace choice and is acceptable when it is explicit.
+`native.Bundles()` is the single source of truth for what the shipped
+CLI has available. Add a new standard bundle there.
+
+### `flow/extensions/` — standard bundles
+
+| Bundle | Contributes |
+|---|---|
+| `assert` | `@assert:` directive, `assert(cond, msg)` keyword |
+| `config` | `@config`, `@config.load` (JSON, TOML, registry-based YAML) |
+| `config_yaml` | Opt-in YAML loader for `@config.load` (`@require config_yaml`) |
+| `decide` | `decide.run` action (pluggable decision backends) |
+| `description` | `@description` |
+| `external` | `external.exec`, `http.request`, `external.wasm` |
+| `fs` | `fs.walk` source; `fs.filter`, `fs.read`, `fs.sort`, `fs.write`, `out.stdout`, `out.file` |
+| `hook` | `@hook:name` directive; `hook.probe` action |
+| `include` | `@include` |
+| `loop` | `loop(...) until(...)` keyword |
+| `macros` | `@macro` engine |
+| `match` | `match(subject) { ... }` keyword |
+| `modifiers_auth` | `:auth`, `:role=`, `:perm=`, `:feature=` |
+| `modifiers_core` | `:timeout=`, `:retry=`, `:cache=`, `:dedup`, `:coalesce`, `:rate_limit=`, `:concurrency=`, `:idempotent` |
+| `modifiers_meta` | `:name=`, `:desc=`, `:status=`, `:tag=`, `:scope=`, `:strict`, `:lenient`, ... |
+| `nodes_bench` | `bench.run`, `bench.save`, `bench.compare` |
+| `nodes_dispatch` | `dispatch.run` |
+| `nodes_distribute` | `distribute.map`, `distribute.reduce` |
+| `nodes_log` | `log.info`, `log.warn`, `log.error` |
+| `nodes_supervisor` | `supervisor.run` |
+| `on` | `@on event "protocol:target"` |
+| `on_error` | `@on_error { when ... }` block |
+| `pipeline` | `@pipeline` directive and materializer |
+| `pool` | `@pool NAME [...]` directive |
+| `projection` | `{ ... }` projection syntax |
+| `render` | `render.markdown` operator |
+| `require` | `@require` directive |
+| `retry` | `AtomAdvise` for `:retry=N` |
+| `runtime` | The primitive action library (`runtime.const`, `runtime.noop`, ...) |
+| `schema` | `@schema NAME { ... }` + `schema.validate` |
+| `scope` | `@scope` and `@profile` directives |
+| `selftestkit` | Coverage actions (`cov.echo`, `cov.flaky`, ...) |
+| `syntax` | `->`, `|`, `&`, `||` operators |
+| `template` | `template.render` |
+
+Look here first when adding a DSL feature.
+
+### `flow/cli` — the CLI
+
+| API | Use |
+|---|---|
+| `cli.Run(args)` | Top-level dispatcher |
+| `cli.RunWithBundles(args, bundles)` | Entry point for harness binaries |
+| `cli.RunEmbedded(ctx, src, args)` | Entry point for `nflow build` binaries |
+| `cli.SourceRequires(path)` | Extract `@require` declarations from a file |
+| `cli.EnsureHarness`, `cli.ExecHarness` | Harness cache and invocation |
+| `cli.Completion(shell, w)` | Shell completion scripts |
+| `cli.Print`, `cli.Version` | Build metadata |
+| `cli.SelfBuild(ctx)` | In-place rebuild |
+
+### `flow/contracts` — context bridges
+
+| API | Use |
+|---|---|
+| `contracts.WithPools` / `PoolsFromContext` | Pool declarations for `dispatch` |
+| `contracts.WithRecoveredError` / `RecoveredErrorFrom` | Error recovery handoff |
+| `contracts.WithCompiler` / `CompilerFromContext` | Compiler handoff (used by `supervisor`) |
+| `contracts.WithActionResolver` / `ActionResolverFromContext` | Resolver handoff |
+
+### `flow/template` — text template rendering
+
+Package-agnostic. `flowtemplate.Render(source, vars)` — Go `text/template`
+syntax, missing-key error, no HTML escaping, no shell.
+
+---
+
+## Naming policy
+
+One canonical, qualified name per capability:
+
+```
+runtime.const      fs.read       http.request
+match.evaluate     pipeline.fetch    pool.workers
+distribute.map     dispatch.run      supervisor.run
+```
+
+**No new short aliases.** `action.Library.Aliases` is rejected at mount
+time. The one alias mechanism Flow supports is `@require ... as NAME`,
+which is per-compilation and does not mutate the source library.
+
+Native keywords (`const`, `noop`, `pick`, ...) are grammar, not
+aliases. They live in `core/reserved.go` and are not extensible.
+
+---
 
 ## Update policy
 
-This file is a curated index, not generated truth. When a public API changes:
+This file is **curated, not generated**. When a public API changes:
 
-1. update the implementation and tests;
-2. update this index in the same change;
-3. run the full validation suite;
-4. remove entries only after verifying no supported code uses them.
+1. Update the implementation and tests.
+2. Update this file in the same change.
+3. Run `go test ./...` and `nflow self test`.
+4. Remove an entry only after verifying no supported code uses it.
 
-The index should stay short enough to scan. For complete signatures, read the source and package documentation.
+If a section here disagrees with the source, the source wins and this
+file is wrong. Fix it in the same commit.

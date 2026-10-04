@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -80,9 +79,7 @@ func runListInProcess(args []string) int {
 	}
 
 	if *jsonOut {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(cfg); err != nil {
+		if err := writeJSON(os.Stdout, cfg, true); err != nil {
 			return fatalf("encode: %v", err)
 		}
 		return 0

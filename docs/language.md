@@ -1,109 +1,552 @@
-# `.nflow` language
+# The `.nflow` language
 
-A `.nflow` file contains Flow directives and a pipeline expression. An atom names an action available to the runner; operators compose actions, and projection expressions can reshape values between them. The examples linked here are current runnable fixtures.
+A `.nflow` file is a graph of actions with typed policies and reusable
+patterns. This document is the language reference; for the CLI that runs
+these files, see [cli.md](cli.md).
 
-## Pipeline syntax
+Every snippet on this page is a real, working flow. Copy any of them
+into a file and run it:
+
+```sh
+nflow run my-flow.nflow
+```
+
+---
+
+## 1. Pipeline syntax
+
+The pipeline is the flow. There are five operators and one literal:
 
 | Form | Meaning |
 |---|---|
-| `A -> B` | Pass the left result to the next action. |
-| `A | B` | Syntax sugar for `A -> B`; it does not introduce an action alias. |
-| `A || B` | Try the right expression if the left expression fails. |
-| `(A & B)` | Run the grouped branches in parallel. |
-| `{ key: expression }` | Project fields and expressions into a new object. |
-| `action @{ key: value }` | Pass named values as the action's arguments. |
-| `action:timeout=1s` | Apply a modifier to that action. |
+| `a -> b` | Pass the output of `a` into `b` |
+| `a \| b` | Sugar for `a -> b` |
+| `a \|\| b` | Run `b` if `a` fails |
+| `(a & b)` | Run `a` and `b` concurrently, gather both |
+| `{ key: expr, ... }` | Project a new object from the current input |
+| `a ? b : c` | Conditional: `b` when `a` is truthy, else `c` |
 
-The binary operators and their current descriptions are also available from `nflow list`. The built-in feature suite tests parallel composition with this expression:
+The smallest pipeline:
 
 ```nflow
-( const @{ value: "left" } & const @{ value: "right" } )
+noop
 ```
 
-Parallel results use each branch action's canonical name as its gather key. A name used by only one branch keeps its existing key; repeated names get `name#1`, `name#2`, and so on in source order (for example, `const#1` and `const#2`). If a generated label is already in use, trailing `#` characters are added until it is unique. The checked [parallel actions example](../examples/00_flow_basics/07_parallel_actions.nflow) demonstrates this mapping with local actions and asserts the resulting map. For a verified end-to-end projection, see [data transformation](../examples/00_flow_basics/04_data_transformation.nflow). For a working timeout and fallback flow, see [sleep and timeout](../examples/00_flow_basics/02_sleep_and_timeout.nflow).
+A pipeline that produces a literal:
 
-## Native keywords
+```nflow
+const @{ value: "hello" }
+```
 
-Native keywords are grammar-level conveniences. They compile to canonical
-action IDs at parse time and are not registry aliases: no bundle can
-extend or override them.
+A pipeline that shapes the input:
 
-| Keyword | Canonical target   |
-|---------|--------------------|
-| `const` | `runtime.const`    |
-| `with`  | `runtime.with`     |
-| `pick`  | `runtime.pick`     |
-| `wrap`  | `runtime.wrap`     |
-| `fail`  | `runtime.fail`     |
-| `noop`  | `runtime.noop`     |
-| `sleep` | `runtime.sleep`    |
-| `env`   | `runtime.env`      |
-| `uuid`  | `runtime.uuid`     |
-| `json`  | `json.clean`       |
+```nflow
+{ id: .user.id, name: .user.name }
+```
 
-Both forms are valid. Prefer the keyword in new code.
+A pipeline that fans out and gathers:
 
-Inside string values (`@{ action: "runtime.noop" }`, `@pool [...]`) the
-canonical form is still required: those positions are runtime values, not
-grammar. Phase 2 introduces `CapabilityRef` to close that gap.
+```nflow
+(
+  const @{ value: "left" }
+  &
+  const @{ value: "right" }
+)
+```
 
-## Directives
+Result: `{ "runtime.const#1": "left", "runtime.const#2": "right" }`.
+Parallel branches key their output by the branch action's canonical name;
+repeats get `#1`, `#2`, and so on in source order.
 
-Directives are handled before the pipeline is compiled. Common directives in the current compiler include:
+Fallback:
 
-| Directive | Use |
+```nflow
+fail @{ kind: "Unavailable", message: "boom" } || const @{ value: "recovered" }
+```
+
+`fail` raises; `||` catches and runs the right arm.
+
+---
+
+## 2. Native keywords
+
+Ten keyword names are part of the language itself. They compile to
+canonical actions at parse time and cannot be overridden by any bundle.
+
+| Keyword | Compiles to | Meaning |
+|---|---|---|
+| `const` | `runtime.const` | Produce a literal |
+| `with` | `runtime.with` | Merge fields into the input |
+| `pick` | `runtime.pick` | Select fields from the input |
+| `wrap` | `runtime.wrap` | Wrap the input under a key |
+| `fail` | `runtime.fail` | Raise an error |
+| `noop` | `runtime.noop` | Pass through unchanged |
+| `sleep` | `runtime.sleep` | Delay by `duration_ms` |
+| `env` | `runtime.env` | Read an environment variable |
+| `uuid` | `runtime.uuid` | Generate a UUID v4 |
+| `json` | `json.clean` | Strip markdown fences and prose from a JSON body |
+
+Both forms are valid; prefer the keyword.
+
+```nflow
+{ user_id: 42 } -> pick @{ field: "user_id" } -> wrap @{ key: "data" }
+```
+
+**Keywords are grammar, not aliases.** The canonical form
+(`runtime.const`) remains valid and is what you'll see in
+`nflow explain` output, but a bundle cannot register an action named
+`const` — the mount rejects it.
+
+---
+
+## 3. Arguments: `@{ ... }`
+
+`@{ }` binds named values to an action. The values are parsed as data,
+not as a mini-language:
+
+```nflow
+{ user: { id: 42, name: "Ada" } }
+-> wrap @{ key: "payload", note: "wrapped", count: 3, active: true }
+```
+
+Inside `@{ }`:
+
+| Form | Meaning |
 |---|---|
-| `@description "..."` | Attach a human-readable description. |
-| `@assert: expression` | Check the final result after the flow runs. |
-| `@pipeline name` … `@end` | Declare a named pipeline. |
-| `@include "path.nflow"` | Include another local Flow file. |
-| `@require ...` | Request an extension or library bundle for the flow; optional `as name` replaces its namespace locally. |
+| `key: "text"` | String literal |
+| `key: 42` | Number |
+| `key: true` | Boolean |
+| `key: [1, 2, 3]` | Array |
+| `key: { a: 1 }` | Nested object |
+| `key: .path.to.field` | Reference to the current input |
+| `key: .` | The whole input |
+| `key: noop` | A capability reference (see §4) |
 
-For example, current example files use `@assert: result.summary == "Ada (ID: 101) is active"` to check their result. Directive and modifier availability can depend on the bundles loaded by a runner; use `nflow list` to inspect the active catalog rather than relying on a fixed feature list.
+References read from the current pipeline state — the value flowing
+into this atom.
 
-Actions, stream sources, and stream operators have one canonical fully-qualified name, such as `const`, `fs.walk`, or `render.markdown`; extension libraries do not publish short-name synonyms. An explicit `@require ... as local` changes the first namespace segment to `local` for that flow. This local qualifier is the only Flow alias mechanism. The `|` character remains pipeline syntax sugar for `->`, not an action alias.
+---
 
-## Policy inheritance
+## 4. Capability references
 
-Two directives govern inherited policy:
+Some arguments name another capability. Write the name as a bare
+identifier; the compiler resolves it:
 
-- `@scope :mods { ... }` — anonymous; applies to atoms inside the block.
-- `@profile NAME :mods` — named; reused via `:profile=NAME` on `@pipeline` or `@scope`.
+```nflow
+distribute.map @{ action: noop, items: [1, 2, 3] }
+```
 
-### Precedence
+`noop` here is a **capability reference**, not a string. It is
+translated to `runtime.noop`, verified against the registry, and passed
+to the handler as the canonical name. Quoting it — `action: "noop"` —
+is a compile error:
+
+```
+distribute.map @{ action: "noop" }
+  error: use a bare capability reference, not a string literal ("noop")
+```
+
+Bare identifiers in **undeclared** argument fields stay as plain
+strings. `const @{ value: noop }` produces the string `"noop"`, not a
+capability. The compiler only treats an argument as a capability
+reference when the owning bundle declares it as one.
+
+Canonical names (`runtime.noop`) are also accepted in capability
+positions.
+
+---
+
+## 5. Projections: `{ ... }`
+
+A `{ ... }` at the top of a pipeline reshapes the current value:
+
+```nflow
+{ id: 1, name: "Ada", extra: "discard" }
+-> { name: .name, greeting: "Hello, " + .name }
+```
+
+Result: `{ "name": "Ada", "greeting": "Hello, Ada" }`.
+
+Projections can spread the whole input with `...`:
+
+```nflow
+{ id: 42, status: "pending" }
+-> { ..., status: "active" }
+```
+
+Result: `{ "id": 42, "status": "active" }`.
+
+Projections run through `expr-lang`, so array functions like `filter`,
+`sortBy`, `map`, and `take` are available:
+
+```nflow
+{ items: [{ line: 30, severity: "high" }, { line: 10, severity: "low" }] }
+-> { top: items | filter(#.severity == "high") | sortBy(#.line, "desc") | take(1) }
+```
+
+`{ ... }` is data. `noop` inside a projection is a variable lookup, not
+a capability. Use `@{ }` for capability references.
+
+---
+
+## 6. Directives
+
+Directives start with `@` at the beginning of a line. They run before
+the pipeline is compiled.
+
+| Directive | Purpose |
+|---|---|
+| `@description "..."` | Human-readable summary; shown by `nflow info`, used as the fixture name |
+| `@assert: expression` | Assertion evaluated after the pipeline runs |
+| `@pipeline NAME` ... `@end` | Declare a named, reusable sub-pipeline |
+| `@scope :mods { ... }` | Inline policy for the enclosed atoms |
+| `@profile NAME :mods` | Named, reusable policy |
+| `@macro NAME(params) { body }` | Compile-time pattern expansion |
+| `@require PATH [version] [as alias] [{ options }]` | Load an external bundle |
+| `@config { ... }` / `@config:key=value` | Compile-time key/value pairs |
+| `@config.load:path="..."` | Load config from a JSON/TOML/YAML file |
+| `@include "path.nflow"` | Inline another file |
+| `@on_error { when ... -> target }` | Route a runtime error to a recovery target |
+| `@hook:name` | Attach a Kernel hook to the compiled program |
+| `@schema NAME { Field Type `tags` }` | Runtime payload validation for strict mode |
+
+---
+
+## 7. `@pipeline` — reusable fragments
+
+```nflow
+@pipeline fetch_user
+  http.request @{ url: "https://api.example/users/1" }
+  -> { id: .body.id, name: .body.name }
+@end
+
+{} -> pipeline.fetch_user
+```
+
+Every `@pipeline NAME` mounts as `pipeline.NAME`. Use that name to call
+it. Modifiers on the pipeline header land on the wrapper:
+
+```nflow
+@pipeline fetch_user :tag="api":status=201
+  ...
+@end
+```
+
+Only policy modifiers (`:timeout`, `:retry`, ...) also propagate to the
+atoms inside the body. Metadata modifiers (`:tag`, `:status`, `:route`)
+stay on the wrapper — see §10 for the full rule.
+
+---
+
+## 8. `@scope` — inline policy
+
+`@scope :mods { ... }` applies a policy to every atom inside the block.
+
+```nflow
+@scope :timeout=5s :retry=3 {
+  http.request @{ url: "https://api.example/one" }
+  http.request @{ url: "https://api.example/two" }
+}
+```
+
+Both `http.request` atoms get `:timeout=5s :retry=3`.
+
+Nested scopes override on a per-name basis:
+
+```nflow
+@scope :timeout=2s :retry=4 {
+  http.request @{ url: "https://fast.example" }
+
+  @scope :timeout=30s {
+    http.request @{ url: "https://slow.example" }
+  }
+}
+```
+
+The first call gets `timeout=2s retry=4`; the second gets
+`timeout=30s retry=4` (timeout overridden, retry inherited).
+
+An atom-local modifier always wins:
+
+```nflow
+@scope :timeout=5s {
+  http.request:timeout=1s @{ url: "..." }
+}
+```
+
+That call gets `timeout=1s`.
+
+---
+
+## 9. `@profile` — named policy
+
+A profile is a named, reusable `@scope`. Declare once, use anywhere.
+
+```nflow
+@profile reliable :timeout=10s :retry=4
+@profile fast     :timeout=500ms :retry=0
+
+@pipeline call_api :profile=reliable
+  http.request @{ url: "https://api.example" }
+@end
+
+@pipeline probe :profile=fast
+  http.request @{ url: "https://health.example" }
+@end
+```
+
+A profile can inherit from one parent:
+
+```nflow
+@profile base     :timeout=10s :retry=4
+@profile careful  :parent=base :timeout=30s
+```
+
+`careful` gets `timeout=30s retry=4`. Cycles and unknown parents are
+compile errors:
+
+```
+@profile a :parent=b
+@profile b :parent=a
+  error: @profile a: profile cycle: a → b → a
+```
+
+---
+
+## 10. Policy precedence
 
 From highest priority to lowest:
 
-1. Atom-local modifier (`atom:mod`)
-2. Innermost `@scope`
-3. Outer `@scope`
-4. `@pipeline` local modifiers
-5. `@pipeline :profile=NAME`
-6. Kernel defaults
-
-More local wins. Later-declared (inner) scope spans override earlier (outer) spans on the same modifier name.
-
-### Explicit disable
-
-An atom-local `:retry=0` is an explicit disable. It overrides any inherited `:retry=N` from scope or profile. `:retry=0` means "off"; absent means "inherit".
-
-### What inherits
-
-Only policy modifiers propagate from `@scope`/`@profile` to atoms:
-
 ```
-:timeout  :retry  :cache  :dedup  :coalesce  :rate_limit  :concurrency  :idempotent  :breaker
+action-local modifier       atom:timeout=1s
+  > innermost @scope        @scope :timeout=2s { ... }
+  > outer @scope
+  > @pipeline local mods    @pipeline p :timeout=5s
+  > @pipeline :profile
+  > file-level @profile     @profile p :timeout=10s
 ```
 
-Metadata modifiers — `:tag`, `:status`, `:route`, `:name`, `:scope`, `:desc` — stay on the atom or `@pipeline` wrapper where they are declared. They do not inherit.
+**More local wins.** Later-declared (inner) scope spans override earlier
+(outer) spans on the same modifier name.
 
-### Known limitations
+Not every modifier propagates. Only **inheritable** policy modifiers
+do:
 
-- Top-level `@scope` does not reach into a `@pipeline` body. Scope inside a pipeline only affects atoms in that pipeline.
-- A profile must be declared before its first use in the file. No forward references.
-- Inherited policy modifiers on stream sources and operators are silently ignored (the source's config struct is authoritative). Dedicated stream semantics are not yet implemented.
-- `nflow lint` does not yet apply scope inheritance.
+```
+:timeout  :retry  :cache  :dedup  :coalesce  :rate_limit  :concurrency  :idempotent
+```
 
-## Next steps
+Metadata modifiers stay on the atom or wrapper where they're declared:
 
-See the [CLI guide](cli.md) for run, lint, build, and catalog commands, or the [extension guide](../extensions/README.md) for how bundles add compiler features.
+```
+:tag  :status  :route  :name  :desc  :scope  :read_only  :audit  :debug  :deprecated
+```
+
+`:retry=0` is an explicit disable; it overrides any inherited
+`:retry=N`. Absent means inherit.
+
+---
+
+## 11. `@macro` — compile-time patterns
+
+A macro is a named expansion. The compiler substitutes parameters and
+re-parses the body as if it were written at the call site.
+
+```nflow
+@macro user_card(name) {
+  const @{ value: { name: $name } } -> wrap @{ key: "card" }
+}
+
+@user_card("Ada")
+```
+
+Expands to:
+
+```nflow
+const @{ value: { name: "Ada" } } -> wrap @{ key: "card" }
+```
+
+### Patterns
+
+**Parameterless:**
+
+```nflow
+@macro hello() {
+  const @{ value: "hello" }
+}
+@hello()
+```
+
+**Parameter substitution into a shape:**
+
+```nflow
+@macro labeled(name, amount) {
+  const @{ value: { label: $name, amount: $amount } }
+}
+@labeled("total", 42)
+```
+
+**Expanding to multiple atoms:**
+
+```nflow
+@macro fetch_and_extract(url) {
+  http.request @{ url: $url } -> { id: .body.id, name: .body.name }
+}
+@fetch_and_extract("https://api.example/users/1")
+```
+
+**Reusable guards:**
+
+```nflow
+@macro require_id() {
+  assert(.id != nil, "id is required")
+}
+{ id: "usr_1" } -> @require_id() -> { ok: true }
+```
+
+**Inside a `@pipeline`:**
+
+```nflow
+@macro constant_answer() { const @{ value: 42 } }
+@pipeline compute
+  @constant_answer()
+@end
+{} -> pipeline.compute
+```
+
+### Limits
+
+Three static limits protect the compiler:
+
+| Limit | Value |
+|---|---|
+| Body size | 32 KiB |
+| Recursion | forbidden — a cycle is a compile error |
+| Expansion depth | 16 nested macros |
+
+A recursive macro fails at declaration time:
+
+```
+@macro loop() { @loop() }
+  error: @macro loop: recursion cycle loop -> loop
+```
+
+Expansion depth is bounded at parse time:
+
+```
+error: macro @m5: expansion depth exceeded (16)
+```
+
+### Error format
+
+A syntax error inside a macro body reports three things: the actual
+file line of the failing token, the macro's name, and the macro's
+definition line.
+
+```
+test.nflow:3: in macro @broken (defined at test.nflow:2): unexpected token ")"
+```
+
+Nested macros chain:
+
+```
+test.nflow:9: in macro @outer (defined at test.nflow:5):
+  test.nflow:2: in macro @inner (defined at test.nflow:1): unexpected token ")"
+```
+
+Both file:line positions are clickable in modern terminals.
+
+### Hygiene
+
+Macros are hygienic by construction. `$param` substitution is textual,
+but the resulting AST enters the caller's pipeline without introducing
+locals, bindings, or names — a macro cannot see or mutate the caller's
+state outside the pipeline value it receives. This is not enforced by a
+check; it is a property of the expansion model.
+
+---
+
+## 12. `@require` — external bundles
+
+```nflow
+@require github.com/nexssp/flow/extensions/macros
+@require ./local/helpers { prefix: "DEMO" }
+@require github.com/example/fancy v1.2.3 as fancy
+```
+
+The CLI builds or reuses a harness binary that links the requested
+modules. A local path (`./helpers`) works if the directory has a `go.mod`
+ancestor or contains Go files directly. Options passed in `{ ... }` are
+validated by the bundle: an unrecognized key is a compile error.
+
+---
+
+## 13. Modifiers you'll use
+
+The standard Kernel policy modifiers, available on any action that
+supports them:
+
+```nflow
+api.call:timeout=5s:retry=3:cache=1m
+```
+
+| Modifier | Value | Effect |
+|---|---|---|
+| `:timeout=5s` | duration | Deadline for one call |
+| `:retry=3` | int | Retry transient failures up to 3 times |
+| `:cache=30s` | duration | Cache the result for 30 seconds |
+| `:dedup` | flag | Collapse concurrent identical calls |
+| `:coalesce` | flag | Share one in-flight call with all waiters |
+| `:rate_limit=100` | int | Token-bucket admission control |
+| `:concurrency=8` | int | Bound simultaneous invocations |
+| `:idempotent` | flag | Idempotency-key middleware |
+
+A bundle can define its own modifiers for its own actions; those are
+listed by `nflow list`.
+
+---
+
+## 14. Inspecting a flow before running it
+
+```sh
+nflow lint    flow.nflow          # static check, exits 1 on any issue
+nflow explain flow.nflow          # effective policies per atom
+nflow info    flow.nflow          # pipeline shape
+```
+
+`nflow explain` shows what the compiler sees, with source attribution:
+
+```
+flow.nflow
+
+  @pipeline fetch  [definition]
+    pipeline.fetch
+      :tag=api             from pipeline fetch
+    http.request
+      :timeout=5s          from profile reliable
+      :retry=3             from profile reliable
+
+  [top-level]
+  pipeline.fetch  [invocation]
+    (no modifiers)
+```
+
+Each modifier lists the scope, profile, or pipeline that produced it.
+
+---
+
+## 15. Known limitations
+
+- **Outer `@scope` does not reach into `@pipeline` bodies.** A
+  `@scope` wrapping a `@pipeline` declaration only affects atoms at
+  the top level. Scope inside a `@pipeline` body works as expected.
+- **Profiles must be declared before use.** No forward references.
+- **Macro bodies cannot reference names declared only by their
+  caller.** A macro sees the top-level registry, not a caller-local
+  binding.
+- **Stream sources and operators ignore inheritable policy modifiers.**
+  A `:timeout` on `fs.walk` has no meaning; stream semantics are
+  governed by the source's own config.
+- **`nflow explain` does not show `:parent=` ancestry.** A child
+  profile's own modifiers are shown; the parent's are shown with the
+  parent's label.

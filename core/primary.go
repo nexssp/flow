@@ -47,24 +47,36 @@ func NewPrimaryExtensionTable(exts ...PrimaryExtension) *PrimaryExtensionTable {
 			panic("core: primary extension with empty Name()")
 		}
 		if tp, ok := ext.(TokenPrimary); ok {
-			tt := tp.TokenType()
-			if _, dup := t.byToken[tt]; dup {
-				panic("core: duplicate primary extension for token " + tt.String())
-			}
-			t.byToken[tt] = ext
+			t.byToken[tp.TokenType()] = mergeOrPanic(
+				t.byToken[tp.TokenType()], ext,
+				"duplicate primary extension for token "+tp.TokenType().String(),
+			)
 		}
 		if kp, ok := ext.(KeywordPrimary); ok {
 			kw := kp.Keyword()
 			if kw == "" {
 				panic("core: keyword primary extension " + ext.Name() + " with empty Keyword()")
 			}
-			if _, dup := t.byKeyword[kw]; dup {
-				panic("core: duplicate primary extension for keyword " + kw)
-			}
-			t.byKeyword[kw] = ext
+			t.byKeyword[kw] = mergeOrPanic(
+				t.byKeyword[kw], ext,
+				"duplicate primary extension for keyword "+kw,
+			)
 		}
 	}
 	return t
+}
+
+// mergeOrPanic returns newer when existing is zero, calls MergeWith when
+// newer opts in, and panics otherwise. The zero-value check is what lets
+// the caller use a single line per token/keyword slot.
+func mergeOrPanic(existing, newer PrimaryExtension, panicMsg string) PrimaryExtension {
+	if existing == nil {
+		return newer
+	}
+	if m, ok := newer.(MergeablePrimary); ok {
+		return m.MergeWith(existing)
+	}
+	panic("core: " + panicMsg)
 }
 
 func (t *PrimaryExtensionTable) ByToken(tt TokenType) (PrimaryExtension, bool) {
@@ -94,4 +106,24 @@ func (t *PrimaryExtensionTable) All() []PrimaryExtension {
 // konkretnego rozszerzenia.
 func DefaultPrimaryExtensions() *PrimaryExtensionTable {
 	return NewPrimaryExtensionTable()
+}
+
+// MergeablePrimary is implemented by primary extensions that know how to
+// combine themselves with an already-installed primary handling the same
+// token or keyword.
+//
+// NewPrimaryExtensionTable calls MergeWith instead of panicking when it
+// encounters a duplicate and the newer extension implements this
+// interface. The older extension is passed as the argument; the newer
+// decides how to combine them.
+//
+// This is what lets a bundle whose primary carries per-compilation
+// state — the macros bundle is the canonical case — be installed more
+// than once during a sub-pipeline compile without triggering the
+// "duplicates fail loudly" panic. A genuine cross-bundle conflict (two
+// unrelated bundles claiming the same token) still panics, because
+// neither implements the interface.
+type MergeablePrimary interface {
+	PrimaryExtension
+	MergeWith(older PrimaryExtension) PrimaryExtension
 }

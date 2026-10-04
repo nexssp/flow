@@ -95,6 +95,16 @@ var helpRegistry = map[string]helpText{
 			`nflow explain flows/client.nflow`,
 		},
 	},
+	"expand": {
+		Summary: "Show what macros in a .nflow file expand to, with definition and invocation lines.",
+		Usage:   "nflow expand <file.nflow> [--macro=NAME[,NAME...]]",
+		Flags:   `      --macro=NAMES   only show expansions of the named macros`,
+		Examples: []string{
+			`nflow expand flows/client.nflow`,
+			`nflow expand flows/client.nflow --macro=fetch_and_extract`,
+			`nflow expand flows/client.nflow --macro=require_id,labeled`,
+		},
+	},
 	"catalog": {
 		Summary: "Dump the compiler surface (atoms, modifiers, directives, operators) as JSON.",
 		Usage:   "nflow catalog [--flow FILE]",
@@ -179,5 +189,5 @@ func PrintCommandHelp(w io.Writer, command string) bool {
 }
 
 func wantsHelp(args []string) bool {
-	return len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help")
+	return len(args) > 0 && (args[0] == flagHelp || args[0] == flagHelpShort || args[0] == flagHelpWord)
 }

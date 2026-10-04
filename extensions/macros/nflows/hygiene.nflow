@@ -1,0 +1,10 @@
+@description "Macro $param is syntactic substitution, not a caller variable lookup"
+@macro echo(v) {
+  runtime.const @{ value: $v }
+}
+# The caller's state has a field named `v`. If hygiene ever broke — if
+# $v were resolved as a runtime variable rather than textually replaced
+# by the literal argument — result would become "state" instead of
+# "argument". It must not.
+@assert: result == "argument"
+{ v: "state" } -> @echo("argument")

@@ -553,6 +553,7 @@ func runJSON(ctx context.Context, opts Options, cfg flowrunner.Config, sections 
 
 	enc := json.NewEncoder(opts.Out)
 	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
 	if err := enc.Encode(report); err != nil {
 		writeLine(opts.Out, "warning: could not encode report: "+err.Error())
 	}

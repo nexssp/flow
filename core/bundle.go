@@ -81,7 +81,7 @@ var (
 	bundleFactories = map[string]BundleFactory{}
 )
 
-// Register rejestruje fabrykę bundla pod podanym ID.
+// Register registers a bundle factory under the given ID.
 func Register(id string, factory BundleFactory) {
 	if factory == nil {
 		panic("core: Register called with nil factory")
@@ -111,7 +111,7 @@ func Lookup(id string) (BundleFactory, bool) {
 	return f, ok
 }
 
-// LookupBundleForModule zapewnia wsteczną kompatybilność dla testów jednostkowych.
+// LookupBundleForModule provides backward compatibility for unit tests.
 func LookupBundleForModule(target string) (BundleFactory, bool) {
 	if f, ok := Lookup(target); ok {
 		return f, true
@@ -129,25 +129,6 @@ func LookupBundleForModule(target string) (BundleFactory, bool) {
 		}
 	}
 	return Lookup(base)
-}
-
-// RegisteredBundles zwraca wszystkie zarejestrowane bundly posortowane alfabetycznie.
-func RegisteredBundles() []Bundle {
-	bundleMu.RLock()
-	ids := make([]string, 0, len(bundleFactories))
-	snapshot := make(map[string]BundleFactory, len(bundleFactories))
-	for id, f := range bundleFactories {
-		ids = append(ids, id)
-		snapshot[id] = f
-	}
-	bundleMu.RUnlock()
-
-	sort.Strings(ids)
-	out := make([]Bundle, 0, len(ids))
-	for _, id := range ids {
-		out = append(out, snapshot[id](nil))
-	}
-	return out
 }
 
 func (b Bundle) AllSelfTests() []SelfTestSection {

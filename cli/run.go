@@ -169,8 +169,103 @@ func RunEmbeddedWithBundles(ctx context.Context, source string, args []string, b
 }
 
 func RunEmbedded(ctx context.Context, source string, args []string) int {
-	fmt.Fprintf(os.Stderr, "nexssflow %s %s (built %s)\n", Version, Commit, BuiltAt)
+	if len(args) > 0 {
+		switch args[0] {
+		case "version", "--version":
+			Print(os.Stdout)
+			return 0
+		case "help", "--help", "-h":
+			printEmbeddedHelp(os.Stdout, source)
+			return 0
+		case "info":
+			return runEmbeddedInfo(ctx, source, args[1:])
+		}
+	}
+
+	// Suppress the banner when the caller asked for machine-readable
+	// output or for the help text. Both mean "no interactive session
+	// is happening".
+	quiet := hasFlag(args, "--json") || hasFlag(args, "--quiet")
+	if !quiet {
+		fmt.Fprintf(os.Stderr, "nexssflow %s %s (built %s)\n", Version, Commit, BuiltAt)
+	}
 	return runSourceInProcess(ctx, source, "<embedded>", args)
+}
+
+// runEmbeddedInfo renders the embedded flow's pipeline shape without
+// printing the version banner. It shares the preprocess → parse path
+// with the info branch of runSourceInProcess; the only difference is
+// banner suppression, which the caller owns.
+func runEmbeddedInfo(ctx context.Context, source string, args []string) int {
+	wantJSON := hasFlag(args, "--json")
+
+	clean, meta, err := core.Preprocess(ctx, native.Directives(), source, "<embedded>")
+	if err != nil {
+		return fatalf("preprocess: %v", err)
+	}
+
+	cfg, err := buildConfig(require.FromMeta(meta))
+	if err != nil {
+		return fatalf("config: %v", err)
+	}
+
+	ast, err := core.NewParserWithFileOffset(
+		ctx, cfg.Operators, cfg.PrimariesFor(meta), clean, "<embedded>", 0,
+	).Parse()
+	if err != nil {
+		return fatalf("parse: %v", err)
+	}
+
+	if wantJSON {
+		if err := runner.PrintInfoJSON(os.Stdout, "<embedded>", meta, ast); err != nil {
+			return fatalf("encode: %v", err)
+		}
+		return 0
+	}
+	return runner.PrintInfo(os.Stderr, "<embedded>", source, meta, ast)
+}
+
+// printEmbeddedHelp writes usage for a packaged flow binary. The
+// description comes from the flow's @description directive, so a user
+// who receives a binary they did not build can learn what it does.
+func printEmbeddedHelp(w io.Writer, source string) {
+	fmt.Fprintln(w, "A Nexss Flow executable.")
+	fmt.Fprintln(w)
+
+	if desc := embeddedDescription(source); desc != "" {
+		fmt.Fprintf(w, "  %s\n\n", desc)
+	}
+
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "  <binary> [json_payload] [flags]")
+	fmt.Fprintln(w, "  <binary> version")
+	fmt.Fprintln(w, "  <binary> info")
+	fmt.Fprintln(w, "  <binary> help")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Flags:")
+	fmt.Fprintln(w, "  --json           Emit clean JSON to stdout")
+	fmt.Fprintln(w, "  --info           Describe the pipeline instead of running it")
+	fmt.Fprintln(w, "  --assert=EXPR    Evaluate EXPR after the run; non-zero exit on failure")
+	fmt.Fprintln(w, "  -v | -vv | -vvv  Increase verbosity")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintln(w, `  <binary> '{"user_id": 42}'`)
+	fmt.Fprintln(w, `  <binary> --assert='result.ok == true'`)
+}
+
+// embeddedDescription extracts the @description text from a source
+// string without running the full compiler. Cheap; called only for
+// `help`.
+func embeddedDescription(source string) string {
+	for line := range strings.SplitSeq(source, "\n") {
+		trimmed := strings.TrimSpace(line)
+		rest, ok := strings.CutPrefix(trimmed, "@description")
+		if !ok {
+			continue
+		}
+		return strings.Trim(strings.TrimSpace(rest), `"'`)
+	}
+	return ""
 }
 
 func RunPath(ctx context.Context, args []string) int {
@@ -192,7 +287,7 @@ func runSourceInProcess(ctx context.Context, src, name string, args []string) in
 
 	payload = readPipedStdin(payload)
 
-	_, meta, err := core.Preprocess(ctx, native.Directives(), src, name)
+	clean, meta, err := core.Preprocess(ctx, native.Directives(), src, name)
 	if err != nil {
 		return fatalf("preprocess: %v", err)
 	}
@@ -210,9 +305,19 @@ func runSourceInProcess(ctx context.Context, src, name string, args []string) in
 	isTerm := isTerminal(os.Stdout)
 
 	if isInfo {
-		ast, parseErr := core.NewParserWithPrimaries(ctx, cfg.Operators, cfg.Primaries, src).Parse()
+		primaries := cfg.PrimariesFor(meta)
+		ast, parseErr := core.NewParserWithFileOffset(
+			ctx, cfg.Operators, primaries, clean, name, 0,
+		).Parse()
 		if parseErr != nil {
 			return fatalf("parse: %v", parseErr)
+		}
+
+		if wantJSON {
+			if err := runner.PrintInfoJSON(os.Stdout, name, meta, ast); err != nil {
+				return fatalf("encode: %v", err)
+			}
+			return 0
 		}
 		return runner.PrintInfo(os.Stderr, name, src, meta, ast)
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/nexssp/kernel/xtest/ktest"
 
 	"github.com/nexssp/flow/core"
+	"github.com/nexssp/flow/extensions/macros"
 )
 
 // runInclude simulates the Recurse callback with a canned result. The
@@ -102,4 +103,37 @@ func TestDirective_NoRecurse(t *testing.T) {
 	t.Parallel()
 	_, err := runInclude(t, `@include "x.nflow"`, "", nil)
 	ktest.RequireErrorContains(t, err, "recurse is not available")
+}
+
+func TestMergeIncludedMeta_ConcatenatesMacros(t *testing.T) {
+	parent := map[string]any{
+		"macros": []macros.Declaration{{Name: "parent_macro"}},
+	}
+	included := map[string]any{
+		"macros": []macros.Declaration{{Name: "included_macro"}},
+	}
+
+	mergeIncludedMeta(parent, included)
+
+	got, ok := parent["macros"].([]macros.Declaration)
+	ktest.RequireTrue(t, ok)
+	ktest.RequireLen(t, got, 2)
+	ktest.RequireEqual(t, got[0].Name, "parent_macro")
+	ktest.RequireEqual(t, got[1].Name, "included_macro")
+}
+
+func TestMergeIncludedMeta_MacrosFromSecondIncludeSurvive(t *testing.T) {
+	parent := map[string]any{
+		"macros": []macros.Declaration{{Name: "first"}},
+	}
+	second := map[string]any{
+		"macros": []macros.Declaration{{Name: "second"}},
+	}
+
+	mergeIncludedMeta(parent, second)
+
+	got, ok := parent["macros"].([]macros.Declaration)
+	ktest.RequireTrue(t, ok)
+	ktest.RequireLen(t, got, 2)
+	ktest.RequireEqual(t, got[1].Name, "second")
 }

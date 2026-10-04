@@ -2,12 +2,11 @@
 // feature check of every registered bundle, run in-process against the
 // binary's own compiler and runtime.
 //
-// It is designed to be embedded: `nflow self test` prints a live,
-// category-colored checklist and exits 0 only when every feature
-// passes. Both inline SelfTest() sections and *.nflow fixtures embedded
-// by each bundle (Bundle.Fixtures) are discovered automatically and
-// executed identically regardless of working directory or installed
-// files.
+// The bundle set the suite runs against is native.SelftestBundles() —
+// the shipped set plus selftestkit. This is the only deviation from the
+// production environment, and it is deliberate: fixtures across every
+// bundle rely on cov.* helpers. Any other environment difference is a
+// bug in the CLI, not a feature of self-test.
 package selftest
 
 import (
@@ -19,38 +18,30 @@ import (
 	"time"
 
 	"github.com/nexssp/flow/core"
+	"github.com/nexssp/flow/native"
 	flowrunner "github.com/nexssp/flow/runner"
 )
 
 // Options configures a self-test run.
 type Options struct {
-	Out          io.Writer // terminal output (default os.Stdout)
-	Filters      []string  // case-insensitive substrings; empty = all sections
-	Verbose      bool      // print DSL and full failure details
-	NoColor      bool      // disable ANSI color
-	NoSpinner    bool      // disable live updates (for CI logs)
-	JSON         bool      // emit machine-readable JSON summary instead of text
-	SaveBaseline bool      // write .nflow_selftest_baseline.json after the run
+	Out          io.Writer
+	Filters      []string
+	Verbose      bool
+	NoColor      bool
+	NoSpinner    bool
+	JSON         bool
+	SaveBaseline bool
 }
 
 // filterResult carries the outcome of one filter application.
 type filterResult struct {
-	Sections []core.SelfTestSection
-	// UnmatchedFilters are the input filters that matched no section
-	// and no feature. Reported to the user at the end of the run.
+	Sections         []core.SelfTestSection
 	UnmatchedFilters []string
 }
 
 // Run executes the suite and returns a process exit code: 0 when every
 // selected feature passes, 1 when at least one fails, 2 on
-// configuration error (bad filter matched nothing).
-//
-// The runner configuration is built exactly once. It is shared across
-// every feature; fixtures are expected to be self-contained (each one
-// declares its own @pipeline / @pool names). A fixture that references
-// a name declared only by another fixture would still compile here,
-// because the resolver is shared — the same way production behaves
-// when two .nflow files are loaded into one process.
+// configuration error.
 func Run(ctx context.Context, opts Options) int {
 	if opts.Out == nil {
 		opts.Out = os.Stdout
@@ -72,7 +63,7 @@ func Run(ctx context.Context, opts Options) int {
 		return 2
 	}
 
-	cfg, err := flowrunner.BuildConfig(core.RegisteredBundles())
+	cfg, err := flowrunner.BuildConfig(native.SelftestBundles())
 	if err != nil {
 		fmt.Fprintf(opts.Out, "self test: build config: %v\n", err)
 		return 1
@@ -144,13 +135,6 @@ func Run(ctx context.Context, opts Options) int {
 //   - a filter that only matches individual features keeps those features
 //   - a filter that matches nothing is reported back to the caller as
 //     "unmatched" so the renderer can list it in the summary
-//
-// Every filter is ORed with the others, so `nflow self test loop assert`
-// shows every loop-related and every assert-related feature.
-//
-// Section names are bundle IDs ("loop", "macros", "modifiers_core");
-// feature names are either the inline Name declared by SelfTest() or
-// the @description value of a *.nflow fixture.
 func filterSections(in []core.SelfTestSection, filters []string) filterResult {
 	norm := make([]string, 0, len(filters))
 	for _, f := range filters {

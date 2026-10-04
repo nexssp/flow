@@ -1,8 +1,12 @@
 package macros
 
 import (
+	"context"
+	"maps"
 	"strconv"
 	"strings"
+
+	"github.com/nexssp/kernel/xctx"
 
 	"github.com/nexssp/flow/core"
 )
@@ -75,11 +79,53 @@ func (m *macroPrimary) Parse(p *core.Parser) (core.Expr, error) {
 	m.depth++
 	defer func() { m.depth-- }()
 
-	expr, err := p.SubParse(body)
-	if err != nil {
-		return nil, wrapMacroError(err, p, nameTok.Lit, invokeLine, declaration)
+	expr, subErr := p.SubParse(body)
+
+	// Record the expansion, whether it succeeded or failed. A failed
+	// expansion is the most important one to see: nflow expand renders
+	// the body and the error together so the caller does not need to
+	// step through a debugger to find the failing token.
+	recordExpansion(p, Expansion{
+		Macro:      nameTok.Lit,
+		DefLine:    declaration.DefLine,
+		InvokeLine: invokeLine,
+		Where:      whereFromContext(p.Context()),
+		Body:       body,
+		Err:        subErr,
+	})
+
+	if subErr != nil {
+		return nil, wrapMacroError(subErr, p, nameTok.Lit, invokeLine, declaration)
 	}
 	return expr, nil
+}
+
+// recordExpansion is a small helper so the two call sites in Parse do
+// not need to know the trace is optional.
+func recordExpansion(p *core.Parser, e Expansion) {
+	if t := TraceFrom(p.Context()); t != nil {
+		t.Record(e)
+	}
+}
+
+var whereKey = xctx.NewKey[string]("macros.where")
+
+// WithWhere records the current source label ("top-level", "pipeline p")
+// on the parser's context. nflow expand installs it so each expansion
+// can be attributed to the source it appeared in; without it, the trace
+// labels every expansion "top-level".
+func WithWhere(ctx context.Context, where string) context.Context {
+	if where == "" {
+		return ctx
+	}
+	return whereKey.With(ctx, where)
+}
+
+func whereFromContext(ctx context.Context) string {
+	if w, ok := whereKey.From(ctx); ok {
+		return w
+	}
+	return "top-level"
 }
 
 // wrapMacroError attaches macro context — the name and the definition
@@ -232,4 +278,25 @@ func substituteParams(body string, params, args []string) string {
 		out = strings.ReplaceAll(out, "$"+param, arg)
 	}
 	return out
+}
+
+// MergeWith implements core.MergeablePrimary. The argument is the
+// older (inherited) primary; this method returns a new primary whose
+// byName map is the union of both, with this (newer) primary's
+// declarations winning on name collision.
+//
+// depth is intentionally reset: merges happen at table construction
+// time, before any parse begins, so a merged primary always starts at
+// depth 0.
+func (m *macroPrimary) MergeWith(older core.PrimaryExtension) core.PrimaryExtension {
+	other, ok := older.(*macroPrimary)
+	if !ok {
+		return m
+	}
+
+	merged := make(map[string]Declaration, len(m.byName)+len(other.byName))
+	maps.Copy(merged, other.byName)
+	maps.Copy(merged, m.byName) // newer wins on collision
+
+	return &macroPrimary{byName: merged}
 }

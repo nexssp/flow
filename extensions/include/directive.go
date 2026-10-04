@@ -77,7 +77,7 @@ func mergeIncludedMeta(parent, included map[string]any) {
 			incoming, _ := value.(map[string]string)
 			maps.Copy(existing, incoming)
 			parent["pipelines"] = existing
-		case "require", "llms", "sandboxes", "pools", "schemas":
+		case "require", "llms", "sandboxes", "pools", "schemas", "macros":
 			parent[key] = concatSlices(parent[key], value)
 		default:
 			if _, exists := parent[key]; !exists {

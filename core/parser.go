@@ -125,6 +125,13 @@ func (p *Parser) Fail(line int, format string, args ...any) error {
 // Src returns the source text under parse.
 func (p *Parser) Src() string { return p.src }
 
+// Context returns the parser's context. Extensions reach caller-installed
+// values through it — a trace sink, a policy context, a filename-keyed
+// cache. The parser itself never reads those values; only primaries and
+// line lookups do. It is the sanctioned way for an extension to reach a
+// caller-provided sink without package-level state.
+func (p *Parser) Context() context.Context { return p.ctx }
+
 // File returns the source file path, or "".
 func (p *Parser) File() string { return p.file }
 

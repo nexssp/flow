@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"flag"
 	"os"
 
@@ -52,11 +51,7 @@ func runCatalogInProcess(args []string) int {
 
 	cat := core.BuildCatalog(cfg.Resolver, cfg.Modifiers, cfg.Directives, cfg.Operators)
 
-	enc := json.NewEncoder(os.Stdout)
-	if *pretty {
-		enc.SetIndent("", "  ")
-	}
-	if err := enc.Encode(cat); err != nil {
+	if err := writeJSON(os.Stdout, cat, *pretty); err != nil {
 		return fatalf("encode: %v", err)
 	}
 	return 0

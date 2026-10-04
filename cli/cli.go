@@ -40,6 +40,7 @@ var commands = map[string]func([]string) int{
 	"serve":      runServe,
 	"lint":       runLint,
 	"explain":    runExplain,
+	"expand":     runExpand,
 	"catalog":    runCatalog,
 	"list":       runList,
 	"show":       runShow,
@@ -57,7 +58,7 @@ func Run(args []string) int {
 
 	cmd := args[0]
 
-	if cmd == "help" || cmd == "--help" || (cmd == "-h" && len(args) == 1) {
+	if cmd == flagHelpWord || cmd == flagHelp || (cmd == flagHelpShort && len(args) == 1) {
 		return handleHelp(args[1:])
 	}
 

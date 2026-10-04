@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -35,4 +36,29 @@ func PrintInfo(w io.Writer, path, _ string, meta map[string]any, ast core.Expr) 
 
 	_, _ = fmt.Fprintln(w, strings.Repeat("═", 60))
 	return 0
+}
+
+type InfoShape struct {
+	Path        string   `json:"path"`
+	Description string   `json:"description,omitempty"`
+	Asserts     []string `json:"asserts,omitempty"`
+	Atoms       []string `json:"atoms"`
+}
+
+func PrintInfoJSON(w io.Writer, path string, meta map[string]any, ast core.Expr) error {
+	shape := InfoShape{
+		Path:  path,
+		Atoms: core.AtomNames(ast),
+	}
+	if desc, ok := meta["description"].(string); ok {
+		shape.Description = desc
+	}
+	if asserts, ok := meta["asserts"].([]string); ok {
+		shape.Asserts = asserts
+	}
+
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
+	return enc.Encode(shape)
 }

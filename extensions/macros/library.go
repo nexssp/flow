@@ -56,22 +56,19 @@ func Bundle(_ map[string]string) core.Bundle {
 		Libraries:  []action.Library{{Name: ID}},
 		Directives: []core.Directive{Directive},
 		OnPreprocess: func(meta map[string]any) core.PreprocessContributions {
-			// Only install the primary when this source declares at
-			// least one macro. Installing it unconditionally collides
-			// with the inherited top-level primary inside sub-pipeline
-			// compiles: NewPrimaryExtensionTable panics on a duplicate
-			// TokAtPrompt handler. Sub-sources that declare nothing
-			// inherit the top primary through InheritedPrimaries and
-			// see the top-level declarations through it.
+			// Always install the macro primary, even when this source declares
+			// no macros. This is what makes `@unknown_name` produce
+			// "unknown macro @unknown_name" instead of the parser's generic
+			// "unexpected token".
 			//
-			// Consequence: a file that uses @name without declaring any
-			// macro gets the parser's generic "unexpected token" error
-			// rather than "unknown macro". That is a rare shape — a
-			// macro-aware file almost always declares at least one.
+			// Sub-pipelines inherit the parent's macro primary through
+			// CompileReq.InheritedPrimaries and also contribute their own here.
+			// NewPrimaryExtensionTable detects the duplicate TokAtPrompt handler
+			// and, because *macroPrimary implements core.MergeablePrimary,
+			// calls MergeWith to fold the two declaration maps together. The
+			// parent's macros stay visible in the sub-source; the sub-source's
+			// own declarations shadow on name collision.
 			declarations, _ := meta[DeclarationKey].([]Declaration)
-			if len(declarations) == 0 {
-				return core.PreprocessContributions{}
-			}
 			byName := make(map[string]Declaration, len(declarations))
 			for _, declaration := range declarations {
 				byName[declaration.Name] = declaration

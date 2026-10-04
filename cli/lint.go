@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -199,9 +198,7 @@ func runLintInProcess(args []string) int {
 		return 0
 	}
 
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(issues); err != nil {
+	if err := writeJSON(os.Stdout, issues, true); err != nil {
 		return fatalf("encode issues: %v", err)
 	}
 	return 1
@@ -247,9 +244,7 @@ func runLintBatchInProcessWithHarnessError(paths []string, harnessErr error) int
 		fmt.Fprintf(os.Stdout, "ok (%d files)\n", len(paths))
 		return 0
 	}
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(issues); err != nil {
+	if err := writeJSON(os.Stdout, issues, true); err != nil {
 		return fatalf("encode issues: %v", err)
 	}
 	return 1
@@ -305,12 +300,12 @@ func computeLineMods(cfg runner.Config, meta map[string]any) []core.LineLookup {
 // isolation. Library files (only @pipeline blocks, no top-level) are
 // valid — the emptiness of the top-level body is not an error.
 //
-// Each fragment is parsed with the line-indexed modifier lookups the
-// runtime compiler would apply: @scope spans from the fragment body,
-// @pipeline :profile-derived policy modifiers, and top-level @scope
-// spans that reach into the fragment. This makes lint agree with the
-// compiler on inherited modifiers, so a typo inside @scope or
-// @profile fails at lint time, not just at run time.
+// Each fragment is parsed with the same primary table and the same
+// line-indexed modifier lookups the runtime compiler would install.
+// This makes lint agree with the compiler on inherited modifiers and
+// on per-source primaries (the macro engine is the canonical example):
+// a file that runs successfully will lint cleanly, and a typo inside
+// @scope, @profile, or a macro body fails at lint time.
 func lintFile(
 	path, src string,
 	cfg runner.Config,
@@ -339,12 +334,15 @@ func lintFile(
 		}
 	}
 
+	topContribs := core.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
+	topPrimaries := cfg.PrimariesFor(meta)
 	topLineMods := computeLineMods(cfg, meta)
 
 	var issues []LintIssue
 
 	if strings.TrimSpace(clean) != "" {
-		issues = append(issues, lintFragment(path, clean, cfg, known, modifiers, topLineMods)...)
+		issues = append(issues,
+			lintFragment(path, clean, cfg, topPrimaries, known, modifiers, topLineMods)...)
 	}
 
 	pipelineMods, _ := meta["pipeline_modifiers"].(map[string][]string)
@@ -369,6 +367,13 @@ func lintFile(
 			continue
 		}
 
+		// A fragment inherits the parent's primaries, mirroring
+		// CompileReq.InheritedPrimaries in the runtime compiler. Without
+		// this, a macro declared at the top of the file would not
+		// resolve inside a @pipeline body, and lint would reject a file
+		// that runs.
+		fragmentPrimaries := cfg.PrimariesFor(fragmentMeta, topContribs.Primaries...)
+
 		fragmentOpts := append([]core.CompileOption(nil), cfg.CompileOpts...)
 		fragmentContribs := core.PreprocessContributionsFromMeta(fragmentMeta, cfg.CompileOpts...)
 		fragmentOpts = append(fragmentOpts, fragmentContribs.CompileOpts...)
@@ -391,19 +396,22 @@ func lintFile(
 
 		fragmentLineMods := core.LineModifiersFromOptions(cfg.Modifiers, fragmentOpts)
 		label := fmt.Sprintf("%s:@pipeline[%s]", path, name)
-		issues = append(issues, lintFragment(label, fragmentClean, cfg, known, modifiers, fragmentLineMods)...)
+		issues = append(issues,
+			lintFragment(label, fragmentClean, cfg, fragmentPrimaries, known, modifiers, fragmentLineMods)...)
 	}
 
 	return issues
 }
 
-// lintFragment parses one source fragment with the given line-indexed
-// modifier lookups installed. The parser consults the lookups for
-// every atom, so inherited modifiers are validated exactly as the
-// runtime compiler would.
+// lintFragment parses one source fragment with the given primary table
+// and line-indexed modifier lookups installed. The parser consults the
+// table for every primary dispatch and the lookups for every atom, so
+// inherited modifiers and per-source primaries are validated exactly as
+// the runtime compiler would apply them.
 func lintFragment(
 	path, src string,
 	cfg runner.Config,
+	primaries *core.PrimaryExtensionTable,
 	known map[string]struct{},
 	modifiers map[string]core.Modifier,
 	lineMods []core.LineLookup,
@@ -411,7 +419,7 @@ func lintFragment(
 	ast, err := core.NewParserWithFileOffset(
 		context.Background(),
 		cfg.Operators,
-		cfg.Primaries,
+		primaries,
 		src,
 		path,
 		0,
