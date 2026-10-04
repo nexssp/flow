@@ -1,12 +1,9 @@
-// Package nodes_dispatch provides the `dispatch` action, which selects
-// one action from a named pool (or explicit member list) and invokes
-// it with the supplied payload. On failure it falls through the
-// remaining members.
+// Package nodes_dispatch provides the `dispatch.run` action, which tries
+// explicitly listed actions in order and returns the first successful result.
 //
 // Typical use:
 //
-//	{ members: "log.info,runtime.noop", payload: { value: "x" } } -> dispatch.run
-//	{ pool: "workers", chosen: "log.info", payload: .data } -> dispatch.run
+//	dispatch.run @{ members: [runtime.fail, runtime.const], payload: { value: "x" } }
 package nodes_dispatch
 
 import (
@@ -33,8 +30,6 @@ func Bundle(_ map[string]string) core.Bundle {
 		ArgSchemas: map[string][]core.ArgFieldSpec{
 			"dispatch.run": {
 				{Name: "members", Kind: core.ArgCapabilityRefList},
-				{Name: "chosen", Kind: core.ArgCapabilityRef},
-				{Name: "fallback", Kind: core.ArgCapabilityRef},
 			},
 		},
 		Fixtures: fixturesFS,

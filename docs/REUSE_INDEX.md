@@ -275,7 +275,7 @@ CLI has available. Add a new standard bundle there.
 | `on` | `@on event "protocol:target"` |
 | `on_error` | `@on_error { when ... }` block |
 | `pipeline` | `@pipeline` directive and materializer |
-| `pool` | `@pool NAME [...]` directive |
+| `pool` | `@pool NAME [...]` directive; materializes a callable `pool.NAME` action |
 | `projection` | `{ ... }` projection syntax |
 | `render` | `render.markdown` operator |
 | `require` | `@require` directive |
@@ -306,7 +306,7 @@ Look here first when adding a DSL feature.
 
 | API | Use |
 |---|---|
-| `contracts.WithPools` / `PoolsFromContext` | Pool declarations for `dispatch` |
+| `contracts.WithPools` / `PoolsFromContext` | Optional named-pool context bridge for integrations; `dispatch.run` does not use it |
 | `contracts.WithRecoveredError` / `RecoveredErrorFrom` | Error recovery handoff |
 | `contracts.WithCompiler` / `CompilerFromContext` | Compiler handoff (used by `supervisor`) |
 | `contracts.WithActionResolver` / `ActionResolverFromContext` | Resolver handoff |

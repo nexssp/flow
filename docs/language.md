@@ -23,6 +23,7 @@ The pipeline is the flow. There are five operators and one literal:
 | `a \| b` | Sugar for `a -> b` |
 | `a \|\| b` | Run `b` if `a` fails |
 | `(a & b)` | Run `a` and `b` concurrently, gather both |
+| `parallel { label: expr, ... }` | Run branches concurrently and gather results under explicit labels |
 | `{ key: expr, ... }` | Project a new object from the current input |
 | `a ? b : c` | Conditional: `b` when `a` is truthy, else `c` |
 
@@ -57,6 +58,22 @@ A pipeline that fans out and gathers:
 Result: `{ "runtime.const#1": "left", "runtime.const#2": "right" }`.
 Parallel branches key their output by the branch action's canonical name;
 repeats get `#1`, `#2`, and so on in source order.
+
+Use `parallel` when the result needs stable, intentional keys rather than
+action-name-derived keys:
+
+```nflow
+parallel {
+  profile: runtime.const @{ value: "profile-ready" },
+  metrics: runtime.const @{ value: "metrics-ready" },
+}
+```
+
+Commas are required between branches; a trailing comma is optional. Labels
+must be unique and the block must contain at least one branch. A branch may
+contain the existing parenthesized `&` form. If a branch fails, the error
+propagates; as with `(a & b)`, a following pipeline step does not receive a
+partial result map.
 
 Fallback:
 
@@ -153,6 +170,11 @@ reference when the owning bundle declares it as one.
 
 Canonical names (`runtime.noop`) are also accepted in capability
 positions.
+
+Capability-reference arguments are compile-time-only and must be supplied
+in the action's `@{ ... }` block; pipeline input cannot fill a missing
+binding. See [extensions.md §7](extensions.md#7-argument-schemas) for the
+`ArgSchemas` contract and its optional-field behavior.
 
 ---
 

@@ -27,6 +27,7 @@ func runExplain(args []string) int {
 	return withHarness("explain", path, args, runExplainInProcess)
 }
 
+// runExplainInProcess gains flag parsing and the --ast / --json paths.
 func runExplainInProcess(args []string) int {
 	if len(args) < 1 {
 		return fatalf("usage: nflow explain <file.nflow> [--ast] [--json]")
@@ -53,8 +54,8 @@ func runExplainInProcess(args []string) int {
 
 	// --json has no meaning for the policy view; it exists only for
 	// the AST view, which carries a machine-readable shape. Refusing
-	// the combination explicitly is better than silently ignoring
-	// one of the two flags.
+	// the combination explicitly is better than silently ignoring one
+	// of the two flags.
 	if wantJSON && !wantAST {
 		return fatalf("--json requires --ast (the policy view has no JSON shape)")
 	}
@@ -75,9 +76,8 @@ func runExplainInProcess(args []string) int {
 // renderExplain is the pure function behind runExplainInProcess. It
 // takes a source string and writes the report to w. Tests drive it
 // directly, without touching disk.
-// renderExplain is the pure function behind runExplainInProcess. It
-// takes a source string and writes the report to w. Tests drive it
-// directly, without touching disk.
+// renderExplain now computes top-level preprocess contributions once
+// and threads them into the pipeline renderer as inherited primaries.
 func renderExplain(w io.Writer, cfg runner.Config, src, path string) error {
 	useColor := colorEnabled(w)
 
@@ -96,6 +96,9 @@ func renderExplain(w io.Writer, cfg runner.Config, src, path string) error {
 	return nil
 }
 
+// renderExplainTopLevel takes meta so it can install per-source
+// primaries via cfg.PrimariesFor — reading cfg.Primaries directly
+// drops the macro engine and would reject a file that runs.
 func renderExplainTopLevel(
 	w io.Writer,
 	cfg runner.Config,
@@ -120,36 +123,6 @@ func renderExplainTopLevel(
 	fmt.Fprintf(w, "  %s\n", dim("[top-level]", useColor))
 	renderExplainNodes(w, ast, "  ", useColor)
 	fmt.Fprintln(w)
-}
-
-func renderExplainPipelines(
-	w io.Writer,
-	cfg runner.Config,
-	meta map[string]any,
-	parentPrimaries []core.PrimaryExtension,
-	useColor bool,
-) {
-	pipelines, _ := meta["pipelines"].(map[string]string)
-	if len(pipelines) == 0 {
-		return
-	}
-
-	pipelineMods, _ := meta["pipeline_modifiers"].(map[string][]string)
-	pipelineModSources, _ := meta["pipeline_modifier_sources"].(map[string][]core.ModifierSource)
-
-	names := make([]string, 0, len(pipelines))
-	for name := range pipelines {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	for _, name := range names {
-		renderExplainPipeline(
-			w, cfg, name, pipelines[name],
-			pipelineMods[name], pipelineModSources[name],
-			parentPrimaries, useColor,
-		)
-	}
 }
 
 func renderExplainPipeline(
@@ -219,9 +192,6 @@ func renderExplainPipeline(
 
 	// A pipeline body sees its own macros plus the parent's, the same
 	// way the runtime compiler stacks CompileReq.InheritedPrimaries.
-	// Reading cfg.Primaries here would drop every macro declared at the
-	// top of the file, and the policy view would reject a file the AST
-	// view renders correctly.
 	fragPrimaries := cfg.PrimariesFor(fragMeta, parentPrimaries...)
 
 	ast, perr := core.NewParserWithFileOffset(
@@ -293,7 +263,11 @@ func renderExplainProjection(w io.Writer, p *core.ProjectionExpr, indent string,
 }
 
 func renderExplainModifier(w io.Writer, raw string, src core.ModifierSource, indent string, useColor bool) {
-	name, value := splitRawModifier(raw)
+	name := core.ModifierName(raw)
+	value := ""
+	if i := strings.IndexByte(raw, '='); i > 0 {
+		value = raw[i+1:]
+	}
 	display := ":" + name
 	if value != "" {
 		display += "=" + value
@@ -313,9 +287,9 @@ func renderExplainModifier(w io.Writer, raw string, src core.ModifierSource, ind
 		green("from "+srcText, useColor))
 }
 
-// walkExplainNodes visits atoms and projections in document order.
-// Unlike walkLintAST it descends into ProjectionExpr so the report
-// reflects the whole shape of the file, not just its atoms.
+// walkExplainNodes visits atoms and projections in document order. It
+// descends into ProjectionExpr so the report reflects the whole shape
+// of the file, not just its atoms.
 func walkExplainNodes(node core.Expr, visit func(core.Expr)) {
 	switch n := node.(type) {
 	case *core.Atom:
@@ -342,5 +316,38 @@ func walkExplainNodes(node core.Expr, visit func(core.Expr)) {
 		walkExplainNodes(n.Body, visit)
 	case *core.AssertExpr:
 		// Assert carries a raw expression, not a callable node.
+	}
+}
+
+// renderExplainPipelines now receives the top-level preprocess
+// primaries as parentPrimaries and forwards them to each pipeline
+// body, mirroring CompileReq.InheritedPrimaries.
+func renderExplainPipelines(
+	w io.Writer,
+	cfg runner.Config,
+	meta map[string]any,
+	parentPrimaries []core.PrimaryExtension,
+	useColor bool,
+) {
+	pipelines, _ := meta["pipelines"].(map[string]string)
+	if len(pipelines) == 0 {
+		return
+	}
+
+	pipelineMods, _ := meta["pipeline_modifiers"].(map[string][]string)
+	pipelineModSources, _ := meta["pipeline_modifier_sources"].(map[string][]core.ModifierSource)
+
+	names := make([]string, 0, len(pipelines))
+	for name := range pipelines {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		renderExplainPipeline(
+			w, cfg, name, pipelines[name],
+			pipelineMods[name], pipelineModSources[name],
+			parentPrimaries, useColor,
+		)
 	}
 }

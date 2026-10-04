@@ -89,10 +89,14 @@ var helpRegistry = map[string]helpText{
 		},
 	},
 	"explain": {
-		Summary: "Show the effective modifiers for each atom, with source attribution.",
-		Usage:   "nflow explain <file.nflow>",
+		Summary: "Show the effective modifiers for each atom, with source attribution. With --ast, render the effective AST after every directive and macro has been resolved.",
+		Usage:   "nflow explain <file.nflow> [--ast] [--json]",
+		Flags: `      --ast         show the effective AST instead of the policy view
+      --json        emit the AST as JSON (requires --ast)`,
 		Examples: []string{
 			`nflow explain flows/client.nflow`,
+			`nflow explain --ast flows/client.nflow`,
+			`nflow explain --ast --json flows/client.nflow > ast.json`,
 		},
 	},
 	"expand": {

@@ -320,7 +320,10 @@ modifier :timeout is not repeatable
 
 Some actions take arguments that name **another capability**. Declare
 those fields in `ArgSchemas` and the compiler resolves and validates
-them:
+them. `ArgCapabilityRef` and `ArgCapabilityRefList` fields are required
+by default; set `Optional: true` only when the action intentionally accepts
+the capability through runtime input instead. `Optional` does not change
+the behavior of `ArgAny`, `ArgString`, `ArgInt`, or `ArgBool`.
 
 ```go
 func Bundle(_ map[string]string) core.Bundle {
@@ -358,6 +361,13 @@ dispatch.run @{ members: [noop, const], payload: .data }
 A field **not** declared in `ArgSchemas` is a plain string. A bare
 identifier in an undeclared field stays a string; the compiler does not
 guess.
+
+Capability references are compile-time bindings. They must appear in the
+action's `@{ ... }` block; a value in the pipeline input cannot satisfy a
+required capability field. For example, `dispatch.run` requires its
+`members` field in `@{}` and reports the source file and line if it is
+missing. `runtime.call.name` is optional because that action deliberately
+resolves a name supplied in its runtime input.
 
 ---
 

@@ -146,10 +146,9 @@ func compileConfigFromCtx(ctx context.Context) (config map[string]string, cliArg
 // mt so non-inheritable metadata modifiers are dropped and unknown
 // modifiers pass through for ApplyAll to reject. Sources are preserved.
 //
-// Used by nflow lint to parse a source with the same inherited
-// modifiers the runtime compiler would apply. Extensions publish their
-// lookups through Bundle.OnPreprocess as CompileOptions; this function
-// is the only way to extract them outside CompileAction.
+// Used by diagnostics such as nflow explain that need to render inherited
+// modifiers without compiling a program. Extensions publish their lookups
+// through Bundle.OnPreprocess as CompileOptions.
 func LineModifiersFromOptions(mt *ModifierTable, opts []CompileOption) []LineLookup {
 	return filterLineMods(mt, applyCompileOptions(opts).lineMods)
 }

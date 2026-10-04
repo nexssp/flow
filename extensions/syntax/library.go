@@ -30,6 +30,7 @@ func Bundle(_ map[string]string) core.Bundle {
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID}},
 		Operators: []core.Operator{pipe, pipeAlias, parallel, fallback},
+		Primaries: []core.PrimaryExtension{namedParallelKeyword{}},
 		SelfTest:  selftest,
 		Fixtures:  fixturesFS,
 	}

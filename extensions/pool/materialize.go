@@ -1,12 +1,9 @@
 package pool
 
 import (
-	"context"
-
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
-	"github.com/nexssp/flow/contracts"
 	"github.com/nexssp/flow/core"
 )
 
@@ -26,17 +23,4 @@ func materialize(req core.MaterializeReq) error {
 		}
 	}
 	return nil
-}
-
-// wrapWithPools publishes the pools table into the context so that
-// dispatch can resolve pool names at runtime. A pipeline without any
-// @pool declaration returns the inner action untouched.
-func wrapWithPools(meta map[string]any, inner action.AnyAction) (action.AnyAction, error) {
-	pools := PoolsFromMeta(meta)
-	if len(pools) == 0 {
-		return inner, nil
-	}
-	return action.New("pool.wrap", func(ctx context.Context, req any) (any, error) {
-		return action.InvokeAny(contracts.WithPools(ctx, pools), inner, req)
-	}).Build(), nil
 }

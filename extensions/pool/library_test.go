@@ -1,14 +1,20 @@
 package pool
 
 import (
+	"context"
 	"io/fs"
 	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
+
+	"github.com/nexssp/flow/core"
+	runtimeext "github.com/nexssp/flow/extensions/runtime"
+	"github.com/nexssp/flow/extensions/syntax"
+	"github.com/nexssp/flow/runner"
 )
 
-func TestBundle_WiresDirectiveMaterializeWrapFixtures(t *testing.T) {
+func TestBundle_WiresDirectiveMaterializeFixtures(t *testing.T) {
 	t.Parallel()
 	b := Bundle(nil)
 	ktest.RequireEqual(t, b.ID, ID)
@@ -16,8 +22,24 @@ func TestBundle_WiresDirectiveMaterializeWrapFixtures(t *testing.T) {
 	ktest.RequireEqual(t, len(b.Directives), 1)
 	ktest.RequireEqual(t, b.Directives[0].Name, "pool")
 	ktest.RequireCondition(t, b.Materialize != nil, "Materialize is nil")
-	ktest.RequireCondition(t, b.WrapPipeline != nil, "WrapPipeline is nil")
 	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
+}
+
+func TestPoolAction_CanBeCalledDirectly(t *testing.T) {
+	cfg, err := runner.BuildConfig([]core.Bundle{
+		syntax.Bundle(nil),
+		runtimeext.Bundle(nil),
+		Bundle(nil),
+	})
+	ktest.RequireNoError(t, err)
+
+	ex, err := runner.Execute(context.Background(), cfg,
+		"@pool workers [noop]\npool.workers @{ value: \"p\" }",
+		"pool-direct.nflow", nil)
+	ktest.RequireNoError(t, err)
+	output, ok := ex.Output.(map[string]any)
+	ktest.RequireCondition(t, ok, "pool output is not an object: %#v", ex.Output)
+	ktest.RequireEqual(t, output["value"], "p")
 }
 
 func TestFixtures_Discoverable(t *testing.T) {

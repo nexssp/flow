@@ -13,6 +13,38 @@ type CompileReq struct {
 	Name               string
 	Line               int
 	InheritedPrimaries []PrimaryExtension
+	Prepared           *PreparedSource
+}
+
+// PreparedSource is the result of preprocessing one source. Its fields are
+// intentionally opaque so callers can inspect metadata and pass the value to
+// CompileAction without separating the source from its metadata.
+type PreparedSource struct {
+	source        string
+	name          string
+	clean         string
+	meta          map[string]any
+	contributions PreprocessContributions
+}
+
+// Metadata returns the directive metadata associated with this source.
+func (p *PreparedSource) Metadata() map[string]any {
+	if p == nil {
+		return nil
+	}
+	return p.meta
+}
+
+// Contributions returns compile-time contributions already computed for this
+// source. It does not invoke extension callbacks again.
+func (p *PreparedSource) Contributions() PreprocessContributions {
+	if p == nil {
+		return PreprocessContributions{}
+	}
+	return PreprocessContributions{
+		Primaries:   append([]PrimaryExtension(nil), p.contributions.Primaries...),
+		CompileOpts: append([]CompileOption(nil), p.contributions.CompileOpts...),
+	}
 }
 
 type CompileRes struct {
@@ -41,6 +73,35 @@ func PreprocessContributionsFromMeta(meta map[string]any, opts ...CompileOption)
 		out.CompileOpts = append(out.CompileOpts, c.CompileOpts...)
 	}
 	return out
+}
+
+// PrepareSource preprocesses source and computes its extension contributions
+// once. Use the returned value when metadata must be inspected before the same
+// source is compiled, such as runner materialization.
+func PrepareSource(ctx context.Context, dt *DirectiveTable, source, name string, opts ...CompileOption) (*PreparedSource, error) {
+	cfg := applyCompileOptions(opts)
+	return prepareSource(ctx, dt, source, name, cfg)
+}
+
+func prepareSource(ctx context.Context, dt *DirectiveTable, source, name string, cfg *compileConfig) (*PreparedSource, error) {
+	ctx = applyConfigToCtx(ctx, cfg)
+	clean, meta, err := Preprocess(ctx, dt, source, name)
+	if err != nil {
+		return nil, err
+	}
+	var contributions PreprocessContributions
+	for _, fn := range cfg.onPreprocess {
+		c := fn(meta)
+		contributions.Primaries = append(contributions.Primaries, c.Primaries...)
+		contributions.CompileOpts = append(contributions.CompileOpts, c.CompileOpts...)
+	}
+	return &PreparedSource{
+		source:        source,
+		name:          name,
+		clean:         clean,
+		meta:          meta,
+		contributions: contributions,
+	}, nil
 }
 
 func CompileAction(
@@ -72,25 +133,32 @@ func runCompile(
 	pt *PrimaryExtensionTable,
 	req CompileReq,
 ) (CompileRes, error) {
-	if strings.TrimSpace(req.Source) == "" {
+	if req.Prepared == nil && strings.TrimSpace(req.Source) == "" {
 		return CompileRes{}, xerr.BadRequest("compile: source is empty")
 	}
 
 	ctx = applyConfigToCtx(ctx, cfg)
 
-	clean, meta, err := Preprocess(ctx, dt, req.Source, req.Name)
-	if err != nil {
-		return CompileRes{}, err
+	prepared := req.Prepared
+	if prepared == nil {
+		var err error
+		prepared, err = prepareSource(ctx, dt, req.Source, req.Name, cfg)
+		if err != nil {
+			return CompileRes{}, err
+		}
+	}
+	if strings.TrimSpace(prepared.clean) == "" {
+		return CompileRes{Meta: prepared.meta}, nil
 	}
 
-	if isStrictConfig(meta) {
+	if isStrictConfig(prepared.meta) {
 		ctx = WithStrict(ctx)
 	}
 
-	effectiveCfg, ctx, ptEffective := applyPreprocessContributions(ctx, cfg, opts, pt, meta, req)
+	effectiveCfg, ctx, ptEffective := applyPreprocessContributions(ctx, cfg, opts, pt, prepared.contributions, req)
 
 	lineMods := filterLineMods(mt, effectiveCfg.lineMods)
-	ast, err := NewParserWithFileOffset(ctx, ot, ptEffective, clean, req.Name, 0).
+	ast, err := NewParserWithFileOffset(ctx, ot, ptEffective, prepared.clean, prepared.name, 0).
 		WithLineModifiers(lineMods...).
 		Parse()
 	if err != nil {
@@ -100,12 +168,12 @@ func runCompile(
 		return CompileRes{}, analyzeErr
 	}
 
-	program, err := buildProgram(ctx, resolver, mt, ast, effectiveCfg, meta)
+	program, err := buildProgram(ctx, resolver, mt, ast, effectiveCfg, prepared.meta)
 	if err != nil {
 		return CompileRes{}, err
 	}
 
-	return CompileRes{Program: program, Meta: meta, AST: ast}, nil
+	return CompileRes{Program: program, Meta: prepared.meta, AST: ast}, nil
 }
 
 func applyConfigToCtx(ctx context.Context, cfg *compileConfig) context.Context {
@@ -120,31 +188,23 @@ func applyPreprocessContributions(
 	cfg *compileConfig,
 	opts []CompileOption,
 	pt *PrimaryExtensionTable,
-	meta map[string]any,
+	contributions PreprocessContributions,
 	req CompileReq,
 ) (*compileConfig, context.Context, *PrimaryExtensionTable) {
-	var extraPrimaries []PrimaryExtension
-	var extraOpts []CompileOption
-	for _, fn := range cfg.onPreprocess {
-		contribs := fn(meta)
-		extraPrimaries = append(extraPrimaries, contribs.Primaries...)
-		extraOpts = append(extraOpts, contribs.CompileOpts...)
-	}
-
 	effectiveCfg := cfg
-	if len(extraOpts) > 0 {
-		effectiveCfg = applyCompileOptions(append(opts, extraOpts...))
+	if len(contributions.CompileOpts) > 0 {
+		effectiveCfg = applyCompileOptions(append(opts, contributions.CompileOpts...))
 		ctx = applyConfigToCtx(ctx, effectiveCfg)
 	}
 
 	ptEffective := pt
-	if len(extraPrimaries) > 0 || len(req.InheritedPrimaries) > 0 {
+	if len(contributions.Primaries) > 0 || len(req.InheritedPrimaries) > 0 {
 		var all []PrimaryExtension
 		if pt != nil {
 			all = append(all, pt.All()...)
 		}
 		all = append(all, req.InheritedPrimaries...)
-		all = append(all, extraPrimaries...)
+		all = append(all, contributions.Primaries...)
 		ptEffective = NewPrimaryExtensionTable(all...)
 	}
 

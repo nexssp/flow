@@ -1,0 +1,7 @@
+@description "Named parallel happy path (branch failures are covered by Go tests)"
+@assert: result.profile == "profile-ready"
+@assert: result.metrics == "metrics-ready"
+parallel {
+  profile: runtime.const @{ value: "profile-ready" },
+  metrics: runtime.const @{ value: "metrics-ready" },
+}

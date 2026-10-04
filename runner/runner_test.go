@@ -40,3 +40,27 @@ func TestExecute_DispatchSeesHooks(t *testing.T) {
 		t.Fatal("hooks never fired — registry probably nil")
 	}
 }
+
+func TestCompileAndExecute_DispatchCapabilityRefListFallback(t *testing.T) {
+	cfg, err := BuildConfig(native.Bundles())
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := `dispatch.run @{ members: [runtime.fail, runtime.const], payload: { value: "I am the fallback!" } }`
+
+	compiled, err := Compile(context.Background(), cfg, src, "dispatch_test.nflow")
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	if compiled.Program == nil {
+		t.Fatal("Compile returned no program")
+	}
+
+	ex, err := Execute(context.Background(), cfg, src, "dispatch_test.nflow", nil)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if got, want := ex.Output, "I am the fallback!"; got != want {
+		t.Fatalf("Execute output = %#v, want %q", got, want)
+	}
+}

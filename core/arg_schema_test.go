@@ -8,6 +8,7 @@ import (
 
 	"github.com/nexssp/flow/core"
 	"github.com/nexssp/flow/extensions/modifiers_core"
+	"github.com/nexssp/flow/extensions/nodes_dispatch"
 	"github.com/nexssp/flow/extensions/nodes_distribute"
 	"github.com/nexssp/flow/extensions/runtime"
 	"github.com/nexssp/flow/extensions/syntax"
@@ -19,6 +20,7 @@ func buildConfig(t *testing.T) runner.Config {
 	cfg, err := runner.BuildConfig([]core.Bundle{
 		syntax.Bundle(nil),
 		runtime.Bundle(nil),
+		nodes_dispatch.Bundle(nil),
 		nodes_distribute.Bundle(nil),
 	})
 	ktest.RequireNoError(t, err)
@@ -53,6 +55,58 @@ func TestCapabilityRef_RejectsUnknown(t *testing.T) {
 	_, err := runner.Execute(context.Background(), cfg, src, "bad.nflow", nil)
 	ktest.RequireCondition(t, err != nil, "expected error for unknown capability")
 	ktest.RequireStringContains(t, err.Error(), "unknown capability")
+}
+
+func TestDispatchRun_MembersMustBeDeclaredInAtomArgs(t *testing.T) {
+	cfg := buildConfig(t)
+	src := `const @{ value: { members: [noop] } } -> dispatch.run`
+	_, err := runner.Execute(context.Background(), cfg, src, "missing-members.nflow", nil)
+	ktest.RequireCondition(t, err != nil, "expected missing members compile error")
+	ktest.RequireStringContains(t, err.Error(), `missing-members.nflow:1: dispatch.run: field "members"`)
+	ktest.RequireStringContains(t, err.Error(), "must be declared in the atom's @{ ... } block")
+	ktest.RequireStringContains(t, err.Error(), "not supplied only through pipeline input")
+	ktest.RequireStringContains(t, err.Error(), "hint: dispatch.run @{ members: [runtime.fail, runtime.const] }")
+}
+
+func TestDispatchRun_ValidMembersCompileAndRun(t *testing.T) {
+	cfg := buildConfig(t)
+	ex, err := runner.Execute(context.Background(), cfg,
+		`dispatch.run @{ members: [noop], payload: { value: "ok" } }`, "ok.nflow", nil)
+	ktest.RequireNoError(t, err)
+	output, ok := ex.Output.(map[string]any)
+	ktest.RequireCondition(t, ok, "dispatch output is not an object: %#v", ex.Output)
+	ktest.RequireEqual(t, output["value"], "ok")
+}
+
+func TestDispatchRun_RejectsQuotedAndUnknownMembers(t *testing.T) {
+	cfg := buildConfig(t)
+	cases := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{name: "quoted", src: `dispatch.run @{ members: ["runtime.noop"] }`, want: "bare capability reference"},
+		{name: "unknown", src: `dispatch.run @{ members: [not.registered] }`, want: "unknown capability"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := runner.Execute(context.Background(), cfg, tc.src, "bad.nflow", nil)
+			ktest.RequireCondition(t, err != nil, "expected compile error")
+			ktest.RequireStringContains(t, err.Error(), tc.want)
+		})
+	}
+}
+
+func TestRuntimeCall_NameCanComeFromPipelineInput(t *testing.T) {
+	cfg := buildConfig(t)
+	schema := runtime.Bundle(nil).ArgSchemas["runtime.call"]
+	ktest.RequireEqual(t, len(schema), 1)
+	ktest.RequireCondition(t, schema[0].Optional, "runtime.call.name must remain optional for dynamic input")
+
+	src := `const @{ value: { name: "runtime.const", payload: { value: "called dynamically" } } } -> runtime.call`
+	ex, err := runner.Execute(context.Background(), cfg, src, "dynamic-call.nflow", nil)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, ex.Output, "called dynamically")
 }
 
 func TestCapabilityRef_StringValueStaysData(t *testing.T) {

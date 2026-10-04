@@ -190,8 +190,7 @@ func runLintInProcess(args []string) int {
 		return fatalf("config: %v", err)
 	}
 
-	atoms, modifiers := registrySurface(cfg)
-	issues := lintFile(path, string(src), cfg, atoms, modifiers)
+	issues := lintFile(path, string(src), cfg)
 
 	if len(issues) == 0 {
 		fmt.Fprintln(os.Stdout, "ok")
@@ -219,7 +218,7 @@ func runLintBatchInProcessWithHarnessError(paths []string, harnessErr error) int
 
 		reqs, reqErr := sourceRequiresFromFile(path)
 		if reqErr != nil {
-			// lintFile reports preprocessing failures as source diagnostics;
+			// lintFile reports preprocessing/compile failures as source diagnostics;
 			// do not turn one bad source into an early batch abort.
 			reqs = nil
 		}
@@ -236,8 +235,7 @@ func runLintBatchInProcessWithHarnessError(paths []string, harnessErr error) int
 			issues = append(issues, LintIssue{File: path, Kind: "config", Message: err.Error()})
 			continue
 		}
-		atoms, modifiers := registrySurface(cfg)
-		issues = append(issues, lintFile(path, string(src), cfg, atoms, modifiers)...)
+		issues = append(issues, lintFile(path, string(src), cfg)...)
 	}
 
 	if len(issues) == 0 {
@@ -250,44 +248,9 @@ func runLintBatchInProcessWithHarnessError(paths []string, harnessErr error) int
 	return 1
 }
 
-// registrySurface snapshots the names the compiler knows about. Four
-// categories share one flat namespace at parse time: atoms, sources,
-// operators, and boundaries. Modifiers are returned as full values so
-// the linter can validate their declared value kinds against the DSL
-// text, not just check that the name exists.
-func registrySurface(cfg runner.Config) (known map[string]struct{}, modifiers map[string]core.Modifier) {
-	cat := core.BuildCatalog(cfg.Resolver, cfg.Modifiers, cfg.Directives, cfg.Operators)
-
-	known = make(map[string]struct{},
-		len(cat.Atoms)+len(cat.Sources)+len(cat.Operators))
-
-	for i := range cat.Atoms {
-		known[cat.Atoms[i].Name] = struct{}{}
-	}
-	for _, s := range cat.Sources {
-		known[s.Name] = struct{}{}
-	}
-	for _, o := range cat.Operators {
-		known[o.Name] = struct{}{}
-	}
-	for _, b := range core.NamedBoundaries() {
-		known[b.Name] = struct{}{}
-	}
-
-	modifiers = make(map[string]core.Modifier, len(cat.Modifiers))
-	if cfg.Modifiers != nil {
-		for _, m := range cfg.Modifiers.All() {
-			modifiers[m.Name] = m
-		}
-	}
-	return known, modifiers
-}
-
 // computeLineMods returns the line-indexed modifier lookups a source
-// with the given meta would install. It is the lint-side counterpart
-// of the pipeline applied inside CompileAction: read Preprocess
-// contributions, extract the line lookups, filter through the modifier
-// table.
+// with the given meta would install. The explain command uses it to render
+// inherited modifier state without building a program.
 func computeLineMods(cfg runner.Config, meta map[string]any) []core.LineLookup {
 	opts := append([]core.CompileOption(nil), cfg.CompileOpts...)
 	contribs := core.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
@@ -295,257 +258,16 @@ func computeLineMods(cfg runner.Config, meta map[string]any) []core.LineLookup {
 	return core.LineModifiersFromOptions(cfg.Modifiers, opts)
 }
 
-// lintFile processes one source: preprocess, lint the top-level
-// pipeline if present, then lint every @pipeline fragment in
-// isolation. Library files (only @pipeline blocks, no top-level) are
-// valid — the emptiness of the top-level body is not an error.
-//
-// Each fragment is parsed with the same primary table and the same
-// line-indexed modifier lookups the runtime compiler would install.
-// This makes lint agree with the compiler on inherited modifiers and
-// on per-source primaries (the macro engine is the canonical example):
-// a file that runs successfully will lint cleanly, and a typo inside
-// @scope, @profile, or a macro body fails at lint time.
-func lintFile(
-	path, src string,
-	cfg runner.Config,
-	atoms map[string]struct{},
-	modifiers map[string]core.Modifier,
-) []LintIssue {
-	clean, meta, err := core.Preprocess(context.Background(), cfg.Directives, src, path)
-	if err != nil {
+// lintFile returns one compiler diagnostic for a source. The compiler owns
+// parsing, analysis, schemas, modifiers, and extension contributions; runner
+// owns the same materialization path used by execution.
+func lintFile(path, src string, cfg runner.Config) []LintIssue {
+	if _, err := runner.Compile(context.Background(), cfg, src, path); err != nil {
 		return []LintIssue{{
 			File:    path,
-			Kind:    "preprocess",
+			Kind:    "compile",
 			Message: err.Error(),
 		}}
 	}
-
-	known := make(map[string]struct{}, len(atoms))
-	for name := range atoms {
-		known[name] = struct{}{}
-	}
-
-	pipelines, _ := meta["pipelines"].(map[string]string)
-	for name := range pipelines {
-		known[name] = struct{}{}
-		if !strings.Contains(name, ".") {
-			known["pipeline."+name] = struct{}{}
-		}
-	}
-
-	topContribs := core.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
-	topPrimaries := cfg.PrimariesFor(meta)
-	topLineMods := computeLineMods(cfg, meta)
-
-	var issues []LintIssue
-
-	if strings.TrimSpace(clean) != "" {
-		issues = append(issues,
-			lintFragment(path, clean, cfg, topPrimaries, known, modifiers, topLineMods)...)
-	}
-
-	pipelineMods, _ := meta["pipeline_modifiers"].(map[string][]string)
-
-	pipelineNames := make([]string, 0, len(pipelines))
-	for name := range pipelines {
-		pipelineNames = append(pipelineNames, name)
-	}
-	sort.Strings(pipelineNames)
-	for _, name := range pipelineNames {
-		body := pipelines[name]
-		fragmentClean, fragmentMeta, perr := core.Preprocess(context.Background(), cfg.Directives, body, name)
-		if perr != nil {
-			issues = append(issues, LintIssue{
-				File:    path,
-				Kind:    "pipeline_preprocess",
-				Message: fmt.Sprintf("@pipeline %s: %v", name, perr),
-			})
-			continue
-		}
-		if strings.TrimSpace(fragmentClean) == "" {
-			continue
-		}
-
-		// A fragment inherits the parent's primaries, mirroring
-		// CompileReq.InheritedPrimaries in the runtime compiler. Without
-		// this, a macro declared at the top of the file would not
-		// resolve inside a @pipeline body, and lint would reject a file
-		// that runs.
-		fragmentPrimaries := cfg.PrimariesFor(fragmentMeta, topContribs.Primaries...)
-
-		fragmentOpts := append([]core.CompileOption(nil), cfg.CompileOpts...)
-		fragmentContribs := core.PreprocessContributionsFromMeta(fragmentMeta, cfg.CompileOpts...)
-		fragmentOpts = append(fragmentOpts, fragmentContribs.CompileOpts...)
-
-		if mods, ok := pipelineMods[name]; ok && len(mods) > 0 {
-			_, bodyMods := runner.SplitPipelineModifiers(cfg.Modifiers, mods)
-			if len(bodyMods) > 0 {
-				captured := append([]string(nil), bodyMods...)
-				fragmentOpts = append(fragmentOpts, core.WithLineModifiers(core.LineLookup{
-					Source: core.ModifierSource{
-						Kind:  "pipeline",
-						Label: name,
-					},
-					Fn: func(int) []string {
-						return captured
-					},
-				}))
-			}
-		}
-
-		fragmentLineMods := core.LineModifiersFromOptions(cfg.Modifiers, fragmentOpts)
-		label := fmt.Sprintf("%s:@pipeline[%s]", path, name)
-		issues = append(issues,
-			lintFragment(label, fragmentClean, cfg, fragmentPrimaries, known, modifiers, fragmentLineMods)...)
-	}
-
-	return issues
-}
-
-// lintFragment parses one source fragment with the given primary table
-// and line-indexed modifier lookups installed. The parser consults the
-// table for every primary dispatch and the lookups for every atom, so
-// inherited modifiers and per-source primaries are validated exactly as
-// the runtime compiler would apply them.
-func lintFragment(
-	path, src string,
-	cfg runner.Config,
-	primaries *core.PrimaryExtensionTable,
-	known map[string]struct{},
-	modifiers map[string]core.Modifier,
-	lineMods []core.LineLookup,
-) []LintIssue {
-	ast, err := core.NewParserWithFileOffset(
-		context.Background(),
-		cfg.Operators,
-		primaries,
-		src,
-		path,
-		0,
-	).
-		WithLineModifiers(lineMods...).
-		Parse()
-	if err != nil {
-		return []LintIssue{{
-			File:    path,
-			Kind:    "parse",
-			Message: err.Error(),
-		}}
-	}
-
-	var issues []LintIssue
-
-	if err := core.ValidateAtomArgs(cfg.Resolver, ast, cfg.ArgSchemas); err != nil {
-		issues = append(issues, LintIssue{
-			File:    path,
-			Kind:    "invalid_args",
-			Message: err.Error(),
-		})
-	}
-
-	walkLintAST(ast, func(atom *core.Atom) {
-		_, isKnown := known[atom.Name]
-		if !isKnown {
-			issues = append(issues, LintIssue{
-				File:    path,
-				Kind:    "unknown_atom",
-				Message: fmt.Sprintf("%q is not a registered atom, source, operator, or boundary", atom.Name),
-			})
-			return
-		}
-
-		// Modifier validation is meaningful only for atoms that route
-		// through ModifierTable.ApplyAll. Sources, operators, and
-		// boundaries do not: sources and operators read :key=value
-		// through ModifiersToMap in ast_build, and boundaries take no
-		// modifiers at all.
-		if isNonAtomCapability(cfg, atom.Name) {
-			return
-		}
-
-		action, _ := cfg.Resolver.Action(atom.Name)
-
-		for _, raw := range atom.Modifiers {
-			name, value := splitRawModifier(raw)
-
-			modifier, ok := modifiers[name]
-			if !ok {
-				message := fmt.Sprintf("modifier :%s is not registered", name)
-				if action != nil {
-					if hint := core.SuggestModifierFix(action, name); hint != "" {
-						message = hint
-					}
-				}
-				issues = append(issues, LintIssue{
-					File:    path,
-					Kind:    "unknown_modifier",
-					Message: message,
-				})
-				continue
-			}
-
-			if err := core.ValidateModifierValue(modifier.ValueKind, value); err != nil {
-				issues = append(issues, LintIssue{
-					File:    path,
-					Kind:    "invalid_modifier_value",
-					Message: fmt.Sprintf("modifier :%s: %v", name, err),
-				})
-			}
-		}
-	})
-
-	return issues
-}
-
-// isNonAtomCapability reports whether the name resolves through one of
-// the non-action tables: streams, operators, or boundaries. Modifiers
-// on such names are config values, not builder modifiers, so the lint
-// pass skips modifier validation for them.
-func isNonAtomCapability(cfg runner.Config, name string) bool {
-	if _, ok := cfg.Resolver.Stream(name); ok {
-		return true
-	}
-	if _, ok := cfg.Resolver.Operator(name); ok {
-		return true
-	}
-	if _, ok := core.BoundaryByName(name); ok {
-		return true
-	}
-	return false
-}
-
-func walkLintAST(node core.Expr, visit func(*core.Atom)) {
-	switch n := node.(type) {
-	case *core.Atom:
-		visit(n)
-	case *core.PipeExpr:
-		walkLintAST(n.L, visit)
-		walkLintAST(n.R, visit)
-	case *core.ParallelExpr:
-		for _, c := range n.Branches {
-			walkLintAST(c, visit)
-		}
-	case *core.FallbackExpr:
-		walkLintAST(n.L, visit)
-		walkLintAST(n.R, visit)
-	case *core.ConditionalExpr:
-		walkLintAST(n.Cond, visit)
-		walkLintAST(n.Then, visit)
-		if n.Else != nil {
-			walkLintAST(n.Else, visit)
-		}
-	case *core.LoopExpr:
-		walkLintAST(n.Body, visit)
-	case *core.AssertExpr, *core.ProjectionExpr:
-		// Assert and projection carry raw expressions, not atom
-		// references. Nothing to validate at this layer.
-	}
-}
-
-func splitRawModifier(raw string) (name, value string) {
-	if i := strings.IndexByte(raw, '='); i > 0 {
-		return raw[:i], raw[i+1:]
-	}
-	return raw, ""
+	return nil
 }

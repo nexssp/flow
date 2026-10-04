@@ -54,13 +54,13 @@ func TranslateKeyword(name string) (string, bool) {
 // ── Reserved action names ────────────────────────────────────────────
 
 // reservedActionNames are bare action names a bundle may not register.
-// They are the native keywords: the parser translates those words into
-// canonical actions before resolution, so a bundle that registered an
-// action named "const" would be unreachable and would shadow grammar.
+// They include native keywords and grammar-owned expression names; a
+// bundle action with one of these names would be unreachable and shadow
+// grammar.
 var reservedActionNames = map[string]bool{
 	"const": true, "with": true, "pick": true, "wrap": true,
 	"fail": true, "noop": true, "sleep": true,
-	"env": true, "uuid": true, "json": true,
+	"env": true, "uuid": true, "json": true, "parallel": true,
 }
 
 // IsReservedActionName reports whether name is reserved by the nflow

@@ -26,6 +26,7 @@ type Atom struct {
 	Prompt          string
 	Targets         []string
 	Excludes        []string
+	Pos             Position // source position of the atom, for compile-time diagnostics
 }
 
 // ModifierSource records where a modifier came from. Both fields are

@@ -27,32 +27,42 @@ type Execution struct {
 	RunAllocBytes     uint64
 }
 
+// Compilation is the result of compiling one source without invoking its
+// workflow actions. Program is nil for declaration-only sources such as a
+// file containing only @pipeline definitions.
+type Compilation struct {
+	Program  action.AnyAction
+	Meta     map[string]any
+	Resolver core.CapabilityResolver
+}
+
 func readMemStats(dst *runtime.MemStats) {
 	runtime.ReadMemStats(dst)
 }
 
 var defaultRunAction = core.RunAction()
 
-// Execute compiles and runs a .nflow source under the given configuration.
-func Execute(ctx context.Context, cfg Config, src, name string, payload map[string]any) (Execution, error) {
-	compileStart := time.Now()
+func withExecutionContext(ctx context.Context, cfg Config, resolver core.CapabilityResolver) context.Context {
+	cfg.Resolver = resolver
+	ctx = contracts.WithCompiler(ctx, compilerAdapter{cfg: cfg})
+	return contracts.WithActionResolver(ctx, resolver)
+}
 
-	var startStats, compileStats, runStats runtime.MemStats
-	if cfg.MeasureAllocs {
-		readMemStats(&startStats)
-	}
-
+// Compile preprocesses source, materializes declarations, and compiles its
+// top-level program without invoking workflow actions.
+func Compile(ctx context.Context, cfg Config, src, name string) (Compilation, error) {
 	resolver, err := newExecutionResolver(cfg.Resolver, cfg.Hooks)
 	if err != nil {
-		return Execution{}, err
+		return Compilation{}, err
 	}
 
-	_, meta, err := core.Preprocess(ctx, cfg.Directives, src, name)
+	prepared, err := core.PrepareSource(ctx, cfg.Directives, src, name, cfg.CompileOpts...)
 	if err != nil {
-		return Execution{Resolver: resolver}, err
+		return Compilation{Resolver: resolver}, err
 	}
 
-	topContribs := core.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
+	meta := prepared.Metadata()
+	topContribs := prepared.Contributions()
 
 	// Variadic signature to accept modifiers for sub-pipelines:
 	compileSub := func(subName, subSource string, mods ...string) (action.AnyAction, error) {
@@ -106,14 +116,11 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 			Resolver: resolver,
 			Compile:  compileSub,
 		}); matErr != nil {
-			return Execution{Meta: meta, Resolver: resolver}, fmt.Errorf("materialize: %w", matErr)
+			return Compilation{Meta: meta, Resolver: resolver}, fmt.Errorf("materialize: %w", matErr)
 		}
 	}
 
-	compileCfg := cfg
-	compileCfg.Resolver = resolver
-	ctx = contracts.WithCompiler(ctx, compilerAdapter{cfg: compileCfg})
-	ctx = contracts.WithActionResolver(ctx, resolver)
+	ctx = withExecutionContext(ctx, cfg, resolver)
 
 	compileAct := core.CompileAction(
 		resolver, cfg.Directives, cfg.Modifiers,
@@ -121,24 +128,47 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 	)
 
 	compiledRes, err := compileAct.Do(ctx, core.CompileReq{
-		Source: src,
-		Name:   name,
+		Prepared: prepared,
 	})
+	if err != nil {
+		return Compilation{Meta: meta, Resolver: resolver}, err
+	}
+	return Compilation{
+		Program:  compiledRes.Program,
+		Meta:     meta,
+		Resolver: resolver,
+	}, nil
+}
 
+// Execute compiles and runs a .nflow source under the given configuration.
+func Execute(ctx context.Context, cfg Config, src, name string, payload map[string]any) (Execution, error) {
+	compileStart := time.Now()
+
+	var startStats, compileStats, runStats runtime.MemStats
+	if cfg.MeasureAllocs {
+		readMemStats(&startStats)
+	}
+
+	compiled, err := Compile(ctx, cfg, src, name)
 	compileDuration := time.Since(compileStart)
-
 	if cfg.MeasureAllocs {
 		readMemStats(&compileStats)
 	}
 	if err != nil {
-		result := Execution{Meta: meta, Resolver: resolver, CompileDuration: compileDuration}
+		result := Execution{Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
 		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
 		return result, err
 	}
+	if compiled.Program == nil {
+		result := Execution{Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
+		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
+		return result, errors.New("compile: source is empty")
+	}
 
+	ctx = withExecutionContext(ctx, cfg, compiled.Resolver)
 	runStart := time.Now()
 	runRes, err := defaultRunAction.Do(ctx, core.RunReq{
-		Program: compiledRes.Program,
+		Program: compiled.Program,
 		Payload: payload,
 	})
 	runDuration := time.Since(runStart)
@@ -149,8 +179,8 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 
 	result := Execution{
 		Output:          runRes.Output,
-		Meta:            meta,
-		Resolver:        resolver,
+		Meta:            compiled.Meta,
+		Resolver:        compiled.Resolver,
 		CompileDuration: compileDuration,
 		RunDuration:     runDuration,
 	}
@@ -203,8 +233,8 @@ func (a compilerAdapter) CompilePipeline(expr string) (action.Executable, error)
 // propagate; metadata modifiers (:tag, :status, :route, …) stay on the
 // wrapper.
 //
-// Exported so nflow lint can parse pipeline bodies with the same
-// inherited modifiers the runtime compiler would apply.
+// It is shared by compile-time pipeline materialization and callers that
+// need the same wrapper-versus-body modifier split.
 func SplitPipelineModifiers(table *core.ModifierTable, mods []string) (wrapper, body []string) {
 	if len(mods) == 0 {
 		return nil, nil

@@ -66,6 +66,12 @@ func Bundle(opts map[string]string) core.Bundle {
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
 	}
+	_, stderr, lintCode := captureLintOutput(t, func() int {
+		return runLint([]string{nflowPath})
+	})
+	if lintCode != 0 {
+		t.Fatalf("lint through external @require harness returned %d: %s", lintCode, stderr)
+	}
 }
 
 func TestHarness_Monorepo_RootGoMod(t *testing.T) {

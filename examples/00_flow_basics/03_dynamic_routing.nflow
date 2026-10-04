@@ -1,15 +1,9 @@
-@description "Failover routing: try the primary, fall back to the alternative"
+@description "Local fallback routing with dispatch.run"
 
-# dispatch.run tries each configured member in order and returns the
-# output of the first one that succeeds. Both members are registered
-# capabilities; runtime.fail always errors at runtime, so the pipeline falls
-# through to runtime.const and returns its value.
-#
-# Fallback across *missing* capability names is not permitted — a
-# name must resolve at compile time. Runtime failure fallback is what
-# this example demonstrates.
+# Dispatch tries configured member actions in order until one succeeds.
+# The first action fails; const is the local fallback candidate.
+# This exercises fallback routing only, not recovery of an external service.
 
 @assert: result == "I am the fallback!"
 
-{ value: "I am the fallback!" }
--> dispatch.run @{ members: [runtime.fail, runtime.const], payload: . }
+dispatch.run @{ members: [runtime.fail, runtime.const], payload: { value: "I am the fallback!" } }

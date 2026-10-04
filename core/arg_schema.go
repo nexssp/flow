@@ -33,6 +33,9 @@ const (
 type ArgFieldSpec struct {
 	Name string
 	Kind ArgKind
+	// Optional suppresses the default required-field check for capability
+	// references. It has no effect on ArgAny, ArgString, ArgInt, or ArgBool.
+	Optional bool
 }
 
 // argSchemaAdvisor returns an AtomAdviseFunc that resolves and validates
@@ -50,47 +53,61 @@ func argSchemaAdvisor(resolver CapabilityResolver, schemas map[string][]ArgField
 }
 
 func resolveArgSchema(resolver CapabilityResolver, atom *Atom, schema []ArgFieldSpec) error {
-	kinds := make(map[string]ArgKind, len(schema))
-	for _, f := range schema {
-		kinds[f.Name] = f.Kind
-	}
-
-	for key, value := range atom.Args {
-		kind, declared := kinds[key]
-		if !declared || kind == ArgAny {
+	for _, field := range schema {
+		value, present := atom.Args[field.Name]
+		if !present {
+			if isCapabilityRefKind(field.Kind) && !field.Optional {
+				return missingCapabilityFieldError(atom, field)
+			}
 			continue
 		}
-		switch kind {
-		case ArgAny:
-			// Unreachable: the guard above skips ArgAny. Listed so the
-			// exhaustive linter sees full coverage and a future guard
-			// change cannot silently drop the case.
+
+		switch field.Kind {
+		case ArgAny, ArgString, ArgInt, ArgBool:
+			// These kinds do not perform capability resolution or requiredness checks.
 		case ArgCapabilityRef:
-			canonical, err := resolveCapabilityValue(resolver, value, atom.Name, key)
+			canonical, err := resolveCapabilityValue(resolver, value, atom.Name, field.Name)
 			if err != nil {
 				return err
 			}
 			value.Kind = ValueString
 			value.Str = canonical
 		case ArgCapabilityRefList:
-			if value.Kind != ValueSlice {
+			if value == nil || value.Kind != ValueSlice {
+				got := "missing value"
+				if value != nil {
+					got = kindName(value.Kind)
+				}
 				return xerr.Validation(fmt.Sprintf(
 					"%s.%s: expected a capability reference list, got %s",
-					atom.Name, key, kindName(value.Kind)))
+					atom.Name, field.Name, got))
 			}
 			for _, item := range value.Slice {
-				canonical, err := resolveCapabilityValue(resolver, item, atom.Name, key)
+				canonical, err := resolveCapabilityValue(resolver, item, atom.Name, field.Name)
 				if err != nil {
 					return err
 				}
 				item.Kind = ValueString
 				item.Str = canonical
 			}
-		case ArgString, ArgInt, ArgBool:
-			// Value-kind validation lands in Phase 2b.
 		}
 	}
 	return nil
+}
+
+func isCapabilityRefKind(kind ArgKind) bool {
+	return kind == ArgCapabilityRef || kind == ArgCapabilityRefList
+}
+
+func missingCapabilityFieldError(atom *Atom, field ArgFieldSpec) error {
+	example := "runtime.noop"
+	if field.Kind == ArgCapabilityRefList {
+		example = "[runtime.fail, runtime.const]"
+	}
+	return SourceError(atom.Pos,
+		`%s: field %q is a required capability reference and must be declared in the atom's @{ ... } block, not supplied only through pipeline input`+
+			"\n  hint: %s @{ %s: %s }",
+		atom.Name, field.Name, atom.Name, field.Name, example)
 }
 
 func resolveCapabilityValue(resolver CapabilityResolver, v *Value, atomName, fieldName string) (string, error) {
@@ -154,44 +171,4 @@ func kindName(k ValueKind) string {
 	default:
 		return "unknown"
 	}
-}
-
-// ValidateAtomArgs walks an AST and runs the ArgSchema check on every
-// atom that carries @{...} arguments. It is the parse-time counterpart
-// of argSchemaAdvisor: same rules, same error messages, no builder.
-//
-// nflow lint calls this so that capability references written in
-// @{...} are verified at check time, not only when the pipeline is
-// compiled for execution.
-//
-// Projections and other runtime values are not covered. A projection's
-// output shape is not statically known; the runtime Coerce is the
-// check there, and the error it produces names the field.
-func ValidateAtomArgs(
-	resolver CapabilityResolver,
-	expr Expr,
-	schemas map[string][]ArgFieldSpec,
-) error {
-	if expr == nil || len(schemas) == 0 {
-		return nil
-	}
-
-	var firstErr error
-	walkExpr(expr, func(node Expr) {
-		if firstErr != nil {
-			return
-		}
-		atom, ok := node.(*Atom)
-		if !ok || atom == nil {
-			return
-		}
-		schema, ok := schemas[atom.Name]
-		if !ok || len(atom.Args) == 0 {
-			return
-		}
-		if err := resolveArgSchema(resolver, atom, schema); err != nil {
-			firstErr = err
-		}
-	})
-	return firstErr
 }

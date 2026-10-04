@@ -1,0 +1,4 @@
+@description "@pool declaration materializes a direct pool action"
+@pool coverage [noop]
+@assert: result.value == "p"
+pool.coverage @{ value: "p" }

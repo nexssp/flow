@@ -4,24 +4,21 @@ import (
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
+
+	"github.com/nexssp/flow/core"
 )
 
-func TestSplitMembers(t *testing.T) {
+func TestBundle_DeclaresCapabilityReferenceListForMembers(t *testing.T) {
 	t.Parallel()
-	cases := map[string][]string{
-		"":        nil,
-		"a":       {"a"},
-		"a,b,c":   {"a", "b", "c"},
-		" a , b ": {"a", "b"},
-		"a,,b":    {"a", "b"},
-		" , , ":   nil,
+	schema := Bundle(nil).ArgSchemas["dispatch.run"]
+	for _, field := range schema {
+		if field.Name == "members" {
+			ktest.RequireEqual(t, field.Kind, core.ArgCapabilityRefList)
+			ktest.RequireCondition(t, !field.Optional, "dispatch.run.members must be required")
+			return
+		}
 	}
-	for in, want := range cases {
-		t.Run(in, func(t *testing.T) {
-			t.Parallel()
-			ktest.RequireEqual(t, splitMembers(in), want)
-		})
-	}
+	t.Fatal("dispatch.run schema has no members field")
 }
 
 func TestBundle_WiresDispatchAndFixtures(t *testing.T) {

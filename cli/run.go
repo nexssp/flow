@@ -498,6 +498,11 @@ func collectAsserts(meta map[string]any, extra []string) []string {
 	return out
 }
 
+// sourceRequiresFromFile performs the separate @require bootstrap pass. The
+// final bundle set is needed to build the directive table, so requirement
+// discovery must happen before normal compilation; using the shared directive
+// preprocessor also preserves @include, option parsing, and source-located
+// errors. This is not the compile pass eliminated by PreparedSource.
 func sourceRequiresFromFile(path string) ([]require.Requirement, error) {
 	src, err := os.ReadFile(path)
 	if err != nil {

@@ -1,7 +1,7 @@
 @description "High-Throughput Parallel Processing (Scatter-Gather)"
 
 # The '&' operator executes nodes concurrently on separate goroutines.
-# Duplicate action names receive deterministic keys: sleep#1, sleep#2, sleep#3.
+# Duplicate action names receive deterministic keys: runtime.sleep#1, runtime.sleep#2, runtime.sleep#3.
 # The sleep action returns its request, so the projection.project selects .value.
 
 @assert: result.a == "Data A"
@@ -14,7 +14,7 @@
   & sleep @{ duration_ms: 500, value: "Data C" }
 )
 -> {
-    a: .["sleep#1"].value,
-    b: .["sleep#2"].value,
-    c: .["sleep#3"].value
+    a: .["runtime.sleep#1"].value,
+    b: .["runtime.sleep#2"].value,
+    c: .["runtime.sleep#3"].value
 }

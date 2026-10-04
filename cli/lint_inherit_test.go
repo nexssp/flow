@@ -34,8 +34,7 @@ func inheritLintConfig(t *testing.T) runner.Config {
 func lintSource(t *testing.T, src string) []LintIssue {
 	t.Helper()
 	cfg := inheritLintConfig(t)
-	known, modifiers := registrySurface(cfg)
-	return lintFile("test.nflow", src, cfg, known, modifiers)
+	return lintFile("test.nflow", src, cfg)
 }
 
 func TestLint_UnknownModifierInScope(t *testing.T) {
@@ -45,7 +44,7 @@ func TestLint_UnknownModifierInScope(t *testing.T) {
 	ktest.RequireCondition(t, len(issues) >= 1, "expected at least one issue")
 	found := false
 	for _, i := range issues {
-		if i.Kind == "unknown_modifier" {
+		if i.Kind == "compile" {
 			found = true
 			ktest.RequireStringContains(t, i.Message, "timetout")
 		}
@@ -64,7 +63,7 @@ func TestLint_InvalidValueInProfile(t *testing.T) {
 	ktest.RequireCondition(t, len(issues) >= 1, "expected at least one issue")
 	found := false
 	for _, i := range issues {
-		if i.Kind == "invalid_modifier_value" {
+		if i.Kind == "compile" {
 			found = true
 			ktest.RequireStringContains(t, i.Message, "duration")
 		}
@@ -81,7 +80,7 @@ func TestLint_InvalidValueOnPipeline(t *testing.T) {
 	ktest.RequireCondition(t, len(issues) >= 1, "expected at least one issue")
 	found := false
 	for _, i := range issues {
-		if i.Kind == "invalid_modifier_value" {
+		if i.Kind == "compile" {
 			found = true
 		}
 	}

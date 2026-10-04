@@ -349,6 +349,7 @@ func (p *Parser) parseAtom() (Expr, error) {
 	if !ok {
 		return expr, nil
 	}
+	a.Pos = Position{File: p.file, Line: startLine + p.lineBase}
 	// Every modifier produced by parseAtomInner is written directly on
 	// the atom, so its source is "atom".
 	a.ModifierSources = make([]ModifierSource, len(a.Modifiers))
