@@ -2,14 +2,15 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"testing"
-
-	"github.com/nexssp/kernel/xtest/ktest"
 
 	"github.com/nexssp/flow/extensions/macros"
 	"github.com/nexssp/flow/native"
 	"github.com/nexssp/flow/runner"
+
+	"github.com/nexssp/kernel/xtest/ktest"
 )
 
 // ── collectExpansions ─────────────────────────────────────────────────
@@ -19,7 +20,7 @@ func TestCollectExpansions_RecordsEveryInvocation(t *testing.T) {
 @macro hi() { runtime.const @{ value: "hi" } }
 @hi() -> @hi()
 `
-	exps, err := collectExpansions(expandCfg(t), src, "test.nflow")
+	exps, err := collectExpansionsWithContext(context.Background(), expandCfg(t), src, "test.nflow")
 	ktest.RequireNoError(t, err)
 	ktest.RequireLen(t, exps, 2)
 	ktest.RequireEqual(t, exps[0].Macro, "hi")
@@ -27,7 +28,7 @@ func TestCollectExpansions_RecordsEveryInvocation(t *testing.T) {
 }
 
 func TestCollectExpansions_NoMacros(t *testing.T) {
-	exps, err := collectExpansions(expandCfg(t), `noop`, "test.nflow")
+	exps, err := collectExpansionsWithContext(context.Background(), expandCfg(t), `noop`, "test.nflow")
 	ktest.RequireNoError(t, err)
 	ktest.RequireLen(t, exps, 0)
 }
@@ -39,7 +40,7 @@ func TestCollectExpansions_InsidePipeline(t *testing.T) {
   @hi()
 @end
 `
-	exps, err := collectExpansions(expandCfg(t), src, "test.nflow")
+	exps, err := collectExpansionsWithContext(context.Background(), expandCfg(t), src, "test.nflow")
 	ktest.RequireNoError(t, err)
 	ktest.RequireLen(t, exps, 1)
 	ktest.RequireEqual(t, exps[0].Macro, "hi")
@@ -54,7 +55,7 @@ func TestCollectExpansions_ParseFailureStillReturnsRecorded(t *testing.T) {
 @macro broken() { noop -> ) }
 @broken()
 `
-	exps, err := collectExpansions(expandCfg(t), src, "test.nflow")
+	exps, err := collectExpansionsWithContext(context.Background(), expandCfg(t), src, "test.nflow")
 	ktest.RequireNotNil(t, err)
 	ktest.RequireLen(t, exps, 1)
 	ktest.RequireEqual(t, exps[0].Macro, "broken")

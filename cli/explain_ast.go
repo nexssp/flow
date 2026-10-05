@@ -14,18 +14,8 @@ import (
 
 // ── public entry ─────────────────────────────────────────────────────
 
-// renderExplainAST prints the effective AST for a source file — the
-// tree the compiler builds after every directive and every macro has
-// been resolved. It is the missing third view alongside the policy
-// view (which modifiers apply) and the expand view (what a macro
-// substituted). The AST view answers "what did the compiler actually
-// see".
-//
-// When jsonOut is true the tree is emitted as ASTReport instead of
-// text. The JSON shape is stable and versioned by the Kind strings;
-// see astNodeOf for the per-node mapping.
-func renderExplainAST(w io.Writer, cfg runner.Config, src, path string, jsonOut bool) error {
-	topAST, pipelines, err := parseExplainAST(cfg, src, path)
+func renderExplainASTWithContext(ctx context.Context, w io.Writer, cfg runner.Config, src, path string, jsonOut bool) error {
+	topAST, pipelines, err := parseExplainASTWithContext(ctx, cfg, src, path)
 	if err != nil {
 		return err
 	}
@@ -53,17 +43,17 @@ func renderExplainAST(w io.Writer, cfg runner.Config, src, path string, jsonOut 
 // A source whose cleaned top-level is whitespace-only (a file that
 // contains only @pipeline definitions) yields a nil topAST. That is
 // not an error: the pipeline bodies are still rendered.
-func parseExplainAST(
-	cfg runner.Config, src, path string,
+func parseExplainASTWithContext(
+	ctx context.Context, cfg runner.Config, src, path string,
 ) (topAST core.Expr, pipelines map[string]core.Expr, err error) {
-	clean, meta, err := core.Preprocess(context.Background(), cfg.Directives, src, path)
+	clean, meta, err := core.Preprocess(ctx, cfg.Directives, src, path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("preprocess: %w", err)
 	}
 
 	if strings.TrimSpace(clean) != "" {
 		ast, parseErr := core.NewParserWithFileOffset(
-			context.Background(), cfg.Operators, cfg.PrimariesFor(meta), clean, path, 0,
+			ctx, cfg.Operators, cfg.PrimariesFor(meta), clean, path, 0,
 		).Parse()
 		if parseErr != nil {
 			return nil, nil, fmt.Errorf("parse: %w", parseErr)
@@ -76,7 +66,7 @@ func parseExplainAST(
 
 	pipelines = make(map[string]core.Expr, len(rawPipelines))
 	for name, body := range rawPipelines {
-		fragClean, fragMeta, perr := core.Preprocess(context.Background(), cfg.Directives, body, name)
+		fragClean, fragMeta, perr := core.Preprocess(ctx, cfg.Directives, body, name)
 		if perr != nil {
 			return nil, nil, fmt.Errorf("@pipeline %s: preprocess: %w", name, perr)
 		}
@@ -85,7 +75,7 @@ func parseExplainAST(
 		}
 		fragPrimaries := cfg.PrimariesFor(fragMeta, topContribs.Primaries...)
 		ast, parseErr := core.NewParserWithFileOffset(
-			context.Background(), cfg.Operators, fragPrimaries, fragClean, name, 0,
+			ctx, cfg.Operators, fragPrimaries, fragClean, name, 0,
 		).Parse()
 		if parseErr != nil {
 			return nil, nil, fmt.Errorf("@pipeline %s: %w", name, parseErr)

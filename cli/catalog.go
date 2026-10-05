@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"os"
 
@@ -8,9 +9,9 @@ import (
 	"github.com/nexssp/flow/extensions/require"
 )
 
-func runCatalog(args []string) int {
+func runCatalog(ctx context.Context, inv *invocation, args []string) int {
 	flowPath := extractCatalogFlowPath(args)
-	return withHarness("catalog", flowPath, args, runCatalogInProcess)
+	return withHarness(ctx, inv, "catalog", flowPath, args, runCatalogInProcess)
 }
 
 func extractCatalogFlowPath(args []string) string {
@@ -25,7 +26,7 @@ func extractCatalogFlowPath(args []string) string {
 	return ""
 }
 
-func runCatalogInProcess(args []string) int {
+func runCatalogInProcess(ctx context.Context, inv *invocation, args []string) int {
 	fs := flag.NewFlagSet("catalog", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	pretty := fs.Bool("pretty", true, "pretty-print JSON")
@@ -37,14 +38,14 @@ func runCatalogInProcess(args []string) int {
 
 	var reqs []require.Requirement
 	if *flowPath != "" {
-		loaded, err := sourceRequiresFromFile(*flowPath)
+		loaded, err := inv.sourceRequiresFromFile(ctx, *flowPath)
 		if err != nil {
 			return fatalf("read %s: %v", *flowPath, err)
 		}
 		reqs = loaded
 	}
 
-	cfg, err := buildConfig(reqs)
+	cfg, err := inv.buildConfig(reqs)
 	if err != nil {
 		return fatalf("config: %v", err)
 	}

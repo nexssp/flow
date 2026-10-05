@@ -441,6 +441,41 @@ func TestHarness_RemoteModulePathIdentity(t *testing.T) {
 	}
 }
 
+func TestLocalFileProxyURL(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{
+			name: "Windows drive-letter path",
+			path: `C:\Temp\Go Proxy`,
+			want: "file:///C:/Temp/Go%20Proxy",
+		},
+		{
+			name: "Unix absolute path",
+			path: "/tmp/Go Proxy",
+			want: "file:///tmp/Go%20Proxy",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := localFileProxyURL(tc.path); got != tc.want {
+				t.Fatalf("localFileProxyURL(%q) = %q, want %q", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+func localFileProxyURL(path string) string {
+	path = strings.ReplaceAll(path, `\`, "/")
+	if len(path) >= 3 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':' && path[2] == '/' {
+		path = "/" + path
+	}
+	return (&url.URL{Scheme: "file", Path: path}).String()
+}
+
 func TestHarness_BareTargetUsesNestedRemoteModuleForRunAndBuild(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping local-proxy run/build integration test in short mode")
@@ -457,7 +492,7 @@ func TestHarness_BareTargetUsesNestedRemoteModuleForRunAndBuild(t *testing.T) {
 		"library.go": testBundleSource("parent"),
 	})
 
-	proxyURL := fileProxyURL(proxyDir)
+	proxyURL := localFileProxyURL(proxyDir)
 	t.Setenv("GOPROXY", proxyURL+",off")
 	t.Setenv("GOSUMDB", "off")
 	t.Setenv(harnessCacheEnv, filepath.Join(workDir, "cache"))
@@ -500,7 +535,7 @@ func TestHarness_BareTargetUsesRootModuleNexssflowPackage(t *testing.T) {
 	writeGoModuleProxy(t, proxyDir, modulePath, version, map[string]string{
 		"nexssflow/library.go": testBundleSource("repo"),
 	})
-	proxyURL := fileProxyURL(proxyDir)
+	proxyURL := localFileProxyURL(proxyDir)
 	t.Setenv("GOPROXY", proxyURL+",off")
 	t.Setenv("GOSUMDB", "off")
 
@@ -527,7 +562,7 @@ func TestHarness_ExplicitVariantUsesGoPackageProviderForRunAndBuild(t *testing.T
 	writeGoModuleProxy(t, proxyDir, basePath, version, map[string]string{
 		"nexssflow_v2/library.go": testBundleSource("variant-repo"),
 	})
-	proxyURL := fileProxyURL(proxyDir)
+	proxyURL := localFileProxyURL(proxyDir)
 	t.Setenv("GOPROXY", proxyURL+",off")
 	t.Setenv("GOSUMDB", "off")
 	t.Setenv(harnessCacheEnv, filepath.Join(workDir, "cache"))
@@ -792,18 +827,4 @@ func TestHarness_UnversionedCurrentModulePackage(t *testing.T) {
 	if code := runFlow([]string{flowPath}); code != 0 {
 		t.Fatalf("nflow run with an unversioned current-module package returned %d", code)
 	}
-}
-
-// fileProxyURL converts a local directory into a file:// URL suitable for
-// GOPROXY. Windows drive-letter paths ("j:\Temp\x") must render as
-// "file:///j:/Temp/x" — forward separators plus a leading slash — or
-// net/url reads "j" as the host and the drive colon as a port separator,
-// yielding "file://j:%5CTemp..." which the go tool rejects with
-// `invalid port ":%5C..." after host`.
-func fileProxyURL(dir string) string {
-	p := filepath.ToSlash(dir)
-	if !strings.HasPrefix(p, "/") {
-		p = "/" + p
-	}
-	return (&url.URL{Scheme: "file", Path: p}).String()
 }

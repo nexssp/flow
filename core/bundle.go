@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -30,6 +31,10 @@ type SelfTestSection struct {
 	Features []SelfTestFeature
 }
 
+// ShutdownFunc releases a resource explicitly owned by a bundle.
+// Implementations must honor ctx so host shutdown remains bounded.
+type ShutdownFunc func(context.Context) error
+
 // Bundle is one extension distribution.
 type Bundle struct {
 	ID           string
@@ -50,6 +55,10 @@ type Bundle struct {
 
 	SelfTest func() []SelfTestSection
 	Fixtures fs.FS
+
+	// Shutdowns are invoked by the runner host after the outer invocation
+	// completes. Compile and Execute do not close bundle resources.
+	Shutdowns []ShutdownFunc
 }
 
 func ValidateBundle(b Bundle) error {

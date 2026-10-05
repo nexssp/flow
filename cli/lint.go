@@ -25,6 +25,16 @@ type LintIssue struct {
 }
 
 func runLint(args []string) int {
+	inv, err := newInvocation(nil, nil)
+	if err != nil {
+		return fatalf("flow host: %v", err)
+	}
+	return runInvocation(context.Background(), inv, func(ctx context.Context) int {
+		return runLintInInvocation(ctx, inv, args)
+	})
+}
+
+func runLintInInvocation(ctx context.Context, inv *invocation, args []string) int {
 	if len(args) == 0 {
 		return fatalf("usage: nflow lint <file.nflow | directory | ./...>")
 	}
@@ -34,7 +44,7 @@ func runLint(args []string) int {
 	if len(args) == 1 && !isRecursiveLintPattern(args[0]) {
 		info, err := os.Stat(args[0])
 		if err != nil || !info.IsDir() {
-			return withHarness("lint", args[0], args, runLintInProcess)
+			return withHarness(ctx, inv, "lint", args[0], args, runLintInProcess)
 		}
 	}
 
@@ -47,19 +57,19 @@ func runLint(args []string) int {
 	// but build each file's actual registry independently in batch linting.
 	var allRequirements []require.Requirement
 	for _, path := range files {
-		reqs, reqErr := sourceRequiresFromFile(path)
+		reqs, reqErr := inv.sourceRequiresFromFile(ctx, path)
 		if reqErr == nil {
 			allRequirements = append(allRequirements, reqs...)
 		}
 	}
-	if os.Getenv(harnessEnv) != "" || !requirementsNeedExternalHarness(allRequirements) {
-		return runLintBatchInProcess(files)
+	if os.Getenv(harnessEnv) != "" || !requirementsNeedExternalHarness(inv, allRequirements) {
+		return runLintBatchForInvocation(ctx, inv, files)
 	}
-	bin, err := EnsureHarness(allRequirements, files[0])
+	bin, err := EnsureHarnessContext(ctx, allRequirements, files[0])
 	if err != nil {
-		return runLintBatchInProcessWithHarnessError(files, err)
+		return runLintBatchForInvocationWithHarnessError(ctx, inv, files, err)
 	}
-	return ExecHarness(bin, append([]string{"lint"}, files...))
+	return ExecHarnessContext(ctx, bin, append([]string{"lint"}, files...))
 }
 
 var lintDiscoveryExcludedDirs = map[string]struct{}{
@@ -169,7 +179,7 @@ func walkLintSources(root string, add func(string)) (int, error) {
 	return found, err
 }
 
-func runLintInProcess(args []string) int {
+func runLintInProcess(ctx context.Context, inv *invocation, args []string) int {
 	if len(args) < 1 {
 		return fatalf("usage: nflow lint <file.nflow>")
 	}
@@ -180,17 +190,17 @@ func runLintInProcess(args []string) int {
 		return fatalf("read: %v", err)
 	}
 
-	reqs, err := sourceRequiresFromFile(path)
+	reqs, err := inv.sourceRequiresFromFile(ctx, path)
 	if err != nil {
 		return fatalf("requires: %v", err)
 	}
 
-	cfg, err := buildConfig(reqs)
+	cfg, err := inv.buildConfig(reqs)
 	if err != nil {
 		return fatalf("config: %v", err)
 	}
 
-	issues := lintFile(path, string(src), cfg)
+	issues := lintFileWithContext(ctx, path, string(src), cfg)
 
 	if len(issues) == 0 {
 		fmt.Fprintln(os.Stdout, "ok")
@@ -203,11 +213,21 @@ func runLintInProcess(args []string) int {
 	return 1
 }
 
-func runLintBatchInProcess(paths []string) int {
-	return runLintBatchInProcessWithHarnessError(paths, nil)
+func runLintBatchInProcessWithHarnessError(paths []string, harnessErr error) int {
+	inv, err := newInvocation(nil, nil)
+	if err != nil {
+		return fatalf("flow host: %v", err)
+	}
+	return runInvocation(context.Background(), inv, func(ctx context.Context) int {
+		return runLintBatchForInvocationWithHarnessError(ctx, inv, paths, harnessErr)
+	})
 }
 
-func runLintBatchInProcessWithHarnessError(paths []string, harnessErr error) int {
+func runLintBatchForInvocation(ctx context.Context, inv *invocation, paths []string) int {
+	return runLintBatchForInvocationWithHarnessError(ctx, inv, paths, nil)
+}
+
+func runLintBatchForInvocationWithHarnessError(ctx context.Context, inv *invocation, paths []string, harnessErr error) int {
 	var issues []LintIssue
 	for _, path := range paths {
 		src, err := os.ReadFile(path)
@@ -216,13 +236,13 @@ func runLintBatchInProcessWithHarnessError(paths []string, harnessErr error) int
 			continue
 		}
 
-		reqs, reqErr := sourceRequiresFromFile(path)
+		reqs, reqErr := inv.sourceRequiresFromFile(ctx, path)
 		if reqErr != nil {
 			// lintFile reports preprocessing/compile failures as source diagnostics;
 			// do not turn one bad source into an early batch abort.
 			reqs = nil
 		}
-		if harnessErr != nil && requirementsNeedExternalHarness(reqs) {
+		if harnessErr != nil && requirementsNeedExternalHarness(inv, reqs) {
 			issues = append(issues, LintIssue{
 				File:    path,
 				Kind:    "config",
@@ -230,12 +250,12 @@ func runLintBatchInProcessWithHarnessError(paths []string, harnessErr error) int
 			})
 			continue
 		}
-		cfg, err := buildConfig(reqs)
+		cfg, err := inv.buildConfig(reqs)
 		if err != nil {
 			issues = append(issues, LintIssue{File: path, Kind: "config", Message: err.Error()})
 			continue
 		}
-		issues = append(issues, lintFile(path, string(src), cfg)...)
+		issues = append(issues, lintFileWithContext(ctx, path, string(src), cfg)...)
 	}
 
 	if len(issues) == 0 {
@@ -262,7 +282,11 @@ func computeLineMods(cfg runner.Config, meta map[string]any) []core.LineLookup {
 // parsing, analysis, schemas, modifiers, and extension contributions; runner
 // owns the same materialization path used by execution.
 func lintFile(path, src string, cfg runner.Config) []LintIssue {
-	if _, err := runner.Compile(context.Background(), cfg, src, path); err != nil {
+	return lintFileWithContext(context.Background(), path, src, cfg)
+}
+
+func lintFileWithContext(ctx context.Context, path, src string, cfg runner.Config) []LintIssue {
+	if _, err := runner.Compile(ctx, cfg, src, path); err != nil {
 		return []LintIssue{{
 			File:    path,
 			Kind:    "compile",

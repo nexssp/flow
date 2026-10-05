@@ -19,7 +19,7 @@ import (
 // active but does not execute the flow. Errors from a failed expansion
 // are rendered alongside the substituted body, so the failing token is
 // visible without a debugger.
-func runExpand(args []string) int {
+func runExpand(ctx context.Context, inv *invocation, args []string) int {
 	if len(args) == 0 {
 		return fatalf("usage: nflow expand <file.nflow> [--macro=NAME[,NAME...]]")
 	}
@@ -27,10 +27,10 @@ func runExpand(args []string) int {
 	if _, err := os.Stat(path); err != nil {
 		return fatalf("read: %v", err)
 	}
-	return withHarness("expand", path, args, runExpandInProcess)
+	return withHarness(ctx, inv, "expand", path, args, runExpandInProcess)
 }
 
-func runExpandInProcess(args []string) int {
+func runExpandInProcess(ctx context.Context, inv *invocation, args []string) int {
 	if len(args) < 1 {
 		return fatalf("usage: nflow expand <file.nflow> [--macro=NAME]")
 	}
@@ -43,17 +43,17 @@ func runExpandInProcess(args []string) int {
 		return fatalf("read: %v", err)
 	}
 
-	reqs, err := sourceRequiresFromFile(path)
+	reqs, err := inv.sourceRequiresFromFile(ctx, path)
 	if err != nil {
 		return fatalf("requires: %v", err)
 	}
 
-	cfg, err := buildConfig(reqs)
+	cfg, err := inv.buildConfig(reqs)
 	if err != nil {
 		return fatalf("config: %v", err)
 	}
 
-	exps, err := collectExpansions(cfg, string(src), path)
+	exps, err := collectExpansionsWithContext(ctx, cfg, string(src), path)
 	if err != nil {
 		// Even on parse failure, whatever succeeded before the error is
 		// still useful; render it before printing the error.
@@ -78,10 +78,10 @@ func runExpandInProcess(args []string) int {
 // exposes for building an effective primary table. Reading cfg.Primaries
 // directly would drop per-source primaries such as the macro engine,
 // and the same diagnostic would appear here as it appeared in lint.
-func collectExpansions(cfg runner.Config, src, path string) ([]macros.Expansion, error) {
+func collectExpansionsWithContext(ctx context.Context, cfg runner.Config, src, path string) ([]macros.Expansion, error) {
 	trace := &macros.Trace{}
 
-	clean, meta, err := core.Preprocess(context.Background(), cfg.Directives, src, path)
+	clean, meta, err := core.Preprocess(ctx, cfg.Directives, src, path)
 	if err != nil {
 		return nil, fmt.Errorf("preprocess: %w", err)
 	}
@@ -93,7 +93,7 @@ func collectExpansions(cfg runner.Config, src, path string) ([]macros.Expansion,
 	// input", which is an artifact of a source with no pipeline content,
 	// not a real error.
 	if strings.TrimSpace(clean) != "" {
-		topCtx := macros.WithTrace(context.Background(), trace)
+		topCtx := macros.WithTrace(ctx, trace)
 		topCtx = macros.WithWhere(topCtx, "top-level")
 
 		topPrimaries := cfg.PrimariesFor(meta)
@@ -111,7 +111,7 @@ func collectExpansions(cfg runner.Config, src, path string) ([]macros.Expansion,
 
 	for _, name := range names {
 		body := pipelines[name]
-		fragClean, fragMeta, perr := core.Preprocess(context.Background(), cfg.Directives, body, name)
+		fragClean, fragMeta, perr := core.Preprocess(ctx, cfg.Directives, body, name)
 		if perr != nil {
 			return trace.Expansions(), fmt.Errorf("@pipeline %s: %w", name, perr)
 		}
@@ -119,7 +119,7 @@ func collectExpansions(cfg runner.Config, src, path string) ([]macros.Expansion,
 			continue
 		}
 
-		fragCtx := macros.WithTrace(context.Background(), trace)
+		fragCtx := macros.WithTrace(ctx, trace)
 		fragCtx = macros.WithWhere(fragCtx, "pipeline "+name)
 
 		fragPrimaries := cfg.PrimariesFor(fragMeta, topContribs.Primaries...)

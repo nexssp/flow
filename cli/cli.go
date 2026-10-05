@@ -33,22 +33,36 @@ func setupLogger() {
 }
 
 // commands defines the O(1) routing map for the CLI.
-var commands = map[string]func([]string) int{
-	"init":       runInit,
-	"run":        runFlow,
-	"build":      runBuild,
+var commands = map[string]func(context.Context, *invocation, []string) int{
+	"init":       func(_ context.Context, _ *invocation, args []string) int { return runInit(args) },
+	"run":        runFlowInInvocation,
+	"build":      runBuildInInvocation,
 	"serve":      runServe,
-	"lint":       runLint,
+	"lint":       runLintInInvocation,
 	"explain":    runExplain,
 	"expand":     runExpand,
 	"catalog":    runCatalog,
 	"list":       runList,
 	"show":       runShow,
-	"completion": runCompletion,
+	"completion": func(_ context.Context, _ *invocation, args []string) int { return runCompletion(args) },
 }
 
 // Run is the central CLI dispatcher.
 func Run(args []string) int {
+	return RunContext(context.Background(), args)
+}
+
+// RunContext is Run with a caller-controlled parent context. It also cancels
+// the invocation on Ctrl+C/SIGINT and, where supported, SIGTERM.
+func RunContext(ctx context.Context, args []string) int {
+	inv, err := newInvocation(nil, nil)
+	if err != nil {
+		return fatalf("flow host: %v", err)
+	}
+	return runCLIWithSignals(ctx, inv, args, registerProcessSignals)
+}
+
+func runCLI(ctx context.Context, inv *invocation, args []string) int {
 	setupLogger()
 
 	if len(args) == 0 {
@@ -76,24 +90,24 @@ func Run(args []string) int {
 
 	// Handle special cases not in the function map
 	if cmd == "self" {
-		return runSelf(rest)
+		return runSelf(ctx, inv, rest)
 	}
 	if cmd == "require" {
-		return handleRequire(rest)
+		return handleRequire(ctx, inv, rest)
 	}
 	if cmd == "pin" {
-		return runRequirePin(rest)
+		return runRequirePin(ctx, rest)
 	}
 	if cmd == "info" {
-		return runFlow(append([]string{"--info"}, rest...))
+		return runFlowInInvocation(ctx, inv, append([]string{"--info"}, rest...))
 	}
 
 	if fn, ok := commands[cmd]; ok {
-		return fn(rest)
+		return fn(ctx, inv, rest)
 	}
 
 	// Fallback to inline DSL or file execution
-	return runFlow(args)
+	return runFlowInInvocation(ctx, inv, args)
 }
 
 func handleHelp(args []string) int {
@@ -108,28 +122,33 @@ func handleHelp(args []string) int {
 	return 0
 }
 
-func runSelf(args []string) int {
+func runSelf(ctx context.Context, inv *invocation, args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "usage: nflow self <up|test> [flags] [filter...]")
 		return 2
 	}
 	switch args[0] {
 	case "up", "update":
-		if err := SelfBuild(context.Background()); err != nil {
+		if err := SelfBuild(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "self-build error: %v\n", err)
 			return 1
 		}
 		return 0
 	case "test":
 		flags := args[1:]
-		return selftest.Run(context.Background(), selftest.Options{
+		bundles, err := inv.selftestBundles()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "self test: bundles: %v\n", err)
+			return 1
+		}
+		return selftest.RunWithHost(ctx, selftest.Options{
 			Out:          os.Stdout,
 			Filters:      parseFilters(flags),
 			Verbose:      hasFlag(flags, "--verbose") || hasFlag(flags, "-v"),
 			NoColor:      hasFlag(flags, "--no-color"),
 			JSON:         hasFlag(flags, "--json"),
 			SaveBaseline: hasFlag(flags, "--save-baseline"),
-		})
+		}, bundles, inv.host)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown self command: %s\n", args[0])
 		return 2
@@ -163,11 +182,11 @@ func runCompletion(args []string) int {
 	return 0
 }
 
-func handleRequire(args []string) int {
+func handleRequire(ctx context.Context, inv *invocation, args []string) int {
 	if len(args) > 0 && args[0] == "pin" {
-		return runRequirePin(args[1:])
+		return runRequirePin(ctx, args[1:])
 	}
-	return runRequire(args)
+	return runRequire(ctx, inv, args)
 }
 
 func fatalf(format string, args ...any) int {

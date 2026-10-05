@@ -38,6 +38,16 @@ type buildOptions struct {
 // `nflow build file.nflow -o out` silently dropped -o; a manual parser
 // closes that. Unknown flags fail loudly.
 func runBuild(args []string) int {
+	inv, err := newInvocation(nil, nil)
+	if err != nil {
+		return fatalf("flow host: %v", err)
+	}
+	return runInvocation(context.Background(), inv, func(ctx context.Context) int {
+		return runBuildInInvocation(ctx, inv, args)
+	})
+}
+
+func runBuildInInvocation(ctx context.Context, inv *invocation, args []string) int {
 	started := time.Now()
 
 	opts, rc := parseBuildArgs(args)
@@ -60,7 +70,7 @@ func runBuild(args []string) int {
 	}
 
 	fmt.Fprintf(os.Stderr, "🔎 nflow: resolving @require directives\n")
-	reqs, err := SourceRequires(nflowPath)
+	reqs, err := inv.sourceRequiresFromFile(ctx, nflowPath)
 	if err != nil {
 		return buildFail("requires", err)
 	}
@@ -73,7 +83,7 @@ func runBuild(args []string) int {
 	fmt.Fprintf(os.Stderr, "📂 nflow: output %s\n", binName)
 
 	fmt.Fprintf(os.Stderr, "🧱 nflow: staging build directory\n")
-	buildDir, err := stageBuildDir(nflowPath, src, reqs)
+	buildDir, err := stageBuildDir(ctx, nflowPath, src, reqs)
 	if err != nil {
 		return buildFail("stage", err)
 	}
@@ -81,14 +91,14 @@ func runBuild(args []string) int {
 
 	tidyStart := time.Now()
 	fmt.Fprintf(os.Stderr, "⚙️  nflow: resolving dependencies (go mod tidy -e)  — first run may download modules\n")
-	if err = runGo(buildDir, "mod", "tidy", "-e"); err != nil {
+	if err = runGoContext(ctx, buildDir, "mod", "tidy", "-e"); err != nil {
 		return buildFail("go mod tidy -e", err)
 	}
 	fmt.Fprintf(os.Stderr, "   ✓ dependencies resolved in %s\n",
 		time.Since(tidyStart).Round(time.Millisecond))
 
 	buildStart := time.Now()
-	if err = linkBinary(buildDir, nflowPath, binName, opts); err != nil {
+	if err = linkBinary(ctx, buildDir, nflowPath, binName, opts); err != nil {
 		return buildFail("build", err)
 	}
 
@@ -176,7 +186,7 @@ func resolveBuildOutputPath(nflowPath, out string) (string, error) {
 // On any write failure the partially-staged directory is removed
 // before the error is returned, so a caller that only cleans up on
 // success does not leave a temp tree behind.
-func stageBuildDir(nflowPath string, src []byte, reqs []require.Requirement) (string, error) {
+func stageBuildDir(ctx context.Context, nflowPath string, src []byte, reqs []require.Requirement) (string, error) {
 	driverRoot, driverVersion := resolveDriverInfo()
 	goworkPath := findGoWork(filepath.Dir(nflowPath))
 
@@ -192,7 +202,7 @@ func stageBuildDir(nflowPath string, src []byte, reqs []require.Requirement) (st
 	}()
 
 	flowDir := filepath.Dir(nflowPath)
-	resolvedReqs, err := resolveRequirementPackages(reqs, driverRoot, driverVersion, goworkPath, flowDir)
+	resolvedReqs, err := resolveRequirementPackagesWithContext(ctx, reqs, driverRoot, driverVersion, goworkPath, flowDir)
 	if err != nil {
 		return "", err
 	}
@@ -329,15 +339,15 @@ func embeddedRequireQuote(rawTarget string) byte {
 
 // linkBinary resolves the version metadata, builds the argv, announces
 // the step, and runs `go build`.
-func linkBinary(buildDir, nflowPath, binName string, opts buildOptions) error {
-	version, commit, builtAt := resolveBuildVersion(filepath.Dir(nflowPath))
+func linkBinary(ctx context.Context, buildDir, nflowPath, binName string, opts buildOptions) error {
+	version, commit, builtAt := resolveBuildVersion(ctx, filepath.Dir(nflowPath))
 	ldflags := linkerFlags(opts, version, commit, builtAt)
 
 	fmt.Fprintf(os.Stderr, "🔨 nflow: linking %s%s\n",
 		filepath.Base(binName),
 		buildModeDescription(opts),
 	)
-	return runGo(buildDir, buildArgs(binName, opts, ldflags)...)
+	return runGoContext(ctx, buildDir, buildArgs(binName, opts, ldflags)...)
 }
 
 // ── go build argv ─────────────────────────────────────────────────────
@@ -410,7 +420,7 @@ func buildModeDescription(opts buildOptions) string {
 // hangs — a credential prompt, a lock file, a corrupt object store —
 // must not block the build. On any failure the field is left as-is and
 // the build proceeds.
-func resolveBuildVersion(flowDir string) (version, commit, builtAt string) {
+func resolveBuildVersion(ctx context.Context, flowDir string) (version, commit, builtAt string) {
 	version, commit, builtAt = resolvedBuildInfo()
 
 	if flowDir == "" {
@@ -418,16 +428,16 @@ func resolveBuildVersion(flowDir string) (version, commit, builtAt string) {
 	}
 
 	if version == "" || version == "dev" || version == "unknown" {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		if v := gitDescribe(ctx, flowDir); v != "" && v != "dev" {
+		gitCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		if v := gitDescribe(gitCtx, flowDir); v != "" && v != "dev" {
 			version = v
 		}
 		cancel()
 	}
 
 	if commit == "" || commit == unknownValue {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		if c := gitCommit(ctx, flowDir); c != "" && c != unknownValue {
+		gitCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		if c := gitCommit(gitCtx, flowDir); c != "" && c != unknownValue {
 			commit = c
 		}
 		cancel()
@@ -575,9 +585,12 @@ var embedded string
 
 func main() {
 	`)
-	writeBundleConstruction(&mainBuilder, imports)
 	writeBundleTargets(&mainBuilder, imports)
-	mainBuilder.WriteString(`	os.Exit(cli.RunEmbeddedWithBundlesForRequirements(context.Background(), embedded, os.Args[1:], bundles, targets))
+	mainBuilder.WriteString(`	os.Exit(cli.RunEmbeddedWithBundleFactoriesForRequirements(context.Background(), embedded, os.Args[1:], targets, func(adopt func(core.Bundle) error) error {
+`)
+	writeBundleConstruction(&mainBuilder, imports)
+	mainBuilder.WriteString(`		return nil
+    }))
 }
 `)
 	return mainBuilder.String()

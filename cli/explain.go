@@ -16,7 +16,7 @@ import (
 // .nflow file, with each modifier attributed to the lookup that
 // produced it. It parses with the same line-indexed modifier chain
 // the runtime compiler uses, so its output is what the compiler sees.
-func runExplain(args []string) int {
+func runExplain(ctx context.Context, inv *invocation, args []string) int {
 	if len(args) == 0 {
 		return fatalf("usage: nflow explain <file.nflow>")
 	}
@@ -24,11 +24,11 @@ func runExplain(args []string) int {
 	if _, err := os.Stat(path); err != nil {
 		return fatalf("read: %v", err)
 	}
-	return withHarness("explain", path, args, runExplainInProcess)
+	return withHarness(ctx, inv, "explain", path, args, runExplainInProcess)
 }
 
 // runExplainInProcess gains flag parsing and the --ast / --json paths.
-func runExplainInProcess(args []string) int {
+func runExplainInProcess(ctx context.Context, inv *invocation, args []string) int {
 	if len(args) < 1 {
 		return fatalf("usage: nflow explain <file.nflow> [--ast] [--json]")
 	}
@@ -42,12 +42,12 @@ func runExplainInProcess(args []string) int {
 		return fatalf("read: %v", err)
 	}
 
-	reqs, err := sourceRequiresFromFile(path)
+	reqs, err := inv.sourceRequiresFromFile(ctx, path)
 	if err != nil {
 		return fatalf("requires: %v", err)
 	}
 
-	cfg, err := buildConfig(reqs)
+	cfg, err := inv.buildConfig(reqs)
 	if err != nil {
 		return fatalf("config: %v", err)
 	}
@@ -61,13 +61,13 @@ func runExplainInProcess(args []string) int {
 	}
 
 	if wantAST {
-		if err := renderExplainAST(os.Stdout, cfg, string(src), path, wantJSON); err != nil {
+		if err := renderExplainASTWithContext(ctx, os.Stdout, cfg, string(src), path, wantJSON); err != nil {
 			return fatalf("%v", err)
 		}
 		return 0
 	}
 
-	if err := renderExplain(os.Stdout, cfg, string(src), path); err != nil {
+	if err := renderExplainWithContext(ctx, os.Stdout, cfg, string(src), path); err != nil {
 		return fatalf("%v", err)
 	}
 	return 0
@@ -79,9 +79,13 @@ func runExplainInProcess(args []string) int {
 // renderExplain now computes top-level preprocess contributions once
 // and threads them into the pipeline renderer as inherited primaries.
 func renderExplain(w io.Writer, cfg runner.Config, src, path string) error {
+	return renderExplainWithContext(context.Background(), w, cfg, src, path)
+}
+
+func renderExplainWithContext(ctx context.Context, w io.Writer, cfg runner.Config, src, path string) error {
 	useColor := colorEnabled(w)
 
-	clean, meta, err := core.Preprocess(context.Background(), cfg.Directives, src, path)
+	clean, meta, err := core.Preprocess(ctx, cfg.Directives, src, path)
 	if err != nil {
 		return fmt.Errorf("preprocess: %w", err)
 	}
@@ -91,8 +95,8 @@ func renderExplain(w io.Writer, cfg runner.Config, src, path string) error {
 	topContribs := core.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
 
 	topLineMods := computeLineMods(cfg, meta)
-	renderExplainTopLevel(w, cfg, clean, meta, path, topLineMods, useColor)
-	renderExplainPipelines(w, cfg, meta, topContribs.Primaries, useColor)
+	renderExplainTopLevel(ctx, w, cfg, clean, meta, path, topLineMods, useColor)
+	renderExplainPipelines(ctx, w, cfg, meta, topContribs.Primaries, useColor)
 	return nil
 }
 
@@ -100,6 +104,7 @@ func renderExplain(w io.Writer, cfg runner.Config, src, path string) error {
 // primaries via cfg.PrimariesFor — reading cfg.Primaries directly
 // drops the macro engine and would reject a file that runs.
 func renderExplainTopLevel(
+	ctx context.Context,
 	w io.Writer,
 	cfg runner.Config,
 	clean string,
@@ -112,7 +117,7 @@ func renderExplainTopLevel(
 		return
 	}
 	ast, err := core.NewParserWithFileOffset(
-		context.Background(), cfg.Operators, cfg.PrimariesFor(meta), clean, path, 0,
+		ctx, cfg.Operators, cfg.PrimariesFor(meta), clean, path, 0,
 	).
 		WithLineModifiers(lineMods...).
 		Parse()
@@ -126,6 +131,7 @@ func renderExplainTopLevel(
 }
 
 func renderExplainPipeline(
+	ctx context.Context,
 	w io.Writer,
 	cfg runner.Config,
 	name, body string,
@@ -154,7 +160,7 @@ func renderExplainPipeline(
 		}
 	}
 
-	clean, fragMeta, err := core.Preprocess(context.Background(), cfg.Directives, body, name)
+	clean, fragMeta, err := core.Preprocess(ctx, cfg.Directives, body, name)
 	if err != nil {
 		fmt.Fprintf(w, "    %s\n\n", red(fmt.Sprintf("<preprocess error: %v>", err), useColor))
 		return
@@ -195,7 +201,7 @@ func renderExplainPipeline(
 	fragPrimaries := cfg.PrimariesFor(fragMeta, parentPrimaries...)
 
 	ast, perr := core.NewParserWithFileOffset(
-		context.Background(), cfg.Operators, fragPrimaries, clean, name, 0,
+		ctx, cfg.Operators, fragPrimaries, clean, name, 0,
 	).
 		WithLineModifiers(lineMods...).
 		Parse()
@@ -323,6 +329,7 @@ func walkExplainNodes(node core.Expr, visit func(core.Expr)) {
 // primaries as parentPrimaries and forwards them to each pipeline
 // body, mirroring CompileReq.InheritedPrimaries.
 func renderExplainPipelines(
+	ctx context.Context,
 	w io.Writer,
 	cfg runner.Config,
 	meta map[string]any,
@@ -345,7 +352,7 @@ func renderExplainPipelines(
 
 	for _, name := range names {
 		renderExplainPipeline(
-			w, cfg, name, pipelines[name],
+			ctx, w, cfg, name, pipelines[name],
 			pipelineMods[name], pipelineModSources[name],
 			parentPrimaries, useColor,
 		)

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -12,7 +13,7 @@ import (
 	"github.com/nexssp/flow/extensions/require"
 )
 
-func runShow(args []string) int {
+func runShow(ctx context.Context, inv *invocation, args []string) int {
 	flowPath := ""
 	for i := range args {
 		switch {
@@ -22,10 +23,10 @@ func runShow(args []string) int {
 			flowPath = strings.TrimPrefix(args[i], "--flow=")
 		}
 	}
-	return withHarness("show", flowPath, args, runShowInProcess)
+	return withHarness(ctx, inv, "show", flowPath, args, runShowInProcess)
 }
 
-func runShowInProcess(args []string) int {
+func runShowInProcess(ctx context.Context, inv *invocation, args []string) int {
 	fs := flag.NewFlagSet("show", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	flowPath := fs.String("flow", "", "load @require bundles from this .nflow first")
@@ -39,12 +40,12 @@ func runShowInProcess(args []string) int {
 		return fatalf("usage: nflow show <name>")
 	}
 
-	loaded, err := sourceRequiresFromOptional(*flowPath)
+	loaded, err := sourceRequiresFromOptional(ctx, inv, *flowPath)
 	if err != nil {
 		return fatalf("%v", err)
 	}
 
-	cfg, err := buildConfig(loaded)
+	cfg, err := inv.buildConfig(loaded)
 	if err != nil {
 		return fatalf("config: %v", err)
 	}
@@ -66,11 +67,11 @@ func runShowInProcess(args []string) int {
 	}
 }
 
-func sourceRequiresFromOptional(path string) ([]require.Requirement, error) {
+func sourceRequiresFromOptional(ctx context.Context, inv *invocation, path string) ([]require.Requirement, error) {
 	if path == "" {
 		return nil, nil
 	}
-	return sourceRequiresFromFile(path)
+	return inv.sourceRequiresFromFile(ctx, path)
 }
 
 func showAtom(atoms []core.AtomSpec, name string, useColor bool) bool {

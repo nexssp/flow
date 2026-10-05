@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -9,7 +10,7 @@ import (
 	"github.com/nexssp/flow/core"
 )
 
-func runList(args []string) int {
+func runList(ctx context.Context, inv *invocation, args []string) int {
 	flowPath := ""
 	var cleanArgs []string
 
@@ -30,10 +31,10 @@ func runList(args []string) int {
 			cleanArgs = append(cleanArgs, args[i])
 		}
 	}
-	return withHarness("list", flowPath, cleanArgs, runListInProcess)
+	return withHarness(ctx, inv, "list", flowPath, cleanArgs, runListInProcess)
 }
 
-func runListInProcess(args []string) int {
+func runListInProcess(ctx context.Context, inv *invocation, args []string) int {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	flowPath := fs.String("flow", "", "load @require bundles from this .nflow first")
@@ -61,17 +62,17 @@ func runListInProcess(args []string) int {
 
 	var cfg core.Catalog
 	if *flowPath != "" {
-		loaded, err := sourceRequiresFromFile(*flowPath)
+		loaded, err := inv.sourceRequiresFromFile(ctx, *flowPath)
 		if err != nil {
 			return fatalf("read %s: %v", *flowPath, err)
 		}
-		runnerCfg, err := buildConfig(loaded)
+		runnerCfg, err := inv.buildConfig(loaded)
 		if err != nil {
 			return fatalf("config: %v", err)
 		}
 		cfg = core.BuildCatalog(runnerCfg.Resolver, runnerCfg.Modifiers, runnerCfg.Directives, runnerCfg.Operators)
 	} else {
-		runnerCfg, err := buildConfig(nil)
+		runnerCfg, err := inv.buildConfig(nil)
 		if err != nil {
 			return fatalf("config: %v", err)
 		}

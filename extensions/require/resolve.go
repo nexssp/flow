@@ -9,6 +9,14 @@ import (
 
 // ResolveBundles resolves in-process requirements to core.Bundle instances.
 func ResolveBundles(reqs []Requirement) ([]core.Bundle, error) {
+	return ResolveBundlesWith(reqs, nil)
+}
+
+// ResolveBundlesWith resolves in-process requirements and calls onBundle
+// immediately after each factory returns, before option validation or alias
+// wiring. Owners can therefore retain cleanup callbacks when a later bundle
+// fails validation or construction.
+func ResolveBundlesWith(reqs []Requirement, onBundle func(core.Bundle)) ([]core.Bundle, error) {
 	out := make([]core.Bundle, 0, len(reqs))
 	for i := range reqs {
 		r := &reqs[i]
@@ -23,6 +31,9 @@ func ResolveBundles(reqs []Requirement) ([]core.Bundle, error) {
 		}
 
 		bundle := factory(r.Options)
+		if onBundle != nil {
+			onBundle(bundle)
+		}
 		if err := validateOptions(r, bundle); err != nil {
 			return nil, err
 		}

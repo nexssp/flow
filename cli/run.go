@@ -6,21 +6,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/nexssp/flow/core"
 	"github.com/nexssp/flow/extensions/require"
-	"github.com/nexssp/flow/native"
 	"github.com/nexssp/flow/runner"
 )
 
 const harnessEnv = "NFLOW_HARNESS"
-
-var (
-	injectedBundles            []core.Bundle
-	injectedRequirementTargets map[string]struct{}
-)
 
 func RunWithBundles(args []string, bundles []core.Bundle) int {
 	return RunWithBundlesForRequirements(args, bundles, nil)
@@ -30,56 +23,21 @@ func RunWithBundles(args []string, bundles []core.Bundle) int {
 // @require targets. This preserves bundle IDs when an explicit package variant
 // has a different import-path suffix.
 func RunWithBundlesForRequirements(args []string, bundles []core.Bundle, targets []string) int {
-	injectedBundles = append([]core.Bundle(nil), bundles...)
-	injectedRequirementTargets = make(map[string]struct{}, len(targets))
-	for _, target := range targets {
-		injectedRequirementTargets[target] = struct{}{}
-	}
-	defer func() {
-		injectedBundles = nil
-		injectedRequirementTargets = nil
-	}()
-	return Run(args)
-}
-
-func buildConfig(reqs []require.Requirement) (runner.Config, error) {
-	unresolved := make([]require.Requirement, 0, len(reqs))
-	for i := range reqs {
-		r := &reqs[i]
-		if isAlreadyInjected(*r, injectedBundles) {
-			continue
-		}
-		unresolved = append(unresolved, *r)
-	}
-
-	required, err := require.ResolveBundles(unresolved)
+	inv, err := newInvocation(bundles, targets)
 	if err != nil {
-		return runner.Config{}, err
+		return fatalf("flow host: %v", err)
 	}
-	bundles := append([]core.Bundle{}, native.Bundles()...)
-	bundles = append(bundles, injectedBundles...)
-	bundles = append(bundles, required...)
-	return runner.BuildConfig(dedupeBundleIDs(bundles))
+	return runCLIWithSignals(context.Background(), inv, args, registerProcessSignals)
 }
 
-func isAlreadyInjected(r require.Requirement, injected []core.Bundle) bool {
-	if _, ok := injectedRequirementTargets[r.Import]; ok {
-		return true
-	}
-	if len(injected) == 0 {
-		return false
-	}
-	targetID := require.NormalizeID(r.Import)
-	for i := range injected {
-		b := &injected[i]
-		if b.ID == targetID || b.ID == r.Import || b.ID == r.Alias {
-			return true
-		}
-		if r.IsLoose && (b.ID == filepath.Base(r.LocalPath) || b.ID == targetID) {
-			return true
-		}
-	}
-	return false
+// RunWithBundleFactoriesForRequirements runs generated CLI code in one host
+// scope and adopts each returned bundle before the next factory runs.
+func RunWithBundleFactoriesForRequirements(args, targets []string, construct func(func(core.Bundle) error) error) int {
+	return withSignalContext(context.Background(), registerProcessSignals, func(ctx context.Context) int {
+		return runWithBundleFactories(ctx, targets, construct, func(inv *invocation, runCtx context.Context) int {
+			return runCLI(runCtx, inv, args)
+		})
+	})
 }
 
 func dedupeBundleIDs(bundles []core.Bundle) []core.Bundle {
@@ -97,35 +55,38 @@ func dedupeBundleIDs(bundles []core.Bundle) []core.Bundle {
 	return out
 }
 
-func withHarness(subcommand, flowPath string, args []string, inProcess func([]string) int) int {
+func withHarness(ctx context.Context, inv *invocation, subcommand, flowPath string, args []string, inProcess func(context.Context, *invocation, []string) int) int {
 	if flowPath == "" || isInlineSource(flowPath) {
-		return inProcess(args)
+		return inProcess(ctx, inv, args)
 	}
-	reqs, err := sourceRequiresFromFile(flowPath)
+	reqs, err := inv.sourceRequiresFromFile(ctx, flowPath)
 	if err != nil {
 		return fatalf("%v", err)
 	}
-	return withHarnessRequirements(subcommand, flowPath, reqs, args, inProcess)
+	return withHarnessRequirements(ctx, inv, subcommand, flowPath, reqs, args, inProcess)
 }
 
-func withHarnessRequirements(subcommand, flowPath string, reqs []require.Requirement, args []string, inProcess func([]string) int) int {
+func withHarnessRequirements(ctx context.Context, inv *invocation, subcommand, flowPath string, reqs []require.Requirement, args []string, inProcess func(context.Context, *invocation, []string) int) int {
 	if len(reqs) == 0 || os.Getenv(harnessEnv) != "" {
-		return inProcess(args)
+		return inProcess(ctx, inv, args)
 	}
-	if !requirementsNeedExternalHarness(reqs) {
-		return inProcess(args)
+	if !requirementsNeedExternalHarness(inv, reqs) {
+		return inProcess(ctx, inv, args)
 	}
 
-	bin, err := EnsureHarness(reqs, flowPath)
+	bin, err := EnsureHarnessContext(ctx, reqs, flowPath)
 	if err != nil {
 		return fatalf("%v", err)
 	}
-	return ExecHarness(bin, append([]string{subcommand}, args...))
+	return ExecHarnessContext(ctx, bin, append([]string{subcommand}, args...))
 }
 
-func requirementsNeedExternalHarness(reqs []require.Requirement) bool {
+func requirementsNeedExternalHarness(inv *invocation, reqs []require.Requirement) bool {
 	for i := range reqs {
 		r := &reqs[i]
+		if inv != nil && inv.isAlreadyInjected(*r) {
+			continue
+		}
 		targetID := require.NormalizeID(r.Import)
 		if _, ok := core.Lookup(targetID); ok {
 			continue
@@ -139,11 +100,21 @@ func requirementsNeedExternalHarness(reqs []require.Requirement) bool {
 }
 
 func runFlow(args []string) int {
-	target, _, _ := splitArgs(args)
-	return withHarness("run", target, args, runFlowInProcess)
+	inv, err := newInvocation(nil, nil)
+	if err != nil {
+		return fatalf("flow host: %v", err)
+	}
+	return runInvocation(context.Background(), inv, func(ctx context.Context) int {
+		return runFlowInInvocation(ctx, inv, args)
+	})
 }
 
-func runFlowInProcess(args []string) int {
+func runFlowInInvocation(ctx context.Context, inv *invocation, args []string) int {
+	target, _, _ := splitArgs(args)
+	return withHarness(ctx, inv, "run", target, args, runFlowInProcess)
+}
+
+func runFlowInProcess(ctx context.Context, inv *invocation, args []string) int {
 	target, _, _ := splitArgs(args)
 	if target == "" {
 		return fatalf("usage: nflow run <file.nflow | inline_dsl> [json_payload] [flags]")
@@ -166,7 +137,7 @@ func runFlowInProcess(args []string) int {
 		name = target
 	}
 
-	return runSourceInProcess(context.Background(), src, name, args)
+	return runSourceInInvocation(ctx, inv, src, name, args)
 }
 
 func isInlineSource(target string) bool {
@@ -188,23 +159,34 @@ func RunEmbeddedWithBundles(ctx context.Context, source string, args []string, b
 // RunEmbeddedWithBundlesForRequirements is the embedded-flow counterpart of
 // RunWithBundlesForRequirements.
 func RunEmbeddedWithBundlesForRequirements(ctx context.Context, source string, args []string, bundles []core.Bundle, targets []string) int {
-	injectedBundles = append([]core.Bundle(nil), bundles...)
-	injectedRequirementTargets = make(map[string]struct{}, len(targets))
-	for _, target := range targets {
-		injectedRequirementTargets[target] = struct{}{}
+	inv, err := newInvocation(bundles, targets)
+	if err != nil {
+		return fatalf("flow host: %v", err)
 	}
-	defer func() {
-		injectedBundles = nil
-		injectedRequirementTargets = nil
-	}()
-	return runEmbedded(ctx, source, args)
+	return runInvocation(ctx, inv, func(runCtx context.Context) int {
+		return runEmbeddedInInvocation(runCtx, inv, source, args)
+	})
+}
+
+// RunEmbeddedWithBundleFactoriesForRequirements adopts each generated bundle
+// as soon as its factory returns, before later factories or Flow dispatch run.
+func RunEmbeddedWithBundleFactoriesForRequirements(ctx context.Context, source string, args, targets []string, construct func(func(core.Bundle) error) error) int {
+	return runWithBundleFactories(ctx, targets, construct, func(inv *invocation, runCtx context.Context) int {
+		return runEmbeddedInInvocation(runCtx, inv, source, args)
+	})
 }
 
 func RunEmbedded(ctx context.Context, source string, args []string) int {
-	return runEmbedded(ctx, source, args)
+	inv, err := newInvocation(nil, nil)
+	if err != nil {
+		return fatalf("flow host: %v", err)
+	}
+	return runInvocation(ctx, inv, func(runCtx context.Context) int {
+		return runEmbeddedInInvocation(runCtx, inv, source, args)
+	})
 }
 
-func runEmbedded(ctx context.Context, source string, args []string) int {
+func runEmbeddedInInvocation(ctx context.Context, inv *invocation, source string, args []string) int {
 	if len(args) > 0 {
 		switch args[0] {
 		case "version", "--version":
@@ -214,7 +196,7 @@ func runEmbedded(ctx context.Context, source string, args []string) int {
 			printEmbeddedHelp(os.Stdout, source)
 			return 0
 		case "info":
-			return runEmbeddedInfo(ctx, source, args[1:])
+			return runEmbeddedInfo(ctx, inv, source, args[1:])
 		}
 	}
 
@@ -225,22 +207,26 @@ func runEmbedded(ctx context.Context, source string, args []string) int {
 	if !quiet {
 		fmt.Fprintf(os.Stderr, "nexssflow %s %s (built %s)\n", Version, Commit, BuiltAt)
 	}
-	return runSourceInProcess(ctx, source, "<embedded>", args)
+	return runSourceInInvocation(ctx, inv, source, "<embedded>", args)
 }
 
 // runEmbeddedInfo renders the embedded flow's pipeline shape without
 // printing the version banner. It shares the preprocess → parse path
 // with the info branch of runSourceInProcess; the only difference is
 // banner suppression, which the caller owns.
-func runEmbeddedInfo(ctx context.Context, source string, args []string) int {
+func runEmbeddedInfo(ctx context.Context, inv *invocation, source string, args []string) int {
 	wantJSON := hasFlag(args, "--json")
 
-	clean, meta, err := core.Preprocess(ctx, native.Directives(), source, "<embedded>")
+	directives, err := inv.directiveTable()
+	if err != nil {
+		return fatalf("directives: %v", err)
+	}
+	clean, meta, err := core.Preprocess(ctx, directives, source, "<embedded>")
 	if err != nil {
 		return fatalf("preprocess: %v", err)
 	}
 
-	cfg, err := buildConfig(require.FromMeta(meta))
+	cfg, err := inv.buildConfig(require.FromMeta(meta))
 	if err != nil {
 		return fatalf("config: %v", err)
 	}
@@ -305,31 +291,51 @@ func embeddedDescription(source string) string {
 }
 
 func RunPath(ctx context.Context, args []string) int {
-	target, _, _ := splitArgs(args)
-	if target == "" {
-		fmt.Fprintln(os.Stderr, "usage: nflow <file.nflow> [json] [flags]")
-		return 2
-	}
-	src, err := os.ReadFile(target)
+	inv, err := newInvocation(nil, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "read: %v\n", err)
-		return 1
+		return fatalf("flow host: %v", err)
 	}
-	return runSourceInProcess(ctx, string(src), target, args)
+	return runInvocation(ctx, inv, func(runCtx context.Context) int {
+		target, _, _ := splitArgs(args)
+		if target == "" {
+			fmt.Fprintln(os.Stderr, "usage: nflow <file.nflow> [json] [flags]")
+			return 2
+		}
+		src, err := os.ReadFile(target)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "read: %v\n", err)
+			return 1
+		}
+		return runSourceInInvocation(runCtx, inv, string(src), target, args)
+	})
 }
 
 func runSourceInProcess(ctx context.Context, src, name string, args []string) int {
+	inv, err := newInvocation(nil, nil)
+	if err != nil {
+		return fatalf("flow host: %v", err)
+	}
+	return runInvocation(ctx, inv, func(runCtx context.Context) int {
+		return runSourceInInvocation(runCtx, inv, src, name, args)
+	})
+}
+
+func runSourceInInvocation(ctx context.Context, inv *invocation, src, name string, args []string) int {
 	payload, flags := splitPayloadAndFlags(args)
 
 	payload = readPipedStdin(payload)
 
-	clean, meta, err := core.Preprocess(ctx, native.Directives(), src, name)
+	directives, err := inv.directiveTable()
+	if err != nil {
+		return fatalf("directives: %v", err)
+	}
+	clean, meta, err := core.Preprocess(ctx, directives, src, name)
 	if err != nil {
 		return fatalf("preprocess: %v", err)
 	}
 	reqs := require.FromMeta(meta)
 
-	cfg, err := buildConfig(reqs)
+	cfg, err := inv.buildConfig(reqs)
 	if err != nil {
 		return fatalf("config: %v", err)
 	}
@@ -532,28 +538,6 @@ func collectAsserts(meta map[string]any, extra []string) []string {
 		add(assertion)
 	}
 	return out
-}
-
-// sourceRequiresFromFile performs the separate @require bootstrap pass. The
-// final bundle set is needed to build the directive table, so requirement
-// discovery must happen before normal compilation; using the shared directive
-// preprocessor also preserves @include, option parsing, and source-located
-// errors. This is not the compile pass eliminated by PreparedSource.
-func sourceRequiresFromFile(path string) ([]require.Requirement, error) {
-	src, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	_, meta, err := core.Preprocess(context.Background(),
-		native.Directives(), string(src), path)
-	if err != nil {
-		return nil, err
-	}
-	return require.FromMeta(meta), nil
-}
-
-func SourceRequires(path string) ([]require.Requirement, error) {
-	return sourceRequiresFromFile(path)
 }
 
 func splitArgs(args []string) (target string, payload map[string]any, flags []string) {

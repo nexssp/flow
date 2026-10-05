@@ -106,7 +106,15 @@ func Bundles() []core.Bundle {
 // widening the delta; consider whether the bundle can be exposed via
 // @require instead.
 func SelftestBundles() []core.Bundle {
-	return append(Bundles(), selftestkit.Bundle(nil))
+	return SelftestBundlesFrom(Bundles())
+}
+
+// SelftestBundlesFrom adds the self-test-only bundle to an existing native
+// bundle set. Callers that own bundle lifetimes can reuse their cached set
+// instead of invoking every native factory a second time.
+func SelftestBundlesFrom(bundles []core.Bundle) []core.Bundle {
+	out := append([]core.Bundle(nil), bundles...)
+	return append(out, selftestkit.Bundle(nil))
 }
 
 // Primaries returns the primary extensions contributed by the native

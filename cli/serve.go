@@ -4,28 +4,25 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/nexssp/flow/core"
 	"github.com/nexssp/flow/extensions/on"
 )
 
-func runServe(args []string) int {
+func runServe(ctx context.Context, inv *invocation, args []string) int {
 	path := ""
 	if len(args) > 0 {
 		path = args[0]
 	}
-	return withHarness("serve", path, args, runServeInProcess)
+	return withHarness(ctx, inv, "serve", path, args, runServeInProcess)
 }
 
-func runServeInProcess(args []string) int {
+func runServeInProcess(parent context.Context, inv *invocation, args []string) int {
 	if len(args) < 1 {
 		return fatalf("usage: nflow serve <file.nflow>")
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	ctx := parent
 
 	path := args[0]
 	src, err := os.ReadFile(path)
@@ -33,11 +30,11 @@ func runServeInProcess(args []string) int {
 		return fatalf("read source: %v", err)
 	}
 
-	reqs, err := sourceRequiresFromFile(path)
+	reqs, err := inv.sourceRequiresFromFile(ctx, path)
 	if err != nil {
 		return fatalf("requires: %v", err)
 	}
-	cfg, err := buildConfig(reqs)
+	cfg, err := inv.buildConfig(reqs)
 	if err != nil {
 		return fatalf("build config: %v", err)
 	}

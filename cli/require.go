@@ -14,7 +14,6 @@ import (
 
 	"github.com/nexssp/flow/core"
 	"github.com/nexssp/flow/extensions/require"
-	"github.com/nexssp/flow/native"
 )
 
 // runRequire generuje requires_gen.go na podstawie @require w .nflow.
@@ -25,7 +24,7 @@ import (
 // requires_gen.go. Walidujemy package name, bo generowany plik musi
 // należeć do tego samego pakietu co main, aby init() odpaliło się
 // przed cli.Run.
-func runRequire(args []string) int {
+func runRequire(ctx context.Context, inv *invocation, args []string) int {
 	fs := flag.NewFlagSet("require", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	out := fs.String("o", "", "output file (default: <module_root>/requires_gen.go)")
@@ -48,8 +47,11 @@ func runRequire(args []string) int {
 		return fatalf("read: %v", err)
 	}
 
-	dt := native.Directives()
-	_, meta, err := core.Preprocess(context.Background(), dt, string(src), path)
+	dt, err := inv.directiveTable()
+	if err != nil {
+		return fatalf("directives: %v", err)
+	}
+	_, meta, err := core.Preprocess(ctx, dt, string(src), path)
 	if err != nil {
 		return fatalf("preprocess: %v", err)
 	}
@@ -130,7 +132,7 @@ func findModuleRoot(dir string) string {
 }
 
 // runRequirePin uzupełnia brakujące wersje w pliku .nflow.
-func runRequirePin(args []string) int {
+func runRequirePin(ctx context.Context, args []string) int {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "usage: nexssflow require pin <file.nflow>")
 		return 2
@@ -169,7 +171,7 @@ func runRequirePin(args []string) int {
 
 		modulePath := strings.Trim(parts[0], `"'`)
 
-		ver, err := resolveLatestVersion(modulePath)
+		ver, err := resolveLatestVersion(ctx, modulePath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "⚠️  could not resolve version for %s: %v\n",
 				modulePath, err)
@@ -197,11 +199,11 @@ func runRequirePin(args []string) int {
 	return 0
 }
 
-func resolveLatestVersion(modulePath string) (string, error) {
-	cmd := exec.CommandContext(context.Background(), "go", "list", "-m", "-json", modulePath+"@latest") //nolint:gosec // G204: args are constructed by the CLI, not user input
+func resolveLatestVersion(ctx context.Context, modulePath string) (string, error) {
+	cmd := exec.CommandContext(ctx, "go", "list", "-m", "-json", modulePath+"@latest") //nolint:gosec // G204: args are constructed by the CLI, not user input
 	out, err := cmd.Output()
 	if err != nil {
-		cmd = exec.CommandContext(context.Background(), "go", "list", "-m", "-json", modulePath)
+		cmd = exec.CommandContext(ctx, "go", "list", "-m", "-json", modulePath)
 		out, err = cmd.Output()
 		if err != nil {
 			return "", err

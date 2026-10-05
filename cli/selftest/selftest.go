@@ -43,6 +43,42 @@ type filterResult struct {
 // selected feature passes, 1 when at least one fails, 2 on
 // configuration error.
 func Run(ctx context.Context, opts Options) int {
+	bundles := native.SelftestBundles()
+	host := flowrunner.NewHost()
+	if err := host.OwnAll(bundles); err != nil {
+		fmt.Fprintf(optionOutput(opts), "self test: host: %v\n", err)
+		return 1
+	}
+	code := 1
+	err := host.Run(ctx, func(runCtx context.Context) error {
+		code = RunWithHost(runCtx, opts, bundles, host)
+		return nil
+	})
+	if err != nil {
+		fmt.Fprintf(optionOutput(opts), "%v\n", err)
+		if code == 0 {
+			code = 1
+		}
+	}
+	return code
+}
+
+// RunWithHost executes the suite using bundles already owned by host. It is
+// used by the CLI so self-test shares the command's native bundle instances and
+// its outer invocation lifetime.
+func RunWithHost(ctx context.Context, opts Options, bundles []core.Bundle, host *flowrunner.Host) int {
+	_ = host // ownership is established by the caller; retained in the contract.
+	return runWithBundles(ctx, opts, bundles)
+}
+
+func optionOutput(opts Options) io.Writer {
+	if opts.Out != nil {
+		return opts.Out
+	}
+	return os.Stdout
+}
+
+func runWithBundles(ctx context.Context, opts Options, bundles []core.Bundle) int {
 	if opts.Out == nil {
 		opts.Out = os.Stdout
 	}
@@ -51,7 +87,7 @@ func Run(ctx context.Context, opts Options) int {
 		opts.NoSpinner = true
 	}
 
-	all := Sections()
+	all := SectionsFromBundles(bundles)
 	res := filterSections(all, opts.Filters)
 
 	if len(res.Sections) == 0 {
@@ -63,7 +99,7 @@ func Run(ctx context.Context, opts Options) int {
 		return 2
 	}
 
-	cfg, err := flowrunner.BuildConfig(native.SelftestBundles())
+	cfg, err := flowrunner.BuildConfig(bundles)
 	if err != nil {
 		fmt.Fprintf(opts.Out, "self test: build config: %v\n", err)
 		return 1

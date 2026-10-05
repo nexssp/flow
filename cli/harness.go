@@ -43,6 +43,11 @@ const maxCapturedOutputBytes = 8 * 1024
 // EnsureHarness builds or reuses a runner binary linked with exactly
 // the external modules declared by reqs.
 func EnsureHarness(reqs []require.Requirement, flowPath ...string) (string, error) {
+	return EnsureHarnessContext(context.Background(), reqs, flowPath...)
+}
+
+// EnsureHarnessContext is EnsureHarness with caller-controlled cancellation.
+func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowPath ...string) (string, error) {
 	external := filterExternalRequires(reqs)
 	if len(external) == 0 {
 		return "", errors.New("harness: no external modules to link")
@@ -55,7 +60,7 @@ func EnsureHarness(reqs []require.Requirement, flowPath ...string) (string, erro
 	flowDir := flowDirectory(flowFile)
 	goworkPath := findGoWork(flowDir)
 	driverRoot, driverVersion := resolveDriverInfo()
-	resolved, err := resolveRequirementPackages(external, driverRoot, driverVersion, goworkPath, flowDir)
+	resolved, err := resolveRequirementPackagesWithContext(ctx, external, driverRoot, driverVersion, goworkPath, flowDir)
 	if err != nil {
 		return "", err
 	}
@@ -101,7 +106,7 @@ func EnsureHarness(reqs []require.Requirement, flowPath ...string) (string, erro
 
 	fmt.Fprintf(os.Stderr, "⚙️  nflow: resolving dependencies (go mod tidy -e)...\n")
 	startTidy := time.Now()
-	if err := runGo(buildDir, "mod", "tidy", "-e"); err != nil {
+	if err := runGoContext(ctx, buildDir, "mod", "tidy", "-e"); err != nil {
 		return "", explainBuildError(err, external)
 	}
 	slog.Debug("harness: mod tidy finished", "elapsed", time.Since(startTidy))
@@ -109,7 +114,7 @@ func EnsureHarness(reqs []require.Requirement, flowPath ...string) (string, erro
 	tmp := bin + ".tmp." + strconv.Itoa(os.Getpid())
 	fmt.Fprintf(os.Stderr, "🔨 nflow: compiling runner binary [%s]...\n", key[:8])
 	startBuild := time.Now()
-	if err := runGo(buildDir, "build", "-trimpath", "-o", tmp, "."); err != nil {
+	if err := runGoContext(ctx, buildDir, "build", "-trimpath", "-o", tmp, "."); err != nil {
 		return "", explainBuildError(err, external)
 	}
 
@@ -156,7 +161,12 @@ func filterExternalRequires(reqs []require.Requirement) []require.Requirement {
 }
 
 func ExecHarness(bin string, args []string) int {
-	cmd := exec.CommandContext(context.Background(), bin, args...)
+	return ExecHarnessContext(context.Background(), bin, args)
+}
+
+// ExecHarnessContext runs a generated harness with caller-controlled cancellation.
+func ExecHarnessContext(ctx context.Context, bin string, args []string) int {
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -294,7 +304,7 @@ func exeSuffix() string {
 	return ""
 }
 
-// runGo executes a go toolchain command in dir and returns its error.
+// runGoContext executes a go toolchain command in dir and returns its error.
 //
 // Both stdout and stderr are streamed live to os.Stderr so that first-time
 // module downloads and compiler progress are visible to the developer, and
@@ -307,8 +317,8 @@ func exeSuffix() string {
 // defaultGoCommandTimeout, overridable via NFLOW_GO_TIMEOUT. A slow or
 // dead GOPROXY, a stuck credential prompt, or a misconfigured sum DB
 // cannot hang the CLI indefinitely.
-func runGo(dir string, args ...string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), goCommandTimeout())
+func runGoContext(parent context.Context, dir string, args ...string) error {
+	ctx, cancel := context.WithTimeout(parent, goCommandTimeout())
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "go", args...)
@@ -334,10 +344,10 @@ func runGo(dir string, args ...string) error {
 	return nil
 }
 
-// runGoOutput captures stdout for commands whose machine-readable output is
-// needed while keeping progress and diagnostics visible on stderr.
-func runGoOutput(dir string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), goCommandTimeout())
+// runGoOutputContext captures stdout for machine-readable commands while
+// keeping progress and diagnostics visible on stderr.
+func runGoOutputContext(parent context.Context, dir string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(parent, goCommandTimeout())
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "go", args...)
@@ -362,6 +372,10 @@ func runGoOutput(dir string, args ...string) ([]byte, error) {
 // `go get package@version` in a temporary module; Go decides whether the
 // package is provided by a root or nested module.
 func resolveRequirementPackages(reqs []require.Requirement, driverRoot, driverVersion, goworkPath string, sourceDirs ...string) ([]require.Requirement, error) {
+	return resolveRequirementPackagesWithContext(context.Background(), reqs, driverRoot, driverVersion, goworkPath, sourceDirs...)
+}
+
+func resolveRequirementPackagesWithContext(ctx context.Context, reqs []require.Requirement, driverRoot, driverVersion, goworkPath string, sourceDirs ...string) ([]require.Requirement, error) {
 	sourceDir := ""
 	if len(sourceDirs) > 0 {
 		sourceDir = sourceDirs[0]
@@ -395,7 +409,7 @@ func resolveRequirementPackages(reqs []require.Requirement, driverRoot, driverVe
 		default:
 			packagePath := bundleImportPath(*r)
 			providerPath, providerVersion, err := resolveRemotePackageProvider(
-				packagePath, r.Version, driverRoot, driverVersion, goworkPath,
+				ctx, packagePath, r.Version, driverRoot, driverVersion, goworkPath,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("@require %s: resolve bundle package %s@%s: %w", r.Import, packagePath, r.Version, err)
@@ -467,7 +481,7 @@ func resolveLocalBundlePackage(r *require.Requirement) error {
 	return nil
 }
 
-func resolveRemotePackageProvider(packagePath, version, driverRoot, driverVersion, goworkPath string) (providerPath, providerVersion string, resolveErr error) {
+func resolveRemotePackageProvider(ctx context.Context, packagePath, version, driverRoot, driverVersion, goworkPath string) (providerPath, providerVersion string, resolveErr error) {
 	if packagePath == "" || version == "" {
 		return "", "", errors.New("package path and explicit version are required")
 	}
@@ -481,10 +495,10 @@ func resolveRemotePackageProvider(packagePath, version, driverRoot, driverVersio
 	if writeErr := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(mod), 0o600); writeErr != nil {
 		return "", "", fmt.Errorf("write resolver go.mod: %w", writeErr)
 	}
-	if _, getErr := runGoOutput(dir, "get", packagePath+"@"+version); getErr != nil {
+	if _, getErr := runGoOutputContext(ctx, dir, "get", packagePath+"@"+version); getErr != nil {
 		return "", "", getErr
 	}
-	data, listErr := runGoOutput(dir, "list", "-json", packagePath)
+	data, listErr := runGoOutputContext(ctx, dir, "list", "-json", packagePath)
 	if listErr != nil {
 		return "", "", listErr
 	}
@@ -601,7 +615,6 @@ func writeBundleImports(mainBuilder *strings.Builder, imports []bundleImport) {
 }
 
 func writeBundleConstruction(mainBuilder *strings.Builder, imports []bundleImport) {
-	mainBuilder.WriteString("\tvar bundles []core.Bundle\n")
 	for i := range imports {
 		item := &imports[i]
 		mainBuilder.WriteString("\t{\n")
@@ -609,7 +622,7 @@ func writeBundleConstruction(mainBuilder *strings.Builder, imports []bundleImpor
 		if item.reqAlias != "" {
 			fmt.Fprintf(mainBuilder, "\t\tb.Alias = %q\n", item.reqAlias)
 		}
-		mainBuilder.WriteString("\t\tbundles = append(bundles, b)\n")
+		mainBuilder.WriteString("\t\tif err := adopt(b); err != nil { return err }\n")
 		mainBuilder.WriteString("\t}\n")
 	}
 }
@@ -637,9 +650,10 @@ func writeHarness(directory, driverRoot, driverVersion, goworkPath string, requi
 	writeBundleImports(&mainBuilder, imports)
 	mainBuilder.WriteString(")\n\n")
 	mainBuilder.WriteString("func main() {\n")
-	writeBundleConstruction(&mainBuilder, imports)
 	writeBundleTargets(&mainBuilder, imports)
-	mainBuilder.WriteString("\tos.Exit(cli.RunWithBundlesForRequirements(os.Args[1:], bundles, targets))\n")
+	mainBuilder.WriteString("\tos.Exit(cli.RunWithBundleFactoriesForRequirements(os.Args[1:], targets, func(adopt func(core.Bundle) error) error {\n")
+	writeBundleConstruction(&mainBuilder, imports)
+	mainBuilder.WriteString("\t\treturn nil\n\t}))\n")
 	mainBuilder.WriteString("}\n")
 
 	if err := os.WriteFile(filepath.Join(directory, "main.go"), []byte(mainBuilder.String()), 0o600); err != nil {
