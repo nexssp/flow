@@ -32,12 +32,12 @@ tasks:
   test:
     desc: Fast Go test pass in short mode
     cmds:
-      - go test -short ./... -count=1
+      - go test -short ./...
 
   test:race:
     desc: Full Go test suite with the race detector
     cmds:
-      - go test ./... -race -count=1
+      - go test ./... -race
 
   test:smoke:
     desc: Run CLI smoke tests
@@ -47,17 +47,17 @@ tasks:
   test:extensions:
     desc: Run extension package tests with the race detector
     cmds:
-      - go test ./extensions/... -race -count=1
+      - go test ./extensions/... -race
 
   test:core:
     desc: Run compiler core tests with the race detector
     cmds:
-      - go test ./core/... -race -count=1
+      - go test ./core/... -race
 
   bench:
     desc: Run Go benchmarks; no Benchmark functions exist yet
     cmds:
-      - go test ./... -run '^$' -bench=. -benchmem -count=1
+      - go test ./... -run '^$' -bench=. -benchmem
 
   examples:
     desc: Run curated Flow examples as runtime smoke checks
@@ -97,18 +97,33 @@ tasks:
     cmds:
       - golangci-lint run ./...
 
+  lint:new:
+    desc: Run golangci-lint only on code changed since origin/main
+    cmds:
+      - golangci-lint run --new-from-rev=origin/main
+
+  lint:fix:
+    desc: Run golangci-lint with auto-fix only on code changed since origin/main
+    cmds:
+      - golangci-lint run --fix --new-from-rev=origin/main
+
   lint:errors:
     desc: Find fmt.Errorf usages under extensions/
     cmds:
       - rg -n 'fmt\.Errorf' ./extensions/ || test $? -eq 1
 
   check:
-    desc: Full local gate — format check, vet, lint, and race tests
+    desc: Full local gate — format check, lint, and race tests
     cmds:
       - task: fmt:check
-      - task: vet
       - task: lint
       - task: test:race
+
+  pre-push:
+    desc: Fast pre-push gate — lint of new code and short tests, run in parallel
+    deps:
+      - lint:new
+      - test
 
   # ── self test ────────────────────────────────────────────────────
 

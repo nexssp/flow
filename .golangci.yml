@@ -203,6 +203,26 @@ linters:
         linters:
           - govet
 
+      - path: cli/completion\.go
+        text: "G101"
+        linters:
+          - gosec
+
+      - path: cli/harness_smoke_test\.go
+        text: "G204"
+        linters:
+          - gosec
+
+      - path: cli/require\.go
+        text: "G204"
+        linters:
+          - gosec
+
+      - path: cli/selfbuild\.go
+        text: "G204"
+        linters:
+          - gosec
+
 formatters:
   enable:
     - gofumpt
@@ -214,19 +234,3 @@ formatters:
     goimports:
       local-prefixes:
         - github.com/nexssp/flow
-
-issues:
-  exclude-rules:
-    - path: cli/completion\.go
-      linters: [gosec]
-      text: "G101"
-    - path: cli/harness_smoke_test\.go
-      linters: [gosec]
-      text: "G204"
-    - path: cli/require\.go
-      linters: [gosec]
-      text: "G204"
-    - path: cli/selfbuild\.go
-      linters: [gosec]
-      text: "G204"
-  exclude-use-default: false

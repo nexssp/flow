@@ -1,6 +1,7 @@
 default_install_hook_types:
   - pre-commit
   - pre-push
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -14,7 +15,7 @@ repos:
     hooks:
       - id: golangci-lint
         name: golangci-lint (fix)
-        entry: golangci-lint run --fix --new-from-rev=origin/main
+        entry: task lint:fix
         language: system
         pass_filenames: false
         types: [go]
@@ -22,31 +23,15 @@ repos:
 
       - id: go-test
         name: go test
-        entry: go test -short ./...
+        entry: task test
         language: system
         pass_filenames: false
         types: [go]
         stages: [pre-commit]
 
-      - id: golangci-lint-new
-        name: golangci-lint-new
-        entry: golangci-lint run --new-from-rev=origin/main --timeout=5m
-        language: system
-        pass_filenames: false
-        types: [go]
-        stages: [pre-push]
-
-      - id: go-vet
-        name: go vet
-        entry: go vet ./...
-        language: system
-        pass_filenames: false
-        types: [go]
-        stages: [pre-push]
-
-      - id: go-test-race
-        name: go test -race
-        entry: go test -race ./...
+      - id: pre-push
+        name: pre-push (lint new code + short tests, parallel)
+        entry: task pre-push
         language: system
         pass_filenames: false
         types: [go]

@@ -28,19 +28,18 @@ jobs:
           version: 3.x
 
       - name: Compile all Go packages
-        run: go build ./...
+        run: task build
 
-      - name: Run Go tests
-        run: go test ./...
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
 
-      - name: Run go vet
-        run: go vet ./...
-
-      - name: Install nflow CLI
-        run: go install ./cmd/nflow
+      - name: Run Go tests with race detector
+        run: task test:race
 
       - name: Lint all user-facing Flow examples
-        run: nflow lint ./examples/...
+        run: task lint:nflow -- ./examples/...
 
       - name: Run user-facing Flow examples
         run: task examples
