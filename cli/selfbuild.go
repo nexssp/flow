@@ -37,7 +37,7 @@ func SelfBuild(ctx context.Context) error {
 	fmt.Fprintf(os.Stderr, "  version:  %s\n", version)
 	fmt.Fprintf(os.Stderr, "  commit:   %s\n", commit)
 
-	cmd := exec.CommandContext(ctx, "go", "build", "-ldflags="+ldflags, "-o", output, "./cmd/nexssflow") //nolint:gosec // G204: args are constructed by the CLI, not user input
+	cmd := exec.CommandContext(ctx, "go", "build", "-ldflags="+ldflags, "-o", output, "./cmd/nexssflow")
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

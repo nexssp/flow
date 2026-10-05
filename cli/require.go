@@ -200,7 +200,7 @@ func runRequirePin(ctx context.Context, args []string) int {
 }
 
 func resolveLatestVersion(ctx context.Context, modulePath string) (string, error) {
-	cmd := exec.CommandContext(ctx, "go", "list", "-m", "-json", modulePath+"@latest") //nolint:gosec // G204: args are constructed by the CLI, not user input
+	cmd := exec.CommandContext(ctx, "go", "list", "-m", "-json", modulePath+"@latest")
 	out, err := cmd.Output()
 	if err != nil {
 		cmd = exec.CommandContext(ctx, "go", "list", "-m", "-json", modulePath)
