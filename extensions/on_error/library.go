@@ -34,6 +34,7 @@ func Bundle(_ map[string]string) core.Bundle {
 		ID:           ID,
 		Libraries:    []action.Library{Library()},
 		Directives:   []core.Directive{Directive},
+		Primaries:    []core.PrimaryExtension{errorGuardPrimary{}},
 		WrapPipeline: wrapFromMeta,
 		Fixtures:     fixturesFS,
 	}

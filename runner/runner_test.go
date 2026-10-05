@@ -64,3 +64,21 @@ func TestCompileAndExecute_DispatchCapabilityRefListFallback(t *testing.T) {
 		t.Fatalf("Execute output = %#v, want %q", got, want)
 	}
 }
+
+func TestCompile_MaterializerMountsAreExecutionScoped(t *testing.T) {
+	cfg, err := BuildConfig(native.Bundles())
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := `@pool workers [runtime.const]
+pool.workers @{ value: "p" }`
+
+	for i := range 2 {
+		if _, err := Compile(context.Background(), cfg, src, "pool_materializer.nflow"); err != nil {
+			t.Fatalf("Compile run %d: %v", i+1, err)
+		}
+	}
+	if _, ok := cfg.Resolver.Action("pool.workers"); ok {
+		t.Fatal("execution-scoped pool action leaked into the base resolver")
+	}
+}

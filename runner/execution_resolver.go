@@ -52,9 +52,8 @@ func newExecutionResolver(base core.CapabilityResolver, hooks []action.AnyHook) 
 	if base == nil {
 		return nil, errors.New("executionResolver: base resolver is nil")
 	}
-	if len(hooks) == 0 {
-		return base, nil
-	}
+	// Materializers mount declarations into the resolver, so each execution
+	// needs an overlay even when no hooks are configured.
 	r := &executionResolver{
 		base:             base,
 		hooks:            slices.Clone(hooks),

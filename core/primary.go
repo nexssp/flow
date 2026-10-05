@@ -27,9 +27,20 @@ type KeywordPrimary interface {
 	Keyword() string
 }
 
+// PostfixExtension handles an operator-like form whose left operand has
+// already been parsed. MatchesPostfix must not advance the parser; ParsePostfix
+// is called only after it returns true.
+type PostfixExtension interface {
+	PrimaryExtension
+	PostfixToken() TokenType
+	MatchesPostfix(p *Parser) bool
+	ParsePostfix(p *Parser, left Expr) (Expr, error)
+}
+
 type PrimaryExtensionTable struct {
 	byToken   map[TokenType]PrimaryExtension
 	byKeyword map[string]PrimaryExtension
+	byPostfix map[TokenType]PostfixExtension
 	ordered   []PrimaryExtension
 }
 
@@ -37,6 +48,7 @@ func NewPrimaryExtensionTable(exts ...PrimaryExtension) *PrimaryExtensionTable {
 	t := &PrimaryExtensionTable{
 		byToken:   make(map[TokenType]PrimaryExtension, len(exts)),
 		byKeyword: make(map[string]PrimaryExtension, len(exts)),
+		byPostfix: make(map[TokenType]PostfixExtension, len(exts)),
 		ordered:   append([]PrimaryExtension(nil), exts...),
 	}
 	for _, ext := range exts {
@@ -61,6 +73,13 @@ func NewPrimaryExtensionTable(exts ...PrimaryExtension) *PrimaryExtensionTable {
 				t.byKeyword[kw], ext,
 				"duplicate primary extension for keyword "+kw,
 			)
+		}
+		if postfix, ok := ext.(PostfixExtension); ok {
+			token := postfix.PostfixToken()
+			if t.byPostfix[token] != nil {
+				panic("core: duplicate postfix extension for token " + token.String())
+			}
+			t.byPostfix[token] = postfix
 		}
 	}
 	return t
@@ -92,6 +111,15 @@ func (t *PrimaryExtensionTable) ByKeyword(kw string) (PrimaryExtension, bool) {
 		return nil, false
 	}
 	ext, ok := t.byKeyword[kw]
+	return ext, ok
+}
+
+// ByPostfix returns the postfix extension registered for tok, if any.
+func (t *PrimaryExtensionTable) ByPostfix(tok TokenType) (PostfixExtension, bool) {
+	if t == nil {
+		return nil, false
+	}
+	ext, ok := t.byPostfix[tok]
 	return ext, ok
 }
 

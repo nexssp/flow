@@ -3,7 +3,6 @@ package match
 import (
 	"context"
 
-	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
@@ -43,17 +42,15 @@ func (m *Expr) Analyze(resolver core.CapabilityResolver) error {
 
 func (m *Expr) Build(ctx context.Context, bCtx *core.BuildContext) (action.AnyAction, error) {
 	type compiledCase struct {
-		isDefault bool
-		condProg  *vm.Program
-		bodyAct   action.AnyAction
+		bodyAct action.AnyAction
 	}
 
 	compiledCases := make([]compiledCase, len(m.Cases))
+	conditionCases := make([]ConditionCase, len(m.Cases))
 
 	var subjectProg *vm.Program
 	if m.Subject != "" {
-		cleaned := core.PreprocessDots(m.Subject)
-		prog, err := expr.Compile(cleaned, expr.AllowUndefinedVariables())
+		prog, err := CompileCondition(m.Subject)
 		if err != nil {
 			return nil, xerr.Validation("match: invalid subject expression: "+m.Subject, err)
 		}
@@ -67,61 +64,42 @@ func (m *Expr) Build(ctx context.Context, bCtx *core.BuildContext) (action.AnyAc
 		}
 
 		cc := compiledCase{
-			isDefault: c.IsDefault,
-			bodyAct:   act,
+			bodyAct: act,
 		}
+		conditionCases[i].IsDefault = c.IsDefault
 
 		if !c.IsDefault {
 			condText := c.Condition
 			if m.Subject != "" {
 				condText = "__match_subject__ == (" + condText + ")"
-			} else {
-				condText = core.PreprocessDots(condText)
 			}
 
-			prog, err := expr.Compile(condText, expr.AllowUndefinedVariables())
+			prog, err := CompileCondition(condText)
 			if err != nil {
 				return nil, xerr.Validation("match: invalid case condition: "+c.Condition, err)
 			}
-			cc.condProg = prog
+			conditionCases[i].Program = prog
 		}
 
 		compiledCases[i] = cc
 	}
 
 	return action.New("match.evaluate", func(execCtx context.Context, in any) (any, error) {
-		env := core.BuildEnv(in)
+		env := WithKindEnvironment(core.BuildEnv(in))
 
 		if subjectProg != nil {
-			subjVal, err := expr.Run(subjectProg, env)
+			subjVal, err := EvaluateProgram(subjectProg, env)
 			if err != nil {
 				return nil, xerr.BadRequest("match: failed to evaluate subject: "+m.Subject, err)
 			}
 			env["__match_subject__"] = subjVal
 		}
 
-		for _, cc := range compiledCases {
-			if cc.isDefault {
-				return action.InvokeAny(execCtx, cc.bodyAct, in)
-			}
-
-			matched, err := expr.Run(cc.condProg, env)
-			if err != nil {
-				continue
-			}
-
-			if isTruthy(matched) {
-				return action.InvokeAny(execCtx, cc.bodyAct, in)
-			}
+		caseIndex := FirstMatchingCase(conditionCases, env)
+		if caseIndex >= 0 {
+			return action.InvokeAny(execCtx, compiledCases[caseIndex].bodyAct, in)
 		}
 
 		return in, nil
 	}).Tag("control", "match").Build(), nil
-}
-
-func isTruthy(val any) bool {
-	if b, ok := val.(bool); ok {
-		return b
-	}
-	return false
 }

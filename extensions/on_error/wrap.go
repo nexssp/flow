@@ -3,11 +3,11 @@ package on_error
 import (
 	"context"
 
-	"github.com/expr-lang/expr"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
 	"github.com/nexssp/flow/contracts"
+	"github.com/nexssp/flow/extensions/match"
 )
 
 func wrapFromMeta(meta map[string]any, inner action.AnyAction) (action.AnyAction, error) {
@@ -19,23 +19,26 @@ func wrapFromMeta(meta map[string]any, inner action.AnyAction) (action.AnyAction
 }
 
 func wrap(name string, protected action.AnyAction, cfg Config) action.AnyAction {
+	conditions := compileRules(cfg)
 	return action.CatchAny(name, protected, func(ctx context.Context, req any, err error) (any, error) {
-		return recoverFn(ctx, req, err, cfg)
+		return recoverFn(ctx, req, err, cfg, conditions)
 	}).Build()
 }
 
-func recoverFn(ctx context.Context, req any, err error, cfg Config) (any, error) {
-	errKind := string(xerr.KindFrom(err))
-
-	env := map[string]any{
-		"error": map[string]any{
-			"kind":    errKind,
-			"message": err.Error(),
-		},
-		"input": req,
+func recoverFn(
+	ctx context.Context,
+	req any,
+	err error,
+	cfg Config,
+	conditions []match.ConditionCase,
+) (any, error) {
+	if terminalErr := terminalRecoveryError(ctx, err); terminalErr != nil {
+		return nil, terminalErr
 	}
+	errKind := string(xerr.From(err).Kind)
+	env := pipelineErrorEnvironment(req, err)
 
-	target := resolveTarget(cfg, env)
+	target := resolveTargetWithConditions(cfg, env, conditions)
 	if target == "" {
 		return nil, err
 	}
@@ -55,18 +58,23 @@ func recoverFn(ctx context.Context, req any, err error, cfg Config) (any, error)
 }
 
 func resolveTarget(cfg Config, env map[string]any) string {
-	for _, rule := range cfg.Rules {
-		program, err := expr.Compile(rule.Condition, expr.AllowUndefinedVariables())
-		if err != nil {
-			continue
+	return resolveTargetWithConditions(cfg, env, compileRules(cfg))
+}
+
+func compileRules(cfg Config) []match.ConditionCase {
+	conditions := make([]match.ConditionCase, len(cfg.Rules))
+	for i, rule := range cfg.Rules {
+		program, err := match.CompileCondition(rule.Condition)
+		if err == nil {
+			conditions[i].Program = program
 		}
-		output, err := expr.Run(program, env)
-		if err != nil {
-			continue
-		}
-		if matched, ok := output.(bool); ok && matched {
-			return rule.Target
-		}
+	}
+	return conditions
+}
+
+func resolveTargetWithConditions(cfg Config, env map[string]any, conditions []match.ConditionCase) string {
+	if index := match.FirstMatchingCase(conditions, env); index >= 0 && index < len(cfg.Rules) {
+		return cfg.Rules[index].Target
 	}
 	return cfg.ElseTarget
 }

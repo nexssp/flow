@@ -100,6 +100,16 @@ func (p *Parser) Cur() Token { return p.toks[p.pos] }
 // Current is an alias for Cur, exported for external primary extensions.
 func (p *Parser) Current() Token { return p.toks[p.pos] }
 
+// Peek returns the token at offset from Cur without advancing. Peek(0) is the
+// current token; offsets beyond the input return the final EOF token.
+func (p *Parser) Peek(offset int) Token {
+	index := max(p.pos+offset, 0)
+	if index >= len(p.toks) {
+		return p.toks[len(p.toks)-1]
+	}
+	return p.toks[index]
+}
+
 // Next advances the cursor by one token.
 func (p *Parser) Next() {
 	if p.pos < len(p.toks)-1 {
@@ -201,6 +211,14 @@ func (p *Parser) parseExpr(minPrec int) (Expr, error) {
 	}
 	for {
 		if p.Cur().Type == TokQuestion && minPrec <= 1 {
+			if ext, ok := p.primaries.ByPostfix(TokQuestion); ok && ext.MatchesPostfix(p) {
+				left, err = ext.ParsePostfix(p, left)
+				if err != nil {
+					return nil, err
+				}
+				continue
+			}
+
 			p.Next()
 
 			thenExpr, thenErr := p.parseExpr(2)
