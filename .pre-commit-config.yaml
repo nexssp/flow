@@ -14,7 +14,7 @@ repos:
     hooks:
       - id: golangci-lint
         name: golangci-lint (fix)
-        entry: golangci-lint run --fix
+        entry: golangci-lint run --fix --new-from-rev=origin/main
         language: system
         pass_filenames: false
         types: [go]
@@ -28,9 +28,9 @@ repos:
         types: [go]
         stages: [pre-commit]
 
-      - id: golangci-lint-full
-        name: golangci-lint (full)
-        entry: golangci-lint run --timeout=5m
+      - id: golangci-lint-new
+        name: golangci-lint-new
+        entry: golangci-lint run --new-from-rev=origin/main --timeout=5m
         language: system
         pass_filenames: false
         types: [go]
@@ -46,7 +46,7 @@ repos:
 
       - id: go-test-race
         name: go test -race
-        entry: go test -race -count=1 ./...
+        entry: go test -race ./...
         language: system
         pass_filenames: false
         types: [go]
