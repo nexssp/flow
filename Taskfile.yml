@@ -28,31 +28,124 @@ tasks:
       - go build -trimpath -o "bin/nflow{{.EXE_EXT}}" ./cmd/nflow
 
   # ── test ─────────────────────────────────────────────────────────
+  #
+  # Per-tree tasks declare their own sources; Task hashes them after a
+  # successful run and skips the next invocation if nothing changed.
+  # A red test never caches. Aggregates (test, test:race) carry no
+  # sources of their own — they chain the per-tree tasks, each of which
+  # decides independently.
+  #
+  # test:full / test:race:full bypass the cache for CI and one-off
+  # verification. Use those when you must see a fresh run.
 
   test:
-    desc: Fast Go test pass in short mode
+    desc: Fast short tests; skips trees whose sources are unchanged
+    deps:
+      - test:core
+      - test:runner
+      - test:extensions
+      - test:cli
+
+  test:full:
+    desc: Short tests with no cache (CI or one-off verification)
     cmds:
-      - go test -short ./...
+      - go test -short -count=1 ./...
 
   test:race:
-    desc: Full Go test suite with the race detector
+    desc: Race tests; skips trees whose sources are unchanged
+    deps:
+      - test:core:race
+      - test:runner:race
+      - test:extensions:race
+      - test:cli:race
+
+  test:race:full:
+    desc: Race tests with no cache (CI or one-off verification)
     cmds:
-      - go test ./... -race
+      - go test -race -count=1 ./...
+
+  test:core:
+    desc: Short tests for core/
+    sources:
+      - 'core/**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+    cmds:
+      - go test -short ./core/...
+
+  test:core:race:
+    desc: Race tests for core/
+    sources:
+      - 'core/**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+    cmds:
+      - go test -race -short ./core/...
+
+  test:runner:
+    desc: Short tests for runner/
+    sources:
+      - 'runner/**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+    cmds:
+      - go test -short ./runner/...
+
+  test:runner:race:
+    desc: Race tests for runner/
+    sources:
+      - 'runner/**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+    cmds:
+      - go test -race -short ./runner/...
+
+  test:extensions:
+    desc: Short tests for extensions/
+    sources:
+      - 'extensions/**/*.go'
+      - 'extensions/**/*.nflow'
+      - 'go.mod'
+      - 'go.sum'
+    cmds:
+      - go test -short ./extensions/...
+
+  test:extensions:race:
+    desc: Race tests for extensions/
+    sources:
+      - 'extensions/**/*.go'
+      - 'extensions/**/*.nflow'
+      - 'go.mod'
+      - 'go.sum'
+    cmds:
+      - go test -race -short ./extensions/...
+
+  test:cli:
+    desc: Short tests for cli/, native/, cmd/
+    sources:
+      - 'cli/**/*.go'
+      - 'native/**/*.go'
+      - 'cmd/**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+    cmds:
+      - go test -short ./cli/... ./native/... ./cmd/...
+
+  test:cli:race:
+    desc: Race tests for cli/, native/, cmd/
+    sources:
+      - 'cli/**/*.go'
+      - 'native/**/*.go'
+      - 'cmd/**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+    cmds:
+      - go test -race -short ./cli/... ./native/... ./cmd/...
 
   test:smoke:
     desc: Run CLI smoke tests
     cmds:
       - go test ./cli/... -race -count=1 -v -run TestSmoke
-
-  test:extensions:
-    desc: Run extension package tests with the race detector
-    cmds:
-      - go test ./extensions/... -race
-
-  test:core:
-    desc: Run compiler core tests with the race detector
-    cmds:
-      - go test ./core/... -race
 
   bench:
     desc: Run Go benchmarks; no Benchmark functions exist yet
@@ -175,14 +268,6 @@ tasks:
     desc: Tidy this Flow module only
     cmds:
       - go mod tidy
-
-  tidy:kernel:
-    desc: Opt-in tidy for a matching sibling kernel checkout
-    preconditions:
-      - sh: test -f ../kernel/go.mod && grep -q '^module github.com/nexssp/kernel$' ../kernel/go.mod
-        msg: 'expected ../kernel/go.mod with module github.com/nexssp/kernel; Flow tidy is available as task tidy'
-    cmds:
-      - cd ../kernel && go mod tidy
 
   clean:
     desc: Remove only the generated Flow binary and catalog
