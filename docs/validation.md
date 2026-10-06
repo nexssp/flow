@@ -80,14 +80,14 @@ Flow:
 @config:strict=true
 
 # ✅ passes
-{ name: "Ada", email: "ada@nexss.dev" } -> create_user
+{ name: "Maksymilian", email: "ada@nexss.dev" } -> create_user
 
 # ❌ runtime: [Validation] validation failed
 #    field "name": failed 'min' check (expected 3)
 { name: "Al", email: "ada@nexss.dev" } -> create_user
 
 # ❌ runtime: "email" field missing
-{ name: "Ada" } -> create_user
+{ name: "Maksymilian" } -> create_user
 ```
 
 The error reaches the transport as `xerr.KindValidation` (HTTP 400).

@@ -43,3 +43,4 @@ data/
 
 .nexss/
 coverage_bench.json
+.task

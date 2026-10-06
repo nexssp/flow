@@ -9,7 +9,7 @@
 //	  Name  string `json:"name"  validate:"required"`
 //	  Email string `json:"email" validate:"email"`
 //	}
-//	{ name: "Ada" } -> runtime.noop:schema=TestUser
+//	{ name: "Maksymilian" } -> runtime.noop:schema=TestUser
 package schema
 
 import (

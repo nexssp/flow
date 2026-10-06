@@ -12,7 +12,7 @@ func TestRender_InterpolatesAdjacentRepeatedAndNestedValues(t *testing.T) {
 
 	got, err := Render("{{.greeting}}{{.name}}/{{.name}} {{.profile.city}} {{.count}} {{.active}}", map[string]any{
 		"greeting": "Hello, ",
-		"name":     "Ada",
+		"name":     "Maksymilian",
 		"profile":  map[string]any{"city": "London"},
 		"count":    0,
 		"active":   false,
@@ -20,7 +20,7 @@ func TestRender_InterpolatesAdjacentRepeatedAndNestedValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render() error = %v", err)
 	}
-	if want := "Hello, Ada/Ada London 0 false"; got != want {
+	if want := "Hello, Maksymilian/Maksymilian London 0 false"; got != want {
 		t.Fatalf("Render() = %q, want %q", got, want)
 	}
 }
@@ -67,7 +67,7 @@ func TestRender_MissingVariableFailsWithoutPartialOutput(t *testing.T) {
 func TestRender_ParseErrorIsClassified(t *testing.T) {
 	t.Parallel()
 
-	got, err := Render("{{.name", map[string]any{"name": "Ada"})
+	got, err := Render("{{.name", map[string]any{"name": "Maksymilian"})
 	if got != "" {
 		t.Fatalf("Render() = %q, want empty output on parse error", got)
 	}
@@ -79,7 +79,7 @@ func TestRender_ParseErrorIsClassified(t *testing.T) {
 func TestRender_UnknownFunctionIsParseError(t *testing.T) {
 	t.Parallel()
 
-	_, err := Render(`{{unknownFunction .name}}`, map[string]any{"name": "Ada"})
+	_, err := Render(`{{unknownFunction .name}}`, map[string]any{"name": "Maksymilian"})
 	if !errors.Is(err, ErrParse) {
 		t.Fatalf("Render() error = %v, want ErrParse", err)
 	}

@@ -26,7 +26,12 @@ type Atom struct {
 	Prompt          string
 	Targets         []string
 	Excludes        []string
-	Pos             Position // source position of the atom, for compile-time diagnostics
+	// ConfigInject marks an atom written as `op @config`. For stream
+	// operators, every field of the operator's config struct that has
+	// a matching @config.<json_name> value is injected into its
+	// parameters at build time.
+	ConfigInject bool
+	Pos          Position // source position of the atom, for compile-time diagnostics
 }
 
 // ModifierSource records where a modifier came from. Both fields are

@@ -334,7 +334,11 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 			a.Excludes = p.appendList(a.Excludes)
 
 		case TokAtPrompt:
-			a.Prompt = p.Cur().Lit
+			if p.Cur().Lit == "config" {
+				a.ConfigInject = true
+			} else {
+				a.Prompt = p.Cur().Lit
+			}
 			p.Next()
 
 		case TokAtBrace:

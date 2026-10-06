@@ -27,9 +27,9 @@ The example projects a nested value into a new shape and prints:
 ```json
 {
   "id": 101,
-  "name": "Ada",
+  "name": "Maksymilian",
   "status": "active",
-  "summary": "Ada (ID: 101) is active"
+  "summary": "Maksymilian (ID: 101) is active"
 }
 ```
 

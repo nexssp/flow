@@ -4,9 +4,9 @@ go 1.26.0
 
 require (
 	github.com/expr-lang/expr v1.17.8
-	github.com/nexssp/kernel v0.26.1
+	github.com/nexssp/kernel v0.27.3
 	github.com/nexssp/validation v0.2.4
-	github.com/tetratelabs/wazero v1.8.2
+	github.com/tetratelabs/wazero v1.12.0
 	golang.org/x/sync v0.23.0
 	golang.org/x/sys v0.48.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -14,7 +14,7 @@ require (
 
 require (
 	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
-	github.com/go-playground/locales v0.14.1 // indirect
+	github.com/go-playground/locales v0.14.2 // indirect
 	github.com/go-playground/universal-translator v0.18.2 // indirect
 	github.com/go-playground/validator/v10 v10.30.5 // indirect
 	github.com/kr/pretty v0.3.1 // indirect

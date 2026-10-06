@@ -42,7 +42,7 @@ func requireValidationField(tb testing.TB, err error, field string) xerr.Validat
 func TestValidate_Success(t *testing.T) {
 	t.Parallel()
 	payload := map[string]any{
-		"name":   "Ada",
+		"name":   "Maksymilian",
 		"age":    42,
 		"tags":   []any{"a"},
 		"attrs":  map[string]any{"x": 1},
@@ -60,7 +60,7 @@ func TestValidate_MissingRequired(t *testing.T) {
 
 func TestValidate_OptionalMissing(t *testing.T) {
 	t.Parallel()
-	ktest.RequireNoError(t, Validate(sampleSchema(), map[string]any{"name": "Ada"}))
+	ktest.RequireNoError(t, Validate(sampleSchema(), map[string]any{"name": "Maksymilian"}))
 }
 
 func TestValidate_TypeErrors(t *testing.T) {
@@ -72,9 +72,9 @@ func TestValidate_TypeErrors(t *testing.T) {
 		wantValidate string
 	}{
 		{"wrong string", map[string]any{"name": 42}, "name", "string"},
-		{"wrong int", map[string]any{"name": "Ada", "age": "young"}, "age", "number"},
-		{"wrong slice", map[string]any{"name": "Ada", "tags": "not-a-slice"}, "tags", "slice"},
-		{"wrong map", map[string]any{"name": "Ada", "attrs": "not-a-map"}, "attrs", "map"},
+		{"wrong int", map[string]any{"name": "Maksymilian", "age": "young"}, "age", "number"},
+		{"wrong slice", map[string]any{"name": "Maksymilian", "tags": "not-a-slice"}, "tags", "slice"},
+		{"wrong map", map[string]any{"name": "Maksymilian", "attrs": "not-a-map"}, "attrs", "map"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

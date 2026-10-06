@@ -6,7 +6,7 @@
 //
 // Typical use:
 //
-//	{ name: "Ada", extra: true } -> { name: .name }
+//	{ name: "Maksymilian", extra: true } -> { name: .name }
 //	{ id: 1, status: "new" } -> { ..., status: "active" }
 package projection
 

@@ -122,7 +122,7 @@ Both forms are valid; prefer the keyword.
 not as a mini-language:
 
 ```nflow
-{ user: { id: 42, name: "Ada" } }
+{ user: { id: 42, name: "Maksymilian" } }
 -> wrap @{ key: "payload", note: "wrapped", count: 3, active: true }
 ```
 
@@ -183,11 +183,11 @@ binding. See [extensions.md §7](extensions.md#7-argument-schemas) for the
 A `{ ... }` at the top of a pipeline reshapes the current value:
 
 ```nflow
-{ id: 1, name: "Ada", extra: "discard" }
+{ id: 1, name: "Maksymilian", extra: "discard" }
 -> { name: .name, greeting: "Hello, " + .name }
 ```
 
-Result: `{ "name": "Ada", "greeting": "Hello, Ada" }`.
+Result: `{ "name": "Maksymilian", "greeting": "Hello, Maksymilian" }`.
 
 Projections can spread the whole input with `...`:
 
@@ -379,13 +379,13 @@ re-parses the body as if it were written at the call site.
   const @{ value: { name: $name } } -> wrap @{ key: "card" }
 }
 
-@user_card("Ada")
+@user_card("Maksymilian")
 ```
 
 Expands to:
 
 ```nflow
-const @{ value: { name: "Ada" } } -> wrap @{ key: "card" }
+const @{ value: { name: "Maksymilian" } } -> wrap @{ key: "card" }
 ```
 
 ### Patterns

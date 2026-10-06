@@ -7,11 +7,11 @@ import (
 )
 
 func selftest() []core.SelfTestSection {
-	jsonCommand := `echo {\"name\":\"Ada\"}`
+	jsonCommand := `echo {\"name\":\"Maksymilian\"}`
 	if runtime.GOOS == "windows" {
-		jsonCommand = `echo {"name":"Ada"}`
+		jsonCommand = `echo {"name":"Maksymilian"}`
 	}
-	jsonDSL := `@assert: result.output.name == "Ada"
+	jsonDSL := `@assert: result.output.name == "Maksymilian"
 external.exec @{ cmd: ` + "`" + jsonCommand + "`" + ` }`
 
 	return []core.SelfTestSection{

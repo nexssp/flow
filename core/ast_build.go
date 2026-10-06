@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"reflect"
 	"strings"
 
 	"github.com/expr-lang/expr"
@@ -194,7 +195,7 @@ func buildSegmented(
 }
 
 func buildStreamSource(
-	_ context.Context,
+	ctx context.Context,
 	bCtx *BuildContext,
 	nodes []Expr,
 ) (action.AnyStreamAction, error) {
@@ -207,13 +208,24 @@ func buildStreamSource(
 		return nil, xerr.Internal("stream segment must begin with an atom")
 	}
 
+	resolveConfigRefsInAtom(ctx, headAtom)
+
 	src, ok := bCtx.Resolver.Stream(headAtom.Name)
 	if !ok {
 		return nil, xerr.NotFound(headAtom.Name + " is not a registered stream source")
 	}
 
-	if params := ModifiersToMap(headAtom.Modifiers); len(params) > 0 {
-		src = &configuredSource{inner: src, cfg: params}
+	headParams := ModifiersToMap(headAtom.Modifiers)
+	if headAtom.ConfigInject {
+		cfg, _ := compileConfigFromCtx(ctx)
+		var err error
+		headParams, err = injectConfigIntoParams(headParams, src.ReqPayload(), cfg)
+		if err != nil {
+			return nil, xerr.Validation("stream source "+headAtom.Name+": "+err.Error(), err)
+		}
+	}
+	if len(headParams) > 0 {
+		src = &configuredSource{inner: src, cfg: headParams}
 	}
 
 	ops := make([]action.StreamOperator, 0, len(nodes)-1)
@@ -223,12 +235,24 @@ func buildStreamSource(
 			return nil, xerr.Internal("stream segment only accepts atoms after the head")
 		}
 
+		resolveConfigRefsInAtom(ctx, atom)
+
 		named, ok := bCtx.Resolver.Operator(atom.Name)
 		if !ok {
 			return nil, xerr.NotFound(atom.Name + " is not a registered stream operator")
 		}
 
-		op, err := named.Build(ModifiersToMap(atom.Modifiers))
+		params := ModifiersToMap(atom.Modifiers)
+		if atom.ConfigInject {
+			cfg, _ := compileConfigFromCtx(ctx)
+			var err error
+			params, err = injectConfigIntoParams(params, named.ConfigType, cfg)
+			if err != nil {
+				return nil, xerr.Validation("operator "+atom.Name+": "+err.Error(), err)
+			}
+		}
+
+		op, err := named.Build(params)
 		if err != nil {
 			return nil, xerr.Validation("operator "+atom.Name+": "+err.Error(), err)
 		}
@@ -557,6 +581,26 @@ func resolveConfigRefsInAtom(ctx context.Context, a *Atom) {
 	for _, value := range a.Args {
 		resolveConfigRefsInValue(cfg, cliArgs, value)
 	}
+	for i, raw := range a.Modifiers {
+		a.Modifiers[i] = resolveConfigRefsInModifier(cfg, cliArgs, raw)
+	}
+}
+
+// resolveConfigRefsInModifier rewrites @config.X and @flag.X references
+// inside a raw modifier string of the form name=value. Modifiers
+// without a value or with an unrecognized reference are returned
+// unchanged.
+func resolveConfigRefsInModifier(cfg map[string]string, cliArgs []string, raw string) string {
+	eq := strings.IndexByte(raw, '=')
+	if eq <= 0 {
+		return raw
+	}
+	value := raw[eq+1:]
+	resolved := resolveConfigString(cfg, cliArgs, value)
+	if resolved == value {
+		return raw
+	}
+	return raw[:eq+1] + resolved
 }
 
 func resolveConfigRefsInValue(cfg map[string]string, cliArgs []string, value *Value) {
@@ -741,4 +785,50 @@ func PreprocessDots(src string) string {
 
 func isIdentChar(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
+}
+
+// injectConfigIntoParams copies matching @config values into params,
+// coercing each value to the target field type. Existing params
+// (explicit :mod= values) win over injected config. target is either
+// an operator's ConfigType or a stream source's request payload type;
+// a nil target or a non-struct target is a no-op.
+func injectConfigIntoParams(params map[string]any, target any, cfg map[string]string) (map[string]any, error) {
+	if len(cfg) == 0 || target == nil {
+		return params, nil
+	}
+	typ := reflect.TypeOf(target)
+	for typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	if typ.Kind() != reflect.Struct {
+		return params, nil
+	}
+	if params == nil {
+		params = make(map[string]any, typ.NumField())
+	}
+	for field := range typ.Fields() {
+		if !field.IsExported() {
+			continue
+		}
+		jsonName, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if jsonName == "-" {
+			continue
+		}
+		if jsonName == "" {
+			jsonName = field.Name
+		}
+		if _, exists := params[jsonName]; exists {
+			continue
+		}
+		raw, ok := cfg[jsonName]
+		if !ok {
+			continue
+		}
+		value, err := action.CoerceStringValue(raw, field.Type)
+		if err != nil {
+			return nil, fmt.Errorf("field %q: %w", jsonName, err)
+		}
+		params[jsonName] = value
+	}
+	return params, nil
 }

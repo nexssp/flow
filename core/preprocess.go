@@ -7,12 +7,64 @@ import (
 	"strings"
 )
 
+// SourceLoader resolves a directive-referenced source fragment such as
+// the target of @include. CurrentFile is the path of the file that
+// issued the reference; Target is the raw path from the directive.
+//
+// The returned resolvedPath is used for cycle detection and error
+// reporting. Its only requirement is stability for the same file
+// across calls within one preprocess run.
+type SourceLoader interface {
+	Load(currentFile, target string) (data []byte, resolvedPath string, err error)
+}
+
+type sourceLoaderContextKey struct{}
+
+// WithSourceLoader installs a loader for directive-referenced sources.
+// The default loader reads from the filesystem.
+func WithSourceLoader(ctx context.Context, loader SourceLoader) context.Context {
+	if loader == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, sourceLoaderContextKey{}, loader)
+}
+
+func sourceLoaderFrom(ctx context.Context) SourceLoader {
+	if loader, ok := ctx.Value(sourceLoaderContextKey{}).(SourceLoader); ok {
+		return loader
+	}
+	return fileSystemLoader{}
+}
+
+type fileSystemLoader struct{}
+
+func (fileSystemLoader) Load(currentFile, target string) (data []byte, resolvedPath string, err error) {
+	resolved := target
+	if !filepath.IsAbs(resolved) {
+		resolved = filepath.Join(filepath.Dir(currentFile), target)
+	}
+	var absPath string
+	absPath, err = filepath.Abs(resolved)
+	if err != nil {
+		return nil, "", err
+	}
+	data, err = os.ReadFile(absPath)
+	if err != nil {
+		return nil, "", err
+	}
+	return data, absPath, nil
+}
+
 // Preprocess executes directives from the dt table.
 //
 // Cycle detection uses a call-stack, not a global set. This allows
 // diamond dependencies (A → B → common, A → C → common) while still
 // catching true cycles (A → B → A). The error message carries the
 // exact include chain so the user sees which edge closes the loop.
+//
+// Source fragments referenced by directives are read through the
+// loader installed with WithSourceLoader; the default reads from the
+// filesystem.
 func Preprocess(ctx context.Context, dt *DirectiveTable, source, file string) (clean string, meta map[string]any, err error) {
 	meta = make(map[string]any)
 	if dt == nil {
@@ -66,6 +118,8 @@ func preprocess(
 		return source, meta, nil
 	}
 
+	loader := sourceLoaderFrom(ctx)
+
 	baseDir := ""
 	if file != "" {
 		baseDir = filepath.Dir(file)
@@ -105,19 +159,18 @@ func preprocess(
 			File:    file,
 			BaseDir: baseDir,
 			Table:   dt,
-			Recurse: func(absPath string) (string, map[string]any, error) {
-				if !stack.push(absPath) {
+			Recurse: func(target string) (string, map[string]any, error) {
+				data, resolvedPath, loadErr := loader.Load(file, target)
+				if loadErr != nil {
+					return "", nil, loadErr
+				}
+				if !stack.push(resolvedPath) {
 					return "", nil, SourceError(
 						Position{File: file, Line: i + 1},
-						"@include cycle detected: %s", stack.chain(absPath))
+						"@include cycle detected: %s", stack.chain(resolvedPath))
 				}
 				defer stack.pop()
-
-				data, readErr := os.ReadFile(absPath)
-				if readErr != nil {
-					return "", nil, readErr
-				}
-				return preprocess(ctx, dt, string(data), absPath, stack)
+				return preprocess(ctx, dt, string(data), resolvedPath, stack)
 			},
 		}
 		res, err := handler.Do(ctx, req)

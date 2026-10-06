@@ -56,8 +56,6 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 
 	mergeIncludedMeta(req.Out, includedMeta)
 
-	// Inline the included file's cleaned body so it compiles in the
-	// parent's pipeline graph.
 	req.Body[req.I] = strings.Join(strings.Fields(clean), " ")
 	return core.DirectiveRes{Next: req.I + 1}, nil
 }

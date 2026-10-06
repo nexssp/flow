@@ -6,4 +6,4 @@
 
 @assert: result == "I am the fallback!"
 
-dispatch.run @{ members: [runtime.fail, runtime.const], payload: { value: "I am the fallback!" } }
+dispatch.run @{ members: [fail, const], payload: { value: "I am the fallback!" } }

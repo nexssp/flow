@@ -49,6 +49,34 @@ func SchemasFromMap(meta map[string]any) []Schema {
 	return schemas
 }
 
+// SplitFields classifies schema fields by their transport tags.
+//
+//	A field with config:"true" goes only to compile config unless it
+//	also declares payload:"true".
+//	A field without config:"true" goes only to payload unless it
+//	declares config:"true" without payload.
+//
+// A field without either tag defaults to payload. A field with both
+// goes to both channels. Any tag value other than "true" is treated
+// as absent. Result slices preserve declaration order.
+func SplitFields(s Schema) (payload, config []string) {
+	payload = make([]string, 0, len(s.Fields))
+	config = make([]string, 0, len(s.Fields))
+
+	for _, f := range s.Fields {
+		toConfig := f.Tags["config"] == "true"
+		toPayload := f.Tags["payload"] == "true" || !toConfig
+
+		if toPayload {
+			payload = append(payload, f.JSONName)
+		}
+		if toConfig {
+			config = append(config, f.JSONName)
+		}
+	}
+	return payload, config
+}
+
 // SchemaByName returns the named schema if declared.
 func ByName(meta map[string]any, name string) (Schema, bool) {
 	for _, s := range SchemasFromMap(meta) {

@@ -111,7 +111,8 @@ func TestDynamicResolver_RejectsCrossKindCanonicalCollisions(t *testing.T) {
 	newOperator := func(name string) action.NamedOperator {
 		return action.NamedOperator{
 			Name: name, InType: reflect.TypeFor[any](), OutType: reflect.TypeFor[any](),
-			Build: func(any) (action.StreamOperator, error) { return testResolverOperator{name: name}, nil },
+			ConfigType: reflect.TypeFor[struct{}](),
+			Build:      func(any) (action.StreamOperator, error) { return testResolverOperator{name: name}, nil },
 		}
 	}
 	tests := []struct {
@@ -174,7 +175,8 @@ func TestDynamicResolver_MountWithAliasReplacesNamespacesForAllKinds(t *testing.
 	act := action.New("demo.run", func(_ context.Context, in any) (any, error) { return in, nil }).Build()
 	op := action.NamedOperator{
 		Name: "demo.filter", InType: reflect.TypeFor[any](), OutType: reflect.TypeFor[any](),
-		Build: func(any) (action.StreamOperator, error) { return testResolverOperator{name: "demo.filter"}, nil },
+		ConfigType: reflect.TypeFor[struct{}](),
+		Build:      func(any) (action.StreamOperator, error) { return testResolverOperator{name: "demo.filter"}, nil },
 	}
 	lib := action.Library{
 		Name:      "demo",

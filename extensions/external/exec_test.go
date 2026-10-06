@@ -44,16 +44,16 @@ func TestExec_NonZeroExit(t *testing.T) {
 
 func TestExec_JSONStdoutDecoded(t *testing.T) {
 	t.Parallel()
-	command := `echo '{"name":"Ada","age":42}'`
+	command := `echo '{"name":"Maksymilian","age":42}'`
 	if runtime.GOOS == "windows" {
-		command = `echo {"name":"Ada","age":42}`
+		command = `echo {"name":"Maksymilian","age":42}`
 	}
 	result, err := runExec(t, map[string]any{"cmd": command})
 	ktest.RequireNoError(t, err)
 
 	m, ok := result.Output.(map[string]any)
 	ktest.RequireCondition(t, ok, "Output = %T, want map", result.Output)
-	ktest.RequireEqual(t, m["name"], "Ada")
+	ktest.RequireEqual(t, m["name"], "Maksymilian")
 }
 
 func TestExec_NonJSONStdout(t *testing.T) {

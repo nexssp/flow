@@ -36,6 +36,16 @@ type Compilation struct {
 	Resolver core.CapabilityResolver
 }
 
+// EntryPoint is a named action to invoke after compilation instead of
+// the top-level program. Hosts that route CLI commands to named
+// pipelines use it.
+type EntryPoint struct {
+	// Name is the action's registered name, e.g. "pipeline.pack".
+	Name string
+	// Payload is the typed request passed to the entrypoint.
+	Payload any
+}
+
 func readMemStats(dst *runtime.MemStats) {
 	runtime.ReadMemStats(dst)
 }
@@ -51,14 +61,93 @@ func withExecutionContext(ctx context.Context, cfg Config, resolver core.Capabil
 // Compile preprocesses source, materializes declarations, and compiles its
 // top-level program without invoking workflow actions.
 func Compile(ctx context.Context, cfg Config, src, name string) (Compilation, error) {
-	resolver, err := newExecutionResolver(cfg.Resolver, cfg.Hooks)
+	prepared, err := core.PrepareSource(ctx, cfg.Directives, src, name, cfg.CompileOpts...)
 	if err != nil {
 		return Compilation{}, err
 	}
+	return compilePrepared(ctx, cfg, prepared)
+}
 
-	prepared, err := core.PrepareSource(ctx, cfg.Directives, src, name, cfg.CompileOpts...)
+// Preflight preprocesses source once and returns a value for reuse in
+// ExecutePrepared. Hosts use it to discover @schema declarations and
+// pipeline modifiers before parsing argv, so command-line values can
+// reach compile-time modifiers such as out.file:path=@config.output.
+func Preflight(ctx context.Context, cfg Config, src, name string) (*core.PreparedSource, error) {
+	return core.PrepareSource(ctx, cfg.Directives, src, name, cfg.CompileOpts...)
+}
+
+// ExecutePrepared compiles prepared source and invokes the named
+// entrypoint. extraOpts are appended to cfg.CompileOpts for this
+// invocation only, so hosts can inject argv-derived values with
+// core.WithConfigMap without re-running directives.
+func ExecutePrepared(
+	ctx context.Context,
+	cfg Config,
+	prepared *core.PreparedSource,
+	entry EntryPoint,
+	extraOpts ...core.CompileOption,
+) (Execution, error) {
+	if len(extraOpts) > 0 {
+		cfg.CompileOpts = append(append([]core.CompileOption{}, cfg.CompileOpts...), extraOpts...)
+	}
+
+	compileStart := time.Now()
+	var startStats, compileStats, runStats runtime.MemStats
+	if cfg.MeasureAllocs {
+		readMemStats(&startStats)
+	}
+
+	compiled, err := compilePrepared(ctx, cfg, prepared)
+	compileDuration := time.Since(compileStart)
+	if cfg.MeasureAllocs {
+		readMemStats(&compileStats)
+	}
 	if err != nil {
-		return Compilation{Resolver: resolver}, err
+		result := Execution{Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
+		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
+		return result, err
+	}
+	if entry.Name == "" {
+		result := Execution{Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
+		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
+		return result, errors.New("runner: entrypoint name is required")
+	}
+
+	entryAction, ok := compiled.Resolver.Action(entry.Name)
+	if !ok {
+		result := Execution{Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
+		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
+		return result, fmt.Errorf("runner: entrypoint %q is not registered in the compiled source", entry.Name)
+	}
+
+	ctx = withExecutionContext(ctx, cfg, compiled.Resolver)
+
+	runStart := time.Now()
+	output, runErr := action.InvokeAny(ctx, entryAction, entry.Payload)
+	runDuration := time.Since(runStart)
+	if cfg.MeasureAllocs {
+		readMemStats(&runStats)
+	}
+
+	result := Execution{
+		Output:          output,
+		Meta:            compiled.Meta,
+		Resolver:        compiled.Resolver,
+		CompileDuration: compileDuration,
+		RunDuration:     runDuration,
+	}
+	fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
+	fillRunAllocs(&result, cfg.MeasureAllocs, &compileStats, &runStats)
+	if runErr != nil {
+		return result, runErr
+	}
+	return result, nil
+}
+
+func compilePrepared(ctx context.Context, cfg Config, prepared *core.PreparedSource) (Compilation, error) {
+	resolver, err := newExecutionResolver(cfg.Resolver, cfg.Hooks)
+	if err != nil {
+		return Compilation{}, err
 	}
 
 	meta := prepared.Metadata()

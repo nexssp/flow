@@ -148,7 +148,7 @@ nflow info flow.nflow
 
 Description: Extract and reshape user
 Asserts: 1
-  • result.name == "Ada"
+  • result.name == "Maksymilian"
 
 ⚡ Pipeline:
   [1] http.request
