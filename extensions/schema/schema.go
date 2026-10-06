@@ -30,6 +30,10 @@ type Field struct {
 	Slice    bool
 	Map      bool
 	Tags     map[string]string
+	// Embed is set only while a @schema body is being parsed: a line with
+	// a single identifier is a composition (embed) of another declared
+	// schema, not a field. Resolved schemas never carry Embed.
+	Embed string
 }
 
 // Schema is one complete declaration.

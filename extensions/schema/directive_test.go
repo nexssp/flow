@@ -2,6 +2,7 @@ package schema
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
@@ -94,7 +95,8 @@ func TestDirective_Errors(t *testing.T) {
 		{"missing brace", []string{`@schema X`}, "expected"},
 		{"empty name", []string{`@schema {`, `  A string`, `}`}, "name is required"},
 		{"empty body", []string{`@schema X {`, `}`}, "at least one field"},
-		{"bad field line", []string{`@schema X {`, `  OnlyName`, `}`}, "expected `Name Type`"},
+		{"unknown embed", []string{`@schema X {`, `  OnlyName`, `}`}, "not declared before this point"},
+		{"too many tokens", []string{`@schema X {`, `  Name string extra`, `}`}, "expected `Name Type` or `Embed`"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -130,4 +132,142 @@ func TestDirective_DuplicateField(t *testing.T) {
 		`}`,
 	)
 	ktest.RequireErrorContains(t, err, "duplicate field")
+}
+
+// runSchemaSequence walks every @schema block in order, sharing the
+// same meta map, so composition across declarations can be exercised
+// end to end.
+func runSchemaSequence(tb testing.TB, lines ...string) ([]Schema, error) {
+	tb.Helper()
+	out := map[string]any{}
+	for i := 0; i < len(lines); {
+		if !strings.HasPrefix(strings.TrimSpace(lines[i]), "@schema") {
+			i++
+			continue
+		}
+		res, err := handleDirective(context.Background(), core.DirectiveReq{
+			Lines: lines,
+			I:     i,
+			Out:   out,
+			File:  "<test>",
+		})
+		if err != nil {
+			return SchemasFromMap(out), err
+		}
+		i = res.Next
+	}
+	return SchemasFromMap(out), nil
+}
+
+func TestDirective_Composition(t *testing.T) {
+	t.Parallel()
+
+	t.Run("embed flattens fields in declaration order", func(t *testing.T) {
+		t.Parallel()
+		schemas, err := runSchemaSequence(t,
+			`@schema Common {`,
+			"  JSON  bool `json:\"json\"`",
+			"  Quiet bool `json:\"quiet\"`",
+			`}`,
+			`@schema Pack {`,
+			`  Common`,
+			"  Target string `json:\"target\"`",
+			`}`,
+		)
+		ktest.RequireNoError(t, err)
+		ktest.RequireEqual(t, len(schemas), 2)
+
+		names := make([]string, len(schemas[1].Fields))
+		for i, f := range schemas[1].Fields {
+			names[i] = f.Name
+		}
+		ktest.RequireEqual(t, names, []string{"JSON", "Quiet", "Target"})
+	})
+
+	t.Run("embed of undeclared schema", func(t *testing.T) {
+		t.Parallel()
+		_, err := runSchemaSequence(t,
+			`@schema Pack {`,
+			`  Missing`,
+			`}`,
+		)
+		ktest.RequireErrorContains(t, err, "not declared before this point")
+	})
+
+	t.Run("self-embed", func(t *testing.T) {
+		t.Parallel()
+		_, err := runSchemaSequence(t,
+			`@schema A {`,
+			`  A`,
+			`}`,
+		)
+		ktest.RequireErrorContains(t, err, "cannot embed itself")
+	})
+
+	t.Run("collision with embedded field", func(t *testing.T) {
+		t.Parallel()
+		_, err := runSchemaSequence(t,
+			`@schema Common {`,
+			"  JSON bool `json:\"json\"`",
+			`}`,
+			`@schema Pack {`,
+			`  Common`,
+			"  JSON bool `json:\"json2\"`",
+			`}`,
+		)
+		ktest.RequireErrorContains(t, err, `duplicate field "JSON"`)
+	})
+
+	t.Run("tags on embed line rejected", func(t *testing.T) {
+		t.Parallel()
+		_, err := runSchemaSequence(t,
+			`@schema Common {`,
+			"  JSON bool `json:\"json\"`",
+			`}`,
+			`@schema Pack {`,
+			"  Common `json:\"c\"`",
+			`}`,
+		)
+		ktest.RequireErrorContains(t, err, "must not carry tags")
+	})
+
+	t.Run("multiple embeds flatten in order", func(t *testing.T) {
+		t.Parallel()
+		schemas, err := runSchemaSequence(t,
+			`@schema A {`,
+			"  Foo string `json:\"foo\"`",
+			`}`,
+			`@schema B {`,
+			"  Bar int `json:\"bar\"`",
+			`}`,
+			`@schema C {`,
+			`  A`,
+			`  B`,
+			`}`,
+		)
+		ktest.RequireNoError(t, err)
+		ktest.RequireEqual(t, len(schemas), 3)
+
+		names := make([]string, len(schemas[2].Fields))
+		for i, f := range schemas[2].Fields {
+			names[i] = f.Name
+		}
+		ktest.RequireEqual(t, names, []string{"Foo", "Bar"})
+	})
+
+	t.Run("resolved fields never carry Embed", func(t *testing.T) {
+		t.Parallel()
+		schemas, err := runSchemaSequence(t,
+			`@schema Common {`,
+			"  JSON bool `json:\"json\"`",
+			`}`,
+			`@schema Pack {`,
+			`  Common`,
+			`}`,
+		)
+		ktest.RequireNoError(t, err)
+		for _, f := range schemas[1].Fields {
+			ktest.RequireEqual(t, f.Embed, "")
+		}
+	})
 }
