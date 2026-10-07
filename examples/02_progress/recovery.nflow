@@ -1,0 +1,15 @@
+@description "Progress extension — error path and recovery"
+
+# When the wrapped action fails, progress.wrap reports an error event
+# with a ✗ marker and propagates the error downstream. The `||`
+# operator catches it and runs the right-hand branch.
+#
+# The reporter reads metadata["error"] on the wrap's finish event, so
+# the renderer itself chooses ✗ instead of ✓.
+
+{ attempt: 1 }
+-> progress.wrap @{ action: runtime.fail, message: "Simulated upstream failure", kind: "Unavailable" }
+|| { attempt: 2, recovered: true }
+
+@assert: result.recovered == true
+@assert: result.attempt == 2

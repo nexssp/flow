@@ -104,25 +104,28 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 		return "", err
 	}
 
-	fmt.Fprintf(os.Stderr, "⚙️  nflow: resolving dependencies (go mod tidy -e)...\n")
-	startTidy := time.Now()
-	if err := runGoContext(ctx, buildDir, "mod", "tidy", "-e"); err != nil {
-		return "", explainBuildError(err, external)
+	tidyStep := startProgress("⚙️  nflow: resolving dependencies (go mod tidy -e)")
+	tidyErr := runGoContext(ctx, buildDir, "mod", "tidy", "-e")
+	if tidyErr != nil {
+		tidyStep.Complete("failed")
+		return "", explainBuildError(tidyErr, external)
 	}
-	slog.Debug("harness: mod tidy finished", "elapsed", time.Since(startTidy))
+	tidyStep.Complete("done")
 
 	tmp := bin + ".tmp." + strconv.Itoa(os.Getpid())
-	fmt.Fprintf(os.Stderr, "🔨 nflow: compiling runner binary [%s]...\n", key[:8])
-	startBuild := time.Now()
-	if err := runGoContext(ctx, buildDir, "build", "-trimpath", "-o", tmp, "."); err != nil {
-		return "", explainBuildError(err, external)
+	buildStep := startProgress(fmt.Sprintf("🔨 nflow: compiling runner binary [%s]", key[:8]))
+	buildErr := runGoContext(ctx, buildDir, "build", "-trimpath", "-o", tmp, ".")
+	if buildErr != nil {
+		buildStep.Complete("failed")
+		return "", explainBuildError(buildErr, external)
 	}
+	buildStep.Complete("done")
 
 	if err := os.Rename(tmp, bin); err != nil {
 		_ = os.Remove(tmp)
 		return "", fmt.Errorf("harness: install: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "✓ nflow: runner ready in %s\n", time.Since(startBuild).Round(time.Millisecond))
+	fmt.Fprintf(os.Stderr, "✓ nflow: runner ready\n")
 	return bin, nil
 }
 
@@ -146,6 +149,7 @@ func flowDirectory(path string) string {
 
 func filterExternalRequires(reqs []require.Requirement) []require.Requirement {
 	out := make([]require.Requirement, 0, len(reqs))
+	seen := make(map[string]bool, len(reqs))
 	for i := range reqs {
 		r := &reqs[i]
 		targetID := require.NormalizeID(r.Import)
@@ -155,6 +159,15 @@ func filterExternalRequires(reqs []require.Requirement) []require.Requirement {
 		if _, ok := core.Lookup(r.Import); ok {
 			continue
 		}
+
+		key := r.Import + "@" + r.Version
+		if r.Alias != "" {
+			key += "#" + r.Alias
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
 		out = append(out, *r)
 	}
 	return out
@@ -166,12 +179,52 @@ func ExecHarness(bin string, args []string) int {
 
 // ExecHarnessContext runs a generated harness with caller-controlled cancellation.
 func ExecHarnessContext(ctx context.Context, bin string, args []string) int {
+	quiet := false
+	for _, a := range args {
+		if a == "--json" || a == "--quiet" {
+			quiet = true
+			break
+		}
+	}
+
+	var harnessStep *progressTracker
+	if !quiet {
+		harnessStep = startProgress("▶ nflow: harness")
+	}
+
+	// A blocking server (thttp, tbus, cron, tworker) may run for hours
+	// without producing output. The spinner keeps updating until the
+	// first byte arrives, so "no news" reads as "running", not "hung".
+	onFirstOutput := func() {
+		if harnessStep != nil {
+			harnessStep.Complete("running")
+		}
+	}
+
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	if quiet {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	} else {
+		cmd.Stdout = tapFirstWrite(os.Stdout, onFirstOutput)
+		cmd.Stderr = tapFirstWrite(os.Stderr, onFirstOutput)
+	}
 	cmd.Env = append(os.Environ(), harnessEnv+"=1")
-	if err := cmd.Run(); err != nil {
+
+	err := cmd.Run()
+
+	// If the tap already fired (output started), Complete is a no-op.
+	// Otherwise this is the first and only completion line.
+	if harnessStep != nil {
+		if err != nil {
+			harnessStep.Complete("failed")
+		} else {
+			harnessStep.Complete("done")
+		}
+	}
+
+	if err != nil {
 		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
 			return exit.ExitCode()
 		}
@@ -724,6 +777,28 @@ func isPackageMain(data []byte) bool {
 	return false
 }
 
+// bundleImportPath returns the Go import path of the Flow bundle for a
+// requirement.
+//
+// Convention: every adapter package has its Bundle in a subpackage
+// named `nexssflow` (or a variant such as `nexssflow_v2`). A
+// requirement that does not already end with that suffix gets it
+// appended, regardless of path depth. This is what makes
+// `github.com/nexssp/transport/thttp` resolve to the real bundle at
+// `github.com/nexssp/transport/thttp/nexssflow`.
+//
+// Two cases opt out of the append:
+//
+//  1. The path already ends with an adapter folder suffix
+//     (`nexssflow` or `nexssflow_*`).
+//  2. The requirement is a loose local package whose own directory
+//     contains Go files and no `nexssflow/` subdirectory.
+//
+// Prior versions of this function stopped appending once a path had
+// more than three segments, on the theory that a deep path was already
+// pointing at the intended package. That assumption was wrong for the
+// transport repositories, where `github.com/nexssp/transport/thttp` is
+// the adapter's module root and its Bundle lives one level deeper.
 func bundleImportPath(r require.Requirement) string {
 	if r.PackagePath != "" {
 		return r.PackagePath
@@ -746,11 +821,7 @@ func bundleImportPath(r require.Requirement) string {
 		}
 	}
 
-	parts := strings.Split(base, "/")
-	if len(parts) > 3 && strings.Contains(parts[0], ".") {
-		return base
-	}
-	return base + "/nexssflow"
+	return base + "/" + defaultAdapterDirectory
 }
 
 func hasAdapterFolderSuffix(importPath string) bool {
@@ -762,12 +833,32 @@ func hasAdapterFolderSuffix(importPath string) bool {
 	return segment == defaultAdapterDirectory || strings.HasPrefix(segment, defaultAdapterDirectory+"_")
 }
 
+// explainBuildError converts a raw go build failure into a diagnostic
+// that names the offending @require. It recognizes three failure
+// shapes:
+//
+//  1. `undefined: nflowbundleN.<symbol>` — the resolved package exists
+//     but does not export a Bundle symbol. The most common cause is a
+//     transport adapter path that does not carry its `/nexssflow`
+//     suffix, which is exactly what bundleImportPath now appends.
+//  2. `cannot find package` / `no Go files in` — the import path does
+//     not resolve at all.
+//  3. Loose-package compilation failures — the directory has Go files
+//     but they do not form a valid bundle package.
 func explainBuildError(err error, requirements []require.Requirement) error {
 	if err == nil {
 		return nil
 	}
 	message := err.Error()
 
+	// Case 1: a specific nflowbundleN symbol is undefined. The index in
+	// the generated main.go is parallel to the requirements slice, so
+	// the offending @require can be named exactly.
+	if req := offendingBundleRequirement(message, requirements); req != nil {
+		return missingBundleSymbolError(*req)
+	}
+
+	// Case 2 / 3: match by resolved import path.
 	for i := range requirements {
 		r := &requirements[i]
 		importPath := bundleImportPath(*r)
@@ -806,6 +897,73 @@ func explainBuildError(err error, requirements []require.Requirement) error {
 		return fmt.Errorf("@require %s: build error:\n%s", r.Import, message)
 	}
 	return err
+}
+
+// offendingBundleRequirement extracts the index N from an
+// `undefined: nflowbundleN.<symbol>` diagnostic and returns the
+// matching requirement. Returns nil when the message does not carry
+// that shape, in which case the caller falls back to path matching.
+//
+// The index is parallel to the requirements slice because both
+// prepareBundleImports and the generated main.go iterate it in order.
+// Skipped requirements (empty import path, duplicate) do not shift the
+// index: the loop index `i` is captured at append time for the same
+// slice position the generated main.go assigns to the same bundle.
+func offendingBundleRequirement(message string, requirements []require.Requirement) *require.Requirement {
+	const marker = "undefined: nflowbundle"
+	_, after, ok := strings.Cut(message, marker)
+	if !ok {
+		return nil
+	}
+	rest := after
+	dot := strings.IndexAny(rest, ".\n \t")
+	if dot <= 0 {
+		return nil
+	}
+	n, convErr := strconv.Atoi(rest[:dot])
+	if convErr != nil || n < 0 || n >= len(requirements) {
+		return nil
+	}
+	return &requirements[n]
+}
+
+// missingBundleSymbolError renders the diagnostic for a resolved
+// package that does not export Bundle.
+//
+// When the user's @require did not already carry an adapter suffix,
+// the resolver appended one, and the message shows both the requested
+// and resolved paths so the user can see exactly which package the
+// build tried to import. That is the diagnostic path for the transport
+// adapters, whose module root is one level above the Bundle package.
+//
+// When the user's @require already carried the suffix, the resolver
+// trusted it verbatim; the message points at that exact path and the
+// expected Bundle declaration.
+func missingBundleSymbolError(r require.Requirement) error {
+	resolved := bundleImportPath(r)
+	alreadySuffixed := hasAdapterFolderSuffix(r.Import)
+
+	if alreadySuffixed {
+		return fmt.Errorf(
+			"@require %s: package %q does not export Bundle.\n\n"+
+				"Every Flow extension package must declare:\n"+
+				"    func Bundle(opts map[string]string) core.Bundle\n\n"+
+				"Check that %s contains library.go with a Bundle function",
+			r.Import, resolved, resolved)
+	}
+
+	suggestion := r.Import + "/" + defaultAdapterDirectory
+
+	return fmt.Errorf(
+		"@require %s: package %q does not export Bundle.\n\n"+
+			"The resolver appended the conventional adapter suffix:\n"+
+			"    requested:  %s\n"+
+			"    resolved:   %s\n\n"+
+			"Check that the adapter package %q exists and declares:\n"+
+			"    func Bundle(opts map[string]string) core.Bundle\n\n"+
+			"  💡 If this repository is a Flow extension with Bundle at its root,\n"+
+			"     not under /nexssflow, verify the module path in its go.mod",
+		r.Import, resolved, r.Import, resolved, suggestion)
 }
 
 func tailSegment(path string) string {

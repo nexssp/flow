@@ -317,24 +317,49 @@ func Bundle(opts map[string]string) core.Bundle {
 }
 
 func TestHarness_BundleImportPath_Variants(t *testing.T) {
-	cases := []struct {
-		name       string
-		importPath string
-		want       string
+	tests := []struct {
+		name     string
+		input    string
+		expected string
 	}{
-		{"DefaultModuleRoot_AppendsNexssflow", "github.com/nexssp/sandbox", "github.com/nexssp/sandbox/nexssflow"},
-		{"ExplicitDefault_PreservesNexssflow", "github.com/nexssp/sandbox/nexssflow", "github.com/nexssp/sandbox/nexssflow"},
-		{"CustomFolder_PreservesDevVariant", "github.com/nexssp/sandbox/nexssflow_dev", "github.com/nexssp/sandbox/nexssflow_dev"},
-		{"CustomFolder_PreservesProdVariant", "github.com/nexssp/sandbox/nexssflow_prod", "github.com/nexssp/sandbox/nexssflow_prod"},
+		{
+			name:     "RootModule_AppendsNexssflow",
+			input:    "github.com/nexssp/transport",
+			expected: "github.com/nexssp/transport/nexssflow",
+		},
+		{
+			name:     "RootModule_AlreadySuffixed",
+			input:    "github.com/nexssp/transport/nexssflow",
+			expected: "github.com/nexssp/transport/nexssflow",
+		},
+		{
+			name:     "RootModule_PrefixVariant",
+			input:    "github.com/nexssp/transport/nexssflow_v2",
+			expected: "github.com/nexssp/transport/nexssflow_v2",
+		},
+		{
+			name:     "DeepSubpackage_AppendsNexssflow",
+			input:    "github.com/nexssp/transport/thttp",
+			expected: "github.com/nexssp/transport/thttp/nexssflow",
+		},
+		{
+			name:     "DeepSubpackage_AlreadySuffixed",
+			input:    "github.com/nexssp/transport/thttp/nexssflow",
+			expected: "github.com/nexssp/transport/thttp/nexssflow",
+		},
+		{
+			name:     "DeepSubpackage_PrefixVariant",
+			input:    "github.com/nexssp/transport/thttp/nexssflow_dev",
+			expected: "github.com/nexssp/transport/thttp/nexssflow_dev",
+		},
 	}
 
-	for i := range cases {
-		tc := cases[i]
-		t.Run(tc.name, func(t *testing.T) {
-			req := require.Requirement{Import: tc.importPath}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := require.Requirement{Import: tt.input}
 			got := bundleImportPath(req)
-			if got != tc.want {
-				t.Fatalf("bundleImportPath(%q) = %q, want %q", tc.importPath, got, tc.want)
+			if got != tt.expected {
+				t.Errorf("bundleImportPath(%q) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
 	}
@@ -794,8 +819,10 @@ func TestHarness_UnversionedRemoteRequiresExplicitVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unversioned same-module subpackage was rejected: %v", err)
 	}
-	if resolved[0].PackagePath != sameModule.Import || resolved[0].ModulePath != flowModule {
-		t.Fatalf("unversioned same-module package resolved as %+v", resolved[0])
+	wantPackagePath := sameModule.Import + "/nexssflow"
+	if resolved[0].PackagePath != wantPackagePath || resolved[0].ModulePath != flowModule {
+		t.Fatalf("unversioned same-module package resolved as %+v (want PackagePath=%s ModulePath=%s)",
+			resolved[0], wantPackagePath, flowModule)
 	}
 }
 

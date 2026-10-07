@@ -129,9 +129,9 @@ func runFlowInProcess(ctx context.Context, inv *invocation, args []string) int {
 		src = target
 		name = "<inline>"
 	} else {
-		data, err := os.ReadFile(target)
+		data, err := readSourceFile(target)
 		if err != nil {
-			return fatalf("read: %v", err)
+			return fatalf("%v", err)
 		}
 		src = string(data)
 		name = target
@@ -203,10 +203,6 @@ func runEmbeddedInInvocation(ctx context.Context, inv *invocation, source string
 	// Suppress the banner when the caller asked for machine-readable
 	// output or for the help text. Both mean "no interactive session
 	// is happening".
-	quiet := hasFlag(args, "--json") || hasFlag(args, "--quiet")
-	if !quiet {
-		fmt.Fprintf(os.Stderr, "nexssflow %s %s (built %s)\n", Version, Commit, BuiltAt)
-	}
 	return runSourceInInvocation(ctx, inv, source, "<embedded>", args)
 }
 
@@ -301,10 +297,10 @@ func RunPath(ctx context.Context, args []string) int {
 			fmt.Fprintln(os.Stderr, "usage: nflow <file.nflow> [json] [flags]")
 			return 2
 		}
-		src, err := os.ReadFile(target)
+		src, err := readSourceFile(target)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "read: %v\n", err)
-			return 1
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			return 2
 		}
 		return runSourceInInvocation(runCtx, inv, string(src), target, args)
 	})

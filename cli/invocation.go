@@ -190,7 +190,7 @@ func (inv *invocation) isAlreadyInjected(r require.Requirement) bool {
 }
 
 func (inv *invocation) sourceRequiresFromFile(ctx context.Context, path string) ([]require.Requirement, error) {
-	src, err := os.ReadFile(path)
+	src, err := readSourceFile(path)
 	if err != nil {
 		return nil, err
 	}

@@ -304,7 +304,12 @@ type compilerAdapter struct {
 func (a compilerAdapter) CompilePipeline(expr string) (action.Executable, error) {
 	res, err := core.CompileAction(
 		a.cfg.Resolver, a.cfg.Directives, a.cfg.Modifiers,
-		a.cfg.Operators, a.cfg.Primaries, a.cfg.CompileOpts...,
+		a.cfg.Operators, a.cfg.Primaries,
+		// Note: cfg.CompileOpts deliberately omitted. The parent
+		// pipeline already applied its WrapPipeline wrappers; a
+		// compiled child re-applying them would stack duplicate
+		// layers (schema.wrap is not idempotent) and produce error
+		// chains that no longer match the parent's shape.
 	).Do(context.Background(), core.CompileReq{Source: expr, Name: "<child>"})
 	if err != nil {
 		return nil, err

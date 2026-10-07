@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/expr-lang/expr"
@@ -32,6 +33,7 @@ func (a *Atom) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction,
 
 	if len(bCtx.Advisers) > 0 {
 		builder := action.Dynamic(act)
+		modifiersBefore := slices.Clone(a.Modifiers)
 		for _, advise := range bCtx.Advisers {
 			if advise == nil {
 				continue
@@ -40,7 +42,13 @@ func (a *Atom) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction,
 				return nil, xerr.Validation("atom "+a.Name+" advisor: "+err.Error(), err)
 			}
 		}
-		act = builder.Build()
+		// Materialize the dynamic wrapper only when an advisor actually
+		// consumed a modifier. Otherwise the wrapper would invoke the
+		// original action through InvokeAny, adding a second
+		// "action <name> execution failed:" prefix to every error.
+		if !slices.Equal(modifiersBefore, a.Modifiers) {
+			act = builder.Build()
+		}
 	}
 
 	strict := (strictFromCtx(ctx) || hasModifier(a.Modifiers, "strict")) &&

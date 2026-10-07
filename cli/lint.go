@@ -185,9 +185,9 @@ func runLintInProcess(ctx context.Context, inv *invocation, args []string) int {
 	}
 	path := args[0]
 
-	src, err := os.ReadFile(path)
+	src, err := readSourceFile(path)
 	if err != nil {
-		return fatalf("read: %v", err)
+		return fatalf("%v", err)
 	}
 
 	reqs, err := inv.sourceRequiresFromFile(ctx, path)

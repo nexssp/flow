@@ -41,6 +41,7 @@ import (
 	"github.com/nexssp/flow/extensions/on_error"
 	"github.com/nexssp/flow/extensions/pipeline"
 	"github.com/nexssp/flow/extensions/pool"
+	"github.com/nexssp/flow/extensions/progress"
 	"github.com/nexssp/flow/extensions/projection"
 	"github.com/nexssp/flow/extensions/render"
 	"github.com/nexssp/flow/extensions/require"
@@ -71,6 +72,7 @@ func Bundles() []core.Bundle {
 		config.Bundle(nil),
 		schema.Bundle(nil),
 		projection.Bundle(nil),
+		progress.Bundle(nil),
 		description.Bundle(nil),
 		include.Bundle(nil),
 		macros.Bundle(nil),

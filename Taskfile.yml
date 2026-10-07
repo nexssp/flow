@@ -105,6 +105,7 @@ tasks:
     sources:
       - 'extensions/**/*.go'
       - 'extensions/**/*.nflow'
+      - 'native/**/*.go'
       - 'go.mod'
       - 'go.sum'
     cmds:
@@ -115,6 +116,7 @@ tasks:
     sources:
       - 'extensions/**/*.go'
       - 'extensions/**/*.nflow'
+      - 'native/**/*.go'
       - 'go.mod'
       - 'go.sum'
     cmds:
@@ -167,6 +169,8 @@ tasks:
       - '{{.NFLOW}} run examples/01_secure_pipeline/02_conditional_hold_gate.nflow'
       - '{{.NFLOW}} run examples/01_secure_pipeline/03_bounded_retry_fallback.nflow'
       - '{{.NFLOW}} run examples/01_secure_pipeline/04_read_scoped_fixture.nflow'
+      - '{{.NFLOW}} run examples/02_progress/showcase.nflow'
+      - '{{.NFLOW}} run examples/02_progress/recovery.nflow'
 
   # ── quality ──────────────────────────────────────────────────────
 

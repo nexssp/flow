@@ -1,0 +1,5 @@
+@description "Progress step and wrap"
+@assert: result.ok == true
+{ ok: true }
+-> progress.step @{ message: "Validation step" }
+-> progress.wrap @{ action: runtime.noop, message: "Wrapped noop" }

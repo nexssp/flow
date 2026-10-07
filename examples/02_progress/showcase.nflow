@@ -1,0 +1,47 @@
+@description "Progress extension — full capability showcase"
+
+# Run:
+#     nflow run examples/02_progress/showcase.nflow
+#
+# Progress output goes to stderr; the pipeline result goes to stdout
+# as JSON.
+#
+# In an interactive terminal you get an animated spinner with elapsed
+# time. When stderr is redirected (`2>log.txt` or in CI), you get one
+# plain line per event instead. The same file works in both modes.
+
+# ① progress.step — one-shot line. Consumes only "message"; the rest
+#    of the payload passes through unchanged.
+{ stage: "boot", checks: 0 }
+-> progress.step @{ message: "① Booting service" }
+
+# ② progress.wrap — wraps an action in a start/finish lifecycle. While
+#    the action runs, stderr shows a spinner with elapsed time. When it
+#    finishes, the spinner is replaced by a single "done (Xms)" line.
+#
+#    The keys "action" and "message" are consumed by the wrap; the rest
+#    (here: "duration_ms") is forwarded to the wrapped action.
+-> progress.wrap @{ action: runtime.sleep, message: "② Loading config", duration_ms: 600 }
+
+# ③ progress.wrap without "message" — the message defaults to the
+#    wrapped action's name ("runtime.sleep").
+-> progress.wrap @{ action: runtime.sleep, duration_ms: 250 }
+
+# ④ progress.wrap around an instantaneous action — the spinner appears
+#    and disappears in under 100ms.
+-> progress.wrap @{ action: runtime.noop, message: "④ Validating" }
+
+# ⑤ progress.step as a marker between pipeline stages.
+-> progress.step @{ message: "⑤ Delegating to sub-pipeline" }
+-> pipeline.enrich
+
+# ⑥ Inside a nested @pipeline the reporter is installed only once. The
+#    sub-pipeline does not stack a second spinner on top of the parent.
+-> progress.step @{ message: "⑥ Done" }
+
+@assert: result.stage == "boot"
+@assert: result.enriched == true
+
+@pipeline enrich
+  runtime.with @{ enriched: true }
+@end

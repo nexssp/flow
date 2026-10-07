@@ -46,7 +46,9 @@ func TestRunWithBundles_ClosesOnHelpAndVersionEarlyReturns(t *testing.T) {
 			calls.Add(1)
 			return nil
 		}}}
-		_ = RunWithBundles(args, []core.Bundle{bundle})
+		_, _ = captureIO(t, func() {
+			_ = RunWithBundles(args, []core.Bundle{bundle})
+		})
 		if got := calls.Load(); got != 1 {
 			t.Fatalf("RunWithBundles(%v) shutdown calls = %d, want 1", args, got)
 		}
