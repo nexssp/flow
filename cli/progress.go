@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"sync"
 	"time"
@@ -86,30 +85,4 @@ func (p *progressTracker) Complete(result string) {
 		}
 		fmt.Fprintf(os.Stderr, "%s  %s (%s)\n", p.label, result, elapsed)
 	})
-}
-
-// firstWriteTap forwards every byte to target and fires once, on the
-// first non-empty write it observes. Used to replace the harness
-// spinner with real output as soon as the process emits anything.
-type firstWriteTap struct {
-	target io.Writer
-	once   *sync.Once
-	fire   func()
-}
-
-func (w *firstWriteTap) Write(p []byte) (int, error) {
-	if len(p) > 0 {
-		w.once.Do(w.fire)
-	}
-	return w.target.Write(p)
-}
-
-// tapFirstWrite returns an io.Writer that forwards to target and calls
-// fire on the first non-empty write.
-func tapFirstWrite(target io.Writer, fire func()) io.Writer {
-	return &firstWriteTap{
-		target: target,
-		once:   &sync.Once{},
-		fire:   fire,
-	}
 }

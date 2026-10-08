@@ -187,43 +187,32 @@ func ExecHarnessContext(ctx context.Context, bin string, args []string) int {
 		}
 	}
 
+	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(), harnessEnv+"=1")
+
 	var harnessStep *progressTracker
 	if !quiet {
 		harnessStep = startProgress("▶ nflow: harness")
 	}
 
-	// A blocking server (thttp, tbus, cron, tworker) may run for hours
-	// without producing output. The spinner keeps updating until the
-	// first byte arrives, so "no news" reads as "running", not "hung".
-	onFirstOutput := func() {
+	if err := cmd.Start(); err != nil {
 		if harnessStep != nil {
-			harnessStep.Complete("running")
-		}
-	}
-
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Stdin = os.Stdin
-	if quiet {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	} else {
-		cmd.Stdout = tapFirstWrite(os.Stdout, onFirstOutput)
-		cmd.Stderr = tapFirstWrite(os.Stderr, onFirstOutput)
-	}
-	cmd.Env = append(os.Environ(), harnessEnv+"=1")
-
-	err := cmd.Run()
-
-	// If the tap already fired (output started), Complete is a no-op.
-	// Otherwise this is the first and only completion line.
-	if harnessStep != nil {
-		if err != nil {
 			harnessStep.Complete("failed")
-		} else {
-			harnessStep.Complete("done")
 		}
+		fmt.Fprintf(os.Stderr, "harness: exec: %v\n", err)
+		return 1
+	}
+	if harnessStep != nil {
+		// Without a tap there is no "first byte" signal, so the step
+		// completes as soon as the child is launched. A lingering
+		// spinner would overwrite the child's own output on a TTY.
+		harnessStep.Complete("running")
 	}
 
+	err := cmd.Wait()
 	if err != nil {
 		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
 			return exit.ExitCode()
