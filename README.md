@@ -1,4 +1,4 @@
-# Nexss Flow
+# 🌀 Nexss Flow
 
 Nexss Flow is a Go runtime and language for composing `.nflow` programs from registered actions. The `nflow` CLI runs flows and inspects the active compiler surface.
 
@@ -7,7 +7,7 @@ Nexss Flow is a Go runtime and language for composing `.nflow` programs from reg
 Requires Go 1.26 or later. Install the CLI from the current `main` branch:
 
 ```sh
-go install github.com/nexssp/flow/cmd/nflow@main
+go install github.com/nexssp/flow/cmd/nflow@main 🌀
 nflow version
 ```
 
@@ -46,7 +46,7 @@ The introductory flows are checked by CI: each one must pass `nflow lint` and ru
 
 Run the complete set locally with `task examples` or run an individual flow with `nflow run <file.nflow>`.
 
-## Verify without running a flow
+## Verify without running a flow 🌀
 
 Use `nflow lint <file.nflow>` for a static check, or pass a directory or Go-style recursive target such as `nflow lint ./examples/...` to discover sources automatically. It preprocesses each file, parses its pipeline, and checks referenced atoms and modifiers against that file's active registry; it does **not** execute flows. Recursive discovery sorts paths, skips `.git`, `.hg`, `.svn`, `vendor`, and `node_modules`, and does not follow symlinks. Lint is not a substitute for exercising runtime behavior, and it does not prove every expression or input will succeed. The broader `nflow lint ./...` also discovers internal developer sources and extension fixtures, some of which currently produce context-specific diagnostics; CI intentionally scopes its lint gate to `./examples/...`.
 

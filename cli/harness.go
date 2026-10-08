@@ -378,14 +378,17 @@ func runGoContext(parent context.Context, dir string, args ...string) error {
 	cmd.Dir = dir
 	cmd.Stdin = os.Stdin
 
+	// The startProgress spinner owned by the caller already reports
+	// what is happening; raw toolchain chatter ("go: added ...",
+	// "go: downloading ...") is kept in the tail buffer and surfaced
+	// only when the command fails.
 	capture := newTailBuffer(maxCapturedOutputBytes)
-	stream := io.MultiWriter(os.Stderr, capture)
-	cmd.Stdout = stream
-	cmd.Stderr = stream
+	cmd.Stdout = capture
+	cmd.Stderr = capture
 
 	cmd.Env = append(os.Environ(),
 		"GOWORK=off",
-		"GIT_TERMINAL_PROMPT=0", // fail fast instead of hanging on credentials
+		"GIT_TERMINAL_PROMPT=0",
 	)
 
 	if err := cmd.Run(); err != nil {
