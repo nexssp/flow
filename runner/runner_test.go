@@ -7,6 +7,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
+	"github.com/nexssp/flow/core"
 	"github.com/nexssp/flow/extensions/selftestkit"
 	"github.com/nexssp/flow/native"
 )
@@ -80,5 +81,56 @@ pool.workers @{ value: "p" }`
 	}
 	if _, ok := cfg.Resolver.Action("pool.workers"); ok {
 		t.Fatal("execution-scoped pool action leaked into the base resolver")
+	}
+}
+
+func TestBuildConfig_AggregatesBundleHooks(t *testing.T) {
+	hook := action.AnyHook{
+		Before: func(ctx context.Context, _ any, _ *action.Meta) (context.Context, error) {
+			return ctx, nil
+		},
+	}
+	bundles := append(native.Bundles(), core.Bundle{
+		ID:    "bundle_hooks_aggregation",
+		Hooks: []action.AnyHook{hook},
+	})
+	cfg, err := BuildConfig(bundles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(cfg.Hooks); got != 1 {
+		t.Fatalf("expected 1 aggregated hook, got %d", got)
+	}
+}
+
+func TestBuildConfig_BundleHooksFireOnEveryResolvedAction(t *testing.T) {
+	var calls atomic.Int32
+	hook := action.AnyHook{
+		Before: func(ctx context.Context, _ any, _ *action.Meta) (context.Context, error) {
+			calls.Add(1)
+			return ctx, nil
+		},
+	}
+	bundles := append(native.Bundles(), core.Bundle{
+		ID:    "bundle_hooks_integration",
+		Hooks: []action.AnyHook{hook},
+	})
+	cfg, err := BuildConfig(bundles)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = Execute(
+		context.Background(),
+		cfg,
+		`runtime.const @{ value: "a" } -> runtime.noop`,
+		"bundle_hooks_test.nflow",
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("expected hook to fire on both resolved actions, got %d", got)
 	}
 }

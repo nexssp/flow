@@ -6,6 +6,8 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/nexssp/kernel/action"
+
 	"github.com/nexssp/flow/core"
 )
 
@@ -52,6 +54,7 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 		extraOperators  []core.Operator
 		extraPrimaries  []core.PrimaryExtension
 		materializers   []core.Materializer
+		bundleHooks     []action.AnyHook
 	)
 
 	resolver, err := core.NewDynamicResolver()
@@ -65,6 +68,7 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 		extraModifiers = append(extraModifiers, bundle.Modifiers...)
 		extraOperators = append(extraOperators, bundle.Operators...)
 		extraPrimaries = append(extraPrimaries, bundle.Primaries...)
+		bundleHooks = append(bundleHooks, bundle.Hooks...)
 		for j := range bundle.Libraries {
 			lib := bundle.Libraries[j]
 			// Mount with the bundle's compilation-local namespace qualifier.
@@ -109,5 +113,6 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 		Materializers: materializers,
 		CompileOpts:   core.BundleConfig(unique...),
 		ArgSchemas:    argSchemas,
+		Hooks:         bundleHooks,
 	}, nil
 }

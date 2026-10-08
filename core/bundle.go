@@ -48,6 +48,7 @@ type Bundle struct {
 	OnPreprocess func(meta map[string]any) PreprocessContributions
 	AtomAdvise   func(atom *Atom, builder *action.Builder[any, any]) error
 	WrapPipeline func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error)
+	Hooks        []action.AnyHook
 
 	ArgSchemas map[string][]ArgFieldSpec
 
