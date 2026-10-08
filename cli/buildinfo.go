@@ -2,8 +2,10 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"runtime/debug"
+	"time"
 
 	"github.com/nexssp/flow/core"
 )
@@ -69,8 +71,25 @@ func resolvedBuildInfo() (version, commit, builtAt string) {
 	if commit == "" {
 		commit = unknownValue
 	}
-	if builtAt == "" {
-		builtAt = unknownValue
+	if builtAt == "" || builtAt == unknownValue {
+		builtAt = executableModTime()
 	}
 	return version, commit, builtAt
+}
+
+// executableModTime reports when the running binary was written to disk.
+// `go install` and `go build` both create the file at build completion, so
+// this is the closest reproducible value to a real build timestamp — the
+// linker-injected BuildAt is preferred when present, but proxy-served
+// binaries never carry it.
+func executableModTime() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return unknownValue
+	}
+	info, err := os.Stat(exe)
+	if err != nil {
+		return unknownValue
+	}
+	return info.ModTime().UTC().Format(time.RFC3339)
 }
