@@ -890,3 +890,18 @@ func injectConfigIntoParams(params map[string]any, target any, cfg map[string]st
 	}
 	return params, nil
 }
+
+func (d *DecoratedExpr) Analyze(r CapabilityResolver) error {
+	return d.Inner.Analyze(r)
+}
+
+func (d *DecoratedExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction, error) {
+	inner, err := d.Inner.Build(ctx, bCtx)
+	if err != nil {
+		return nil, err
+	}
+	if bCtx.Modifiers == nil || len(d.Modifiers) == 0 {
+		return inner, nil
+	}
+	return bCtx.Modifiers.ApplyAll(inner, d.Modifiers)
+}

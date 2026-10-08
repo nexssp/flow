@@ -280,7 +280,19 @@ func (p *Parser) parseExpr(minPrec int) (Expr, error) {
 // extensions on their token, keyword-based extensions on identifier
 // tokens. Built-in primaries handle only what no extension claims:
 // parenthesised groups and atoms.
+//
+// After the primary is produced, any trailing `:mod=value` chain is
+// absorbed as a DecoratedExpr so projection, loop, match, assert, and
+// every other primary accept the same policy modifiers an atom does.
 func (p *Parser) parsePrimary() (Expr, error) {
+	expr, err := p.parsePrimaryInner()
+	if err != nil {
+		return nil, err
+	}
+	return p.parsePostfixModifiers(expr)
+}
+
+func (p *Parser) parsePrimaryInner() (Expr, error) {
 	if ext, ok := p.primaries.ByToken(p.Cur().Type); ok {
 		return ext.Parse(p)
 	}
@@ -312,6 +324,40 @@ func (p *Parser) parsePrimary() (Expr, error) {
 		return nil, p.errorf(p.Cur().Line, "expected expression, got end of input")
 	}
 	return nil, p.errorf(p.Cur().Line, "unexpected token %q", p.Cur().Lit)
+}
+
+// parsePostfixModifiers absorbs a trailing `:name` / `:name=value` chain
+// that follows a non-atom primary. Atoms read their own modifiers inside
+// parseAtomInner; if we reach an Atom here it already owns its chain, so
+// the first `:` we see must be a stray ternary separator or an error.
+func (p *Parser) parsePostfixModifiers(expr Expr) (Expr, error) {
+	if p.Cur().Type != TokColon || p.isTernaryColon() {
+		return expr, nil
+	}
+	if _, isAtom := expr.(*Atom); isAtom {
+		return expr, nil
+	}
+
+	startPos := p.Position()
+	var mods []string
+	for p.Cur().Type == TokColon && !p.isTernaryColon() {
+		p.Next()
+		if p.Cur().Type != TokIdent {
+			return nil, p.errorf(p.Cur().Line, "expected modifier name")
+		}
+		name := p.Cur().Lit
+		p.Next()
+		if p.Cur().Type == TokEquals {
+			p.Next()
+			value, err := p.consumeValue()
+			if err != nil {
+				return nil, err
+			}
+			name += "=" + value
+		}
+		mods = append(mods, name)
+	}
+	return &DecoratedExpr{Inner: expr, Modifiers: mods, Pos: startPos}, nil
 }
 
 // parseAtom czyta atom wraz z całą otoczką: params w nawiasach,

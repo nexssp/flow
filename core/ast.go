@@ -178,3 +178,16 @@ func walkExpr(e Expr, visit func(Expr)) {
 		walkExpr(child, visit)
 	}
 }
+
+// DecoratedExpr wraps any primary with postfix modifiers, so constructs
+// like `{ ... }:timeout=5s` and `loop(...) until(...):retry=3` behave
+// like atoms for policy purposes. Build lowers Inner and applies the
+// modifier chain through the same ModifierTable used for atoms.
+type DecoratedExpr struct {
+	Inner     Expr
+	Modifiers []string
+	Pos       Position
+}
+
+func (*DecoratedExpr) Node()              {}
+func (d *DecoratedExpr) Children() []Expr { return []Expr{d.Inner} }
