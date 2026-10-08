@@ -6,11 +6,11 @@ import (
 	"strings"
 )
 
-func parseAtBrace(raw string, line int) (map[string]*Value, error) {
+func parseAtBrace(raw string, base Position) (map[string]*Value, error) {
 	if strings.TrimSpace(raw) == "" {
 		return map[string]*Value{}, nil
 	}
-	b := &braceScanner{src: raw, line: line}
+	b := &braceScanner{src: raw, base: base}
 	out := make(map[string]*Value)
 	if err := b.parseEntries(out); err != nil {
 		return nil, err
@@ -21,7 +21,7 @@ func parseAtBrace(raw string, line int) (map[string]*Value, error) {
 type braceScanner struct {
 	src  string
 	pos  int
-	line int
+	base Position
 }
 
 func (b *braceScanner) eof() bool { return b.pos >= len(b.src) }
@@ -34,7 +34,7 @@ func (b *braceScanner) peek() byte {
 func (b *braceScanner) advance() { b.pos++ }
 
 func (b *braceScanner) errf(format string, args ...any) error {
-	return fmt.Errorf("line %d: @{...}: %s", b.line, fmt.Sprintf(format, args...))
+	return SourceError(b.base, "%s", "@{...}: "+fmt.Sprintf(format, args...))
 }
 
 func (b *braceScanner) skipWS() {

@@ -1,0 +1,9 @@
+@description "spec: named parallel branches with gathered map"
+
+parallel {
+  service_a: const @{ value: "A_OK" },
+  service_b: const @{ value: "B_OK" }
+}
+
+@assert: result.service_a == "A_OK"
+@assert: result.service_b == "B_OK"

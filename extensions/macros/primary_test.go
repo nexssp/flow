@@ -85,3 +85,16 @@ func TestReadArgs(t *testing.T) {
 		})
 	}
 }
+
+func TestPrimary_FlagRefIsNotReportedAsMacro(t *testing.T) {
+	t.Parallel()
+	_, err := newTestParser(t, map[string]Declaration{}, `@flag.endpoint`).Parse()
+	ktest.RequireErrorContains(t, err, "flag reference, not a macro")
+	ktest.RequireErrorNotContains(t, err, "unknown macro")
+}
+
+func TestPrimary_ConfigRefIsNotReportedAsMacro(t *testing.T) {
+	t.Parallel()
+	_, err := newTestParser(t, map[string]Declaration{}, `@config.db_url`).Parse()
+	ktest.RequireErrorContains(t, err, "config reference, not a macro")
+}

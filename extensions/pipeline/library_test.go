@@ -16,7 +16,7 @@ func TestBundle_WiresDirectiveMaterializeFixtures(t *testing.T) {
 	b := Bundle(nil)
 	ktest.RequireEqual(t, b.ID, ID)
 	ktest.RequireEqual(t, len(b.Libraries), 1)
-	ktest.RequireEqual(t, len(b.Directives), 1)
+	ktest.RequireEqual(t, len(b.Directives), 2)
 	ktest.RequireEqual(t, b.Directives[0].Name, "pipeline")
 	ktest.RequireCondition(t, b.Materialize != nil, "Materialize is nil")
 	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
@@ -106,4 +106,15 @@ func TestFixtures_Discoverable(t *testing.T) {
 	})
 	ktest.RequireNoError(t, walkErr)
 	ktest.RequireCondition(t, count > 0, "no fixtures embedded")
+}
+
+func TestEndDirective_RejectsStrayEnd(t *testing.T) {
+	t.Parallel()
+	_, err := handleEnd(context.Background(), core.DirectiveReq{
+		Lines: []string{"@end"},
+		I:     0,
+		File:  "stray.nflow",
+	})
+	ktest.RequireErrorContains(t, err, "@end without a matching block directive")
+	ktest.RequireErrorContains(t, err, "stray.nflow:1")
 }

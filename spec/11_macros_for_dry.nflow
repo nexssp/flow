@@ -1,0 +1,16 @@
+@description "Macros: compile-time substitution eliminates repeated shapes"
+
+@macro require_field(name) {
+  assert(.$name != nil, "field '$name' is required")
+}
+
+@macro rename(from, to) {
+  const @{ value: { $to: .$from } }
+}
+
+@assert: result.user_id == 42
+
+{ id: 42, name: "alice" }
+-> @require_field(id)
+-> @rename(id, user_id)
+-> @require_field(user_id)

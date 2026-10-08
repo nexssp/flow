@@ -33,7 +33,7 @@ func Bundle(_ map[string]string) core.Bundle {
 	return core.Bundle{
 		ID:          ID,
 		Libraries:   []action.Library{{Name: ID}},
-		Directives:  []core.Directive{Directive},
+		Directives:  []core.Directive{Directive, EndDirective},
 		Materialize: materialize,
 		Fixtures:    fixturesFS,
 	}

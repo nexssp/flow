@@ -39,7 +39,7 @@ jobs:
         run: task test:race
 
       - name: Lint all user-facing Flow examples
-        run: task lint:nflow -- ./examples/...
+        run: task lint:nflow
 
       - name: Run user-facing Flow examples
         run: task examples

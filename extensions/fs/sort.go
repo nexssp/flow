@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
 )
 
 // SortConfig controls fs.sort.
@@ -43,7 +44,8 @@ func Sort(cfg SortConfig) action.StreamOp[FileMeta, FileMeta] {
 					return
 				}
 				if len(buffer) >= maxItems {
-					yield(FileMeta{}, fmt.Errorf("fs.sort: max_items %d exceeded", maxItems))
+					yield(FileMeta{}, xerr.Validation(
+						fmt.Sprintf("fs.sort: max_items %d exceeded", maxItems)))
 					return
 				}
 				buffer = append(buffer, meta)

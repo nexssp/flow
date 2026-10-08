@@ -1,0 +1,25 @@
+@description "Error routing: @on_error dispatches to typed recovery pipelines"
+
+# @on_error wraps the pipeline with a catch that maps error kinds to
+# recovery targets. A target is the NAME of a registered action, so
+# recovery logic lives in named pipelines, not inline DSL. Both string
+# ("Timeout") and symbolic (xerr.KindTimeout) forms match. else is
+# optional; without it, unmatched errors propagate unchanged.
+
+@pipeline on_timeout
+  const @{ value: "timeout-recovered" }
+@end
+
+@pipeline on_missing
+  const @{ value: "missing-recovered" }
+@end
+
+@on_error {
+  when error.kind == xerr.KindTimeout  -> pipeline.on_timeout,
+  when error.kind == xerr.KindNotFound -> pipeline.on_missing,
+  else                                  -> error.info,
+}
+
+@assert: result == "timeout-recovered"
+
+fail @{ kind: "Timeout", message: "slow upstream" }

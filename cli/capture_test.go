@@ -9,6 +9,16 @@ import (
 	"github.com/nexssp/kernel/xtest/ktest"
 )
 
+// captureMutex serializes tests that reassign the process-global
+// os.Stdout and os.Stderr. The reassignment itself is the race: two
+// parallel tests swapping the same globals will see each other's
+// pipes, and the race detector flags the read/write pair even though
+// the code under test is correct. Holding this mutex for the full
+// swap window eliminates the race without serializing the code under
+// test — the code still runs in parallel, only the capture window is
+// serialized.
+var captureMutex sync.Mutex
+
 // captureIO runs fn with os.Stdout and os.Stderr redirected to
 // in-memory buffers.
 //
@@ -22,6 +32,8 @@ import (
 // values directly instead of relying on this side effect.
 func captureIO(t *testing.T, fn func()) (stdout, stderr string) {
 	t.Helper()
+	captureMutex.Lock()
+	defer captureMutex.Unlock()
 
 	origOut := os.Stdout
 	origErr := os.Stderr

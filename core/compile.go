@@ -147,7 +147,13 @@ func runCompile(
 			return CompileRes{}, err
 		}
 	}
-	if strings.TrimSpace(prepared.clean) == "" {
+	// A declaration-only source (@const, @schema, @pipeline, @profile,
+	// @include, ...) produces no pipeline tokens after preprocessing.
+	// The old check tested for whitespace-only text, which misses the
+	// case where the body is entirely `#` comments: comments are not
+	// whitespace but the lexer skips them, so the parser sees only EOF.
+	// Ask the lexer directly instead of guessing from the string.
+	if !hasPipelineBody(prepared.clean) {
 		return CompileRes{Meta: prepared.meta}, nil
 	}
 
@@ -164,6 +170,9 @@ func runCompile(
 	if err != nil {
 		return CompileRes{}, err
 	}
+	if refErr := validateConfigRefs(ast, effectiveCfg.config, effectiveCfg.cliArgs); refErr != nil {
+		return CompileRes{}, refErr
+	}
 	if analyzeErr := Analyze(resolver, ast); analyzeErr != nil {
 		return CompileRes{}, analyzeErr
 	}
@@ -174,6 +183,15 @@ func runCompile(
 	}
 
 	return CompileRes{Program: program, Meta: prepared.meta, AST: ast}, nil
+}
+
+// hasPipelineBody reports whether src contains at least one non-EOF
+// token. Whitespace, `#` line comments, and `//` line comments are
+// skipped by the lexer, so a source that consists only of those is
+// correctly identified as body-less.
+func hasPipelineBody(src string) bool {
+	lex := NewLexer(src)
+	return lex.Next().Type != TokEOF
 }
 
 func applyConfigToCtx(ctx context.Context, cfg *compileConfig) context.Context {

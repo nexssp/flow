@@ -50,7 +50,7 @@ func NewExprEvaluator() Evaluator {
 
 		output, err := expr.Run(program, buildEnv(req.Input))
 		if err != nil {
-			return nil, xerr.BadRequest(fmt.Sprintf("projection %q: %v", req.Raw, err))
+			return nil, xerr.BadRequest(fmt.Sprintf("projection %q: %v", strings.TrimSpace(req.Raw), err))
 		}
 		return output, nil
 	}
@@ -76,7 +76,7 @@ func (c *programCache) compile(raw string) (*vm.Program, error) {
 		spreadMergeOption,
 	)
 	if err != nil {
-		return nil, xerr.Validation(fmt.Sprintf("projection %q: %v", raw, err))
+		return nil, xerr.Validation(fmt.Sprintf("projection %q: %v", strings.TrimSpace(raw), err))
 	}
 
 	c.entries.Store(raw, program)

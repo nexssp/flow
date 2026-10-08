@@ -1,0 +1,61 @@
+@description "spec: tips and tricks (typing, defaults, array ops)"
+
+# 1. Starting with a nested object (e.g., payload from API)
+{
+  user: {
+    id: 42,
+    username: "admin",
+    active: true,
+    tags: ["premium", "beta", "tester"],
+    score: 99.5
+  },
+  # metadata intentionally does not have 'ip_address' field
+  metadata: {
+    source: "web"
+  }
+}
+
+# 2. Transformation (Projection) - Data manipulation magic
+-> {
+  ... ,                                     # Trick 1: Spread (...) copies everything that already exists (user, metadata)
+
+  # Trick 2: Operator ?? (null coalescing) to set default values
+  ip: .metadata.ip_address ?? "127.0.0.1",
+
+  # Trick 3: Checking if an element exists in an array (operator 'in')
+  is_premium: "premium" in .user.tags,
+
+  # Trick 4: In-place list operations (map, filter). '#' is the iterator.
+  clean_tags: .user.tags | filter(# != "beta") | map(upper(#))
+}
+
+# ---------------------------------------------------------
+# 3. Assertions - Checking Types and Content
+# ---------------------------------------------------------
+
+# Trick 5: Strict type checking
+@assert: type(result.user.id) == "int"
+@assert: type(result.user.username) == "string"
+@assert: type(result.user.active) == "bool"
+@assert: type(result.user.score) == "float"
+@assert: type(result.user.tags) == "array"
+@assert: type(result.metadata) == "map"
+
+# Trick 6: Ensure the number is an integer (useful for JSON where numbers may be floats)
+@assert: int(result.user.id) == result.user.id
+
+# Trick 7: Check if a key physically exists in a map/object (instead of .field != nil)
+@assert: "username" in result.user
+@assert: !("missing_field" in result.user)
+
+# Trick 8: Advanced list checking
+@assert: len(result.clean_tags) == 2
+@assert: result.clean_tags[0] == "PREMIUM"
+@assert: result.clean_tags[1] == "TESTER"
+
+# Trick 9: Functions 'all' and 'any' checking conditions for the whole list
+@assert: all(result.clean_tags, # != "BETA")    # Ensure that no tag is 'beta'
+@assert: any(result.clean_tags, len(#) > 5)     # At least one tag has more than 5 letters
+
+# Verify that the default value was applied correctly
+@assert: result.ip == "127.0.0.1"

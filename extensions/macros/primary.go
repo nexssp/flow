@@ -64,6 +64,11 @@ func (m *macroPrimary) Parse(p *core.Parser) (core.Expr, error) {
 		}
 	}
 	if !ok {
+		if prefix, isReserved := reservedDirectivePrefix(nameTok.Lit); isReserved {
+			return nil, p.Fail(nameTok.Line,
+				"@%s is a %s reference, not a macro; write it as a string: \"@%s\"",
+				nameTok.Lit, prefix, nameTok.Lit)
+		}
 		return nil, p.Fail(nameTok.Line, "unknown macro @%s", nameTok.Lit)
 	}
 
@@ -299,4 +304,19 @@ func (m *macroPrimary) MergeWith(older core.PrimaryExtension) core.PrimaryExtens
 	maps.Copy(merged, m.byName) // newer wins on collision
 
 	return &macroPrimary{byName: merged}
+}
+
+// reservedDirectivePrefix reports whether a bare `@name` token names a
+// compile-time reference that the preprocessor resolves inside strings
+// ("@config.X", "@flag.X"). Those references must not reach macro
+// expansion: a missing flag is a compile-time error with its own
+// diagnostic, and calling it a "macro" hides the fix.
+func reservedDirectivePrefix(name string) (string, bool) {
+	switch {
+	case strings.HasPrefix(name, "flag."):
+		return "flag", true
+	case strings.HasPrefix(name, "config."):
+		return "config", true
+	}
+	return "", false
 }

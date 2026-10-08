@@ -1,0 +1,13 @@
+{
+  "cluster": {
+    "http_port": ":8080",
+    "nats_url": "nats://127.0.0.1:4222"
+  },
+  "queues": {
+    "telemetry": "PROD_TELEMETRY",
+    "dlq": "prod.alerts.dlq"
+  },
+  "thresholds": {
+    "cpu_alert": "95.0"
+  }
+}

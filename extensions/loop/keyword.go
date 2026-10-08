@@ -14,6 +14,7 @@ func (loopKeyword) Name() string    { return "loop" }
 func (loopKeyword) Keyword() string { return "loop" }
 
 func (loopKeyword) Parse(p *core.Parser) (core.Expr, error) {
+	startPos := p.Position()
 	p.Advance() // consume 'loop'
 	if p.Current().Type != core.TokLParen {
 		return nil, p.Fail(p.Current().Line, "expected '(' after loop")
@@ -71,5 +72,5 @@ scan:
 	rawCondition := strings.TrimSpace(p.Src()[untilStart:p.Current().Offset])
 	p.Advance() // consume closing ')'
 
-	return &core.LoopExpr{Body: body, Until: rawCondition}, nil
+	return &core.LoopExpr{Body: body, Until: rawCondition, Pos: startPos}, nil
 }

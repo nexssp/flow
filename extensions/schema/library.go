@@ -39,10 +39,12 @@ var rootInputKey = xctx.NewKey[any]("flow.schema.root_input")
 
 func Bundle(_ map[string]string) core.Bundle {
 	return core.Bundle{
-		ID:         ID,
-		Libraries:  []action.Library{Library()},
-		Directives: []core.Directive{Directive},
-		Modifiers:  []core.Modifier{SchemaModifier},
+		ID:           ID,
+		Libraries:    []action.Library{Library()},
+		Directives:   []core.Directive{Directive},
+		Modifiers:    []core.Modifier{SchemaModifier},
+		OnPreprocess: wireSchemaAdvisor,
+		Materialize:  materialize,
 		WrapPipeline: func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error) {
 			schemas := SchemasFromMap(meta)
 			return action.New("schema.wrap", func(ctx context.Context, req any) (any, error) {

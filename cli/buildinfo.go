@@ -4,7 +4,13 @@ import (
 	"fmt"
 	"runtime"
 	"runtime/debug"
+
+	"github.com/nexssp/flow/core"
 )
+
+func init() {
+	core.Version = Version
+}
 
 // Build metadata. Injected at build time with:
 //

@@ -18,6 +18,14 @@ func selftest() []core.SelfTestSection {
 				{Name: "runtime.uuid", DSL: "@assert: result != nil\nruntime.uuid"},
 				{Name: "runtime.call", DSL: `@assert: result == "called"` + "\n" + `{ name: "runtime.const", payload: { value: "called" } } -> runtime.call`},
 				{Name: "runtime.dispatch_by_prefix", DSL: `@assert: result.value == "x"` + "\n" + `{ prefix: "cov", key: "echo", payload: { value: "x" } } -> runtime.dispatch_by_prefix`},
+				{
+					Name: "runtime.print",
+					DSL:  `@assert: result == "shown"` + "\n" + `runtime.const @{ value: "shown" } -> print`,
+				},
+				{
+					Name: "runtime.print with limits",
+					DSL:  `runtime.const @{ value: { list: [1,2,3,4,5], nested: { a: { b: { c: "deep" } } } } } -> print @{ label: "demo", limit: 2, depth: 2, stream: "stdout" }`,
+				},
 			},
 		},
 	}

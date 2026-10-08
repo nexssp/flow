@@ -176,6 +176,9 @@ func TestRunLintBatchContinuesWhenExternalHarnessIsUnavailable(t *testing.T) {
 
 func captureLintOutput(t *testing.T, run func() int) (capturedStdout, capturedStderr string, exitCode int) {
 	t.Helper()
+	captureMutex.Lock()
+	defer captureMutex.Unlock()
+
 	oldStdout, oldStderr := os.Stdout, os.Stderr
 	stdoutReader, stdoutWriter, err := os.Pipe()
 	if err != nil {

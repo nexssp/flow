@@ -73,7 +73,11 @@ func compileRules(cfg Config) []match.ConditionCase {
 }
 
 func resolveTargetWithConditions(cfg Config, env map[string]any, conditions []match.ConditionCase) string {
-	if index := match.FirstMatchingCase(conditions, env); index >= 0 && index < len(cfg.Rules) {
+	// on_error is deliberately tolerant: a condition that cannot be
+	// evaluated against the current payload is treated as no-match, and
+	// routing falls through to the next rule or to the else target.
+	index := match.FirstMatchingCase(conditions, env)
+	if index >= 0 && index < len(cfg.Rules) {
 		return cfg.Rules[index].Target
 	}
 	return cfg.ElseTarget

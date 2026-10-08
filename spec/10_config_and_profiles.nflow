@@ -1,0 +1,22 @@
+@description "Profiles: same body runs with different policy per environment"
+
+@profile fast :timeout=1ms
+@profile slow :timeout=10s
+
+@pipeline quick :profile=fast
+  sleep @{ duration_ms: 500 }
+  -> const @{ value: "quick-succeeded" }
+@end
+
+@pipeline leisurely :profile=slow
+  sleep @{ duration_ms: 500 }
+  -> const @{ value: "leisurely-succeeded" }
+@end
+
+# quick hits the 1ms profile timeout during its 500ms sleep and fails.
+# || runs leisurely, which has a 10s budget and succeeds. If :profile
+# did not propagate to the sleep, both would fail identically.
+
+@assert: result == "leisurely-succeeded"
+
+{} -> pipeline.quick || pipeline.leisurely

@@ -1,0 +1,10 @@
+@description "spec: match with boolean predicate arms"
+
+{ level: 4, danger: true }
+-> match {
+  .danger && .level > 3 -> const @{ value: "critical" },
+  .danger               -> const @{ value: "warning" },
+  _                     -> const @{ value: "nominal" }
+}
+
+@assert: result == "critical"

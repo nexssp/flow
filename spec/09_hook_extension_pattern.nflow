@@ -1,0 +1,59 @@
+@description "Pattern: attach a hook to a pipeline (the LLM-extension shape)"
+
+# HOOKS ARE THE EXTENSION POINT FOR AI ANALYZERS
+#
+# The @hook: directive attaches any named hook that was registered with
+# the Kernel via action.MustRegisterHook. A hook receives
+# (ctx, req, err, meta) on every invocation, on the cold path only:
+#   - success → OnSuccess fires, once
+#   - error   → OnError fires, once, with the actual error value
+#   - panic   → OnPanic fires, then the error is recovered into an
+#               xerr.AppError before propagating
+#
+# An LLM error analyzer is just one hook among many. The full pattern:
+#
+#   1. A third-party Go bundle registers a named hook in init():
+#
+#        func init() {
+#            core.Register("ai_assist", Bundle)
+#            action.MustRegisterHook("ai.error_analyzer", func() action.AnyHook {
+#                return action.AnyHook{
+#                    OnError: func(ctx context.Context, req any, err error, meta *action.Meta) {
+#                        bg := xctx.CloneForAsync(ctx)   // detach from request
+#                        go shipToLLM(bg, meta.Name, req, err)
+#                    },
+#                }
+#            })
+#        }
+#
+#   2. The user requires the bundle and attaches the hook once:
+#
+#        @require github.com/mojafirma/ai_assist
+#        @hook:ai.error_analyzer
+#
+#   3. Or, for a multi-file project, once in a shared profile that
+#      every file includes:
+#
+#        # shared.nflow
+#        @profile prod_base :hook=ai.error_analyzer
+#
+#        # every other file
+#        @include ./shared.nflow
+#
+#      The hook then fires on every action in every included file.
+#      Zero duplication across the ten files. Zero changes to the
+#      compiler, the runner, or the CLI.
+#
+#   4. The pipeline itself never changes. The hook lives entirely
+#      beside it. Removing the @hook: line removes the extension —
+#      there is no residue in the source.
+#
+# This fixture demonstrates the mechanism with the built-in
+# hook.verify hook. It stamps a context marker so hook.probe can prove
+# the hook actually fired on the action. A production AI bundle is
+# identical in shape; only the OnError body changes.
+
+@hook:hook.verify
+
+@assert: result.hook_verified == true
+{ probe: "input" } -> hook.probe

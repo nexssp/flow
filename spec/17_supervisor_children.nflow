@@ -1,0 +1,25 @@
+@description "Supervisor: concurrent child pipelines with per-child isolation"
+
+# Each child has its own DSL, its own payload, its own error budget.
+# A failing child does not stop its siblings. Results preserve input
+# order, so the caller always knows which child produced which output.
+# This is the pattern for batch jobs, per-tenant work, and any fan-out
+# where each unit is a small pipeline.
+
+@assert: result.total == 3
+@assert: result.succeeded == 2
+@assert: result.failed == 1
+@assert: result.results[0].task_id == "num"
+@assert: result.results[0].output == 42
+@assert: result.results[1].task_id == "boom"
+@assert: result.results[2].task_id == "echo"
+@assert: result.results[2].output.greeting == "hi"
+
+{
+  tasks: [
+    { id: "num",  dsl: "const @{ value: 42 }",        payload: {} },
+    { id: "boom", dsl: "fail",                        payload: {} },
+    { id: "echo", dsl: "with @{ echoed: true }",      payload: { greeting: "hi" } },
+  ]
+}
+-> supervisor.run

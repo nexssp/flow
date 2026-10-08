@@ -41,6 +41,7 @@ func library() action.Library {
 		Actions: []action.AnyAction{
 			Const,
 			Debug,
+			Print,
 			Noop,
 			Fail,
 			Wrap,
@@ -52,6 +53,7 @@ func library() action.Library {
 			DispatchByPrefix,
 			JSONClean,
 			Sleep,
+			Flatten,
 		},
 	}
 }

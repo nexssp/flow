@@ -22,10 +22,14 @@ import (
 	"github.com/nexssp/flow/core"
 	"github.com/nexssp/flow/extensions/assert"
 	"github.com/nexssp/flow/extensions/config"
+	"github.com/nexssp/flow/extensions/constants"
 	"github.com/nexssp/flow/extensions/description"
 	"github.com/nexssp/flow/extensions/external"
+	"github.com/nexssp/flow/extensions/flow_version"
 	"github.com/nexssp/flow/extensions/fs"
+	"github.com/nexssp/flow/extensions/hook"
 	"github.com/nexssp/flow/extensions/include"
+	"github.com/nexssp/flow/extensions/io"
 	"github.com/nexssp/flow/extensions/loop"
 	"github.com/nexssp/flow/extensions/macros"
 	"github.com/nexssp/flow/extensions/match"
@@ -51,6 +55,7 @@ import (
 	"github.com/nexssp/flow/extensions/scope"
 	"github.com/nexssp/flow/extensions/selftestkit"
 	"github.com/nexssp/flow/extensions/syntax"
+	"github.com/nexssp/flow/spec"
 )
 
 // Bundles returns the complete set of bundles the shipped CLI loads.
@@ -61,6 +66,7 @@ import (
 // scratch — never both, because BuildConfig rejects a duplicate ID.
 func Bundles() []core.Bundle {
 	return []core.Bundle{
+		spec.Bundle(nil),
 		syntax.Bundle(nil),
 		runtime.Bundle(nil),
 		match.Bundle(nil),
@@ -70,11 +76,14 @@ func Bundles() []core.Bundle {
 		pipeline.Bundle(nil),
 		pool.Bundle(nil),
 		config.Bundle(nil),
+		constants.Bundle(nil),
+		flow_version.Bundle(nil),
 		schema.Bundle(nil),
 		projection.Bundle(nil),
 		progress.Bundle(nil),
 		description.Bundle(nil),
 		include.Bundle(nil),
+		hook.Bundle(nil),
 		macros.Bundle(nil),
 		on.Bundle(nil),
 		require.Bundle(nil),
@@ -82,6 +91,7 @@ func Bundles() []core.Bundle {
 		assert.Bundle(nil),
 		external.Bundle(nil),
 		fs.Bundle(nil),
+		io.Bundle(nil),
 		render.Bundle(nil),
 		on_error.Bundle(nil),
 		retry.Bundle(nil),

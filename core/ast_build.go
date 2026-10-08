@@ -494,6 +494,7 @@ func (p *ProjectionExpr) Build(ctx context.Context, bCtx *BuildContext) (action.
 	return (&Atom{
 		Name:   "projection.project",
 		Params: map[string]string{"raw": p.Raw},
+		Pos:    p.Pos,
 	}).Build(ctx, bCtx)
 }
 
@@ -653,9 +654,18 @@ func hasInjections(a *Atom) bool {
 }
 
 func wrapWithInjections(inner action.AnyAction, a *Atom) action.AnyAction {
+	pos := a.Pos
 	return action.New(a.Name, func(ctx context.Context, in any) (any, error) {
 		payload := buildPayload(in, a)
-		return action.InvokeAny(ctx, inner, payload)
+		res, err := action.InvokeAny(ctx, inner, payload)
+		if err != nil {
+			// Jeśli błąd nie ma jeszcze prefiksu pliku i linii, dodaj klikalny link
+			if pos.File != "" && !strings.Contains(err.Error(), pos.File+":") {
+				return nil, SourceError(pos, "%w", err)
+			}
+			return nil, err
+		}
+		return res, nil
 	}).Build()
 }
 
@@ -756,43 +766,83 @@ func BuildEnv(input any) map[string]any {
 	return map[string]any{"__root__": input, "result": input}
 }
 
+// PreprocessDots rewrites a user-authored expression for expr-lang:
+// leading-dot references become bare identifiers (`.name` → `name`),
+// a bare `.` becomes `__root__`, and `.` after an identifier, `)`, `]`,
+// `#`, or `@` is left alone as member access.
+//
+// Quoted strings (`"`, `'`, “ ` “) are copied verbatim; backslash
+// escapes inside them are honored, so a `.` inside `"a.b"` survives
+// untouched. This is the single implementation used by assert, loop,
+// match, @on_error, and projection — no other package should implement
+// its own dot rewriting.
 func PreprocessDots(src string) string {
-	var sb strings.Builder
-	sb.Grow(len(src))
+	var out strings.Builder
+	out.Grow(len(src))
 
-	inQuote := byte(0)
-	for i := range len(src) {
+	var quote byte
+	for i, n := 0, len(src); i < n; {
 		c := src[i]
-		if inQuote != 0 {
-			sb.WriteByte(c)
-			if c == inQuote && (i == 0 || src[i-1] != '\\') {
-				inQuote = 0
-			}
-			continue
-		}
-		if c == '"' || c == '\'' || c == '`' {
-			inQuote = c
-			sb.WriteByte(c)
-			continue
-		}
-		if c == '.' {
-			if i > 0 && isIdentChar(src[i-1]) {
-				sb.WriteByte(c)
+
+		if quote != 0 {
+			out.WriteByte(c)
+			if c == '\\' && i+1 < n {
+				out.WriteByte(src[i+1])
+				i += 2
 				continue
 			}
-			if i+1 < len(src) && isIdentChar(src[i+1]) {
-				continue
+			if c == quote {
+				quote = 0
 			}
-			sb.WriteString("__root__")
+			i++
 			continue
 		}
-		sb.WriteByte(c)
+
+		switch c {
+		case '"', '\'', '`':
+			quote = c
+			out.WriteByte(c)
+			i++
+		case '.':
+			if i > 0 && isDotMemberAccess(src[i-1]) {
+				out.WriteByte(c)
+				i++
+				continue
+			}
+			if i+1 < n && isDotIdentStart(src[i+1]) {
+				i++ // drop the dot; the identifier itself follows
+				continue
+			}
+			out.WriteString("__root__")
+			i++
+		default:
+			out.WriteByte(c)
+			i++
+		}
 	}
-	return sb.String()
+	return out.String()
 }
 
-func isIdentChar(c byte) bool {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
+// isDotMemberAccess reports whether prev, the byte immediately before a
+// `.`, indicates that the `.` is member access on the preceding token
+// (`foo.bar`, `arr[0].field`, `#.name`) rather than a root reference.
+func isDotMemberAccess(prev byte) bool {
+	switch {
+	case prev >= 'a' && prev <= 'z',
+		prev >= 'A' && prev <= 'Z',
+		prev >= '0' && prev <= '9':
+		return true
+	case prev == '_', prev == ')', prev == ']', prev == '#', prev == '@':
+		return true
+	}
+	return false
+}
+
+// isDotIdentStart reports whether c may start an identifier. Used to
+// decide whether `.foo` is a root reference (yes) or a numeric literal
+// continuation `.5` (no).
+func isDotIdentStart(c byte) bool {
+	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 // injectConfigIntoParams copies matching @config values into params,

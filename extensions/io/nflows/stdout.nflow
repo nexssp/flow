@@ -1,0 +1,3 @@
+@description "io.stdout writes each item and passes it through unchanged"
+@assert: len(result) == 3
+cov.items -> io.stdout -> collect

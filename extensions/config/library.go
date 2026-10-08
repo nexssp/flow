@@ -56,7 +56,7 @@ func forwardConfigToCompiler(meta map[string]any) core.PreprocessContributions {
 		return core.PreprocessContributions{}
 	}
 	return core.PreprocessContributions{
-		CompileOpts: []core.CompileOption{core.WithConfigMap(cfg, nil)},
+		CompileOpts: []core.CompileOption{core.WithConfigMap(cfg)},
 	}
 }
 

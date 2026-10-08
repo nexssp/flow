@@ -15,6 +15,7 @@ func (assertKeyword) Name() string    { return "assert" }
 func (assertKeyword) Keyword() string { return "assert" }
 
 func (assertKeyword) Parse(p *core.Parser) (core.Expr, error) {
+	startPos := p.Position()
 	p.Advance() // consume 'assert'
 	if p.Current().Type != core.TokLParen {
 		return nil, p.Fail(p.Current().Line, "expected '(' after assert")
@@ -53,7 +54,11 @@ scan:
 	p.Advance() // consume closing ')'
 
 	condition, message := splitConditionMessage(raw)
-	return &core.AssertExpr{Condition: condition, Message: message}, nil
+	return &core.AssertExpr{
+		Condition: condition,
+		Message:   message,
+		Pos:       startPos,
+	}, nil
 }
 
 // splitConditionMessage splits at the first top-level comma so commas

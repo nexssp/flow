@@ -260,6 +260,12 @@ func formatASTValue(v *core.Value) string {
 	return "?"
 }
 
+type ASTPosition struct {
+	File string `json:"file,omitempty"`
+	Line int    `json:"line,omitempty"`
+	Col  int    `json:"col,omitempty"`
+}
+
 // ── JSON rendering ───────────────────────────────────────────────────
 
 // ASTNode is the machine-readable form of one AST node. Fields are
@@ -279,7 +285,8 @@ func formatASTValue(v *core.Value) string {
 // point: a future AST node type adds a new Kind string and its own
 // fields without breaking existing consumers.
 type ASTNode struct {
-	Kind string `json:"kind"`
+	Kind string       `json:"kind"`
+	Pos  *ASTPosition `json:"pos,omitempty"`
 
 	Name string         `json:"name,omitempty"`
 	Args map[string]any `json:"args,omitempty"`
@@ -336,12 +343,21 @@ func writeExplainASTJSON(
 	return writeJSON(w, report, true)
 }
 
-// astNodeOf lowers one core.Expr to its machine-readable form.
-// Nil expr yields nil so the caller can use the result directly.
 func astNodeOf(expr core.Expr) *ASTNode {
 	if expr == nil {
 		return nil
 	}
+	node := buildASTNode(expr)
+	if p := resolveExprPos(expr); p != (core.Position{}) {
+		node.Pos = &ASTPosition{File: p.File, Line: p.Line, Col: p.Col}
+	}
+	return node
+}
+
+// buildASTNode lowers one expression to its machine-readable shape,
+// without touching positions — that step is handled by astNodeOf, which
+// can also walk children when a composite node has no explicit Pos.
+func buildASTNode(expr core.Expr) *ASTNode {
 	switch n := expr.(type) {
 	case *core.Atom:
 		var args map[string]any
@@ -383,8 +399,61 @@ func astNodeOf(expr core.Expr) *ASTNode {
 	case *core.AssertExpr:
 		return &ASTNode{Kind: "Assert", Condition: n.Condition, Message: n.Message}
 	}
-
 	return &ASTNode{Kind: fmt.Sprintf("Unknown(%T)", expr)}
+}
+
+// resolveExprPos returns the node's own Pos when set, otherwise the
+// leftmost non-zero Pos in its subtree. Composite nodes built by operator
+// handlers often leave Pos zero; this makes the JSON useful anyway.
+func resolveExprPos(e core.Expr) core.Position {
+	if e == nil {
+		return core.Position{}
+	}
+	switch n := e.(type) {
+	case *core.Atom:
+		return n.Pos
+	case *core.ProjectionExpr:
+		return n.Pos
+	case *core.AssertExpr:
+		return n.Pos
+	case *core.LoopExpr:
+		if n.Pos != (core.Position{}) {
+			return n.Pos
+		}
+		return resolveExprPos(n.Body)
+	case *core.PipeExpr:
+		if n.Pos != (core.Position{}) {
+			return n.Pos
+		}
+		return resolveExprPos(n.L)
+	case *core.FallbackExpr:
+		if n.Pos != (core.Position{}) {
+			return n.Pos
+		}
+		if p := resolveExprPos(n.L); p != (core.Position{}) {
+			return p
+		}
+		return resolveExprPos(n.R)
+	case *core.ConditionalExpr:
+		if n.Pos != (core.Position{}) {
+			return n.Pos
+		}
+		for _, c := range []core.Expr{n.Cond, n.Then, n.Else} {
+			if p := resolveExprPos(c); p != (core.Position{}) {
+				return p
+			}
+		}
+	case *core.ParallelExpr:
+		if n.Pos != (core.Position{}) {
+			return n.Pos
+		}
+		for _, b := range n.Branches {
+			if p := resolveExprPos(b); p != (core.Position{}) {
+				return p
+			}
+		}
+	}
+	return core.Position{}
 }
 
 func valueToAny(v *core.Value) any {

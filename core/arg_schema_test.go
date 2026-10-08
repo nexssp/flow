@@ -58,11 +58,17 @@ func TestCapabilityRef_RejectsUnknown(t *testing.T) {
 }
 
 func TestDispatchRun_MembersMustBeDeclaredInAtomArgs(t *testing.T) {
+	t.Parallel()
 	cfg := buildConfig(t)
 	src := `const @{ value: { members: [noop] } } -> dispatch.run`
 	_, err := runner.Execute(context.Background(), cfg, src, "missing-members.nflow", nil)
 	ktest.RequireCondition(t, err != nil, "expected missing members compile error")
-	ktest.RequireStringContains(t, err.Error(), `missing-members.nflow:1: dispatch.run: field "members"`)
+
+	// The error carries file:line:col since Position.col was added. Split
+	// the location assertion from the message assertion so a column
+	// change does not break the contract this test guards.
+	ktest.RequireStringContains(t, err.Error(), "missing-members.nflow:1:")
+	ktest.RequireStringContains(t, err.Error(), `dispatch.run: field "members"`)
 	ktest.RequireStringContains(t, err.Error(), "must be declared in the atom's @{ ... } block")
 	ktest.RequireStringContains(t, err.Error(), "not supplied only through pipeline input")
 	ktest.RequireStringContains(t, err.Error(), "hint: dispatch.run @{ members: [runtime.fail, runtime.const] }")

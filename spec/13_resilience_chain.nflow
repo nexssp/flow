@@ -1,0 +1,17 @@
+@description "Resilience: timeout and retry wrap the action; || guarantees a floor"
+
+# :timeout and :retry are inheritable policy modifiers. They wrap the
+# handler with a deadline and a bounded retry loop. || is a structural
+# fallback: if everything on the left fails, the right branch runs.
+#
+# Three independent layers, each removable without touching the others.
+# This is the production shape: fast-fail on transient upstream, always
+# answer to the caller.
+
+@assert: result == "recovered"
+
+runtime.fail:timeout=100ms:retry=2 @{
+  kind: "Timeout",
+  message: "upstream slow",
+}
+|| const @{ value: "recovered" }

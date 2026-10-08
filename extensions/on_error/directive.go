@@ -49,7 +49,7 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 			if !ok {
 				return core.DirectiveRes{}, core.SourceError(pos, "invalid else clause: %q", line)
 			}
-			cfg.ElseTarget = strings.TrimSpace(target)
+			cfg.ElseTarget = strings.TrimSpace(core.StripExprComments(target))
 			continue
 		}
 
@@ -59,10 +59,9 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 			if !ok {
 				return core.DirectiveRes{}, core.SourceError(pos, "invalid when clause: %q", line)
 			}
-			cfg.Rules = append(cfg.Rules, Rule{
-				Condition: strings.TrimSpace(condition),
-				Target:    strings.TrimSpace(target),
-			})
+			condition = strings.TrimSpace(core.StripExprComments(condition))
+			target = strings.TrimSpace(core.StripExprComments(target))
+			cfg.Rules = append(cfg.Rules, Rule{Condition: condition, Target: target})
 			continue
 		}
 

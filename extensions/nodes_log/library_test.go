@@ -75,3 +75,23 @@ func TestLibrary_ActionNames(t *testing.T) {
 		ktest.RequireCondition(t, seen, "action %q missing", name)
 	}
 }
+
+func TestLog_MasksSensitiveFields(t *testing.T) {
+	input := map[string]any{
+		"user":     "alice",
+		"password": "s3cret",
+		"token":    "gho_xxx",
+	}
+
+	logged := captureLogs(t, func() {
+		if _, err := action.InvokeAny(context.Background(), LogInfo, input); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	ktest.RequireStringContains(t, logged, `user=alice`)
+	ktest.RequireStringContains(t, logged, `password=[REDACTED]`)
+	ktest.RequireStringContains(t, logged, `token=[REDACTED]`)
+	ktest.RequireStringNotContains(t, logged, "s3cret")
+	ktest.RequireStringNotContains(t, logged, "gho_xxx")
+}

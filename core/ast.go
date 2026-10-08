@@ -53,19 +53,28 @@ func (*Atom) Node()            {}
 func (*Atom) Children() []Expr { return nil }
 
 // PipeExpr: left -> right.
-type PipeExpr struct{ L, R Expr }
+type PipeExpr struct {
+	L, R Expr
+	Pos  Position
+}
 
 func (*PipeExpr) Node()              {}
 func (p *PipeExpr) Children() []Expr { return []Expr{p.L, p.R} }
 
 // ParallelExpr: N branches executed concurrently.
-type ParallelExpr struct{ Branches []Expr }
+type ParallelExpr struct {
+	Branches []Expr
+	Pos      Position
+}
 
 func (p *ParallelExpr) Children() []Expr { return p.Branches }
 func (*ParallelExpr) Node()              {}
 
 // FallbackExpr: left || right.
-type FallbackExpr struct{ L, R Expr }
+type FallbackExpr struct {
+	L, R Expr
+	Pos  Position
+}
 
 func (*FallbackExpr) Node()              {}
 func (f *FallbackExpr) Children() []Expr { return []Expr{f.L, f.R} }
@@ -75,6 +84,7 @@ type ConditionalExpr struct {
 	Cond Expr
 	Then Expr
 	Else Expr
+	Pos  Position
 }
 
 func (*ConditionalExpr) Node() {}
@@ -86,7 +96,10 @@ func (c *ConditionalExpr) Children() []Expr {
 }
 
 // ProjectionExpr: raw content `{ ... }`.
-type ProjectionExpr struct{ Raw string }
+type ProjectionExpr struct {
+	Raw string
+	Pos Position
+}
 
 func (*ProjectionExpr) Node()              {}
 func (p *ProjectionExpr) Children() []Expr { return nil }
@@ -95,6 +108,7 @@ func (p *ProjectionExpr) Children() []Expr { return nil }
 type LoopExpr struct {
 	Body  Expr
 	Until string
+	Pos   Position
 }
 
 func (*LoopExpr) Node()              {}
@@ -104,6 +118,7 @@ func (l *LoopExpr) Children() []Expr { return []Expr{l.Body} }
 type AssertExpr struct {
 	Condition string
 	Message   string
+	Pos       Position
 }
 
 func (*AssertExpr) Node()              {}

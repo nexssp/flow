@@ -47,8 +47,9 @@ var helpRegistry = map[string]helpText{
 		},
 	},
 	"serve": {
-		Summary: "Run a .nflow file as a long-running daemon. The file must declare `@on event`.",
-		Usage:   "nflow serve <file.nflow>",
+		Summary: "Validate a .nflow file for serve mode. The listener is not implemented in this release.",
+		Usage:   "nflow serve <file.nflow> [--allow-exec]",
+		Flags:   `      --allow-exec   acknowledge that external.exec/external.wasm will run host commands`,
 		Examples: []string{
 			`nflow serve flows/api.nflow`,
 		},

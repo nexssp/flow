@@ -28,6 +28,9 @@ var keywordList = []KeywordMapping{
 	{Keyword: "env", Target: "runtime.env"},
 	{Keyword: "uuid", Target: "runtime.uuid"},
 	{Keyword: "json", Target: "json.clean"},
+	{Keyword: "print", Target: "runtime.print"},
+	{Keyword: "debug", Target: "runtime.debug"},
+	{Keyword: "flatten", Target: "runtime.flatten"},
 }
 
 var nativeKeywords = func() map[string]string {
@@ -61,6 +64,7 @@ var reservedActionNames = map[string]bool{
 	"const": true, "with": true, "pick": true, "wrap": true,
 	"fail": true, "noop": true, "sleep": true,
 	"env": true, "uuid": true, "json": true, "parallel": true,
+	"print": true, "debug": true, "flatten": true,
 }
 
 // IsReservedActionName reports whether name is reserved by the nflow

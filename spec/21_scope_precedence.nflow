@@ -1,0 +1,19 @@
+@description "Scope: innermost policy wins, atom-local wins over all"
+
+# @scope attaches modifiers to every atom within its braces. Nested
+# scopes override on a per-modifier-name basis: the inner value wins,
+# unrelated modifiers from outer scopes survive. Atom-local modifiers
+# beat every scope level.
+#
+# The 1ms outer timeout would kill the 20ms sleep if stacking were
+# additive. Success proves replacement, not accumulation. The payload
+# is a map so that sleep's own @{ duration_ms: 20 } argument merges
+# cleanly without wrapping the value in a __root__ sentinel.
+
+@scope :timeout=1ms {
+  @scope :timeout=1s {
+    const @{ value: { tag: "ok" } } -> sleep @{ duration_ms: 20 }
+  }
+}
+
+@assert: result.tag == "ok"

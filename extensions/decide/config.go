@@ -1,10 +1,10 @@
 package decide
 
 import (
-	"fmt"
 	"os"
 	"time"
 
+	"github.com/nexssp/kernel/xerr"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,17 +23,18 @@ type FileConfig struct {
 func LoadConfigFile(path string) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("decide: read config %s: %w", path, err)
+		return xerr.NotFound("decide: read config " + path + ": " + err.Error())
 	}
 
 	var parsed FileConfig
 	if err := yaml.Unmarshal(raw, &parsed); err != nil {
-		return fmt.Errorf("decide: unmarshal %s: %w", path, err)
+		return xerr.Validation("decide: unmarshal " + path + ": " + err.Error())
 	}
 
 	for name, spec := range parsed.Backends {
 		if spec.Kind != "http" {
-			return fmt.Errorf("decide: backend %q unsupported kind %q (supported: http)", name, spec.Kind)
+			return xerr.Validation("decide: backend " + name +
+				" unsupported kind " + spec.Kind + " (supported: http)")
 		}
 		backend, err := NewHTTPBackend(HTTPConfig{
 			Name:     name,

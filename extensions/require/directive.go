@@ -59,13 +59,8 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 	existing, _ := req.Out["require"].([]Requirement)
 	for i := range existing {
 		old := &existing[i]
-		if old.Import == r.Import && old.Version == r.Version {
-			if old.Alias == r.Alias {
-				return core.DirectiveRes{Next: next}, nil
-			}
-			return core.DirectiveRes{}, core.SourceError(
-				core.Position{File: req.File, Line: req.I + 1},
-				"@require: module %q cannot be imported more than once with different qualifiers", r.Import)
+		if old.Import == r.Import && old.Version == r.Version && old.Alias == r.Alias {
+			return core.DirectiveRes{Next: next}, nil
 		}
 		if r.Alias != "" && old.Alias == r.Alias {
 			return core.DirectiveRes{}, core.SourceError(

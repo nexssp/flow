@@ -319,8 +319,6 @@ func runSourceInProcess(ctx context.Context, src, name string, args []string) in
 func runSourceInInvocation(ctx context.Context, inv *invocation, src, name string, args []string) int {
 	payload, flags := splitPayloadAndFlags(args)
 
-	payload = readPipedStdin(payload)
-
 	directives, err := inv.directiveTable()
 	if err != nil {
 		return fatalf("directives: %v", err)
@@ -329,12 +327,19 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 	if err != nil {
 		return fatalf("preprocess: %v", err)
 	}
-	reqs := require.FromMeta(meta)
 
+	// A flow that declares io.stdin owns process stdin as a stream; the
+	// CLI must not pre-consume it as a payload. Explicit args still win.
+	if !strings.Contains(clean, "io.stdin") {
+		payload = readPipedStdin(payload)
+	}
+
+	reqs := require.FromMeta(meta)
 	cfg, err := inv.buildConfig(reqs)
 	if err != nil {
 		return fatalf("config: %v", err)
 	}
+	cfg.CompileOpts = append(cfg.CompileOpts, core.WithCLIArgs(flags))
 
 	useColorErr := colorEnabled(os.Stderr)
 	useColorOut := colorEnabled(os.Stdout)
@@ -368,10 +373,19 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 	total := ex.CompileDuration + ex.RunDuration
 
 	if execErr != nil {
-		fmt.Fprintf(os.Stderr, "\n%s\n", paint("✗ Pipeline Execution Failed", ansiRed, useColorErr))
-		fmt.Fprintf(os.Stderr, "  Error: %v\n", execErr)
+		fmt.Fprintf(os.Stderr, "\n%s\n\n", paint("✗ Pipeline Execution Failed", ansiRed, useColorErr))
+		fmt.Fprintf(os.Stderr, "  %s\n\n", formatCleanError(execErr, useColorErr))
 		if verbosity >= 1 {
 			observer.PrintSummary(os.Stderr)
+		}
+		// Runner.Execute returns (Execution, error) where the run phase
+		// never executes when compilation fails, so RunDuration stays
+		// zero. Compile errors are usage errors — bad syntax, unknown
+		// flag, missing capability — and exit 2 (matching flag.ExitOnError
+		// convention). A failure after the pipeline started is a runtime
+		// error and exits 1.
+		if ex.RunDuration == 0 {
+			return 2
 		}
 		return 1
 	}
@@ -456,7 +470,7 @@ func emitCleanOutput(w io.Writer, output any) {
 func renderPrettyOutput(w *os.File, output any, useColor bool) {
 	m, ok := output.(map[string]any)
 	if !ok {
-		fmt.Fprint(w, formatOutputPretty(output))
+		renderColoredJSON(w, output, useColor)
 		return
 	}
 
@@ -472,7 +486,7 @@ func renderPrettyOutput(w *os.File, output any, useColor bool) {
 	}
 
 	if !isExec && !hasStdout && !hasStderr && !hasExitCode {
-		fmt.Fprint(w, formatOutputPretty(output))
+		renderColoredJSON(w, output, useColor)
 		return
 	}
 
@@ -485,32 +499,40 @@ func renderPrettyOutput(w *os.File, output any, useColor bool) {
 		} else {
 			fmt.Fprintf(w, "%s\n", paint("▶ EXECUTION SUCCESS (no stdout)", ansiGreen, useColor))
 		}
-	} else {
-		fmt.Fprintf(w, "\n%s (code %d)\n", paint("▶ EXECUTION FAILED", ansiRed, useColor), exitCode)
-		if hasStdout && strings.TrimSpace(stdout) != "" {
-			fmt.Fprintf(w, "%s\n", paint("STDOUT:", ansiBold, useColor))
-			for line := range strings.SplitSeq(strings.TrimSpace(stdout), "\n") {
-				fmt.Fprintf(w, "  %s\n", line)
-			}
+		return
+	}
+
+	fmt.Fprintf(w, "\n%s (code %d)\n", paint("▶ EXECUTION FAILED", ansiRed, useColor), exitCode)
+	if hasStdout && strings.TrimSpace(stdout) != "" {
+		fmt.Fprintf(w, "%s\n", paint("STDOUT:", ansiBold, useColor))
+		for line := range strings.SplitSeq(strings.TrimSpace(stdout), "\n") {
+			fmt.Fprintf(w, "  %s\n", line)
 		}
-		if hasStderr && strings.TrimSpace(stderr) != "" {
-			fmt.Fprintf(w, "%s\n", paint("STDERR:", ansiRed, useColor))
-			for line := range strings.SplitSeq(strings.TrimSpace(stderr), "\n") {
-				fmt.Fprintf(w, "  %s\n", paint(line, ansiRed, useColor))
-			}
+	}
+	if hasStderr && strings.TrimSpace(stderr) != "" {
+		fmt.Fprintf(w, "%s\n", paint("STDERR:", ansiRed, useColor))
+		for line := range strings.SplitSeq(strings.TrimSpace(stderr), "\n") {
+			fmt.Fprintf(w, "  %s\n", paint(line, ansiRed, useColor))
 		}
 	}
 }
 
-func formatOutputPretty(value any) string {
+// renderColoredJSON pretty-prints value with per-token ANSI colors on a
+// TTY. Non-TTY output stays compact and machine-readable.
+func renderColoredJSON(w io.Writer, value any, useColor bool) {
 	if s, ok := value.(string); ok {
-		return s + "\n"
+		fmt.Fprintln(w, s)
+		return
 	}
 	encoded, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
-		return fmt.Sprintf("%v\n", value)
+		fmt.Fprintf(w, "%v\n", value)
+		return
 	}
-	return string(encoded) + "\n"
+	fmt.Fprintln(w)
+	for line := range strings.SplitSeq(string(encoded), "\n") {
+		fmt.Fprintln(w, colorizeJSONLine(line, useColor))
+	}
 }
 
 func collectAsserts(meta map[string]any, extra []string) []string {
@@ -586,4 +608,87 @@ func flagsToAsserts(flags []string) []string {
 		}
 	}
 	return out
+}
+
+// formatCleanError strips the runtime's cascading wrappers and appends
+// a terminal snippet pointing at the failing source line.
+func formatCleanError(err error, useColor bool) string {
+	if err == nil {
+		return ""
+	}
+
+	msg := err.Error()
+	for {
+		if idx := strings.Index(msg, "execution failed: "); idx >= 0 {
+			msg = msg[idx+len("execution failed: "):]
+		} else {
+			break
+		}
+	}
+	msg = strings.TrimSpace(msg)
+
+	pos, ok := core.PositionOf(err)
+	if !ok || pos.File == "" || strings.HasPrefix(pos.File, "<") {
+		return msg
+	}
+	snippet := renderSnippet(pos, useColor)
+	if snippet == "" {
+		return msg
+	}
+	return msg + "\n" + snippet
+}
+
+// renderSnippet reads pos.File and draws the target line with a caret
+// under the failing column. Returns "" when the snippet is not useful
+// (file gone, line out of range, embedded source).
+//
+// Tabs in the source line are copied verbatim so terminals that honor
+// tab stops align the caret correctly.
+func renderSnippet(pos core.Position, useColor bool) string {
+	data, err := os.ReadFile(pos.File)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(string(data), "\n")
+	if pos.Line < 1 || pos.Line > len(lines) {
+		return ""
+	}
+
+	target := lines[pos.Line-1]
+	var b strings.Builder
+	b.WriteString("\n")
+
+	if pos.Line > 1 {
+		fmt.Fprintf(&b, "  %4d │ %s\n", pos.Line-1, lines[pos.Line-2])
+	}
+	fmt.Fprintf(&b, "  %4d │ %s\n", pos.Line, target)
+	b.WriteString("       │ ")
+
+	col := pos.Col
+	if col < 1 {
+		col = leadingWhitespace(target) + 1
+	}
+	for i := 0; i < col-1 && i < len(target); i++ {
+		if target[i] == '\t' {
+			b.WriteByte('\t')
+		} else {
+			b.WriteByte(' ')
+		}
+	}
+	b.WriteString(paint("^", ansiYellow, useColor))
+
+	if pos.Line < len(lines) && strings.TrimSpace(lines[pos.Line]) != "" {
+		fmt.Fprintf(&b, "\n  %4d │ %s", pos.Line+1, lines[pos.Line])
+	}
+
+	return b.String()
+}
+
+func leadingWhitespace(s string) int {
+	for i := range len(s) {
+		if s[i] != ' ' && s[i] != '\t' {
+			return i
+		}
+	}
+	return 0
 }

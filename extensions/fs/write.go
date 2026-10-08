@@ -1,12 +1,12 @@
 package fs
 
 import (
-	"fmt"
 	"iter"
 	"os"
 	"path/filepath"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xfs"
 )
 
@@ -47,7 +47,7 @@ func Write(cfg WriteConfig) action.StreamOp[FileContent, FileContent] {
 
 				clean, relErr := xfs.Rel(rel)
 				if relErr != nil {
-					yield(FileContent{}, fmt.Errorf("fs.write: invalid path %q: %w", rel, relErr))
+					yield(FileContent{}, xerr.Validation("fs.write: "+rel, relErr))
 					return
 				}
 
@@ -71,7 +71,7 @@ func WriteOperator() action.NamedOperator {
 func writeOne(dir, rel string, content []byte, mode os.FileMode, overwrite bool) error {
 	target := filepath.Join(dir, rel)
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return fmt.Errorf("fs.write: mkdir: %w", err)
+		return xerr.Internal("fs.write: mkdir", err)
 	}
 
 	flags := os.O_CREATE | os.O_WRONLY
@@ -83,17 +83,17 @@ func writeOne(dir, rel string, content []byte, mode os.FileMode, overwrite bool)
 
 	file, err := os.OpenFile(target, flags, mode)
 	if err != nil {
-		return fmt.Errorf("fs.write: open %q: %w", target, err)
+		return xerr.Internal("fs.write: open "+target, err)
 	}
 
 	_, writeErr := file.Write(content)
 	closeErr := file.Close()
 
 	if writeErr != nil {
-		return fmt.Errorf("fs.write: write %q: %w", target, writeErr)
+		return xerr.Internal("fs.write: write "+target, writeErr)
 	}
 	if closeErr != nil {
-		return fmt.Errorf("fs.write: close %q: %w", target, closeErr)
+		return xerr.Internal("fs.write: close "+target, closeErr)
 	}
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
 )
 
 // OutFileConfig controls out.file.
@@ -55,7 +56,7 @@ func OutFileOperator() action.NamedOperator {
 func openOutFile(cfg OutFileConfig) (*os.File, error) {
 	if dir := filepath.Dir(cfg.Path); dir != "." && dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return nil, fmt.Errorf("out.file: mkdir: %w", err)
+			return nil, xerr.Internal("out.file: mkdir", err)
 		}
 	}
 	flags := os.O_CREATE | os.O_WRONLY
@@ -66,7 +67,7 @@ func openOutFile(cfg OutFileConfig) (*os.File, error) {
 	}
 	file, err := os.OpenFile(cfg.Path, flags, 0o600)
 	if err != nil {
-		return nil, fmt.Errorf("out.file: open: %w", err)
+		return nil, xerr.Internal("out.file: open", err)
 	}
 	return file, nil
 }
@@ -87,11 +88,11 @@ func writeOutStream[T any](
 		data := itemBytes(item)
 		if len(data) > 0 {
 			if _, err := writer.Write(data); err != nil {
-				return fmt.Errorf("out.file: write: %w", err)
+				return xerr.Internal("out.file: write", err)
 			}
 			if flushEach {
 				if err := writer.Flush(); err != nil {
-					return fmt.Errorf("out.file: flush: %w", err)
+					return xerr.Internal("out.file: flush", err)
 				}
 			}
 		}

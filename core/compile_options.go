@@ -58,12 +58,31 @@ func WithOnPreprocess(fns ...OnPreprocessFunc) CompileOption {
 	}
 }
 
-// WithConfigMap carries @config resolution context: the merged
-// key→value map plus the raw CLI args for @flag. lookups.
-func WithConfigMap(cfg map[string]string, cliArgs []string) CompileOption {
+// WithConfigMap carries the @config key→value map into the compile
+// context. It is called by the config bundle's OnPreprocess hook after
+// preprocessing has collected the source's @config directives. A nil
+// map leaves any existing config untouched so an unrelated option (e.g.
+// WithCLIArgs from the CLI) is not silently wiped by a later call.
+func WithConfigMap(cfg map[string]string) CompileOption {
 	return func(c *compileConfig) {
-		c.config = cfg
-		c.cliArgs = cliArgs
+		if cfg != nil {
+			c.config = cfg
+		}
+	}
+}
+
+// WithCLIArgs carries the raw command-line flags into the compile
+// context so @flag.X references can be resolved and validated at
+// compile time. A nil slice disables @flag validation, which is the
+// right behavior for embedded runs and pure-compile tests that do not
+// model a CLI invocation; an empty non-nil slice enables validation
+// with zero known flags, so any @flag reference in the source is
+// rejected.
+func WithCLIArgs(args []string) CompileOption {
+	return func(c *compileConfig) {
+		if args != nil {
+			c.cliArgs = args
+		}
 	}
 }
 

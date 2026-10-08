@@ -20,7 +20,7 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 	line := strings.TrimSpace(req.Lines[req.I])
 	expression := strings.TrimSpace(strings.TrimPrefix(line, "@assert"))
 	expression = strings.TrimPrefix(expression, ":")
-	expression = strings.TrimSpace(expression)
+	expression = strings.TrimSpace(core.StripExprComments(expression))
 
 	if expression == "" {
 		return core.DirectiveRes{}, core.SourceError(

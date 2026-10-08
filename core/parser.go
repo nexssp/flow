@@ -120,16 +120,31 @@ func (p *Parser) Next() {
 // Advance is an alias for Next, exported for external primary extensions.
 func (p *Parser) Advance() { p.Next() }
 
-// errorf wraps a parse failure with the current position.
-func (p *Parser) errorf(line int, format string, args ...any) error {
-	return SourceError(Position{File: p.file, Line: line + p.lineBase}, format, args...)
+func (p *Parser) errorf(_ int, format string, args ...any) error {
+	return SourceError(p.currentPos(), format, args...)
 }
+
+func (p *Parser) currentPos() Position {
+	tok := p.Cur()
+	col := 0
+	if tok.Offset >= 0 && tok.Offset <= len(p.src) {
+		lastNL := strings.LastIndexByte(p.src[:tok.Offset], '\n')
+		// Matematyka indeksów (1-based). Jeśli brak '\n', lastNL wynosi -1.
+		col = tok.Offset - lastNL
+	}
+	return Position{File: p.file, Line: tok.Line + p.lineBase, Col: col}
+}
+
+// Position returns the parser's current source position, including file,
+// line, and column. Exposed so primary extensions can stamp AST nodes
+// they construct without re-implementing column arithmetic.
+func (p *Parser) Position() Position { return p.currentPos() }
 
 // Fail reports a parse error at the given line offset by lineBase.
 // Exported so external primary extensions can format errors the same
 // way the built-in parser does.
-func (p *Parser) Fail(line int, format string, args ...any) error {
-	return p.errorf(line, format, args...)
+func (p *Parser) Fail(_ int, format string, args ...any) error {
+	return p.errorf(0, format, args...)
 }
 
 // Src returns the source text under parse.
@@ -342,7 +357,7 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 			p.Next()
 
 		case TokAtBrace:
-			args, err := parseAtBrace(p.Cur().Lit, p.Cur().Line)
+			args, err := parseAtBrace(p.Cur().Lit, p.Position())
 			if err != nil {
 				return nil, err
 			}
@@ -362,6 +377,7 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 }
 
 func (p *Parser) parseAtom() (Expr, error) {
+	pos := p.currentPos()
 	startLine := p.Cur().Line
 	expr, err := p.parseAtomInner()
 	if err != nil {
@@ -371,7 +387,7 @@ func (p *Parser) parseAtom() (Expr, error) {
 	if !ok {
 		return expr, nil
 	}
-	a.Pos = Position{File: p.file, Line: startLine + p.lineBase}
+	a.Pos = pos
 	// Every modifier produced by parseAtomInner is written directly on
 	// the atom, so its source is "atom".
 	a.ModifierSources = make([]ModifierSource, len(a.Modifiers))

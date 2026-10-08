@@ -158,6 +158,7 @@ func compilePrepared(ctx context.Context, cfg Config, prepared *core.PreparedSou
 		wrapperMods, bodyMods := SplitPipelineModifiers(cfg.Modifiers, mods)
 
 		subOpts := append([]core.CompileOption(nil), cfg.CompileOpts...)
+		subOpts = append(subOpts, topContribs.CompileOpts...)
 		if len(bodyMods) > 0 {
 			captured := append([]string(nil), bodyMods...)
 			subOpts = append(subOpts, core.WithLineModifiers(core.LineLookup{

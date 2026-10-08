@@ -1,0 +1,14 @@
+@description "ETL fan-out: distribute.map fans out, flatten unwraps, reduce collects"
+
+# distribute.map runs an action over each item with bounded concurrency,
+# preserving order. It returns a typed struct; flatten unwraps it into
+# a map so distribute.reduce can consume its fields via @{...}.
+# This is scatter-gather with one line of glue.
+
+@assert: result.strategy == "collect"
+@assert: len(result.results) == 3
+
+{ items: [1, 2, 3] }
+-> distribute.map @{ action: noop, items: .items }
+-> flatten
+-> distribute.reduce @{ strategy: "collect" }

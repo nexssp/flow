@@ -228,3 +228,26 @@ func readQuotedValue(rest string) (value, remaining string) {
 	}
 	return sb.String(), ""
 }
+
+// EndDirective rejects a stray `@end`. It only fires when `@end` appears
+// outside a `@pipeline` block, because the pipeline handler consumes its
+// own terminator while scanning the body and never forwards it to the
+// directive table. Outside a pipeline the fallback path is the macro
+// primary, which reports `unknown macro @end` — a diagnostic that hides
+// the actual problem. This handler replaces it with a message that
+// names the missing opening directive.
+//
+// Registered in Bundle().Directives so every top-level `@end` in any
+// fixture is a registered directive; the native fixture contract test
+// enforces that invariant across every embedded .nflow file.
+var EndDirective = core.Directive{
+	Name:    "end",
+	Example: "@pipeline p\n  ...\n@end",
+	Handler: handleEnd,
+}
+
+func handleEnd(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
+	return core.DirectiveRes{}, core.SourceError(
+		core.Position{File: req.File, Line: req.I + 1},
+		"@end without a matching block directive")
+}

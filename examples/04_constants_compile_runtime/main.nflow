@@ -1,0 +1,34 @@
+@description "Compile-time constants: ${env.X} substituted before compile, runtime sees the value"
+
+# Include merges globals.nflow's constants into this file's scope.
+# Every `${...}` reference below resolves during preprocessing; the
+# parser never sees the placeholders.
+@include "globals.nflow"
+
+# The pipeline body uses constants in three positions:
+#   - a match() condition   → ${env.thresholds.cpu_alert}
+#   - a string in a shape   → ${WORKER_NAME}, ${DEFAULT_CURRENCY}
+#   - a numeric literal     → ${env.thresholds.cpu_alert} again
+#
+# Without substitution the match would compare .cpu to a string,
+# and the emitted worker field would carry the literal text
+# "${WORKER_NAME}".
+
+@pipeline process
+  match(.cpu > ${env.thresholds.cpu_alert}) {
+    true -> {
+      status:   "alert",
+      worker:   "${WORKER_NAME}",
+      currency: "${DEFAULT_CURRENCY}",
+      limit:    ${env.thresholds.cpu_alert},
+    },
+    false -> { status: "ok" },
+  }
+@end
+
+@assert: result.status == "alert"
+@assert: result.worker == "telemetry_processor"
+@assert: result.currency == "USD"
+@assert: result.limit == 95.0
+
+{ cpu: 99.5 } -> pipeline.process

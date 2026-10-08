@@ -1,0 +1,12 @@
+@description "Shared compile-time infrastructure constants"
+
+# Load JSON and flatten it into the 'env' namespace. Every leaf becomes
+# a `${env.<path>}` reference that later files can substitute at
+# preprocess time.
+@const.load "config.prod.json" as env
+
+# Hardcoded constants for the specific service. They land in the same
+# namespace as the loaded ones — `@const` and `@const.load` share the
+# `constants` map, so order determines collision resolution.
+@const WORKER_NAME = "telemetry_processor"
+@const DEFAULT_CURRENCY = "USD"

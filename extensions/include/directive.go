@@ -13,6 +13,13 @@ import (
 // Directive parses `@include "path"` and merges the referenced file's
 // meta into the parent. Path resolution is relative to the including
 // file's directory.
+//
+// After merging meta, it applies the merged compile-time constants
+// (`${ns.key}` references from `@const` and `@const.load`) to the
+// parent's own source lines below the @include. Without this step the
+// constants live in meta but never reach the parent's text, so a
+// `@require { url: "${env.X}" }` after the @include would ship the
+// literal `${env.X}` to the bundle resolver.
 var Directive = core.Directive{
 	Name:    "include",
 	Example: `@include "shared/child.nflow"`,
@@ -56,14 +63,28 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 
 	mergeIncludedMeta(req.Out, includedMeta)
 
+	// Apply the merged constants to the parent's lines below the
+	// @include. The included file's own @const / @const.load handlers
+	// already substituted its lines; the parent's lines have not been
+	// touched, so a `${ns.key}` written after the @include would remain
+	// literal text through compile. Applying here closes that gap.
+	if consts, ok := req.Out["constants"].(map[string]string); ok {
+		core.ApplyConstants(req.Lines, req.I+1, consts)
+	}
+
 	req.Body[req.I] = strings.Join(strings.Fields(clean), " ")
 	return core.DirectiveRes{Next: req.I + 1}, nil
 }
 
 // mergeIncludedMeta folds meta from an included file into the parent
-// out map. Pipelines are merged key-by-key; slice-valued declarations
-// (require, llms, pools, ...) are concatenated; everything else is
-// copied only when the parent has not set it.
+// out map. Pipelines and constants are merged key-by-key; slice-valued
+// declarations (require, llms, pools, ...) are concatenated;
+// everything else is copied only when the parent has not set it.
+//
+// The constants case is not a default-case copy: two files that both
+// declare constants must produce the union, and the parent must win
+// on key collision. Silent loss on the second @include was the
+// original bug.
 func mergeIncludedMeta(parent, included map[string]any) {
 	for key, value := range included {
 		switch key {
@@ -75,8 +96,25 @@ func mergeIncludedMeta(parent, included map[string]any) {
 			incoming, _ := value.(map[string]string)
 			maps.Copy(existing, incoming)
 			parent["pipelines"] = existing
+
+		case "constants":
+			existing, _ := parent["constants"].(map[string]string)
+			if existing == nil {
+				existing = map[string]string{}
+				parent["constants"] = existing
+			}
+			incoming, _ := value.(map[string]string)
+			// Parent wins on collision: an explicit @const in the
+			// including file is the more local declaration.
+			for k, v := range incoming {
+				if _, set := existing[k]; !set {
+					existing[k] = v
+				}
+			}
+
 		case "require", "llms", "sandboxes", "pools", "schemas", "macros":
 			parent[key] = concatSlices(parent[key], value)
+
 		default:
 			if _, exists := parent[key]; !exists {
 				parent[key] = value

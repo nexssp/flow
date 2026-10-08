@@ -3,7 +3,7 @@ package fs
 import (
 	"bufio"
 	"bytes"
-	"fmt"
+	"errors"
 	"iter"
 	"os"
 	"strconv"
@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
 )
 
 const readBufferSize = 64 * 1024
@@ -55,7 +56,7 @@ func Read(cfg ReadConfig) action.StreamOp[FileMeta, FileContent] {
 	if parseErr != nil {
 		return func(iter.Seq2[FileMeta, error]) iter.Seq2[FileContent, error] {
 			return func(yield func(FileContent, error) bool) {
-				yield(FileContent{}, fmt.Errorf("fs.read: %w", parseErr))
+				yield(FileContent{}, xerr.Validation("fs.read: "+parseErr.Error(), parseErr))
 			}
 		}
 	}
@@ -81,7 +82,7 @@ func Read(cfg ReadConfig) action.StreamOp[FileMeta, FileContent] {
 
 				content, readErr := readFileContent(meta.Path, ranges, buf)
 				if readErr != nil {
-					if !yield(FileContent{}, fmt.Errorf("read %q: %w", meta.RelPath, readErr)) {
+					if !yield(FileContent{}, xerr.Internal("fs.read: "+meta.RelPath, readErr)) {
 						return
 					}
 					continue
@@ -163,7 +164,7 @@ func parseLineRanges(spec string) ([]lineRange, error) {
 		if dash < 0 {
 			line, err := strconv.Atoi(part)
 			if err != nil || line < 1 {
-				return nil, fmt.Errorf("invalid line number: %q", part)
+				return nil, errors.New("invalid line number: " + part)
 			}
 			ranges = append(ranges, lineRange{start: line, end: line})
 			continue
@@ -174,14 +175,14 @@ func parseLineRanges(spec string) ([]lineRange, error) {
 
 		start, err := strconv.Atoi(startText)
 		if err != nil || start < 1 {
-			return nil, fmt.Errorf("invalid line start: %q", startText)
+			return nil, errors.New("invalid line start: " + startText)
 		}
 
 		end := -1
 		if endText != "" {
 			end, err = strconv.Atoi(endText)
 			if err != nil || end < start {
-				return nil, fmt.Errorf("invalid line end in range %q", part)
+				return nil, errors.New("invalid line end in range " + part)
 			}
 		}
 		ranges = append(ranges, lineRange{start: start, end: end})

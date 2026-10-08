@@ -110,3 +110,20 @@ func TestResolveTarget_NoMatchNoElse(t *testing.T) {
 	env := map[string]any{"error": map[string]any{"kind": "Internal", "message": "x"}}
 	ktest.RequireEqual(t, resolveTarget(cfg, env), "")
 }
+
+func TestDirective_TrailingCommentOnRule(t *testing.T) {
+	t.Parallel()
+	out, err := runDirective(t,
+		`@on_error {`,
+		`  when error.kind == "Timeout" -> runtime.noop  # timeout path`,
+		`  else -> error.info  # fallback`,
+		`}`,
+	)
+	ktest.RequireNoError(t, err)
+
+	cfg, ok := out["on_error"].(Config)
+	ktest.RequireCondition(t, ok, "got %T, want Config", out["on_error"])
+	ktest.RequireLen(t, cfg.Rules, 1)
+	ktest.RequireEqual(t, cfg.Rules[0].Target, "runtime.noop")
+	ktest.RequireEqual(t, cfg.ElseTarget, "error.info")
+}

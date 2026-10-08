@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/nexssp/kernel/xerr"
+
 	"github.com/nexssp/flow/core"
 )
 
@@ -27,7 +29,9 @@ func ResolveBundlesWith(reqs []Requirement, onBundle func(core.Bundle)) ([]core.
 			factory, ok = core.Lookup(r.Import)
 		}
 		if !ok {
-			return nil, fmt.Errorf("@require %s: bundle %q is not registered in this binary", r.Import, targetID)
+			return nil, xerr.NotFound(fmt.Sprintf(
+				"@require %s: bundle %q is not registered in this binary",
+				r.Import, targetID))
 		}
 
 		bundle := factory(r.Options)
@@ -51,9 +55,9 @@ func validateOptions(r *Requirement, bundle core.Bundle) error {
 	}
 	for k := range r.Options {
 		if !slices.Contains(bundle.AcceptedOptions, k) {
-			return fmt.Errorf(
+			return xerr.BadRequest(fmt.Sprintf(
 				"@require %s: unknown option %q (accepted: %v)",
-				r.Import, k, bundle.AcceptedOptions)
+				r.Import, k, bundle.AcceptedOptions))
 		}
 	}
 	return nil

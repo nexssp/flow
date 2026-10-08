@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/nexssp/kernel/xerr"
 )
 
 // httpBackend is the default HTTP-backed decision source.
@@ -21,10 +22,10 @@ type httpBackend struct {
 // defaults to 30 seconds.
 func NewHTTPBackend(configuration HTTPConfig) (Backend, error) {
 	if configuration.Name == "" {
-		return nil, errors.New("decide/http: backend name is required")
+		return nil, xerr.Validation("decide/http: backend name is required")
 	}
 	if configuration.Endpoint == "" {
-		return nil, errors.New("decide/http: endpoint is required")
+		return nil, xerr.Validation("decide/http: endpoint is required")
 	}
 	timeout := configuration.Timeout
 	if timeout <= 0 {
@@ -52,13 +53,13 @@ func (b *httpBackend) Decide(ctx context.Context, state, questions map[string]an
 		"questions": questions,
 	})
 	if err != nil {
-		return Result{}, fmt.Errorf("decide/http: marshal request: %w", err)
+		return Result{}, xerr.Internal("decide/http: marshal request", err)
 	}
 
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		b.configuration.Endpoint, bytes.NewReader(requestBody))
 	if err != nil {
-		return Result{}, fmt.Errorf("decide/http: build request: %w", err)
+		return Result{}, xerr.Internal("decide/http: build request", err)
 	}
 	httpRequest.Header.Set("Content-Type", "application/json")
 	httpRequest.Header.Set("Accept", "application/json")
@@ -68,21 +69,52 @@ func (b *httpBackend) Decide(ctx context.Context, state, questions map[string]an
 
 	response, err := b.client.Do(httpRequest)
 	if err != nil {
-		return Result{}, fmt.Errorf("decide/http: dispatch: %w", err)
+		return Result{}, xerr.Unavailable("decide/http: dispatch "+b.configuration.Endpoint, err)
 	}
 	defer func() { _ = response.Body.Close() }()
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, 16<<20))
 	if err != nil {
-		return Result{}, fmt.Errorf("decide/http: read response: %w", err)
+		return Result{}, xerr.Unavailable("decide/http: read response", err)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return Result{}, fmt.Errorf("decide/http: status %d: %s", response.StatusCode, body)
+		return Result{}, errorFromStatus(response.StatusCode, b.configuration.Endpoint, body)
 	}
 
 	var result Result
 	if err := json.Unmarshal(body, &result); err != nil {
-		return Result{}, fmt.Errorf("decide/http: unmarshal: %w", err)
+		return Result{}, xerr.Internal("decide/http: unmarshal response", err)
 	}
 	return result, nil
+}
+
+// errorFromStatus maps an HTTP status to the matching xerr kind so
+// retry and circuit-breaker policies can react correctly. 5xx is
+// transient (Unavailable); 4xx is permanent (BadRequest family);
+// 429 is its own transient kind.
+func errorFromStatus(status int, endpoint string, body []byte) error {
+	msg := fmt.Sprintf("decide/http: %s returned %d: %s", endpoint, status, body)
+	switch status {
+	case http.StatusBadRequest:
+		return xerr.BadRequest(msg)
+	case http.StatusUnauthorized:
+		return xerr.Unauthorized(msg)
+	case http.StatusForbidden:
+		return xerr.Forbidden(msg)
+	case http.StatusNotFound:
+		return xerr.NotFound(msg)
+	case http.StatusConflict:
+		return xerr.Conflict(msg)
+	case http.StatusTooManyRequests:
+		return xerr.TooManyRequests(msg)
+	case http.StatusRequestTimeout, http.StatusGatewayTimeout:
+		return xerr.Timeout(msg)
+	case http.StatusBadGateway, http.StatusServiceUnavailable:
+		return xerr.Unavailable(msg)
+	default:
+		if status >= 500 {
+			return xerr.Internal(msg)
+		}
+		return xerr.BadRequest(msg)
+	}
 }

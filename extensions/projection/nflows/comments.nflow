@@ -1,0 +1,9 @@
+@description "Projection: hash comments are stripped before expr-lang compiles"
+@assert: result.name == "Julia"
+@assert: result.extra == 1
+const @{ value: { name: "Julia", extra: 1 } }
+-> {
+  # leading comment
+  name: .name,  # trailing comment
+  extra: .extra
+}

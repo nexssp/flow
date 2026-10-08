@@ -72,3 +72,22 @@ func TestDirective_WhitespaceTrimmed(t *testing.T) {
 	asserts, _ := out["asserts"].([]string)
 	ktest.RequireEqual(t, asserts[0], "result.x == 1")
 }
+
+func TestDirective_StripsInlineComment(t *testing.T) {
+	t.Parallel()
+	out, err := runDirective(t, `@assert: x > 0  # positive`)
+	ktest.RequireNoError(t, err)
+
+	asserts, _ := out["asserts"].([]string)
+	ktest.RequireLen(t, asserts, 1)
+	ktest.RequireEqual(t, asserts[0], "x > 0")
+}
+
+func TestDirective_PreservesIteratorInsideAll(t *testing.T) {
+	t.Parallel()
+	out, err := runDirective(t, `@assert: all(items, # != "x")  # check`)
+	ktest.RequireNoError(t, err)
+
+	asserts, _ := out["asserts"].([]string)
+	ktest.RequireEqual(t, asserts[0], `all(items, # != "x")`)
+}

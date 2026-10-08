@@ -1,0 +1,4 @@
+@description "@flow_version lower-bound constraint satisfied by every released compiler"
+@flow_version ">=0.0.0"
+@assert: result == "ok"
+runtime.const @{ value: "ok" }

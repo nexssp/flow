@@ -5,12 +5,16 @@ import (
 	"log/slog"
 
 	"github.com/nexssp/kernel/action"
+
+	"github.com/nexssp/flow/redact"
 )
 
 // LogInfo, LogWarn, LogError emit a structured line at the matching
 // slog level and return the input unchanged. The message field, when
 // present, becomes the slog message; every other field becomes an
-// attribute.
+// attribute after passing through redact.Map, which masks any field
+// whose name looks like a credential. The input map itself is never
+// mutated — the same value flows downstream unchanged.
 var (
 	LogInfo  = newLogNode("log.info", slog.LevelInfo)
 	LogWarn  = newLogNode("log.warn", slog.LevelWarn)
@@ -25,8 +29,10 @@ func newLogNode(name string, level slog.Level) action.AnyAction {
 		}
 
 		message, _ := in["message"].(string)
-		attributes := make([]slog.Attr, 0, len(in))
-		for key, value := range in {
+
+		safe := redact.Map(in)
+		attributes := make([]slog.Attr, 0, len(safe))
+		for key, value := range safe {
 			if key == "message" {
 				continue
 			}

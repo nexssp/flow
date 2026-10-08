@@ -1,10 +1,10 @@
 package decide
 
 import (
-	"errors"
-	"fmt"
 	"slices"
 	"sync"
+
+	"github.com/nexssp/kernel/xerr"
 )
 
 // Registry is an in-process backend table. It is a plain struct, not a
@@ -23,17 +23,17 @@ func NewRegistry() *Registry {
 // silent override.
 func (r *Registry) Register(backend Backend) error {
 	if backend == nil {
-		return errors.New("decide: backend cannot be nil")
+		return xerr.BadRequest("decide: backend cannot be nil")
 	}
 	name := backend.Name()
 	if name == "" {
-		return errors.New("decide: backend name cannot be empty")
+		return xerr.BadRequest("decide: backend name cannot be empty")
 	}
 
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	if _, exists := r.backends[name]; exists {
-		return fmt.Errorf("decide: duplicate backend %q", name)
+		return xerr.Conflict("decide: duplicate backend " + name)
 	}
 	r.backends[name] = backend
 	return nil

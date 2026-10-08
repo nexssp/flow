@@ -1,0 +1,12 @@
+@description "spec: runtime schema validation strictly guards pipeline payload"
+
+@schema Order {
+  OrderID string `json:"order_id" validate:"required"`
+  Amount  int    `json:"amount"   validate:"required"`
+}
+
+{ order_id: "ORD-999", amount: 250, extra_note: "safe" }
+-> Order.validate
+
+@assert: result.order_id == "ORD-999"
+@assert: result.amount == 250

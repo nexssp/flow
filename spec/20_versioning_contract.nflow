@@ -1,0 +1,11 @@
+@description "Versioning: @flow_version gates the file on a compiler constraint"
+
+# @flow_version declares the minimum compiler version this file
+# requires. Builds with Version="dev" (go run, go install from HEAD)
+# accept any constraint; released binaries compare against their
+# injected version. Prevents the DSL from being silently reinterpreted
+# by an older compiler.
+
+@flow_version ">=0.0.0"
+
+const @{ value: "ok" }

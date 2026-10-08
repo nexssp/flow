@@ -116,9 +116,21 @@ func Validate(schema Schema, payload any) error {
 	}
 
 	if len(details) > 0 {
+		var b strings.Builder
+		b.WriteString("schema ")
+		b.WriteString(schema.Name)
+		b.WriteString(" failed:")
+		for _, d := range details {
+			b.WriteString("\n    • ")
+			if d.Value != "" {
+				fmt.Fprintf(&b, "field %q: expected %s, %s", d.Field, d.Validation, d.Value)
+			} else {
+				fmt.Fprintf(&b, "field %q: %s", d.Field, d.Validation)
+			}
+		}
 		return &xerr.AppError{
 			Kind:              xerr.KindValidation,
-			Message:           "schema " + schema.Name + ": validation failed",
+			Message:           b.String(),
 			ValidationDetails: details,
 		}
 	}

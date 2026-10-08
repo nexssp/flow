@@ -264,7 +264,8 @@ tasks:
   lint:nflow:
     desc: 'Run native nflow lint; e.g. task lint:nflow -- ./examples/... or ./...'
     cmds:
-      - '{{.NFLOW}} lint {{.CLI_ARGS}}'
+      - '{{.NFLOW}} lint ./examples'
+      - '{{.NFLOW}} lint ./spec'
 
   # ── maintenance ──────────────────────────────────────────────────
 

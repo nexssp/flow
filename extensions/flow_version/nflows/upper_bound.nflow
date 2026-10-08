@@ -1,0 +1,4 @@
+@description "@flow_version upper-bound constraint with a v-prefixed version"
+@flow_version "<v9999.0.0"
+@assert: result == "ok"
+runtime.const @{ value: "ok" }

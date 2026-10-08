@@ -1,0 +1,6 @@
+@description "spec: fallback operator catches failure and runs alternative"
+
+fail @{ kind: "NotFound", message: "record missing" }
+|| const @{ value: "default_fallback" }
+
+@assert: result == "default_fallback"

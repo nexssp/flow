@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/nexssp/kernel/action"
+
+	"github.com/nexssp/flow/redact"
 )
 
 // Observer tracks every action that passes through the runtime.
@@ -90,6 +92,9 @@ func (o *Observer) record(ctx context.Context, meta *action.Meta, req, res any, 
 func formatTracePayload(v any) string {
 	if v == nil {
 		return "nil"
+	}
+	if m, ok := v.(map[string]any); ok {
+		v = redact.Map(m)
 	}
 	b, err := json.Marshal(v)
 	if err != nil {

@@ -7,6 +7,8 @@ import (
 	"maps"
 
 	"github.com/expr-lang/expr"
+
+	"github.com/nexssp/flow/core"
 )
 
 // JSONMapView applies JSON tags to struct outputs before expr evaluation.
@@ -58,9 +60,10 @@ func RunAssertions(w io.Writer, result any, durationMS int64, actions, asserts [
 
 	failed := 0
 	for _, src := range asserts {
+		src = core.StripExprComments(src) // defense in depth
 		prog, cerr := expr.Compile(src, expr.Env(env))
 		if cerr != nil {
-			_, _ = fmt.Fprintf(w, "  ✗ %s  (syntax: %v)\n", src, cerr)
+			fmt.Fprintf(w, "  ✗ %s  (syntax: %v)\n", src, cerr)
 			failed++
 			continue
 		}
