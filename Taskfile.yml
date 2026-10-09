@@ -20,129 +20,35 @@ tasks:
 
   build:binary:
     desc: Build the nflow executable into ./bin/
-    vars:
-      EXE_EXT:
-        sh: go env GOEXE
     cmds:
-      - mkdir -p bin
-      - go build -trimpath -o "bin/nflow{{.EXE_EXT}}" ./cmd/nflow
+      - go build -trimpath -o "bin/nflow{{exeExt}}" ./cmd/nflow
 
   # ── test ─────────────────────────────────────────────────────────
   #
-  # Per-tree tasks declare their own sources; Task hashes them after a
-  # successful run and skips the next invocation if nothing changed.
-  # A red test never caches. Aggregates (test, test:race) carry no
-  # sources of their own — they chain the per-tree tasks, each of which
-  # decides independently.
-  #
-  # test:full / test:race:full bypass the cache for CI and one-off
-  # verification. Use those when you must see a fresh run.
+  # Go's build and test caches skip unchanged packages automatically,
+  # keyed on source content, toolchain and env. No per-tree caching
+  # layer is needed. The *:full variants add -count=1 to force a fresh
+  # run for CI.
 
   test:
-    desc: Fast short tests; skips trees whose sources are unchanged
-    deps:
-      - test:core
-      - test:runner
-      - test:extensions
-      - test:cli
+    desc: Short tests (Go cache skips unchanged packages)
+    cmds:
+      - go test -short ./...
 
   test:full:
-    desc: Short tests with no cache (CI or one-off verification)
+    desc: Short tests with no test-result cache (CI)
     cmds:
       - go test -short -count=1 ./...
 
   test:race:
-    desc: Race tests; skips trees whose sources are unchanged
-    deps:
-      - test:core:race
-      - test:runner:race
-      - test:extensions:race
-      - test:cli:race
+    desc: Race tests (Go cache skips unchanged packages)
+    cmds:
+      - go test -race -short ./...
 
   test:race:full:
-    desc: Race tests with no cache (CI or one-off verification)
+    desc: Race tests with no test-result cache (CI)
     cmds:
       - go test -race -count=1 ./...
-
-  test:core:
-    desc: Short tests for core/
-    sources:
-      - 'core/**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-    cmds:
-      - go test -short ./core/...
-
-  test:core:race:
-    desc: Race tests for core/
-    sources:
-      - 'core/**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-    cmds:
-      - go test -race -short ./core/...
-
-  test:runner:
-    desc: Short tests for runner/
-    sources:
-      - 'runner/**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-    cmds:
-      - go test -short ./runner/...
-
-  test:runner:race:
-    desc: Race tests for runner/
-    sources:
-      - 'runner/**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-    cmds:
-      - go test -race -short ./runner/...
-
-  test:extensions:
-    desc: Short tests for extensions/
-    sources:
-      - 'extensions/**/*.go'
-      - 'extensions/**/*.nflow'
-      - 'native/**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-    cmds:
-      - go test -short ./extensions/...
-
-  test:extensions:race:
-    desc: Race tests for extensions/
-    sources:
-      - 'extensions/**/*.go'
-      - 'extensions/**/*.nflow'
-      - 'native/**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-    cmds:
-      - go test -race -short ./extensions/...
-
-  test:cli:
-    desc: Short tests for cli/, native/, cmd/
-    sources:
-      - 'cli/**/*.go'
-      - 'native/**/*.go'
-      - 'cmd/**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-    cmds:
-      - go test -short ./cli/... ./native/... ./cmd/...
-
-  test:cli:race:
-    desc: Race tests for cli/, native/, cmd/
-    sources:
-      - 'cli/**/*.go'
-      - 'native/**/*.go'
-      - 'cmd/**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-    cmds:
-      - go test -race -short ./cli/... ./native/... ./cmd/...
 
   test:smoke:
     desc: Run CLI smoke tests
@@ -174,40 +80,36 @@ tasks:
 
   # ── quality ──────────────────────────────────────────────────────
 
-  vet:
-    desc: Run go vet across all packages
-    cmds:
-      - go vet ./...
-
   fmt:
     desc: Apply configured gofumpt and goimports formatters
     cmds:
       - golangci-lint fmt
 
   fmt:check:
-    desc: Check gofumpt and goimports formatting without editing files
+    desc: Check formatting without editing files
     cmds:
       - golangci-lint fmt --diff
 
   lint:
-    desc: Run configured golangci-lint checks
+    desc: golangci-lint over the whole module
     cmds:
-      - golangci-lint run ./...
+      - golangci-lint run
 
   lint:new:
-    desc: Run golangci-lint only on code changed since origin/main
+    desc: golangci-lint over the current branch (forked from origin/main)
+    vars:
+      BASE:
+        sh: git merge-base HEAD origin/main
     cmds:
-      - golangci-lint run --new-from-rev=origin/main
+      - golangci-lint run --new-from-rev="{{.BASE}}"
 
   lint:fix:
-    desc: Run golangci-lint with auto-fix only on code changed since origin/main
+    desc: golangci-lint --fix over the current branch (forked from origin/main)
+    vars:
+      BASE:
+        sh: git merge-base HEAD origin/main
     cmds:
-      - golangci-lint run --fix --new-from-rev=origin/main
-
-  lint:errors:
-    desc: Find fmt.Errorf usages under extensions/
-    cmds:
-      - rg -n 'fmt\.Errorf' ./extensions/ || test $? -eq 1
+      - golangci-lint run --fix --new-from-rev="{{.BASE}}"
 
   check:
     desc: Full local gate — format check, lint, and race tests
@@ -217,7 +119,7 @@ tasks:
       - task: test:race
 
   pre-push:
-    desc: Fast pre-push gate — lint of new code and short tests, run in parallel
+    desc: Fast pre-push gate — lint branch diff and short tests, in parallel
     deps:
       - lint:new
       - test
@@ -262,7 +164,7 @@ tasks:
       - '{{.NFLOW}} catalog > catalog.json'
 
   lint:nflow:
-    desc: 'Run native nflow lint; e.g. task lint:nflow -- ./examples/... or ./...'
+    desc: Lint the bundled examples and spec files
     cmds:
       - '{{.NFLOW}} lint ./examples'
       - '{{.NFLOW}} lint ./spec'
@@ -275,10 +177,9 @@ tasks:
       - go mod tidy
 
   clean:
-    desc: Remove only the generated Flow binary and catalog
+    desc: Remove the generated Flow binary and catalog
     cmds:
-      - rm -f bin/nflow bin/nflow.exe catalog.json
-      - rmdir bin 2>/dev/null || true
+      - rm -rf bin catalog.json
 
   # ── composite ────────────────────────────────────────────────────
 
@@ -289,7 +190,7 @@ tasks:
     preconditions:
       - sh: test -n "{{.NAME}}"
         msg: 'usage: task ext:new -- <go_package_name>'
-      - sh: echo "{{.NAME}}" | grep -Eq '^[A-Za-z_][A-Za-z0-9_]*$'
+      - sh: echo "{{.NAME}}" | rg -q '^[A-Za-z_][A-Za-z0-9_]*$'
         msg: 'bundle name must be a valid Go package identifier'
       - sh: test ! -e "extensions/{{.NAME}}"
         msg: 'extensions/{{.NAME}} already exists'

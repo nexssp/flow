@@ -21,10 +21,9 @@ repos:
         types: [go]
 
       - id: golangci-lint
-        name: golangci-lint (new)
-        entry: task lint:new
+        name: golangci-lint
+        entry: golangci-lint run
         language: system
-        pass_filenames: false
         types: [go]
 
       - id: go-test
@@ -36,7 +35,7 @@ repos:
         stages: [pre-commit]
 
       - id: pre-push
-        name: pre-push (lint new code + short tests, parallel)
+        name: pre-push
         entry: task pre-push
         language: system
         pass_filenames: false
