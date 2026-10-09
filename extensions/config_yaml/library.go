@@ -7,9 +7,8 @@
 package config_yaml
 
 import (
-	"gopkg.in/yaml.v3"
-
 	"github.com/nexssp/kernel/action"
+	"gopkg.in/yaml.v3"
 
 	"github.com/nexssp/flow/core"
 	"github.com/nexssp/flow/extensions/config"

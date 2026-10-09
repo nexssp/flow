@@ -1,10 +1,8 @@
-// Plik: flow/runner/config.go
 package runner
 
 import (
 	"fmt"
 	"maps"
-	"slices"
 
 	"github.com/nexssp/kernel/action"
 
@@ -84,17 +82,26 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 		}
 	}
 
-	for i := range slices.Backward(unique) {
-		u := unique[len(unique)-1-i]
+	// Declaration materializers (schema, pool) must mount capabilities before
+	// pipeline materialization compiles sub-pipelines that invoke them.
+	var pipelineMaterializers []core.Materializer
+	for i := range unique {
+		u := &unique[i]
 		if u.Materialize != nil {
 			materializer := u.Materialize
 			alias := u.Alias
-			materializers = append(materializers, func(req core.MaterializeReq) error {
+			wrapped := func(req core.MaterializeReq) error {
 				req.Alias = alias
 				return materializer(req)
-			})
+			}
+			if u.ID == "pipeline" {
+				pipelineMaterializers = append(pipelineMaterializers, wrapped)
+			} else {
+				materializers = append(materializers, wrapped)
+			}
 		}
 	}
+	materializers = append(materializers, pipelineMaterializers...)
 
 	for _, km := range core.KeywordMappings() {
 		if _, ok := resolver.Action(km.Target); !ok {

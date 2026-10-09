@@ -6,11 +6,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/nexssp/kernel/xtest/ktest"
+
 	"github.com/nexssp/flow/extensions/macros"
 	"github.com/nexssp/flow/native"
 	"github.com/nexssp/flow/runner"
-
-	"github.com/nexssp/kernel/xtest/ktest"
 )
 
 // ── collectExpansions ─────────────────────────────────────────────────

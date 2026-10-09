@@ -200,9 +200,15 @@ func runEmbeddedInInvocation(ctx context.Context, inv *invocation, source string
 		}
 	}
 
-	// Suppress the banner when the caller asked for machine-readable
-	// output or for the help text. Both mean "no interactive session
-	// is happening".
+	// Emit the run banner on stderr so the flow's own stdout stays
+	// machine-readable. Suppressed under --json, which is explicitly
+	// machine-facing, and for the subcommands handled above, which
+	// write their own output.
+	if !hasFlag(args, "--json") {
+		v, _, b := resolvedBuildInfo()
+		fmt.Fprintf(os.Stderr, "nexssflow %s (built %s)\n", v, b)
+	}
+
 	return runSourceInInvocation(ctx, inv, source, "<embedded>", args)
 }
 

@@ -11,7 +11,7 @@ import (
 
 // RenderRequest is the input shape for the template.render Flow action.
 type RenderRequest struct {
-	Template  string         `json:"template" cli:"template"`
+	Template  string         `json:"template"  cli:"template"`
 	Variables map[string]any `json:"variables" cli:"variables"`
 }
 

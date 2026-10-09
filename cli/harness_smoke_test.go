@@ -240,6 +240,7 @@ func moduleGoMod(modulePath, flowRoot, kernelRoot string) string {
 // streams in the test failure message.
 func runNflow(t *testing.T, goBin, flowRoot string, args ...string) string {
 	t.Helper()
+	//nolint:gosec // G204: args are controlled by the test, not user input.
 	cmd := exec.CommandContext(t.Context(), goBin, append([]string{"run", "./cmd/nflow"}, args...)...)
 	cmd.Dir = flowRoot
 	var stdout, stderr bytes.Buffer

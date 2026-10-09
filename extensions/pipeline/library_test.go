@@ -118,3 +118,27 @@ func TestEndDirective_RejectsStrayEnd(t *testing.T) {
 	ktest.RequireErrorContains(t, err, "@end without a matching block directive")
 	ktest.RequireErrorContains(t, err, "stray.nflow:1")
 }
+
+func TestDirective_MultilineHeaderModifiers(t *testing.T) {
+	t.Parallel()
+	out := map[string]any{}
+	body := []string{
+		`@pipeline p`,
+		`  :tag="fast"`,
+		`  :status=201`,
+		`  runtime.noop`,
+		`@end`,
+	}
+	_, err := handleDirective(context.Background(), core.DirectiveReq{
+		Lines: body, Body: body, I: 0, Out: out, File: "<test>",
+	})
+	ktest.RequireNoError(t, err)
+
+	pipelines, ok := out["pipelines"].(map[string]string)
+	ktest.RequireCondition(t, ok, "pipelines = %T, want map[string]string", out["pipelines"])
+	ktest.RequireEqual(t, strings.TrimSpace(pipelines["p"]), "runtime.noop")
+
+	pipelineMods, ok := out["pipeline_modifiers"].(map[string][]string)
+	ktest.RequireCondition(t, ok, "pipeline_modifiers missing")
+	ktest.RequireEqual(t, pipelineMods["p"], []string{"tag=fast", "status=201"})
+}

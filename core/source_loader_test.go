@@ -103,7 +103,7 @@ func TestSourceLoader_DiamondDependencyAllowed(t *testing.T) {
 	//   ├── a
 	//   └── b
 	//       └── a
-	// a is included twice but from different branches, not nested.
+	// file a is included twice but from different branches, not nested.
 	loader := &mapLoader{
 		content: map[string]string{
 			"a": "content-a",

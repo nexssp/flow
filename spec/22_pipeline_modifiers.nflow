@@ -1,0 +1,30 @@
+@description "spec: pipeline multiline modifiers and schema guard recovery"
+
+@schema SupportTicket {
+  TicketID string `json:"ticket_id" validate:"required"`
+  Priority string `json:"priority"  validate:"required"`
+}
+
+@pipeline triage
+  :tag="support"
+  :status=200
+
+  SupportTicket.validate ? on_error {
+    xerr.KindValidation -> {
+      status: "rejected",
+      error:  .error.message
+    }
+  }
+  -> {
+    status:    "accepted",
+    ticket_id: .ticket_id,
+    queue:     "tier1-" + .priority
+  }
+@end
+
+{ ticket_id: "TCK-101", priority: "high" }
+-> pipeline.triage
+
+@assert: result.status == "accepted"
+@assert: result.ticket_id == "TCK-101"
+@assert: result.queue == "tier1-high"

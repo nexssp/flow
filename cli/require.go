@@ -200,6 +200,7 @@ func runRequirePin(ctx context.Context, args []string) int {
 }
 
 func resolveLatestVersion(ctx context.Context, modulePath string) (string, error) {
+	//nolint:gosec // G204: modulePath is parsed from a trusted @require directive in a .nflow source.
 	cmd := exec.CommandContext(ctx, "go", "list", "-m", "-json", modulePath+"@latest")
 	out, err := cmd.Output()
 	if err != nil {

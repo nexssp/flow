@@ -7,14 +7,13 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
+	"github.com/nexssp/flow/core"
 	"github.com/nexssp/flow/extensions/assert"
 	"github.com/nexssp/flow/extensions/constants"
 	"github.com/nexssp/flow/extensions/runtime"
 	"github.com/nexssp/flow/extensions/schema"
 	"github.com/nexssp/flow/extensions/syntax"
 	"github.com/nexssp/flow/runner"
-
-	"github.com/nexssp/flow/core"
 )
 
 func constSchemaConfig(t *testing.T) runner.Config {

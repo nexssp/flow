@@ -1,11 +1,20 @@
 # Security Policy
 
-Please do not disclose exploitable vulnerabilities in public issues. Report them privately to the repository maintainers with a reproduction, affected version, impact, and proposed mitigation.
+Please **do not** report exploitable vulnerabilities through public issues, pull requests, or discussions.
 
-## Telemetry & Context Security Model
+Report privately to the maintainers of the affected Nexss repository with:
 
-Nexss Observability intercepts application contexts and attaches trace correlation metadata across boundaries:
+- A minimal reproduction (or a clear description of the exploit path)
+- The affected version, tag, or commit
+- The impact you believe it has
+- Any proposed mitigation, if you have one
 
-- **PII and Sensitive Data:** Do not pass unmasked credentials, tokens, or personal identifiers into span attributes or log fields.
-- **Trace Propagation:** Outbound HTTP clients wrapped via `httptrace.WrapClient` inject W3C standard traceparent headers. Ensure target upstream services are trusted before distributing correlation contexts.
-- **Health Probes:** Readiness probes exposed by `HealthHandler()` should not leak confidential infrastructure details in failure payloads.
+We aim to acknowledge reports within a few business days.
+
+## Supported Versions
+
+Only the latest release on the default branch receives security fixes. Older tags are not patched; upgrade to the current release.
+
+## Disclosure
+
+We coordinate disclosure with the reporter. Once a fix is released, we publish a short advisory describing the affected package, the fixed version, and the impact — never the reporter's identity unless they ask to be credited.

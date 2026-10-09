@@ -9,11 +9,11 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/nexssp/kernel/action"
+
 	"github.com/nexssp/flow/core"
 	"github.com/nexssp/flow/extensions/require"
 	"github.com/nexssp/flow/native"
-
-	"github.com/nexssp/kernel/action"
 )
 
 func writeLifecycleFlow(t *testing.T, source string) string {

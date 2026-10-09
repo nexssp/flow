@@ -16,7 +16,7 @@ const benchDefaultTolerancePct = 5.0
 // TolerancePct is the allowed regression percentage; a lower reading
 // for RPS or a higher reading for latency metrics counts as regression.
 type BenchCompareReq struct {
-	Baseline     string  `json:"baseline" validate:"required"`
+	Baseline     string  `json:"baseline"                validate:"required"`
 	TolerancePct float64 `json:"tolerance_pct,omitempty"`
 	BenchRunRes
 }

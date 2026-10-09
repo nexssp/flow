@@ -402,9 +402,9 @@ For typed options, use `core.Decode[T]`:
 
 ```go
 type Options struct {
-    Endpoint string        `flow:"endpoint" default:"https://api.example"`
-    Retries  int           `flow:"retries"  default:"3"`
-    Timeout  time.Duration `flow:"timeout"`
+    Endpoint string        `nflow:"endpoint" default:"https://api.example"`
+    Retries  int           `nflow:"retries"  default:"3"`
+    Timeout  time.Duration `nflow:"timeout"`
 }
 
 func Bundle(raw map[string]string) core.Bundle {

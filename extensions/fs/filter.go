@@ -10,7 +10,7 @@ import (
 // FilterConfig controls fs.filter. All fields are optional; the zero
 // value passes every file through.
 type FilterConfig struct {
-	Ext       string `json:"ext" cli:"ext"`
+	Ext       string `json:"ext"       cli:"ext"`
 	Tests     bool   `json:"tests"`
 	Generated bool   `json:"generated"`
 	Deps      bool   `json:"deps"`

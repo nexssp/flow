@@ -18,9 +18,9 @@ const (
 
 // DistributeMapReq carries the fan-out configuration.
 type DistributeMapReq struct {
-	Action      string `json:"action"      validate:"required"`
+	Action      string `json:"action"                validate:"required"`
 	Concurrency int    `json:"concurrency,omitempty"`
-	Items       []any  `json:"items"       validate:"required"`
+	Items       []any  `json:"items"                 validate:"required"`
 }
 
 // DistributeMapRes is the ordered result; index i corresponds to

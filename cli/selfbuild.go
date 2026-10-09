@@ -37,6 +37,7 @@ func SelfBuild(ctx context.Context) error {
 	fmt.Fprintf(os.Stderr, "  version:  %s\n", version)
 	fmt.Fprintf(os.Stderr, "  commit:   %s\n", commit)
 
+	//nolint:gosec // G204: output path and ldflags are derived from the local module root.
 	cmd := exec.CommandContext(ctx, "go", "build", "-ldflags="+ldflags, "-o", output, "./cmd/nexssflow")
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout

@@ -1,10 +1,10 @@
 module github.com/nexssp/flow
 
-go 1.26.0
+go 1.26.9
 
 require (
 	github.com/expr-lang/expr v1.17.8
-	github.com/nexssp/kernel v0.27.4
+	github.com/nexssp/kernel v0.28.0
 	github.com/nexssp/validation v0.2.4
 	github.com/tetratelabs/wazero v1.12.0
 	golang.org/x/sync v0.23.0

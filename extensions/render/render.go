@@ -15,9 +15,9 @@ import (
 type Config struct {
 	// Editor selects the framing: "markdown" (default), "zed", "claude",
 	// or "fold" (details/summary).
-	Editor   string `json:"editor" cli:"editor,e"`
+	Editor   string `json:"editor"    cli:"editor,e"`
 	NoHeader bool   `json:"no_header" cli:"no_header"`
-	Prompt   string `json:"prompt" cli:"prompt"`
+	Prompt   string `json:"prompt"    cli:"prompt"`
 }
 
 // renderBufPool amortizes the formatting buffer across items.

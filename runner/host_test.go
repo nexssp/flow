@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nexssp/flow/core"
-	"github.com/nexssp/flow/native"
-
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xtest/ktest"
+
+	"github.com/nexssp/flow/core"
+	"github.com/nexssp/flow/native"
 )
 
 func TestHostRun_ShutsDownOnceInReverseOwnershipOrder(t *testing.T) {

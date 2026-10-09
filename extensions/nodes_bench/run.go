@@ -18,7 +18,7 @@ const (
 )
 
 type BenchRunReq struct {
-	Action     string         `json:"action"     validate:"required"`
+	Action     string         `json:"action"               validate:"required"`
 	Iterations int            `json:"iterations,omitempty"`
 	Warmup     int            `json:"warmup,omitempty"`
 	Payload    map[string]any `json:"payload,omitempty"`

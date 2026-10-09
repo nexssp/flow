@@ -133,7 +133,8 @@ _nexssflow "$@"
 `
 
 // ── pwsh ─────────────────────────────────────────────────────────────
-
+//
+//nolint:gosec // G101 false positive: shell completion script, not credentials.
 const pwshCompletion = `# nexssflow PowerShell completion.
 # Install: nexssflow completion pwsh | Out-String | Invoke-Expression
 # Or append to your $PROFILE:

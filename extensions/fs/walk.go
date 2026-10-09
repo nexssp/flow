@@ -26,14 +26,14 @@ var DefaultSkipDirs = []string{
 }
 
 type WalkConfig struct {
-	Dir           string   `json:"dir" cli:"dir,d"`
-	Dirs          []string `json:"dirs" cli:"dirs"`
-	Files         []string `json:"files" cli:"files,file,f"`
-	Skip          []string `json:"skip" cli:"skip"`
+	Dir           string   `json:"dir"            cli:"dir,d"`
+	Dirs          []string `json:"dirs"           cli:"dirs"`
+	Files         []string `json:"files"          cli:"files,file,f"`
+	Skip          []string `json:"skip"           cli:"skip"`
 	IncludeHidden bool     `json:"include_hidden" cli:"include_hidden"`
-	IncludeAll    bool     `json:"include_all" cli:"include_all"`
-	Ext           string   `json:"ext" cli:"ext"`
-	MaxDepth      int      `json:"max_depth" cli:"max_depth"`
+	IncludeAll    bool     `json:"include_all"    cli:"include_all"`
+	Ext           string   `json:"ext"            cli:"ext"`
+	MaxDepth      int      `json:"max_depth"      cli:"max_depth"`
 }
 
 func WalkSource() action.AnyStreamAction {

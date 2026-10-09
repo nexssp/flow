@@ -24,7 +24,7 @@ func WithContextSchemas(ctx context.Context, schemas []Schema) context.Context {
 
 // ValidateRequest specifies which schema to run against the input.
 type ValidateRequest struct {
-	Name    string `json:"name" validate:"required"`
+	Name    string `json:"name"              validate:"required"`
 	Payload any    `json:"payload,omitempty"`
 }
 

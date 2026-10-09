@@ -43,12 +43,23 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 		return core.DirectiveRes{}, core.SourceError(pos, "@pipeline requires a name")
 	}
 
+	next := req.I + 1
+	for next < len(req.Lines) {
+		trimmed := strings.TrimSpace(req.Lines[next])
+		if strings.HasPrefix(trimmed, ":") {
+			_, extraMods := parsePipelineHeader("@pipeline dummy " + trimmed)
+			mods = append(mods, extraMods...)
+			next++
+			continue
+		}
+		break
+	}
+
 	applied, err := expandProfiles(mods, req.Out, pos, name)
 	if err != nil {
 		return core.DirectiveRes{}, err
 	}
 
-	next := req.I + 1
 	var bodyLines []string
 	for next < len(req.Lines) {
 		if strings.TrimSpace(req.Lines[next]) == "@end" {

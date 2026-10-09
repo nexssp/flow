@@ -7,6 +7,8 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
+const typeString = "string"
+
 // SchemaKind is a coarse classification used by Validate.
 type Kind uint8
 
@@ -165,7 +167,7 @@ func checkFieldKind(field Field, value any) (xerr.ValidationDetail, bool) {
 	switch field.Kind {
 	case KindString:
 		if _, ok := value.(string); !ok {
-			detail.Validation = "string"
+			detail.Validation = typeString
 			detail.Value = fmt.Sprintf("got %T", value)
 			return detail, true
 		}
@@ -204,4 +206,75 @@ func hasValidationTag(tag, name string) bool {
 		}
 	}
 	return false
+}
+
+// ToJSONSchema converts a declared Schema into a standard JSON Schema object
+// without runtime reflection.
+func ToJSONSchema(s Schema) map[string]any {
+	properties := make(map[string]any, len(s.Fields))
+	var required []string
+
+	for _, f := range s.Fields {
+		prop := map[string]any{}
+		switch f.Kind {
+		case KindString, KindAny:
+			prop["type"] = typeString
+		case KindInt, KindFloat:
+			prop["type"] = "number"
+		case KindBool:
+			prop["type"] = "boolean"
+		case KindStruct:
+			prop["type"] = "object"
+		}
+
+		if f.Slice {
+			elemType := typeString
+			switch f.Kind {
+			case KindInt, KindFloat:
+				elemType = "number"
+			case KindBool:
+				elemType = "boolean"
+			case KindString, KindAny, KindStruct:
+				elemType = typeString
+			}
+			prop = map[string]any{
+				"type":  "array",
+				"items": map[string]any{"type": elemType},
+			}
+		}
+
+		if desc := f.Tags["usage"]; desc != "" {
+			prop["description"] = desc
+		} else if desc := f.Tags["description"]; desc != "" {
+			prop["description"] = desc
+		}
+
+		if enum := f.Tags["enum"]; enum != "" {
+			raw := strings.Split(enum, ",")
+			vals := make([]string, 0, len(raw))
+			for _, v := range raw {
+				if trimmed := strings.TrimSpace(v); trimmed != "" {
+					vals = append(vals, trimmed)
+				}
+			}
+			if len(vals) > 0 {
+				prop["enum"] = vals
+			}
+		}
+
+		if hasValidationTag(f.Tags["validate"], "required") {
+			required = append(required, f.JSONName)
+		}
+
+		properties[f.JSONName] = prop
+	}
+
+	out := map[string]any{
+		"type":       "object",
+		"properties": properties,
+	}
+	if len(required) > 0 {
+		out["required"] = required
+	}
+	return out
 }

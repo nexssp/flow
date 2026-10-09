@@ -1,76 +1,87 @@
-# Contributing to Nexss Flow
+# Contributing to Nexss Ecosystem
 
-Nexss Flow is the DSL, compiler, runtime, and extension system in the Nexss ecosystem. Keep changes focused on correctness, clarity, portability, and measured performance. Avoid expanding the public API without a clear need.
+This repository is part of the **Nexss Ecosystem**.
+
+We keep packages small, focused, and composable. Contributions should improve
+correctness, clarity, portability, or measured performance without expanding the
+public API unnecessarily.
+
+## Toolchain
+
+Every workflow in this repo goes through [Task](https://taskfile.dev). Do not
+invoke `go build`, `go test`, `golangci-lint`, or `govulncheck` directly — the
+`task` targets keep flags, ordering, and cache behavior identical to CI.
+
+Install Task once:
+
+```bash
+brew install go-task/tap/go-task                       # macOS / Linuxbrew
+scoop install task                                     # Windows (Scoop)
+go install github.com/go-task/task/v3/cmd/task@latest  # any platform
+```
+
+Bootstrap the repo:
+
+```bash
+task           # list every available target
+task setup     # fetch repo templates + install tool deps (gotestsum, govulncheck)
+```
 
 ## Before opening a pull request
 
-Use Go 1.26 or newer. Run Task commands from the repository root (`flow/`). For a quick local test pass:
+Run the full gate:
 
 ```bash
-task test
+task tidy       # go mod tidy — keep go.mod / go.sum clean
+task fmt        # gofumpt + gci (auto-fix)
+task pre-push   # [fmt:check, lint, test:race]
+task ci         # [fmt:check, lint, test:race:nocache] — exactly what CI runs
 ```
 
-The full local check gate is:
+Optional extra checks when relevant:
 
 ```bash
-task check
+task vuln       # govulncheck
+task bench      # benchmark smoke test
+task examples   # run curated .nflow files as runtime smoke checks
+task lint:nflow # lint ./examples and ./spec
+task self       # nflow self test
+task test:smoke # CLI smoke test
 ```
 
-It checks formatting without rewriting files, then runs `go vet`, `golangci-lint`, and the full race-enabled Go test suite. The configured formatters are gofumpt and goimports. To check formatting alone, use `task fmt:check`; to apply formatting, use `task fmt` and review the resulting diff.
+Run `task examples`, `task lint:nflow`, or `task test:smoke` whenever you touch
+the compiler, the DSL, `.nflow` files, or CLI wiring. A green `task test` is not
+enough on its own in those cases.
 
-Useful focused commands include:
+## Requirements
+
+- A change to a **public interface** requires a compatibility explanation and tests.
+- A performance claim requires a benchmark on a documented Go version and hardware.
+- New dependencies require a clear reason, license review, and evidence that the
+  dependency is not better placed in an adapter module.
+- Keep business rules, transports, hosted services, and provider-specific
+  behavior outside this repository.
+- New DSL features must use the existing extension/bundle mechanism — scaffold
+  with `task ext:new -- <go_package_name>` rather than hand-rolling the layout.
+- Do not add `testify` or other assertion helpers; use `xtest` / `xtest/ktest`.
+
+## Local pre-commit (optional)
+
+Install the hooks:
 
 ```bash
-task build
-task build:binary
-task test:race
-task test:smoke
-task self
-task examples
+pre-commit install
+# or
+prek install
 ```
 
-`task examples` runs the curated runtime smoke checks: six introductory flows in `examples/00_flow_basics/` and four practical secure-pipeline flows in `examples/01_secure_pipeline/`.
+Hooks are wired to `task pre-commit` (on commit) and `task pre-push` (on push),
+so **Task must be installed first** — see the Toolchain section above.
 
-The optional benchmark task is:
+## Getting help
 
-```bash
-task bench
-```
+If a core or Kernel change appears necessary, write a short RFC before opening
+the PR: describe the missing contract, alternatives considered, and why an
+existing extension or adapter cannot solve the problem.
 
-There are currently no Go `Benchmark...` functions, so this runs no substantive benchmark cases until benchmark functions are added. When adding benchmarks or making a performance claim, report the Go version and hardware used.
-
-## Flow CLI and maintenance tasks
-
-Run or lint a Flow file with, for example:
-
-```bash
-task run -- examples/00_flow_basics/04_data_transformation.nflow
-task lint:nflow -- examples/00_flow_basics/04_data_transformation.nflow
-```
-
-Create an extension bundle with the CLI-backed task (use a valid Go package name that does not already exist):
-
-```bash
-task ext:new -- my_extension
-```
-
-`task tidy` tidies only the Flow module, so it also works in a standalone clone. If a sibling `../kernel` checkout is present and its module path is `github.com/nexssp/kernel`, `task tidy:kernel` is available as a separate opt-in. `task clean` removes only the generated `bin/nflow`/`bin/nflow.exe` binary and `catalog.json`; it does not clear shared Go build or test caches.
-
-## Design and review expectations
-
-- Public API changes should explain compatibility impact and include tests.
-- New dependencies should have a clear need and license review; keep provider-specific integrations in an adapter when that is the better boundary.
-- Keep Flow's core and built-in extensions reusable. Application-specific business rules, hosted-service integrations, and provider-specific behavior generally belong in downstream bundles or adapters.
-- Add or update `.nflow` examples when syntax or user-facing behavior changes, and run documented runnable flows through the current CLI.
-
-## Optional Git hooks
-
-Install the configured pre-commit (or [prek](https://github.com/j178/prek) ) and pre-push hooks with [pre-commit](https://pre-commit.com/):
-
-```bash
-pre-commit install --hook-type pre-commit --hook-type pre-push
-```
-
-The pre-commit stage runs whitespace, end-of-file, YAML, large-file, formatter, lint, and Go test checks. The pre-push stage also runs `go vet` and race-enabled Go tests. Hooks are a local safeguard, not a replacement for `task check` or CI.
-
-Thank you for contributing to Nexss Flow.
+Thank you for contributing to Nexss.
