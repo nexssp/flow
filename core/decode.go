@@ -8,20 +8,20 @@ import (
 	"time"
 )
 
-// Decode mapuje string map na typowany struct opcji. To jest
-// kontrakt, którego każdy zewnętrzny Bundle używa do odczytu
-// swojego bloku @require.
+// Decode maps a string map to a typed options struct. This is
+// the contract that each external Bundle uses to read
+// its @require block.
 //
-// Tagi:
+// Tags:
 //
-//	flow:"key"      nazwa klucza w bloku @require
-//	default:"..."   wartość gdy klucz nieobecny
+//	nflow:"key"     name of the key in the @require block
+//	default:"..."   value when the key is missing
 //
-// Nieznane klucze są odrzucane — literówka w .nflow ma się wywalić
-// głośno przy ładowaniu, nie cicho zdefaultować.
+// Unknown keys are rejected — a typo in .nflow should cause a loud
+// failure during loading, not silently default.
 //
-// Obsługiwane typy pól: string, bool, int, int64, time.Duration,
-// float64. Każdy inny to błąd projektowy Bundle.
+// Supported field types: string, bool, int, int64, time.Duration,
+// float64. Any other type is a design error for the Bundle.
 func Decode[T any](raw map[string]string) (T, error) {
 	var out T
 	v := reflect.ValueOf(&out).Elem()
@@ -34,7 +34,7 @@ func Decode[T any](raw map[string]string) (T, error) {
 		if !f.IsExported() {
 			continue
 		}
-		key := f.Tag.Get("flow")
+		key := f.Tag.Get("nflow")
 		if key == "" {
 			continue
 		}
@@ -110,7 +110,7 @@ func setField(field reflect.Value, val string) error {
 func knownKeys(t reflect.Type) []string {
 	var out []string
 	for field := range t.Fields() {
-		if k := field.Tag.Get("flow"); k != "" {
+		if k := field.Tag.Get("nflow"); k != "" {
 			out = append(out, k)
 		}
 	}
