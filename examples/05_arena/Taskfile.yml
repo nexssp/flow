@@ -1,0 +1,40 @@
+# Nexss Ecosystem
+# Copyright 2018-Present Marcin Polak and Contributors
+# SPDX-License-Identifier: Apache-2.0
+version: '3'
+
+vars:
+  NFLOW: 'go run ../../cmd/nflow'
+  ARENA: .
+
+tasks:
+  arena:warm:
+    desc: Pre-build harnesses so the parallel boot is instant
+    cmds:
+      - '{{.NFLOW}} lint {{.ARENA}}/server.nflow'
+      - '{{.NFLOW}} lint {{.ARENA}}/player.nflow'
+      - '{{.NFLOW}} lint {{.ARENA}}/load.nflow'
+
+  arena:server:
+    desc: Arena 60Hz server (blocks)
+    cmds: ['{{.NFLOW}} run {{.ARENA}}/server.nflow']
+
+  arena:p1:
+    desc: Arena player p1 (blocks)
+    cmds: ['{{.NFLOW}} run {{.ARENA}}/player.nflow --id=p1']
+
+  arena:p2:
+    desc: Arena player p2 (blocks)
+    cmds: ['{{.NFLOW}} run {{.ARENA}}/player.nflow --id=p2']
+
+  arena:load:
+    desc: Spawn 200 bots and drive them at 60Hz
+    cmds: ['{{.NFLOW}} run {{.ARENA}}/load.nflow']
+
+  arena:move:
+    desc: 'Send one input: task arena:move -- --id=p1 --dx=1 --dy=0'
+    cmds: ['{{.NFLOW}} run {{.ARENA}}/move.nflow {{.CLI_ARGS}}']
+
+  arena:
+    desc: Boot server + 2 players in parallel
+    deps: [arena:server, arena:p1, arena:p2]

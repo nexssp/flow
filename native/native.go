@@ -47,6 +47,7 @@ import (
 	"github.com/nexssp/flow/extensions/pool"
 	"github.com/nexssp/flow/extensions/progress"
 	"github.com/nexssp/flow/extensions/projection"
+	"github.com/nexssp/flow/extensions/realtime"
 	"github.com/nexssp/flow/extensions/render"
 	"github.com/nexssp/flow/extensions/require"
 	"github.com/nexssp/flow/extensions/retry"
@@ -54,6 +55,7 @@ import (
 	"github.com/nexssp/flow/extensions/schema"
 	"github.com/nexssp/flow/extensions/scope"
 	"github.com/nexssp/flow/extensions/selftestkit"
+	"github.com/nexssp/flow/extensions/stream_ops"
 	"github.com/nexssp/flow/extensions/syntax"
 	"github.com/nexssp/flow/spec"
 )
@@ -101,6 +103,8 @@ func Bundles() []core.Bundle {
 		nodes_dispatch.Bundle(nil),
 		nodes_supervisor.Bundle(nil),
 		scope.Bundle(nil),
+		realtime.Bundle(nil),
+		stream_ops.Bundle(nil),
 	}
 }
 

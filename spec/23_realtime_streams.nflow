@@ -1,0 +1,28 @@
+@description "spec: real-time stream operators and fixed-timestep loops"
+
+@pipeline realtime_test
+  # Emit 60Hz ticks, take exactly 3, and collect
+  realtime.ticks @{ hz: 60, max_catchup_ms: 32 }
+  -> stream.take @{ count: 3 }
+  -> collect
+@end
+
+@pipeline batch_test
+  # Emit 100Hz ticks, take 5 items, and group them into batches of 2
+  realtime.ticks @{ hz: 100, max_catchup_ms: 50 }
+  -> stream.take @{ count: 5 }
+  -> stream.batch @{ size: 2 }
+  -> collect
+@end
+
+# 5 items batched by 2 yields 3 batches: [2 items], [2 items], [1 item]
+@assert: len(result.ticks) == 3
+@assert: len(result.batches) == 3
+@assert: len(result.batches[0]) == 2
+@assert: len(result.batches[1]) == 2
+@assert: len(result.batches[2]) == 1
+
+parallel {
+  ticks: pipeline.realtime_test,
+  batches: pipeline.batch_test
+}

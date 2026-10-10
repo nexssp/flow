@@ -32,7 +32,7 @@ func startProgress(label string) *progressTracker {
 	p := &progressTracker{
 		label: label,
 		start: time.Now(),
-		tty:   isTerminal(os.Stderr),
+		tty:   isTerminal(os.Stderr) && os.Getenv("NFLOW_GO_VERBOSE") != "1",
 		stop:  make(chan struct{}),
 		done:  make(chan struct{}),
 	}

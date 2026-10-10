@@ -12,33 +12,232 @@ import (
 	"github.com/nexssp/flow/extensions/require"
 )
 
-// ── option types ──────────────────────────────────────────────────────
-
-// buildOptions is the parsed command line for `nflow build`.
 type buildOptions struct {
-	output     string   // -o / --output
-	debug      bool     // --debug: keep symbols and DWARF
-	noTrimpath bool     // --no-trimpath: keep full source paths
-	positional []string // the input .nflow path
+	output     string
+	debug      bool
+	noTrimpath bool
+	allBundles bool
+	positional []string
 }
 
-// ── entry point ───────────────────────────────────────────────────────
+type nativeBundleInfo struct {
+	id      string
+	pkg     string
+	matcher func(src string) bool
+}
 
-// runBuild compiles a .nflow file into a standalone executable.
-//
-// Defaults favor distribution:
-//
-//   - symbols and DWARF stripped (-s -w) → 25–35% smaller binary
-//   - trimpath on                       → no build-host paths in traces
-//   - buildvcs off                      → no VCS metadata embedded
-//   - version injected via -X           → `./myflow version` reports real values
-//
-// Flags are accepted in any position relative to the input path. The
-// stdlib flag package stops at the first non-flag argument, which meant
-// `nflow build file.nflow -o out` silently dropped -o; a manual parser
-// closes that. Unknown flags fail loudly.
+var allNativeBundles = []nativeBundleInfo{
+	{
+		id:      "syntax",
+		pkg:     "github.com/nexssp/flow/extensions/syntax",
+		matcher: func(string) bool { return true },
+	},
+	{
+		id:      "runtime",
+		pkg:     "github.com/nexssp/flow/extensions/runtime",
+		matcher: func(string) bool { return true },
+	},
+	{
+		id:      "description",
+		pkg:     "github.com/nexssp/flow/extensions/description",
+		matcher: func(string) bool { return true },
+	},
+	{
+		id:      "require",
+		pkg:     "github.com/nexssp/flow/extensions/require",
+		matcher: func(string) bool { return true },
+	},
+	{
+		id:      "pipeline",
+		pkg:     "github.com/nexssp/flow/extensions/pipeline",
+		matcher: func(s string) bool { return strings.Contains(s, "@pipeline") || strings.Contains(s, "pipeline.") },
+	},
+	{
+		id:      "modifiers_core",
+		pkg:     "github.com/nexssp/flow/extensions/modifiers_core",
+		matcher: func(string) bool { return true },
+	},
+	{
+		id:      "modifiers_meta",
+		pkg:     "github.com/nexssp/flow/extensions/modifiers_meta",
+		matcher: func(string) bool { return true },
+	},
+	{
+		id:  "modifiers_auth",
+		pkg: "github.com/nexssp/flow/extensions/modifiers_auth",
+		matcher: func(s string) bool {
+			return strings.Contains(s, ":auth") || strings.Contains(s, ":role") ||
+				strings.Contains(s, ":perm") || strings.Contains(s, ":feature")
+		},
+	},
+	{
+		id:      "match",
+		pkg:     "github.com/nexssp/flow/extensions/match",
+		matcher: func(s string) bool { return strings.Contains(s, "match") },
+	},
+	{
+		id:  "assert",
+		pkg: "github.com/nexssp/flow/extensions/assert",
+		matcher: func(s string) bool {
+			return strings.Contains(s, "@assert") || strings.Contains(s, "assert(") || strings.Contains(s, "assert ")
+		},
+	},
+	{
+		id:      "loop",
+		pkg:     "github.com/nexssp/flow/extensions/loop",
+		matcher: func(s string) bool { return strings.Contains(s, "loop(") || strings.Contains(s, "loop ") },
+	},
+	{
+		id:      "projection",
+		pkg:     "github.com/nexssp/flow/extensions/projection",
+		matcher: func(s string) bool { return strings.Contains(s, "{") },
+	},
+	{
+		id:      "config",
+		pkg:     "github.com/nexssp/flow/extensions/config",
+		matcher: func(s string) bool { return strings.Contains(s, "@config") },
+	},
+	{
+		id:      "constants",
+		pkg:     "github.com/nexssp/flow/extensions/constants",
+		matcher: func(s string) bool { return strings.Contains(s, "@const") || strings.Contains(s, "${") },
+	},
+	{
+		id:      "flow_version",
+		pkg:     "github.com/nexssp/flow/extensions/flow_version",
+		matcher: func(s string) bool { return strings.Contains(s, "@flow_version") },
+	},
+	{
+		id:  "schema",
+		pkg: "github.com/nexssp/flow/extensions/schema",
+		matcher: func(s string) bool {
+			return strings.Contains(s, "@schema") || strings.Contains(s, ":schema") || strings.Contains(s, "schema.")
+		},
+	},
+	{
+		id:  "scope",
+		pkg: "github.com/nexssp/flow/extensions/scope",
+		matcher: func(s string) bool {
+			return strings.Contains(s, "@scope") || strings.Contains(s, "@profile") || strings.Contains(s, ":profile")
+		},
+	},
+	{
+		id:      "pool",
+		pkg:     "github.com/nexssp/flow/extensions/pool",
+		matcher: func(s string) bool { return strings.Contains(s, "@pool") || strings.Contains(s, "pool.") },
+	},
+	{
+		id:      "macros",
+		pkg:     "github.com/nexssp/flow/extensions/macros",
+		matcher: func(s string) bool { return strings.Contains(s, "@macro") },
+	},
+	{
+		id:      "include",
+		pkg:     "github.com/nexssp/flow/extensions/include",
+		matcher: func(s string) bool { return strings.Contains(s, "@include") },
+	},
+	{
+		id:      "on",
+		pkg:     "github.com/nexssp/flow/extensions/on",
+		matcher: func(s string) bool { return strings.Contains(s, "@on") },
+	},
+	{
+		id:      "on_error",
+		pkg:     "github.com/nexssp/flow/extensions/on_error",
+		matcher: func(s string) bool { return strings.Contains(s, "@on_error") || strings.Contains(s, "on_error") },
+	},
+	{
+		id:      "retry",
+		pkg:     "github.com/nexssp/flow/extensions/retry",
+		matcher: func(s string) bool { return strings.Contains(s, ":retry") },
+	},
+	{
+		id:      "hook",
+		pkg:     "github.com/nexssp/flow/extensions/hook",
+		matcher: func(s string) bool { return strings.Contains(s, "@hook") || strings.Contains(s, "hook.") },
+	},
+	{
+		id:  "fs",
+		pkg: "github.com/nexssp/flow/extensions/fs",
+		matcher: func(s string) bool {
+			return strings.Contains(s, "fs.") || strings.Contains(s, "out.file") || strings.Contains(s, "out.stdout")
+		},
+	},
+	{
+		id:      "io",
+		pkg:     "github.com/nexssp/flow/extensions/io",
+		matcher: func(s string) bool { return strings.Contains(s, "io.") },
+	},
+	{
+		id:  "external",
+		pkg: "github.com/nexssp/flow/extensions/external",
+		matcher: func(s string) bool {
+			return strings.Contains(s, "external.") || strings.Contains(s, "http.request")
+		},
+	},
+	{
+		id:      "nodes_log",
+		pkg:     "github.com/nexssp/flow/extensions/nodes_log",
+		matcher: func(s string) bool { return strings.Contains(s, "log.") },
+	},
+	{
+		id:      "nodes_bench",
+		pkg:     "github.com/nexssp/flow/extensions/nodes_bench",
+		matcher: func(s string) bool { return strings.Contains(s, "bench.") },
+	},
+	{
+		id:      "nodes_distribute",
+		pkg:     "github.com/nexssp/flow/extensions/nodes_distribute",
+		matcher: func(s string) bool { return strings.Contains(s, "distribute.") },
+	},
+	{
+		id:      "nodes_dispatch",
+		pkg:     "github.com/nexssp/flow/extensions/nodes_dispatch",
+		matcher: func(s string) bool { return strings.Contains(s, "dispatch.") },
+	},
+	{
+		id:      "nodes_supervisor",
+		pkg:     "github.com/nexssp/flow/extensions/nodes_supervisor",
+		matcher: func(s string) bool { return strings.Contains(s, "supervisor.") },
+	},
+	{
+		id:      "realtime",
+		pkg:     "github.com/nexssp/flow/extensions/realtime",
+		matcher: func(s string) bool { return strings.Contains(s, "realtime.") },
+	},
+	{
+		id:      "stream_ops",
+		pkg:     "github.com/nexssp/flow/extensions/stream_ops",
+		matcher: func(s string) bool { return strings.Contains(s, "stream.") },
+	},
+	{
+		id:      "render",
+		pkg:     "github.com/nexssp/flow/extensions/render",
+		matcher: func(s string) bool { return strings.Contains(s, "render.") },
+	},
+	{
+		id:      "selftestkit",
+		pkg:     "github.com/nexssp/flow/extensions/selftestkit",
+		matcher: func(s string) bool { return strings.Contains(s, "cov.") || strings.Contains(s, "selftestkit") },
+	},
+}
+
+func detectUsedNativeBundles(src string, forceAll bool) []nativeBundleInfo {
+	if forceAll {
+		return append([]nativeBundleInfo(nil), allNativeBundles...)
+	}
+
+	used := make([]nativeBundleInfo, 0, len(allNativeBundles))
+	for _, b := range allNativeBundles {
+		if b.matcher(src) {
+			used = append(used, b)
+		}
+	}
+	return used
+}
+
 func runBuild(args []string) int {
-	inv, err := newInvocation(nil, nil)
+	inv, err := newNativeInvocation(nil, nil)
 	if err != nil {
 		return fatalf("flow host: %v", err)
 	}
@@ -83,16 +282,16 @@ func runBuildInInvocation(ctx context.Context, inv *invocation, args []string) i
 	fmt.Fprintf(os.Stderr, "📂 nflow: output %s\n", binName)
 
 	fmt.Fprintf(os.Stderr, "🧱 nflow: staging build directory\n")
-	buildDir, err := stageBuildDir(ctx, nflowPath, src, reqs)
+	buildDir, err := stageBuildDir(ctx, nflowPath, src, reqs, opts)
 	if err != nil {
 		return buildFail("stage", err)
 	}
 	defer func() { _ = os.RemoveAll(buildDir) }()
 
 	tidyStart := time.Now()
-	fmt.Fprintf(os.Stderr, "⚙️  nflow: resolving dependencies (go mod tidy -e)  — first run may download modules\n")
-	if err = runGoContext(ctx, buildDir, "mod", "tidy", "-e"); err != nil {
-		return buildFail("go mod tidy -e", err)
+	fmt.Fprintf(os.Stderr, "⚙️  nflow: resolving dependencies (go mod tidy)  — first run may download modules\n")
+	if err = runGoContext(ctx, buildDir, "mod", "tidy"); err != nil {
+		return buildFail("go mod tidy", err)
 	}
 	fmt.Fprintf(os.Stderr, "   ✓ dependencies resolved in %s\n",
 		time.Since(tidyStart).Round(time.Millisecond))
@@ -117,12 +316,6 @@ func runBuildInInvocation(ctx context.Context, inv *invocation, args []string) i
 	return 0
 }
 
-// ── step helpers ──────────────────────────────────────────────────────
-
-// resolveInputPath turns the positional argument into an absolute path
-// and verifies the file exists. Both errors name the argument as the
-// user typed it, not its absolute form, so the message reads the same
-// as the input.
 func resolveInputPath(p string) (string, error) {
 	abs, err := filepath.Abs(p)
 	if err != nil {
@@ -134,9 +327,6 @@ func resolveInputPath(p string) (string, error) {
 	return abs, nil
 }
 
-// printRequires writes one line per @require declaration. Centralized
-// so the wording and the emoji prefix stay consistent with the other
-// step messages.
 func printRequires(reqs []require.Requirement) {
 	if len(reqs) == 0 {
 		fmt.Fprintf(os.Stderr, "   • no external modules\n")
@@ -155,11 +345,6 @@ func printRequires(reqs []require.Requirement) {
 	}
 }
 
-// resolveOutputPath produces an absolute output path, applies the
-// Windows .exe suffix, and creates the parent directory. The absolute
-// path is load-bearing: `go build -o <relative>` resolves against the
-// temp build directory, and the temp tree is deleted when the build
-// returns.
 func resolveBuildOutputPath(nflowPath, out string) (string, error) {
 	binName := out
 	if binName == "" {
@@ -179,14 +364,13 @@ func resolveBuildOutputPath(nflowPath, out string) (string, error) {
 	return abs, nil
 }
 
-// stageBuildDir creates the temp directory and writes the three files
-// the harness needs: the embedded source, the generated main.go, and
-// the go.mod that links the driver and every @require.
-//
-// On any write failure the partially-staged directory is removed
-// before the error is returned, so a caller that only cleans up on
-// success does not leave a temp tree behind.
-func stageBuildDir(ctx context.Context, nflowPath string, src []byte, reqs []require.Requirement) (string, error) {
+func stageBuildDir(
+	ctx context.Context,
+	nflowPath string,
+	src []byte,
+	reqs []require.Requirement,
+	opts buildOptions,
+) (string, error) {
 	driverRoot, driverVersion := resolveDriverInfo()
 	goworkPath := findGoWork(filepath.Dir(nflowPath))
 
@@ -222,11 +406,13 @@ func stageBuildDir(ctx context.Context, nflowPath string, src []byte, reqs []req
 		return "", fmt.Errorf("embed: %w", err)
 	}
 
-	if err := writeBuildFile(buildRoot, "main.go", []byte(buildMain(imports))); err != nil {
+	usedNative := detectUsedNativeBundles(embeddedSource, opts.allBundles)
+
+	if err := writeBuildFile(buildRoot, "main.go", []byte(buildMain(usedNative, imports))); err != nil {
 		return "", fmt.Errorf("main.go: %w", err)
 	}
 
-	mod := harnessGoMod(driverRoot, driverVersion, goworkPath, resolvedReqs, flowDir)
+	mod := harnessGoMod(driverRoot, driverVersion, goworkPath, external, flowDir)
 	if err := writeBuildFile(buildRoot, "go.mod", []byte(mod)); err != nil {
 		return "", fmt.Errorf("go.mod: %w", err)
 	}
@@ -337,8 +523,6 @@ func embeddedRequireQuote(rawTarget string) byte {
 	return 0
 }
 
-// linkBinary resolves the version metadata, builds the argv, announces
-// the step, and runs `go build`.
 func linkBinary(ctx context.Context, buildDir, nflowPath, binName string, opts buildOptions) error {
 	version, commit, builtAt := resolveBuildVersion(ctx, filepath.Dir(nflowPath))
 	ldflags := linkerFlags(opts, version, commit, builtAt)
@@ -350,10 +534,6 @@ func linkBinary(ctx context.Context, buildDir, nflowPath, binName string, opts b
 	return runGoContext(ctx, buildDir, buildArgs(binName, opts, ldflags)...)
 }
 
-// ── go build argv ─────────────────────────────────────────────────────
-
-// buildArgs assembles the go build argv. The debug flag flips the two
-// size-reduction defaults off; every other flag is fixed.
 func buildArgs(binName string, opts buildOptions, ldflags string) []string {
 	args := []string{"build"}
 
@@ -371,19 +551,13 @@ func buildArgs(binName string, opts buildOptions, ldflags string) []string {
 	return args
 }
 
-// linkerFlags returns the -ldflags value. version/commit/builtAt are
-// passed in rather than resolved here so the caller controls the
-// git-fallback policy.
 func linkerFlags(opts buildOptions, version, commit, builtAt string) string {
 	flags := []string{
-		"-X github.com/nexssp/flow/cli.Version=" + version,
-		"-X github.com/nexssp/flow/cli.Commit=" + commit,
-		"-X github.com/nexssp/flow/cli.BuiltAt=" + builtAt,
+		"-X main.Version=" + version,
+		"-X main.Commit=" + commit,
+		"-X main.BuiltAt=" + builtAt,
 	}
 	if !opts.debug {
-		// -s drops the symbol table; -w drops DWARF. Together they
-		// remove the debugging metadata that accounts for the majority
-		// of a Go binary's size beyond its code.
 		flags = append([]string{"-s", "-w"}, flags...)
 	}
 	return strings.Join(flags, " ")
@@ -396,30 +570,10 @@ func buildModeDescription(opts buildOptions) string {
 	case opts.noTrimpath:
 		return "  (release, full paths)"
 	default:
-		return "  (release, symbols stripped)"
+		return "  (release, tree-shaken, symbols stripped)"
 	}
 }
 
-// ── version resolution ────────────────────────────────────────────────
-
-// resolveBuildVersion returns version metadata for the packaged binary.
-//
-// Priority:
-//
-//  1. The running CLI's linker-injected values (nflow self up, or a
-//     release binary built with -ldflags="-X ...").
-//  2. The running CLI's embedded VCS info (debug.ReadBuildInfo).
-//  3. Git in the flow's own directory.
-//
-// The third fallback is what makes `nflow build` invoked via `go run`
-// produce a binary that reports a real commit hash instead of "dev
-// unknown". The running CLI has nothing useful to say about itself in
-// that case; the flow's repository does.
-//
-// Each git call runs under its own short timeout. A git invocation that
-// hangs — a credential prompt, a lock file, a corrupt object store —
-// must not block the build. On any failure the field is left as-is and
-// the build proceeds.
 func resolveBuildVersion(ctx context.Context, flowDir string) (version, commit, builtAt string) {
 	version, commit, builtAt = resolvedBuildInfo()
 
@@ -450,11 +604,6 @@ func resolveBuildVersion(ctx context.Context, flowDir string) (version, commit, 
 	return version, commit, builtAt
 }
 
-// ── output path helpers ───────────────────────────────────────────────
-
-// ensureExeSuffix appends ".exe" on Windows when the path does not
-// already end in that extension, case-insensitively. Non-Windows
-// platforms are unaffected.
 func ensureExeSuffix(path string) string {
 	if runtime.GOOS != "windows" {
 		return path
@@ -465,7 +614,6 @@ func ensureExeSuffix(path string) string {
 	return path + ".exe"
 }
 
-// humanBytes renders a byte count in binary units.
 func humanBytes(n int64) string {
 	const unit = 1024
 	if n < unit {
@@ -479,11 +627,6 @@ func humanBytes(n int64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
 
-// ── argument parsing ──────────────────────────────────────────────────
-
-// parseBuildArgs reads the build command's flags in any position.
-// Returns (options, 0) on success, (_, rc) on error or --help, where
-// rc is the process exit code to propagate.
 func parseBuildArgs(args []string) (opts buildOptions, rc int) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -503,6 +646,8 @@ func parseBuildArgs(args []string) (opts buildOptions, rc int) {
 			opts.debug = true
 		case a == "--no-trimpath":
 			opts.noTrimpath = true
+		case a == "--all-bundles":
+			opts.allBundles = true
 
 		case a == flagHelp || a == flagHelpShort:
 			printBuildHelp()
@@ -519,11 +664,11 @@ func parseBuildArgs(args []string) (opts buildOptions, rc int) {
 }
 
 func printBuildHelp() {
-	fmt.Fprint(os.Stderr, `Usage: nflow build <file.nflow> [-o <output>] [--debug]
+	fmt.Fprint(os.Stderr, `Usage: nflow build <file.nflow> [-o <output>] [--debug] [--all-bundles]
 
-Compile a .nflow file into a standalone executable. The binary embeds
-the source and links every @require module. It runs the flow when
-launched and accepts the same JSON payload and CLI flags as 'nflow run'.
+Compile a .nflow file into a standalone, tree-shaken executable. The binary
+embeds the workflow and links only the required native and @require modules.
+It executes with zero compiler/CLI runtime baggage (~2MB binary size).
 
 Flags:
   -o, --output <path>   Output binary path. Defaults to the source
@@ -537,61 +682,140 @@ Flags:
                         default; useful when the binary and its source
                         tree live on the same machine.
 
-Defaults favor distribution: symbols stripped (-s -w), trimpath on,
-buildvcs off, and version metadata injected from the running CLI.
+  --all-bundles         Link all native extensions instead of tree-shaking
+                        (increases binary size by ~18MB).
 
-Examples:
-  nflow build flow.nflow
-  nflow build flow.nflow -o ./bin/my-flow
-  nflow build -o ./bin/my-flow flow.nflow
-  nflow build flow.nflow -o ./bin/my-flow --debug
-
-Cross-compilation: this command targets the host platform. For a
-different target, invoke 'go build' on the harness the CLI stages.
+Defaults favor lean distribution: dead-code elimination enabled, symbols
+stripped (-s -w), trimpath on, and buildvcs off.
 `)
 }
 
-// ── error rendering ───────────────────────────────────────────────────
-
-// buildFail renders a step failure with the step label and the error.
 func buildFail(step string, err error) int {
 	fmt.Fprintf(os.Stderr, "✗ nflow: %s: %v\n", step, err)
 	return 1
 }
 
-// ── generated main.go ─────────────────────────────────────────────────
-
-// buildMain is the source of the generated main.go that lives in the
-// temp build directory. It embeds the .nflow file and hands control to
-// cli.RunEmbeddedWithBundles, which compiles and runs it with the statically
-// linked @require bundles.
-func buildMain(imports []bundleImport) string {
-	var mainBuilder strings.Builder
-	mainBuilder.WriteString(`package main
+func buildMain(usedBundles []nativeBundleInfo, imports []bundleImport) string {
+	var b strings.Builder
+	b.WriteString(`package main
 
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 
-	"github.com/nexssp/flow/cli"
 	"github.com/nexssp/flow/core"
+	"github.com/nexssp/flow/runner"
 `)
-	writeBundleImports(&mainBuilder, imports)
-	mainBuilder.WriteString(`)
+
+	for i, bundle := range usedBundles {
+		fmt.Fprintf(&b, "\tnative%d %q\n", i, bundle.pkg)
+	}
+	writeBundleImports(&b, imports)
+
+	b.WriteString(`)
 
 //go:embed workflow.nflow
 var embedded string
 
+var (
+	Version = "dev"
+	Commit  = "unknown"
+	BuiltAt = "unknown"
+)
+
 func main() {
-	`)
-	writeBundleTargets(&mainBuilder, imports)
-	mainBuilder.WriteString(`	os.Exit(cli.RunEmbeddedWithBundleFactoriesForRequirements(context.Background(), embedded, os.Args[1:], targets, func(adopt func(core.Bundle) error) error {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "version", "--version":
+			fmt.Printf("flow binary (version: %s, commit: %s, built at: %s)\n", Version, Commit, BuiltAt)
+			os.Exit(0)
+		case "help", "--help", "-h":
+			fmt.Println("Nexss Flow standalone executable.")
+			fmt.Println("Usage:\n  <binary> [json_payload] [flags]")
+			os.Exit(0)
+		}
+	}
+
+	payload := map[string]any{}
+	var flags []string
+	for _, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, "{") {
+			_ = json.Unmarshal([]byte(arg), &payload)
+		} else if strings.HasPrefix(arg, "-") {
+			flags = append(flags, arg)
+		}
+	}
+
+	bundles := []core.Bundle{
 `)
-	writeBundleConstruction(&mainBuilder, imports)
-	mainBuilder.WriteString(`		return nil
-    }))
+	for i := range usedBundles {
+		fmt.Fprintf(&b, "\t\tnative%d.Bundle(nil),\n", i)
+	}
+	b.WriteString(`	}
+
+	host := runner.NewHost()
+	defer func() { _ = host.Shutdown(context.Background()) }()
+	if err := host.OwnAll(bundles); err != nil {
+		fmt.Fprintf(os.Stderr, "host error: %v\n", err)
+		os.Exit(2)
+	}
+`)
+
+	if len(imports) > 0 {
+		b.WriteString(`
+	adopt := func(bundle core.Bundle) error {
+		if err := host.Own(bundle); err != nil {
+			return err
+		}
+		bundles = append(bundles, bundle)
+		return nil
+	}
+
+	constructExternal := func() error {
+`)
+		writeBundleConstruction(&b, imports)
+		b.WriteString(`		return nil
+	}
+	if err := constructExternal(); err != nil {
+		fmt.Fprintf(os.Stderr, "bundle error: %v\n", err)
+		os.Exit(2)
+	}
+`)
+	}
+
+	b.WriteString(`
+	cfg, err := runner.BuildConfig(bundles)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
+		os.Exit(2)
+	}
+
+	opts := runner.Opts{
+		Verbosity: countVerbosity(flags),
+	}
+	os.Exit(runner.RunSource(context.Background(), cfg, embedded, "<embedded>", payload, opts))
+}
+
+func countVerbosity(flags []string) int {
+	n := 0
+	for _, f := range flags {
+		if f == "--verbose" {
+			n++
+			continue
+		}
+		if strings.HasPrefix(f, "-") && !strings.HasPrefix(f, "--") {
+			vCount := strings.Count(f, "v")
+			if vCount > 0 && vCount == len(f)-1 {
+				n += vCount
+			}
+		}
+	}
+	return n
 }
 `)
-	return mainBuilder.String()
+	return b.String()
 }

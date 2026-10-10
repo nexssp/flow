@@ -14,9 +14,6 @@ import (
 	"github.com/nexssp/flow/runner"
 )
 
-// LintIssue is one problem found in a .nflow source. The shape is
-// stable — the CLI prints it as JSON so tooling and editors can
-// consume it. File is always a real path (never a synthetic label).
 type LintIssue struct {
 	File    string `json:"file"`
 	Line    int    `json:"line,omitempty"`
@@ -25,7 +22,7 @@ type LintIssue struct {
 }
 
 func runLint(args []string) int {
-	inv, err := newInvocation(nil, nil)
+	inv, err := newNativeInvocation(nil, nil)
 	if err != nil {
 		return fatalf("flow host: %v", err)
 	}
@@ -39,8 +36,6 @@ func runLintInInvocation(ctx context.Context, inv *invocation, args []string) in
 		return fatalf("usage: nflow lint <file.nflow | directory | ./...>")
 	}
 
-	// Preserve the existing explicit single-file path, including its
-	// source-specific harness and error behavior.
 	if len(args) == 1 && !isRecursiveLintPattern(args[0]) {
 		info, err := os.Stat(args[0])
 		if err != nil || !info.IsDir() {
@@ -53,8 +48,6 @@ func runLintInInvocation(ctx context.Context, inv *invocation, args []string) in
 		return fatalf("%v", err)
 	}
 
-	// Make every required bundle available to an optional external harness,
-	// but build each file's actual registry independently in batch linting.
 	var allRequirements []require.Requirement
 	for _, path := range files {
 		reqs, reqErr := inv.sourceRequiresFromFile(ctx, path)
@@ -65,7 +58,7 @@ func runLintInInvocation(ctx context.Context, inv *invocation, args []string) in
 	if os.Getenv(harnessEnv) != "" || !requirementsNeedExternalHarness(inv, allRequirements) {
 		return runLintBatchForInvocation(ctx, inv, files)
 	}
-	bin, err := EnsureHarnessContext(ctx, allRequirements, files[0])
+	bin, err := EnsureHarnessContext(ctx, allRequirements, files...)
 	if err != nil {
 		return runLintBatchForInvocationWithHarnessError(ctx, inv, files, err)
 	}
@@ -85,9 +78,6 @@ func isRecursiveLintPattern(target string) bool {
 		(filepath.Separator == '\\' && strings.HasSuffix(target, `\...`))
 }
 
-// discoverLintFiles expands exact directories and Go-style /... targets.
-// WalkDir does not follow directory symlinks; discovered symlink files are
-// also skipped so a link cannot make a source appear more than once.
 func discoverLintFiles(targets []string) ([]string, error) {
 	seen := make(map[string]struct{})
 	files := make([]string, 0)
@@ -214,7 +204,7 @@ func runLintInProcess(ctx context.Context, inv *invocation, args []string) int {
 }
 
 func runLintBatchInProcessWithHarnessError(paths []string, harnessErr error) int {
-	inv, err := newInvocation(nil, nil)
+	inv, err := newNativeInvocation(nil, nil)
 	if err != nil {
 		return fatalf("flow host: %v", err)
 	}
@@ -238,8 +228,6 @@ func runLintBatchForInvocationWithHarnessError(ctx context.Context, inv *invocat
 
 		reqs, reqErr := inv.sourceRequiresFromFile(ctx, path)
 		if reqErr != nil {
-			// lintFile reports preprocessing/compile failures as source diagnostics;
-			// do not turn one bad source into an early batch abort.
 			reqs = nil
 		}
 		if harnessErr != nil && requirementsNeedExternalHarness(inv, reqs) {
@@ -268,9 +256,6 @@ func runLintBatchForInvocationWithHarnessError(ctx context.Context, inv *invocat
 	return 1
 }
 
-// computeLineMods returns the line-indexed modifier lookups a source
-// with the given meta would install. The explain command uses it to render
-// inherited modifier state without building a program.
 func computeLineMods(cfg runner.Config, meta map[string]any) []core.LineLookup {
 	opts := append([]core.CompileOption(nil), cfg.CompileOpts...)
 	contribs := core.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
@@ -278,9 +263,6 @@ func computeLineMods(cfg runner.Config, meta map[string]any) []core.LineLookup {
 	return core.LineModifiersFromOptions(cfg.Modifiers, opts)
 }
 
-// lintFile returns one compiler diagnostic for a source. The compiler owns
-// parsing, analysis, schemas, modifiers, and extension contributions; runner
-// owns the same materialization path used by execution.
 func lintFile(path, src string, cfg runner.Config) []LintIssue {
 	return lintFileWithContext(context.Background(), path, src, cfg)
 }

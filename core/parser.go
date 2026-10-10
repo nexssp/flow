@@ -74,6 +74,11 @@ func NewParserWithFileOffset(
 	if primaries == nil {
 		primaries = DefaultPrimaryExtensions()
 	}
+
+	if strings.IndexByte(src, '\r') >= 0 {
+		src = strings.ReplaceAll(src, "\r\n", "\n")
+		src = strings.ReplaceAll(src, "\r", "\n")
+	}
 	var toks []Token
 	l := NewLexer(src)
 	for {

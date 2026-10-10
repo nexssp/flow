@@ -751,25 +751,56 @@ func TestHarnessKey_DistinguishesResolvedPackageAndVersion(t *testing.T) {
 		ModulePath:      "example.invalid/cache/repo",
 		ResolvedVersion: "v1.2.3",
 	}
-	baseKey := harnessKey([]require.Requirement{base}, "")
+	baseKey := harnessKey([]require.Requirement{base}, "", nil)
 
 	variant := base
 	variant.PackagePath = "example.invalid/cache/repo/nexssflow_v2"
-	if got := harnessKey([]require.Requirement{variant}, ""); got == baseKey {
+	if got := harnessKey([]require.Requirement{variant}, "", nil); got == baseKey {
 		t.Fatal("different resolved package variants shared a harness cache key")
 	}
 
 	version := base
 	version.Version = "v1.2.4"
 	version.ResolvedVersion = "v1.2.4"
-	if got := harnessKey([]require.Requirement{version}, ""); got == baseKey {
+	if got := harnessKey([]require.Requirement{version}, "", nil); got == baseKey {
 		t.Fatal("different resolved versions shared a harness cache key")
 	}
 
 	provider := base
 	provider.ModulePath = "example.invalid/cache/repo/nexssflow"
-	if got := harnessKey([]require.Requirement{provider}, ""); got == baseKey {
+	if got := harnessKey([]require.Requirement{provider}, "", nil); got == baseKey {
 		t.Fatal("different Go module providers shared a harness cache key")
+	}
+}
+
+func TestHarnessKey_DistinguishesNativeBundleSet(t *testing.T) {
+	req := require.Requirement{
+		Import:          "example.invalid/native/repo",
+		Version:         "v1.0.0",
+		PackagePath:     "example.invalid/native/repo/nexssflow",
+		ModulePath:      "example.invalid/native/repo",
+		ResolvedVersion: "v1.0.0",
+	}
+
+	withPipeline := harnessKey([]require.Requirement{req}, "", []string{"pipeline"})
+	withoutNative := harnessKey([]require.Requirement{req}, "", nil)
+	if withPipeline == withoutNative {
+		t.Fatal("native bundle set did not affect the harness cache key")
+	}
+
+	// Ordering must not matter: the set is sorted before hashing so that
+	// two callers passing the same IDs in different order share a cache.
+	a := harnessKey([]require.Requirement{req}, "", []string{"pipeline", "schema"})
+	b := harnessKey([]require.Requirement{req}, "", []string{"schema", "pipeline"})
+	if a != b {
+		t.Fatal("native bundle ordering affected the harness cache key")
+	}
+
+	// A cached harness that lacks @pipeline must not be reused for a
+	// source that needs it, and vice versa.
+	onlySchema := harnessKey([]require.Requirement{req}, "", []string{"schema"})
+	if onlySchema == withPipeline {
+		t.Fatal("different native bundle sets shared a harness cache key")
 	}
 }
 

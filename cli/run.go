@@ -19,22 +19,31 @@ func RunWithBundles(args []string, bundles []core.Bundle) int {
 	return RunWithBundlesForRequirements(args, bundles, nil)
 }
 
-// RunWithBundlesForRequirements injects bundles linked to their original
-// @require targets. This preserves bundle IDs when an explicit package variant
-// has a different import-path suffix.
 func RunWithBundlesForRequirements(args []string, bundles []core.Bundle, targets []string) int {
-	inv, err := newInvocation(bundles, targets)
+	inv, err := newNativeInvocation(bundles, targets)
 	if err != nil {
 		return fatalf("flow host: %v", err)
 	}
 	return runCLIWithSignals(context.Background(), inv, args, registerProcessSignals)
 }
 
-// RunWithBundleFactoriesForRequirements runs generated CLI code in one host
-// scope and adopts each returned bundle before the next factory runs.
 func RunWithBundleFactoriesForRequirements(args, targets []string, construct func(func(core.Bundle) error) error) int {
 	return withSignalContext(context.Background(), registerProcessSignals, func(ctx context.Context) int {
 		return runWithBundleFactories(ctx, targets, construct, func(inv *invocation, runCtx context.Context) int {
+			withNativeDefaults(inv)
+			return runCLI(runCtx, inv, args)
+		})
+	})
+}
+
+func RunWithBundleFactoriesAndNative(
+	args, targets []string,
+	nativeFactory func() []core.Bundle,
+	construct func(func(core.Bundle) error) error,
+) int {
+	return withSignalContext(context.Background(), registerProcessSignals, func(ctx context.Context) int {
+		return runWithBundleFactories(ctx, targets, construct, func(inv *invocation, runCtx context.Context) int {
+			inv.nativeFactory = nativeFactory
 			return runCLI(runCtx, inv, args)
 		})
 	})
@@ -100,7 +109,7 @@ func requirementsNeedExternalHarness(inv *invocation, reqs []require.Requirement
 }
 
 func runFlow(args []string) int {
-	inv, err := newInvocation(nil, nil)
+	inv, err := newNativeInvocation(nil, nil)
 	if err != nil {
 		return fatalf("flow host: %v", err)
 	}
@@ -156,10 +165,8 @@ func RunEmbeddedWithBundles(ctx context.Context, source string, args []string, b
 	return RunEmbeddedWithBundlesForRequirements(ctx, source, args, bundles, nil)
 }
 
-// RunEmbeddedWithBundlesForRequirements is the embedded-flow counterpart of
-// RunWithBundlesForRequirements.
 func RunEmbeddedWithBundlesForRequirements(ctx context.Context, source string, args []string, bundles []core.Bundle, targets []string) int {
-	inv, err := newInvocation(bundles, targets)
+	inv, err := newNativeInvocation(bundles, targets)
 	if err != nil {
 		return fatalf("flow host: %v", err)
 	}
@@ -168,8 +175,6 @@ func RunEmbeddedWithBundlesForRequirements(ctx context.Context, source string, a
 	})
 }
 
-// RunEmbeddedWithBundleFactoriesForRequirements adopts each generated bundle
-// as soon as its factory returns, before later factories or Flow dispatch run.
 func RunEmbeddedWithBundleFactoriesForRequirements(ctx context.Context, source string, args, targets []string, construct func(func(core.Bundle) error) error) int {
 	return runWithBundleFactories(ctx, targets, construct, func(inv *invocation, runCtx context.Context) int {
 		return runEmbeddedInInvocation(runCtx, inv, source, args)
@@ -177,7 +182,7 @@ func RunEmbeddedWithBundleFactoriesForRequirements(ctx context.Context, source s
 }
 
 func RunEmbedded(ctx context.Context, source string, args []string) int {
-	inv, err := newInvocation(nil, nil)
+	inv, err := newNativeInvocation(nil, nil)
 	if err != nil {
 		return fatalf("flow host: %v", err)
 	}
@@ -200,10 +205,6 @@ func runEmbeddedInInvocation(ctx context.Context, inv *invocation, source string
 		}
 	}
 
-	// Emit the run banner on stderr so the flow's own stdout stays
-	// machine-readable. Suppressed under --json, which is explicitly
-	// machine-facing, and for the subcommands handled above, which
-	// write their own output.
 	if !hasFlag(args, "--json") {
 		v, _, b := resolvedBuildInfo()
 		fmt.Fprintf(os.Stderr, "nexssflow %s (built %s)\n", v, b)
@@ -212,10 +213,6 @@ func runEmbeddedInInvocation(ctx context.Context, inv *invocation, source string
 	return runSourceInInvocation(ctx, inv, source, "<embedded>", args)
 }
 
-// runEmbeddedInfo renders the embedded flow's pipeline shape without
-// printing the version banner. It shares the preprocess → parse path
-// with the info branch of runSourceInProcess; the only difference is
-// banner suppression, which the caller owns.
 func runEmbeddedInfo(ctx context.Context, inv *invocation, source string, args []string) int {
 	wantJSON := hasFlag(args, "--json")
 
@@ -249,9 +246,6 @@ func runEmbeddedInfo(ctx context.Context, inv *invocation, source string, args [
 	return runner.PrintInfo(os.Stderr, "<embedded>", source, meta, ast)
 }
 
-// printEmbeddedHelp writes usage for a packaged flow binary. The
-// description comes from the flow's @description directive, so a user
-// who receives a binary they did not build can learn what it does.
 func printEmbeddedHelp(w io.Writer, source string) {
 	fmt.Fprintln(w, "A Nexss Flow executable.")
 	fmt.Fprintln(w)
@@ -277,9 +271,6 @@ func printEmbeddedHelp(w io.Writer, source string) {
 	fmt.Fprintln(w, `  <binary> --assert='result.ok == true'`)
 }
 
-// embeddedDescription extracts the @description text from a source
-// string without running the full compiler. Cheap; called only for
-// `help`.
 func embeddedDescription(source string) string {
 	for line := range strings.SplitSeq(source, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -293,7 +284,7 @@ func embeddedDescription(source string) string {
 }
 
 func RunPath(ctx context.Context, args []string) int {
-	inv, err := newInvocation(nil, nil)
+	inv, err := newNativeInvocation(nil, nil)
 	if err != nil {
 		return fatalf("flow host: %v", err)
 	}
@@ -313,7 +304,7 @@ func RunPath(ctx context.Context, args []string) int {
 }
 
 func runSourceInProcess(ctx context.Context, src, name string, args []string) int {
-	inv, err := newInvocation(nil, nil)
+	inv, err := newNativeInvocation(nil, nil)
 	if err != nil {
 		return fatalf("flow host: %v", err)
 	}
@@ -334,13 +325,14 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 		return fatalf("preprocess: %v", err)
 	}
 
-	// A flow that declares io.stdin owns process stdin as a stream; the
-	// CLI must not pre-consume it as a payload. Explicit args still win.
 	if !strings.Contains(clean, "io.stdin") {
 		payload = readPipedStdin(payload)
 	}
 
 	reqs := require.FromMeta(meta)
+	if strings.Contains(clean, "cov.") && !hasRequirement(reqs, "selftestkit") {
+		reqs = append(reqs, require.Requirement{Import: "selftestkit"})
+	}
 	cfg, err := inv.buildConfig(reqs)
 	if err != nil {
 		return fatalf("config: %v", err)
@@ -384,12 +376,6 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 		if verbosity >= 1 {
 			observer.PrintSummary(os.Stderr)
 		}
-		// Runner.Execute returns (Execution, error) where the run phase
-		// never executes when compilation fails, so RunDuration stays
-		// zero. Compile errors are usage errors — bad syntax, unknown
-		// flag, missing capability — and exit 2 (matching flag.ExitOnError
-		// convention). A failure after the pipeline started is a runtime
-		// error and exits 1.
 		if ex.RunDuration == 0 {
 			return 2
 		}
@@ -523,8 +509,6 @@ func renderPrettyOutput(w *os.File, output any, useColor bool) {
 	}
 }
 
-// renderColoredJSON pretty-prints value with per-token ANSI colors on a
-// TTY. Non-TTY output stays compact and machine-readable.
 func renderColoredJSON(w io.Writer, value any, useColor bool) {
 	if s, ok := value.(string); ok {
 		fmt.Fprintln(w, s)
@@ -616,8 +600,6 @@ func flagsToAsserts(flags []string) []string {
 	return out
 }
 
-// formatCleanError strips the runtime's cascading wrappers and appends
-// a terminal snippet pointing at the failing source line.
 func formatCleanError(err error, useColor bool) string {
 	if err == nil {
 		return ""
@@ -644,12 +626,6 @@ func formatCleanError(err error, useColor bool) string {
 	return msg + "\n" + snippet
 }
 
-// renderSnippet reads pos.File and draws the target line with a caret
-// under the failing column. Returns "" when the snippet is not useful
-// (file gone, line out of range, embedded source).
-//
-// Tabs in the source line are copied verbatim so terminals that honor
-// tab stops align the caret correctly.
 func renderSnippet(pos core.Position, useColor bool) string {
 	data, err := os.ReadFile(pos.File)
 	if err != nil {

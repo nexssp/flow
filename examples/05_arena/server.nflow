@@ -1,0 +1,30 @@
+@description "Flow Arena — 60Hz authoritative server with spatial indexing"
+
+@require github.com/nexssp/transport/tworker
+@require github.com/nexssp/transportnats { url: "nats://127.0.0.1:4222", name: "arena-server" }
+@require ./bundle
+
+# Physics runs every 16ms. No snapshot is broadcast here — clients pull
+# their own AoI view at their own rate. This is the pattern real game
+# servers use: tick rate and network snapshot rate are decoupled.
+@pipeline tick :worker=16ms
+  arena.tick
+@end
+
+@pipeline spawn :nats_topic="arena.spawn"
+  arena.spawn @{ id: .id }
+@end
+
+@pipeline input :nats_topic="arena.input"
+  arena.input @{ id: .id, dx: .dx, dy: .dy }
+@end
+
+@pipeline count :nats_request="arena.count"
+  arena.count
+@end
+
+@pipeline view :nats_request="arena.view"
+  arena.view @{ id: .id, radius: .radius }
+@end
+
+( nats.listen & tworker.listen )

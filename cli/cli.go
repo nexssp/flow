@@ -32,7 +32,6 @@ func setupLogger() {
 	slog.SetDefault(slog.New(handler))
 }
 
-// commands defines the O(1) routing map for the CLI.
 var commands = map[string]func(context.Context, *invocation, []string) int{
 	"init":       func(_ context.Context, _ *invocation, args []string) int { return runInit(args) },
 	"run":        runFlowInInvocation,
@@ -47,15 +46,12 @@ var commands = map[string]func(context.Context, *invocation, []string) int{
 	"completion": func(_ context.Context, _ *invocation, args []string) int { return runCompletion(args) },
 }
 
-// Run is the central CLI dispatcher.
 func Run(args []string) int {
 	return RunContext(context.Background(), args)
 }
 
-// RunContext is Run with a caller-controlled parent context. It also cancels
-// the invocation on Ctrl+C/SIGINT and, where supported, SIGTERM.
 func RunContext(ctx context.Context, args []string) int {
-	inv, err := newInvocation(nil, nil)
+	inv, err := newNativeInvocation(nil, nil)
 	if err != nil {
 		return fatalf("flow host: %v", err)
 	}
@@ -88,7 +84,6 @@ func runCLI(ctx context.Context, inv *invocation, args []string) int {
 		return 0
 	}
 
-	// Handle special cases not in the function map
 	if cmd == "self" {
 		return runSelf(ctx, inv, rest)
 	}
@@ -106,7 +101,6 @@ func runCLI(ctx context.Context, inv *invocation, args []string) int {
 		return fn(ctx, inv, rest)
 	}
 
-	// Fallback to inline DSL or file execution
 	return runFlowInInvocation(ctx, inv, args)
 }
 

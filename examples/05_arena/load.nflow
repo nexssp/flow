@@ -1,0 +1,31 @@
+@description "Flow Arena — load generator: spawn N bots, drive them at 60Hz"
+
+@require github.com/nexssp/transport/tworker
+@require github.com/nexssp/transportnats { url: "nats://127.0.0.1:4222", name: "arena-load" }
+@require github.com/nexssp/flow/extensions/nodes_distribute
+
+@config:bots=200
+
+# Spawn bots once (tworker fires the first iteration immediately, then hourly).
+@pipeline spawn :worker=1h
+  const @{ value: { count: "@config.bots" } }
+  -> { count: int(count) }
+  -> { msgs: map(range(0, count), { subject: "arena.spawn", payload: { id: "bot_" + string(#) } }) }
+  -> distribute.map @{ action: nats.publish, items: .msgs, concurrency: 64 }
+@end
+
+# Drive every tick: one input message per bot.
+@pipeline drive :worker=16ms
+  const @{ value: { count: "@config.bots" } }
+  -> { count: int(count) }
+  -> { msgs: map(range(0, count), { subject: "arena.input", payload: { id: "bot_" + string(#), dx: 1, dy: 0 } }) }
+  -> distribute.map @{ action: nats.publish, items: .msgs, concurrency: 128 }
+@end
+
+# Report once a second.
+@pipeline stats :worker=1s
+  nats.request @{ subject: "arena.count", payload: {} }
+  -> runtime.print @{ label: "load", stream: "stdout" }
+@end
+
+tworker.listen

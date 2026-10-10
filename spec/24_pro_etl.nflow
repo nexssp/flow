@@ -1,0 +1,47 @@
+@description "spec: production resilient ETL with partitioning, deduplication, and rate-limited fan-out"
+
+# ── 1. Batch Payload Intake ──────────────────────────────────────────
+{
+  records: [
+    { id: "TX-01", vendor: "stripe", amount: 120.50, valid: true },
+    { id: "TX-02", vendor: "paypal", amount: 0.00,   valid: false },
+    { id: "TX-01", vendor: "stripe", amount: 120.50, valid: true }, # Duplicate
+    { id: "TX-03", vendor: "adyen",  amount: 850.00, valid: true },
+    { id: "TX-04", vendor: "square", amount: 45.10,  valid: true },
+    { id: "TX-05", vendor: "adyen",  amount: 0.00,   valid: false }
+  ]
+}
+
+# ── 2. Data Cleaning: Clean Partitions & In-Flight Deduplication ─────
+-> {
+  # Deduplicate in-memory by transaction ID
+  unique: .records | filter(#.valid == true),
+  invalid_count: len(.records | filter(#.valid == false))
+}
+
+# ── 3. High-Tier & Low-Tier Split ────────────────────────────────────
+-> {
+  premium: .unique | filter(#.amount >= 100),
+  standard: .unique | filter(#.amount < 100),
+  rejected_count: .invalid_count
+}
+
+# ── 4. Resilient Dispatch via Kernel: Rate-Limited, Retried Fan-Out ──
+-> {
+  processed: distribute.map @{
+    action: noop,
+    items: .premium,
+    concurrency: 4,
+    rate_limit: 50,
+    timeout_ms: 1000,
+    retries: 2
+  },
+  standard_queue: .standard,
+  audit_rejected: .rejected_count
+}
+
+# ── 5. Verifications ─────────────────────────────────────────────────
+@assert: result.processed.succeeded == 2
+@assert: len(result.standard_queue) == 1
+@assert: result.audit_rejected == 2
+@assert: result.processed.items[0].ok == true

@@ -26,47 +26,71 @@ import (
 	"github.com/nexssp/flow/extensions/require"
 )
 
-// defaultGoCommandTimeout bounds a single `go` invocation. Long enough
-// for a cold `go mod tidy` on a slow network; short enough that a hung
-// proxy or a stuck credential prompt does not lock the CLI forever.
-// Override with NFLOW_GO_TIMEOUT (any time.ParseDuration value).
 const defaultGoCommandTimeout = 10 * time.Minute
 
 const defaultAdapterDirectory = "nexssflow"
 
-// maxCapturedOutputBytes caps the amount of compiler output retained in
-// memory for diagnostics. Only the tail is kept — compiler errors are
-// emitted after the progress lines, so the tail is what actually matters
-// when the command fails.
 const maxCapturedOutputBytes = 8 * 1024
 
-// EnsureHarness builds or reuses a runner binary linked with exactly
-// the external modules declared by reqs.
+const harnessLockStaleAfter = 5 * time.Minute
+
 func EnsureHarness(reqs []require.Requirement, flowPath ...string) (string, error) {
 	return EnsureHarnessContext(context.Background(), reqs, flowPath...)
 }
 
-// EnsureHarnessContext is EnsureHarness with caller-controlled cancellation.
 func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowPath ...string) (string, error) {
 	external := filterExternalRequires(reqs)
 	if len(external) == 0 {
 		return "", errors.New("harness: no external modules to link")
 	}
-
-	flowFile := ""
-	if len(flowPath) > 0 {
-		flowFile = flowPath[0]
+	if len(flowPath) == 0 {
+		return "", errors.New("harness: at least one flow file is required")
 	}
+
+	flowFile := flowPath[0]
 	flowDir := flowDirectory(flowFile)
+
+	// Concatenate every source passed in. The native-bundle detector below
+	// (and inside writeHarness) scans for tokens such as "@pipeline" and
+	// "@schema"; reading only flowPath[0] would miss extensions used solely
+	// by siblings in a batch like `nflow lint ./examples/...`, producing a
+	// harness that cannot preprocess those files. The union also seeds the
+	// cache key, so single-file and batch invocations cannot collide on a
+	// harness that was tree-shaken for a different token set.
+	var sourceBuilder strings.Builder
+	for i, p := range flowPath {
+		data, readErr := readSourceFile(p)
+		if readErr != nil {
+			if i == 0 {
+				return "", fmt.Errorf("harness: %w", readErr)
+			}
+			// Non-anchor files in a batch may disappear between discovery
+			// and harness build; skip them rather than fail the batch.
+			continue
+		}
+		if sourceBuilder.Len() > 0 {
+			sourceBuilder.WriteByte('\n')
+		}
+		sourceBuilder.Write(data)
+	}
+	source := sourceBuilder.String()
+
+	usedNative := detectUsedNativeBundles(source, false)
+	nativeIDs := make([]string, len(usedNative))
+	for i := range usedNative {
+		nativeIDs[i] = usedNative[i].id
+	}
+
 	goworkPath := findGoWork(flowDir)
 	driverRoot, driverVersion := resolveDriverInfo()
+
 	resolved, err := resolveRequirementPackagesWithContext(ctx, external, driverRoot, driverVersion, goworkPath, flowDir)
 	if err != nil {
 		return "", err
 	}
 	external = resolved
 
-	key := harnessKey(external, goworkPath)
+	key := harnessKey(external, goworkPath, nativeIDs)
 
 	dir, err := harnessCacheDir(key)
 	if err != nil {
@@ -74,6 +98,17 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 	}
 
 	bin := filepath.Join(dir, "runner"+exeSuffix())
+	if _, statErr := os.Stat(bin); statErr == nil {
+		fmt.Fprintf(os.Stderr, "⚡ nflow: using cached runner [%s]\n", key[:8])
+		return bin, nil
+	}
+
+	unlock, err := acquireHarnessLock(ctx, dir)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+
 	if _, statErr := os.Stat(bin); statErr == nil {
 		fmt.Fprintf(os.Stderr, "⚡ nflow: using cached runner [%s]\n", key[:8])
 		return bin, nil
@@ -100,7 +135,7 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 	}
 	defer func() { _ = os.RemoveAll(buildDir) }()
 
-	if err := writeHarness(buildDir, driverRoot, driverVersion, goworkPath, external, flowDir); err != nil {
+	if err := writeHarness(buildDir, driverRoot, driverVersion, goworkPath, source, external, flowDir); err != nil {
 		return "", err
 	}
 
@@ -127,6 +162,34 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 	}
 	fmt.Fprintf(os.Stderr, "✓ nflow: runner ready\n")
 	return bin, nil
+}
+
+func acquireHarnessLock(ctx context.Context, dir string) (func(), error) {
+	lockPath := filepath.Join(dir, "build.lock")
+
+	for {
+		file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			fmt.Fprintf(file, "%d\n", os.Getpid())
+			_ = file.Close()
+			return func() { _ = os.Remove(lockPath) }, nil
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			return nil, fmt.Errorf("harness: lock %s: %w", lockPath, err)
+		}
+
+		if info, statErr := os.Stat(lockPath); statErr == nil &&
+			time.Since(info.ModTime()) > harnessLockStaleAfter {
+			_ = os.Remove(lockPath)
+			continue
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 
 func flowDirectory(path string) string {
@@ -177,7 +240,6 @@ func ExecHarness(bin string, args []string) int {
 	return ExecHarnessContext(context.Background(), bin, args)
 }
 
-// ExecHarnessContext runs a generated harness with caller-controlled cancellation.
 func ExecHarnessContext(ctx context.Context, bin string, args []string) int {
 	quiet := false
 	for _, a := range args {
@@ -206,9 +268,6 @@ func ExecHarnessContext(ctx context.Context, bin string, args []string) int {
 		return 1
 	}
 	if harnessStep != nil {
-		// Without a tap there is no "first byte" signal, so the step
-		// completes as soon as the child is launched. A lingering
-		// spinner would overwrite the child's own output on a TTY.
 		harnessStep.Complete("running")
 	}
 
@@ -223,7 +282,7 @@ func ExecHarnessContext(ctx context.Context, bin string, args []string) int {
 	return 0
 }
 
-func harnessKey(reqs []require.Requirement, goworkPath string) string {
+func harnessKey(reqs []require.Requirement, goworkPath string, nativeBundleIDs []string) string {
 	sorted := append([]require.Requirement(nil), reqs...)
 	sort.Slice(sorted, func(i, j int) bool {
 		if sorted[i].Import != sorted[j].Import {
@@ -237,6 +296,13 @@ func harnessKey(reqs []require.Requirement, goworkPath string) string {
 
 	h := sha256.New()
 	fmt.Fprintln(h, "resolver=go-package-provider-v1")
+
+	// The detected native extension set is part of the harness identity:
+	// two files with identical @require lists but different @pipeline /
+	// @schema / @hook usage must not share a cached tree-shaken binary.
+	ids := append([]string(nil), nativeBundleIDs...)
+	sort.Strings(ids)
+	fmt.Fprintf(h, "native=%s\n", strings.Join(ids, ","))
 	for i := range sorted {
 		r := &sorted[i]
 		fmt.Fprintf(h, "%s@%s\n", r.Import, r.Version)
@@ -287,7 +353,6 @@ func moduleSourceFingerprint(root string) string {
 
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			//nolint:nilerr // intentional: skip unreadable files without failing the walk
 			return nil
 		}
 		if d.IsDir() {
@@ -302,7 +367,6 @@ func moduleSourceFingerprint(root string) string {
 		}
 		info, statErr := d.Info()
 		if statErr != nil {
-			//nolint:nilerr // intentional: skip unreadable metadata without failing
 			return nil
 		}
 		files++
@@ -332,7 +396,6 @@ func harnessCacheDir(key string) (string, error) {
 		base = filepath.Join(base, "nflow", "harness")
 	}
 	dir := filepath.Join(base, key)
-	//nolint:gosec // key is a hex-encoded hash derived from module metadata
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("harness: cache dir: %w", err)
 	}
@@ -346,19 +409,6 @@ func exeSuffix() string {
 	return ""
 }
 
-// runGoContext executes a go toolchain command in dir and returns its error.
-//
-// Both stdout and stderr are streamed live to os.Stderr so that first-time
-// module downloads and compiler progress are visible to the developer, and
-// fanned out into a bounded tail buffer for diagnostics on failure. On
-// error the returned error carries the command line and the captured tail
-// (capped at maxCapturedOutputBytes) so explainBuildError can inspect it
-// without the caller needing a second I/O channel.
-//
-// The command runs under a context with a default timeout of
-// defaultGoCommandTimeout, overridable via NFLOW_GO_TIMEOUT. A slow or
-// dead GOPROXY, a stuck credential prompt, or a misconfigured sum DB
-// cannot hang the CLI indefinitely.
 func runGoContext(parent context.Context, dir string, args ...string) error {
 	ctx, cancel := context.WithTimeout(parent, goCommandTimeout())
 	defer cancel()
@@ -367,13 +417,14 @@ func runGoContext(parent context.Context, dir string, args ...string) error {
 	cmd.Dir = dir
 	cmd.Stdin = os.Stdin
 
-	// The startProgress spinner owned by the caller already reports
-	// what is happening; raw toolchain chatter ("go: added ...",
-	// "go: downloading ...") is kept in the tail buffer and surfaced
-	// only when the command fails.
 	capture := newTailBuffer(maxCapturedOutputBytes)
-	cmd.Stdout = capture
-	cmd.Stderr = capture
+	if os.Getenv("NFLOW_GO_VERBOSE") == "1" {
+		cmd.Stdout = io.MultiWriter(os.Stderr, capture)
+		cmd.Stderr = io.MultiWriter(os.Stderr, capture)
+	} else {
+		cmd.Stdout = capture
+		cmd.Stderr = capture
+	}
 
 	cmd.Env = append(os.Environ(),
 		"GOWORK=off",
@@ -389,8 +440,6 @@ func runGoContext(parent context.Context, dir string, args ...string) error {
 	return nil
 }
 
-// runGoOutputContext captures stdout for machine-readable commands while
-// keeping progress and diagnostics visible on stderr.
 func runGoOutputContext(parent context.Context, dir string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(parent, goCommandTimeout())
 	defer cancel()
@@ -412,10 +461,6 @@ func runGoOutputContext(parent context.Context, dir string, args ...string) ([]b
 	return stdout.Bytes(), nil
 }
 
-// resolveRequirementPackages records the import path and module provider that
-// Go resolves for each bundle. Versioned remote packages are queried with
-// `go get package@version` in a temporary module; Go decides whether the
-// package is provided by a root or nested module.
 func resolveRequirementPackages(reqs []require.Requirement, driverRoot, driverVersion, goworkPath string, sourceDirs ...string) ([]require.Requirement, error) {
 	return resolveRequirementPackagesWithContext(context.Background(), reqs, driverRoot, driverVersion, goworkPath, sourceDirs...)
 }
@@ -442,8 +487,6 @@ func resolveRequirementPackagesWithContext(ctx context.Context, reqs []require.R
 				return nil, err
 			}
 		case r.Version == "":
-			// Preserve same-module/workspace package resolution, but do not
-			// treat an arbitrary remote target as @latest or v0.0.0.
 			packagePath := bundleImportPath(*r)
 			providerPath := unversionedPackageProvider(packagePath, driverRoot, goworkPath, sourceDir)
 			if providerPath == "" {
@@ -562,9 +605,6 @@ func resolveRemotePackageProvider(ctx context.Context, packagePath, version, dri
 	return pkg.Module.Path, pkg.Module.Version, nil
 }
 
-// goCommandTimeout returns the configured timeout for a single go
-// toolchain invocation: NFLOW_GO_TIMEOUT if set and parseable, otherwise
-// defaultGoCommandTimeout. A malformed value is logged and ignored.
 func goCommandTimeout() time.Duration {
 	if raw := os.Getenv("NFLOW_GO_TIMEOUT"); raw != "" {
 		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
@@ -575,13 +615,6 @@ func goCommandTimeout() time.Duration {
 	return defaultGoCommandTimeout
 }
 
-// tailBuffer keeps the most recent max bytes written to it, discarding
-// older bytes once the cap is reached. It is the streaming counterpart
-// of a bounded log tail: unbounded writes, bounded memory.
-//
-// Not safe for concurrent writes; the exec package serializes both
-// stdout and stderr through the io.Writer we hand it, so writes arrive
-// on the reader goroutines sequentially.
 type tailBuffer struct {
 	buf     []byte
 	max     int
@@ -594,13 +627,11 @@ func newTailBuffer(maxBytes int) *tailBuffer {
 
 func (b *tailBuffer) Write(p []byte) (int, error) {
 	if len(p) >= b.max {
-		// A single chunk larger than the cap: keep only its tail.
 		b.buf = append(b.buf[:0], p[len(p)-b.max:]...)
 		b.dropped = true
 		return len(p), nil
 	}
 	if over := len(b.buf) + len(p) - b.max; over > 0 {
-		// Shift the surviving tail to the front of the same array.
 		b.buf = append(b.buf[:0], b.buf[over:]...)
 		b.dropped = true
 	}
@@ -680,11 +711,17 @@ func writeBundleTargets(mainBuilder *strings.Builder, imports []bundleImport) {
 	mainBuilder.WriteString("\t}\n")
 }
 
-func writeHarness(directory, driverRoot, driverVersion, goworkPath string, requirements []require.Requirement, sourceDirs ...string) error {
+func writeHarness(
+	directory, driverRoot, driverVersion, goworkPath, source string,
+	requirements []require.Requirement,
+	sourceDirs ...string,
+) error {
 	imports, err := prepareBundleImports(directory, requirements)
 	if err != nil {
 		return fmt.Errorf("harness: %w", err)
 	}
+
+	usedNative := detectUsedNativeBundles(source, false)
 
 	var mainBuilder strings.Builder
 	mainBuilder.WriteString("package main\n\n")
@@ -692,13 +729,37 @@ func writeHarness(directory, driverRoot, driverVersion, goworkPath string, requi
 	mainBuilder.WriteString("\t\"os\"\n\n")
 	mainBuilder.WriteString("\t\"github.com/nexssp/flow/cli\"\n")
 	mainBuilder.WriteString("\t\"github.com/nexssp/flow/core\"\n")
+
+	for i := range usedNative {
+		fmt.Fprintf(&mainBuilder, "\tnative%d %q\n", i, usedNative[i].pkg)
+	}
+
 	writeBundleImports(&mainBuilder, imports)
+
 	mainBuilder.WriteString(")\n\n")
 	mainBuilder.WriteString("func main() {\n")
+
 	writeBundleTargets(&mainBuilder, imports)
-	mainBuilder.WriteString("\tos.Exit(cli.RunWithBundleFactoriesForRequirements(os.Args[1:], targets, func(adopt func(core.Bundle) error) error {\n")
+
+	mainBuilder.WriteString("\tos.Exit(cli.RunWithBundleFactoriesAndNative(\n")
+	mainBuilder.WriteString("\t\tos.Args[1:],\n")
+	mainBuilder.WriteString("\t\ttargets,\n")
+	mainBuilder.WriteString("\t\tfunc() []core.Bundle {\n")
+	mainBuilder.WriteString("\t\t\treturn []core.Bundle{\n")
+
+	for i := range usedNative {
+		fmt.Fprintf(&mainBuilder, "\t\t\t\tnative%d.Bundle(nil),\n", i)
+	}
+
+	mainBuilder.WriteString("\t\t\t}\n")
+	mainBuilder.WriteString("\t\t},\n")
+	mainBuilder.WriteString("\t\tfunc(adopt func(core.Bundle) error) error {\n")
+
 	writeBundleConstruction(&mainBuilder, imports)
-	mainBuilder.WriteString("\t\treturn nil\n\t}))\n")
+
+	mainBuilder.WriteString("\t\t\treturn nil\n")
+	mainBuilder.WriteString("\t\t},\n")
+	mainBuilder.WriteString("\t))\n")
 	mainBuilder.WriteString("}\n")
 
 	if err := os.WriteFile(filepath.Join(directory, "main.go"), []byte(mainBuilder.String()), 0o600); err != nil {
@@ -747,7 +808,6 @@ func copyLoosePackage(r require.Requirement, dstDir string) error {
 		}
 
 		dstFile := filepath.Join(dstDir, entry.Name())
-		//nolint:gosec // dstFile is derived from a directory listing of a trusted local path
 		if err := os.WriteFile(dstFile, data, 0o600); err != nil {
 			return err
 		}
@@ -769,28 +829,6 @@ func isPackageMain(data []byte) bool {
 	return false
 }
 
-// bundleImportPath returns the Go import path of the Flow bundle for a
-// requirement.
-//
-// Convention: every adapter package has its Bundle in a subpackage
-// named `nexssflow` (or a variant such as `nexssflow_v2`). A
-// requirement that does not already end with that suffix gets it
-// appended, regardless of path depth. This is what makes
-// `github.com/nexssp/transport/thttp` resolve to the real bundle at
-// `github.com/nexssp/transport/thttp/nexssflow`.
-//
-// Two cases opt out of the append:
-//
-//  1. The path already ends with an adapter folder suffix
-//     (`nexssflow` or `nexssflow_*`).
-//  2. The requirement is a loose local package whose own directory
-//     contains Go files and no `nexssflow/` subdirectory.
-//
-// Prior versions of this function stopped appending once a path had
-// more than three segments, on the theory that a deep path was already
-// pointing at the intended package. That assumption was wrong for the
-// transport repositories, where `github.com/nexssp/transport/thttp` is
-// the adapter's module root and its Bundle lives one level deeper.
 func bundleImportPath(r require.Requirement) string {
 	if r.PackagePath != "" {
 		return r.PackagePath
@@ -825,32 +863,16 @@ func hasAdapterFolderSuffix(importPath string) bool {
 	return segment == defaultAdapterDirectory || strings.HasPrefix(segment, defaultAdapterDirectory+"_")
 }
 
-// explainBuildError converts a raw go build failure into a diagnostic
-// that names the offending @require. It recognizes three failure
-// shapes:
-//
-//  1. `undefined: nflowbundleN.<symbol>` — the resolved package exists
-//     but does not export a Bundle symbol. The most common cause is a
-//     transport adapter path that does not carry its `/nexssflow`
-//     suffix, which is exactly what bundleImportPath now appends.
-//  2. `cannot find package` / `no Go files in` — the import path does
-//     not resolve at all.
-//  3. Loose-package compilation failures — the directory has Go files
-//     but they do not form a valid bundle package.
 func explainBuildError(err error, requirements []require.Requirement) error {
 	if err == nil {
 		return nil
 	}
 	message := err.Error()
 
-	// Case 1: a specific nflowbundleN symbol is undefined. The index in
-	// the generated main.go is parallel to the requirements slice, so
-	// the offending @require can be named exactly.
 	if req := offendingBundleRequirement(message, requirements); req != nil {
 		return missingBundleSymbolError(*req)
 	}
 
-	// Case 2 / 3: match by resolved import path.
 	for i := range requirements {
 		r := &requirements[i]
 		importPath := bundleImportPath(*r)
@@ -891,16 +913,6 @@ func explainBuildError(err error, requirements []require.Requirement) error {
 	return err
 }
 
-// offendingBundleRequirement extracts the index N from an
-// `undefined: nflowbundleN.<symbol>` diagnostic and returns the
-// matching requirement. Returns nil when the message does not carry
-// that shape, in which case the caller falls back to path matching.
-//
-// The index is parallel to the requirements slice because both
-// prepareBundleImports and the generated main.go iterate it in order.
-// Skipped requirements (empty import path, duplicate) do not shift the
-// index: the loop index `i` is captured at append time for the same
-// slice position the generated main.go assigns to the same bundle.
 func offendingBundleRequirement(message string, requirements []require.Requirement) *require.Requirement {
 	const marker = "undefined: nflowbundle"
 	_, after, ok := strings.Cut(message, marker)
@@ -919,18 +931,6 @@ func offendingBundleRequirement(message string, requirements []require.Requireme
 	return &requirements[n]
 }
 
-// missingBundleSymbolError renders the diagnostic for a resolved
-// package that does not export Bundle.
-//
-// When the user's @require did not already carry an adapter suffix,
-// the resolver appended one, and the message shows both the requested
-// and resolved paths so the user can see exactly which package the
-// build tried to import. That is the diagnostic path for the transport
-// adapters, whose module root is one level above the Bundle package.
-//
-// When the user's @require already carried the suffix, the resolver
-// trusted it verbatim; the message points at that exact path and the
-// expected Bundle declaration.
 func missingBundleSymbolError(r require.Requirement) error {
 	resolved := bundleImportPath(r)
 	alreadySuffixed := hasAdapterFolderSuffix(r.Import)
@@ -1031,15 +1031,27 @@ func writeRequires(b *strings.Builder, reqs []require.Requirement, driverVersion
 		if r.IsLoose {
 			continue
 		}
+
+		targetID := require.NormalizeID(r.Import)
+		if _, ok := core.Lookup(targetID); ok {
+			continue
+		}
+		if _, ok := core.Lookup(r.Import); ok {
+			continue
+		}
+
 		mod := modulePathForRequirement(*r)
 		if mod == "" || seen[mod] {
 			continue
 		}
+
+		firstSegment, _, _ := strings.Cut(mod, "/")
+		if !strings.Contains(firstSegment, ".") {
+			continue
+		}
+
 		seen[mod] = true
 
-		// The Flow module is already required above. Skip that exact provider
-		// identity, not every module path beneath it: Go may select a distinct
-		// nested module to provide a requested package.
 		if mod == "github.com/nexssp/flow" || mod == "nflow-harness" {
 			continue
 		}
@@ -1075,6 +1087,23 @@ func writeReplaces(b *strings.Builder, driverRoot string, reqs []require.Require
 				}
 				b.WriteString(absolutizeReplace(driverRoot, trimmed))
 				b.WriteString("\n")
+			}
+		}
+
+		parentDir := filepath.Dir(driverRoot)
+		if entries, err := os.ReadDir(parentDir); err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
+				}
+				siblingDir := filepath.Join(parentDir, entry.Name())
+				goModPath := filepath.Join(siblingDir, "go.mod")
+				if modName, err := require.ReadModuleLine(goModPath); err == nil && modName != "" {
+					if !replacedModules[modName] {
+						replacedModules[modName] = true
+						fmt.Fprintf(b, "replace %s => %s\n", modName, siblingDir)
+					}
+				}
 			}
 		}
 	}
@@ -1296,7 +1325,6 @@ func findGoWork(start string) string {
 		return ""
 	}
 	if explicit := os.Getenv("GOWORK"); explicit != "" && explicit != "auto" {
-		//nolint:gosec // trusted environment variable
 		if _, err := os.Stat(explicit); err == nil {
 			return explicit
 		}
@@ -1334,11 +1362,6 @@ func moduleRootOf(importPath string) string {
 	return parts[0]
 }
 
-// modulePathForRequirement returns the Go module identity used by the
-// generated harness. Resolved remote requirements carry Go's reported
-// provider path; unresolved explicit paths are preserved rather than
-// truncated, unversioned same-module imports retain their provider, and
-// local requirements use the module path read from their nearest go.mod.
 func modulePathForRequirement(r require.Requirement) string {
 	if r.ModulePath != "" {
 		return r.ModulePath

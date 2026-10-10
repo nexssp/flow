@@ -2,28 +2,30 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/nexssp/flow/core"
 	"github.com/nexssp/flow/extensions/require"
-	"github.com/nexssp/flow/native"
 	"github.com/nexssp/flow/runner"
 )
 
 type invocation struct {
-	host          *runner.Host
-	injected      []core.Bundle
-	targets       map[string]struct{}
-	nativeFactory func() []core.Bundle
-	native        []core.Bundle
-	nativeErr     error
-	nativeMade    bool
-	directives    *core.DirectiveTable
-	selftest      []core.Bundle
-	selfErr       error
-	selfMade      bool
+	host            *runner.Host
+	injected        []core.Bundle
+	targets         map[string]struct{}
+	nativeFactory   func() []core.Bundle
+	native          []core.Bundle
+	nativeErr       error
+	nativeMade      bool
+	directives      *core.DirectiveTable
+	selftest        []core.Bundle
+	selftestFactory func([]core.Bundle) []core.Bundle
+	selfErr         error
+	selfMade        bool
 }
 
 func newInvocation(bundles []core.Bundle, targets []string) (*invocation, error) {
@@ -33,10 +35,9 @@ func newInvocation(bundles []core.Bundle, targets []string) (*invocation, error)
 		return nil, err
 	}
 	inv := &invocation{
-		host:          host,
-		injected:      injected,
-		targets:       make(map[string]struct{}, len(targets)),
-		nativeFactory: native.Bundles,
+		host:     host,
+		injected: injected,
+		targets:  make(map[string]struct{}, len(targets)),
 	}
 	for _, target := range targets {
 		inv.targets[target] = struct{}{}
@@ -44,7 +45,12 @@ func newInvocation(bundles []core.Bundle, targets []string) (*invocation, error)
 	return inv, nil
 }
 
-func runWithBundleFactories(ctx context.Context, targets []string, construct func(func(core.Bundle) error) error, dispatch func(*invocation, context.Context) int) int {
+func runWithBundleFactories(
+	ctx context.Context,
+	targets []string,
+	construct func(func(core.Bundle) error) error,
+	dispatch func(*invocation, context.Context) int,
+) int {
 	inv, err := newInvocation(nil, targets)
 	if err != nil {
 		return fatalf("flow host: %v", err)
@@ -93,6 +99,10 @@ func (inv *invocation) nativeBundles() ([]core.Bundle, error) {
 		return inv.native, inv.nativeErr
 	}
 	inv.nativeMade = true
+	if inv.nativeFactory == nil {
+		inv.nativeErr = errors.New("flow host: native bundle factory is not configured")
+		return nil, inv.nativeErr
+	}
 	inv.native = inv.nativeFactory()
 	if err := inv.host.OwnAll(inv.native); err != nil {
 		inv.nativeErr = err
@@ -127,7 +137,11 @@ func (inv *invocation) selftestBundles() ([]core.Bundle, error) {
 		inv.selfErr = err
 		return nil, err
 	}
-	inv.selftest = native.SelftestBundlesFrom(base)
+	if inv.selftestFactory == nil {
+		inv.selfErr = errors.New("flow host: selftest bundles are not available")
+		return nil, inv.selfErr
+	}
+	inv.selftest = inv.selftestFactory(base)
 	extra := inv.selftest[len(base):]
 	if err := inv.host.OwnAll(extra); err != nil {
 		inv.selfErr = err
@@ -202,17 +216,29 @@ func (inv *invocation) sourceRequiresFromFile(ctx context.Context, path string) 
 	if err != nil {
 		return nil, err
 	}
-	return require.FromMeta(meta), nil
+	reqs := require.FromMeta(meta)
+
+	if strings.Contains(string(src), "cov.") && !hasRequirement(reqs, "selftestkit") {
+		reqs = append(reqs, require.Requirement{Import: "selftestkit"})
+	}
+	return reqs, nil
 }
 
-// SourceRequires performs the native-directive bootstrap pass and owns any
-// resources constructed while discovering requirements.
+func hasRequirement(reqs []require.Requirement, id string) bool {
+	for i := range reqs {
+		if reqs[i].Import == id || require.NormalizeID(reqs[i].Import) == id {
+			return true
+		}
+	}
+	return false
+}
+
 func SourceRequires(path string) ([]require.Requirement, error) {
 	return sourceRequiresFromFile(path)
 }
 
 func buildConfig(reqs []require.Requirement) (runner.Config, error) {
-	inv, err := newInvocation(nil, nil)
+	inv, err := newNativeInvocation(nil, nil)
 	if err != nil {
 		return runner.Config{}, err
 	}
@@ -226,7 +252,7 @@ func buildConfig(reqs []require.Requirement) (runner.Config, error) {
 }
 
 func sourceRequiresFromFile(path string) ([]require.Requirement, error) {
-	inv, err := newInvocation(nil, nil)
+	inv, err := newNativeInvocation(nil, nil)
 	if err != nil {
 		return nil, err
 	}

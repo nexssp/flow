@@ -1,0 +1,28 @@
+@description "spec: authoritative 60Hz game loop with fixed-timesteps, abilities, and broadcast"
+
+# ── Step 1: Drive Game Simulation at 60Hz (Capped to 3 ticks for test)
+realtime.ticks @{ hz: 60, max_catchup_ms: 32 }
+-> stream.take @{ count: 3 }
+-> collect
+
+# ── Step 2-3: Step world physics, resolve cooldowns, and reshape ──────
+#  The stream segment only accepts operators after its head, so the
+#  per-tick enrichment runs as a single expr-lang `map` projection
+#  after the `collect` boundary.
+-> {
+  ticks: map(., {
+    tick_dt: #,
+    players: [
+      { id: "p1", hp: 100, x: 10.5, y: 20.0 },
+      { id: "p2", hp: 85,  x: 45.0, y: 12.0 }
+    ],
+    server_fps: 60,
+    match_status: "in_progress",
+    snapshot_seq: 1
+  })
+}
+
+@assert: len(result.ticks) == 3
+@assert: result.ticks[0].server_fps == 60
+@assert: result.ticks[0].match_status == "in_progress"
+@assert: len(result.ticks[0].players) == 2

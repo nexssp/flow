@@ -202,6 +202,31 @@ func buildSegmented(
 	return ComposedPipe(consumer, rightAct), nil
 }
 
+func atomStreamParams(atom *Atom) map[string]any {
+	params := ModifiersToMap(atom.Modifiers)
+	if len(atom.Params) > 0 {
+		if params == nil {
+			params = make(map[string]any, len(atom.Params))
+		}
+		for key, value := range atom.Params {
+			if _, exists := params[key]; !exists {
+				params[key] = value
+			}
+		}
+	}
+	if len(atom.Args) > 0 {
+		if params == nil {
+			params = make(map[string]any, len(atom.Args))
+		}
+		for key, value := range atom.Args {
+			if _, exists := params[key]; !exists {
+				params[key] = resolveValue(value, nil)
+			}
+		}
+	}
+	return params
+}
+
 func buildStreamSource(
 	ctx context.Context,
 	bCtx *BuildContext,
@@ -223,7 +248,7 @@ func buildStreamSource(
 		return nil, xerr.NotFound(headAtom.Name + " is not a registered stream source")
 	}
 
-	headParams := ModifiersToMap(headAtom.Modifiers)
+	headParams := atomStreamParams(headAtom)
 	if headAtom.ConfigInject {
 		cfg, _ := compileConfigFromCtx(ctx)
 		var err error
@@ -250,7 +275,7 @@ func buildStreamSource(
 			return nil, xerr.NotFound(atom.Name + " is not a registered stream operator")
 		}
 
-		params := ModifiersToMap(atom.Modifiers)
+		params := atomStreamParams(atom)
 		if atom.ConfigInject {
 			cfg, _ := compileConfigFromCtx(ctx)
 			var err error

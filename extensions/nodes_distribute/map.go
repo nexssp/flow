@@ -2,6 +2,7 @@ package nodes_distribute
 
 import (
 	"context"
+	"time"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
@@ -13,26 +14,25 @@ import (
 const (
 	defaultConcurrency = 4
 	maxConcurrency     = 256
-	maxItems           = 10_000
+	maxItems           = 100_000
 )
 
-// DistributeMapReq carries the fan-out configuration.
 type DistributeMapReq struct {
-	Action      string `json:"action"                validate:"required"`
+	Action      string `json:"action"                 validate:"required"`
 	Concurrency int    `json:"concurrency,omitempty"`
-	Items       []any  `json:"items"                 validate:"required"`
+	Items       []any  `json:"items"                  validate:"required"`
+	RateLimit   int    `json:"rate_limit,omitempty"`
+	TimeoutMs   int64  `json:"timeout_ms,omitempty"`
+	Retries     int    `json:"retries,omitempty"`
+	FailFast    bool   `json:"fail_fast,omitempty"`
 }
 
-// DistributeMapRes is the ordered result; index i corresponds to
-// input item i regardless of completion order.
 type DistributeMapRes struct {
 	Items     []Item `json:"items"`
 	Succeeded int    `json:"succeeded"`
 	Failed    int    `json:"failed"`
 }
 
-// DistributeMap invokes Action once per input item with bounded
-// concurrency, preserving input order in the output.
 var DistributeMap = action.New("distribute.map", func(ctx context.Context, req DistributeMapReq) (DistributeMapRes, error) {
 	if req.Action == "" {
 		return DistributeMapRes{}, xerr.BadRequest("distribute.map: action is required")
@@ -41,7 +41,7 @@ var DistributeMap = action.New("distribute.map", func(ctx context.Context, req D
 		return DistributeMapRes{}, nil
 	}
 	if len(req.Items) > maxItems {
-		return DistributeMapRes{}, xerr.BadRequest("distribute.map: items exceeds limit")
+		return DistributeMapRes{}, xerr.BadRequest("distribute.map: items count exceeds limit")
 	}
 
 	resolver := contracts.ActionResolverFromContext(ctx)
@@ -62,6 +62,21 @@ var DistributeMap = action.New("distribute.map", func(ctx context.Context, req D
 		concurrency = maxConcurrency
 	}
 
+	// ─── Kernel Composition ──────────────────────────────────────────────
+	// Compose target once with Kernel's native middleware. All goroutines
+	// share the rate limiter, and each execution gets its own retry/timeout.
+	builder := action.Dynamic(target)
+	if req.TimeoutMs > 0 {
+		builder = builder.Timeout(time.Duration(req.TimeoutMs) * time.Millisecond)
+	}
+	if req.Retries > 0 {
+		builder = builder.Retry(req.Retries, action.ExponentialJitter(10*time.Millisecond, 2*time.Second))
+	}
+	if req.RateLimit > 0 {
+		builder = builder.RateLimit(float64(req.RateLimit), max(req.RateLimit/10, 1))
+	}
+	execTarget := builder.Build()
+
 	items := make([]Item, len(req.Items))
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(concurrency)
@@ -69,16 +84,18 @@ var DistributeMap = action.New("distribute.map", func(ctx context.Context, req D
 	for i, value := range req.Items {
 		index, val := i, value
 		group.Go(func() error {
-			// Only abort the execution if the parent context was canceled (e.g. timeout)
 			if err := groupCtx.Err(); err != nil {
 				items[index] = Item{Error: err.Error()}
 				return err
 			}
 
-			output, err := invokeSafely(groupCtx, target, val)
+			output, err := action.InvokeAny(groupCtx, execTarget, val)
 			if err != nil {
 				items[index] = Item{Error: err.Error()}
-				return nil // Return nil so the errgroup continues processing other items!
+				if req.FailFast {
+					return err
+				}
+				return nil
 			}
 
 			items[index] = Item{OK: true, Result: output}
@@ -86,8 +103,8 @@ var DistributeMap = action.New("distribute.map", func(ctx context.Context, req D
 		})
 	}
 
-	// Wait only returns an error if groupCtx.Err() triggered an abort
-	if err := group.Wait(); err != nil {
+	err := group.Wait()
+	if err != nil && req.FailFast {
 		return DistributeMapRes{}, err
 	}
 
@@ -100,18 +117,6 @@ var DistributeMap = action.New("distribute.map", func(ctx context.Context, req D
 		}
 	}
 	return result, nil
-}).Description("Fan out one action over many items with bounded concurrency").
+}).Description("Fan out one action over many items with Kernel rate-limiting, retry, and timeout").
 	Tag("distribute", "fanout").
 	Build()
-
-// invokeSafely isolates a panic in the target action and returns it as
-// an error, so one bad item cannot crash the fan-out.
-func invokeSafely(ctx context.Context, target action.AnyAction, input any) (output any, err error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			output = nil
-			err = xerr.PanicRecovery(recovered)
-		}
-	}()
-	return action.InvokeAny(ctx, target, input)
-}

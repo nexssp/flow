@@ -1,0 +1,8 @@
+@description "Send one input: nflow run move.nflow --id=p1 --dx=1 --dy=0"
+
+@require github.com/nexssp/transportnats { url: "nats://127.0.0.1:4222", name: "arena-move" }
+
+nats.publish @{
+  subject: "arena.input",
+  payload: { id: "@flag.id", dx: "@flag.dx", dy: "@flag.dy" }
+}

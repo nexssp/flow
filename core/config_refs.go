@@ -144,7 +144,7 @@ func checkFlagRef(atom *Atom, raw, where string, known map[string]struct{}) erro
 	}
 	return SourceError(atom.Pos,
 		"%s: unknown @flag.%s (available: %s)"+
-			"\n  hint: pass -%s=VALUE on the command line",
+			"\n  hint: pass --%s=VALUE on the command line",
 		where, name, availableFlagNames(known), name)
 }
 

@@ -1,0 +1,13 @@
+@description "Flow Arena — player: pulls AoI view at 20Hz"
+
+@require github.com/nexssp/transport/tworker
+@require github.com/nexssp/transportnats { url: "nats://127.0.0.1:4222", name: "arena-player" }
+
+@pipeline view :worker=50ms
+  nats.request @{ subject: "arena.view", payload: { id: "@flag.id", radius: 1 } }
+  -> { tick: (.tick ?? 0), self: (.self ?? { id: "@flag.id" }), nearby: len(.nearby ?? []) }
+  || { tick: 0, self: { id: "@flag.id" }, nearby: -1 }
+  -> runtime.print @{ label: "view", stream: "stdout" }
+@end
+
+tworker.listen
