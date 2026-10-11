@@ -20,20 +20,18 @@ func terminalRecoveryError(ctx context.Context, err error) error {
 	return nil
 }
 
-func recoveryEnvironment(input any, err error) map[string]any {
+func recoveryEnvironment(ctx context.Context, input any, err error) map[string]any {
 	env := core.BuildEnv(input)
 	env["input"] = input
 	env["error"] = errorMetadata(err)
-	return match.WithKindEnvironment(env)
+	return match.WithSymbolEnvironment(ctx, env)
 }
 
-func pipelineErrorEnvironment(input any, err error) map[string]any {
+func pipelineErrorEnvironment(ctx context.Context, input any, err error) map[string]any {
 	metadata := errorMetadata(err)
-	// @on_error historically exposes kind as a string; keep that surface
-	// stable while adding the shared symbolic Kernel constants.
 	metadata["kind"] = string(xerr.From(err).Kind)
 	env := map[string]any{"input": input, "error": metadata}
-	return match.WithKindEnvironment(env)
+	return match.WithSymbolEnvironment(ctx, env)
 }
 
 func errorMetadata(err error) map[string]any {

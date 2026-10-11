@@ -36,7 +36,7 @@ func recoverFn(
 		return nil, terminalErr
 	}
 	errKind := string(xerr.From(err).Kind)
-	env := pipelineErrorEnvironment(req, err)
+	env := pipelineErrorEnvironment(ctx, req, err)
 
 	target := resolveTargetWithConditions(cfg, env, conditions)
 	if target == "" {

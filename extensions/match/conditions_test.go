@@ -4,6 +4,9 @@ import (
 	"testing"
 
 	"github.com/nexssp/kernel/xerr"
+	"github.com/nexssp/kernel/xtest/ktest"
+
+	"github.com/nexssp/flow/compiler"
 )
 
 func TestKindSymbolsResolveAndMatchEveryBuiltIn(t *testing.T) {
@@ -82,4 +85,74 @@ func TestLegacyStringKindCanMatchKernelSymbol(t *testing.T) {
 	if got := FirstMatchingCase([]ConditionCase{{Program: program}}, env); got != 0 {
 		t.Fatalf("legacy string kind did not match xerr.KindTimeout; selected %d", got)
 	}
+}
+
+func TestInitRegistersXerrNamespace(t *testing.T) {
+	t.Parallel()
+	value, ok := compiler.LookupSymbol("xerr", "KindTimeout")
+	ktest.RequireCondition(t, ok, "xerr namespace was not registered by init()")
+	ktest.RequireEqual(t, value, any(xerr.KindTimeout))
+}
+
+func TestWithSymbolEnvironment_BindsRegisteredNamespaces(t *testing.T) {
+	t.Parallel()
+	compiler.RegisterNamespace(compiler.SymbolNamespace{
+		Name:    "symenv_test",
+		Symbols: map[string]any{"role": "billing.refund"},
+	})
+	env := WithSymbolEnvironment(t.Context(), map[string]any{
+		"error": map[string]any{"kind": xerr.KindTimeout},
+	})
+	ns, ok := env["symenv_test"].(map[string]any)
+	ktest.RequireCondition(t, ok, "symenv_test not bound as map: %T", env["symenv_test"])
+	ktest.RequireEqual(t, ns["role"], "billing.refund")
+}
+
+func TestWithSymbolEnvironment_BindsXerrTyped(t *testing.T) {
+	t.Parallel()
+	env := WithSymbolEnvironment(t.Context(), map[string]any{
+		"error": map[string]any{"kind": xerr.KindTimeout},
+	})
+	xerrMap, ok := env["xerr"].(map[string]any)
+	ktest.RequireCondition(t, ok, "xerr not bound as map: %T", env["xerr"])
+	ktest.RequireEqual(t, xerrMap["KindTimeout"], any(xerr.KindTimeout))
+}
+
+func TestWithSymbolEnvironment_BindsXerrString(t *testing.T) {
+	t.Parallel()
+	env := WithSymbolEnvironment(t.Context(), map[string]any{
+		"error": map[string]any{"kind": "Timeout"},
+	})
+	xerrMap, ok := env["xerr"].(map[string]any)
+	ktest.RequireCondition(t, ok, "xerr not bound as map: %T", env["xerr"])
+	ktest.RequireEqual(t, xerrMap["KindTimeout"], "Timeout")
+}
+
+func TestWithSymbolEnvironment_CallerKeyWins(t *testing.T) {
+	t.Parallel()
+	compiler.RegisterNamespace(compiler.SymbolNamespace{
+		Name:    "symenv_caller",
+		Symbols: map[string]any{"role": "from_registry"},
+	})
+	env := WithSymbolEnvironment(t.Context(), map[string]any{
+		"symenv_caller": "caller_value",
+	})
+	ktest.RequireEqual(t, env["symenv_caller"], "caller_value")
+}
+
+func TestWithKindEnvironment_MatchesSymbolEnvironment(t *testing.T) {
+	t.Parallel()
+	in := map[string]any{"error": map[string]any{"kind": xerr.KindTimeout}}
+	ktest.RequireEqual(t, WithKindEnvironment(in), WithSymbolEnvironment(t.Context(), in))
+}
+
+func TestWithSymbolEnvironment_BindsFileLocal(t *testing.T) {
+	t.Parallel()
+	ctx := compiler.WithLocalSymbols(t.Context(), map[string]compiler.SymbolNamespace{
+		"filelocal": {Name: "filelocal", Symbols: map[string]any{"role": "from_file"}},
+	})
+	env := WithSymbolEnvironment(ctx, map[string]any{})
+	ns, ok := env["filelocal"].(map[string]any)
+	ktest.RequireCondition(t, ok, "filelocal not bound as map: %T", env["filelocal"])
+	ktest.RequireEqual(t, ns["role"], "from_file")
 }

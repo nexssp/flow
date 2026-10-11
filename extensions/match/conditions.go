@@ -1,7 +1,7 @@
 package match
 
 import (
-	"maps"
+	"context"
 
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
@@ -9,6 +9,17 @@ import (
 
 	core "github.com/nexssp/flow/compiler"
 )
+
+func init() {
+	symbols := make(map[string]any, len(xerr.AllKinds()))
+	for _, kind := range xerr.AllKinds() {
+		symbols["Kind"+string(kind)] = kind
+	}
+	core.RegisterNamespace(core.SymbolNamespace{
+		Name:    "xerr",
+		Symbols: symbols,
+	})
+}
 
 // ConditionCase is one ordered expression condition, or a default branch.
 // A nil Program is skipped unless IsDefault is true.
@@ -84,18 +95,35 @@ func KindEnvironmentFor(kindValue any) map[string]any {
 	return map[string]any{"xerr": symbols}
 }
 
-// WithKindEnvironment returns a fresh expression environment with built-in
-// Kernel kind symbols added under xerr. The caller's map is never mutated.
-func WithKindEnvironment(env map[string]any) map[string]any {
-	out := make(map[string]any, len(env)+1)
-	maps.Copy(out, env)
-	kindValue, hasKind := errorKindValue(out)
-	if hasKind {
+// WithSymbolEnvironment returns a fresh expression environment with every
+// registered symbol namespace bound: process-global namespaces from
+// compiler.RegisterNamespace, then any file-local namespace installed on ctx
+// by the compiler after @symbols preprocessing, then xerr in the
+// string-or-typed form the current error source expects. Caller-supplied
+// keys win on collision.
+func WithSymbolEnvironment(ctx context.Context, env map[string]any) map[string]any {
+	out := core.MergeSymbolNamespaces(ctx, env)
+
+	// Respect file-local shadow namespaces (prevent clobbering test overrides)
+	localSyms := core.LocalSymbolsFrom(ctx)
+	if _, hasLocal := localSyms["xerr"]; hasLocal {
+		return out
+	}
+
+	if kindValue, hasKind := errorKindValue(out); hasKind {
 		out["xerr"] = KindEnvironmentFor(kindValue)["xerr"]
 	} else {
 		out["xerr"] = KindEnvironment()["xerr"]
 	}
 	return out
+}
+
+// WithKindEnvironment is retained for backward compatibility with callers
+// that predate the file-local symbol path.
+//
+// Deprecated: use WithSymbolEnvironment(ctx, env).
+func WithKindEnvironment(env map[string]any) map[string]any {
+	return WithSymbolEnvironment(context.Background(), env)
 }
 
 func errorKindValue(env map[string]any) (any, bool) {

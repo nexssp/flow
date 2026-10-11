@@ -1,0 +1,15 @@
+@description "Symbols: SLA tier symbols keep routing thresholds consistent"
+
+@symbols sla {
+  p1: "1h"
+  p2: "4h"
+  p3: "24h"
+}
+
+{ severity: "high" } -> match {
+  .severity == "critical" -> const @{ value: sla.p1 },
+  .severity == "high"     -> const @{ value: sla.p2 },
+  _                       -> const @{ value: sla.p3 }
+}
+
+@assert: result == "4h"

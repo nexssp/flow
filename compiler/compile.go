@@ -173,6 +173,7 @@ func runCompile(
 	if isStrictConfig(prepared.meta) {
 		ctx = WithStrict(ctx)
 	}
+	ctx = applySymbolsToCtx(ctx, prepared.meta)
 
 	effectiveCfg, ctx, ptEffective := applyPreprocessContributions(ctx, cfg, opts, pt, prepared.contributions, req)
 
@@ -204,6 +205,14 @@ func runCompile(
 	}
 
 	return CompileRes{Program: program, Meta: prepared.meta, AST: ast, ActionGraph: graph}, nil
+}
+
+func applySymbolsToCtx(ctx context.Context, meta map[string]any) context.Context {
+	syms, _ := meta["symbols"].(map[string]SymbolNamespace)
+	if len(syms) == 0 {
+		return ctx
+	}
+	return WithLocalSymbols(ctx, syms)
 }
 
 // hasPipelineBody reports whether src contains at least one non-EOF

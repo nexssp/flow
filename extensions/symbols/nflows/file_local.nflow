@@ -1,0 +1,13 @@
+@description "Symbols: file-local namespace resolves in match expression"
+
+@symbols routing {
+  primary_queue: "billing-operations"
+  max_retries:   "3"
+}
+
+{ queue: "billing-operations" } -> match {
+  .queue == routing.primary_queue -> const @{ value: "routed" },
+  _                               -> const @{ value: "fallback" }
+}
+
+@assert: result == "routed"

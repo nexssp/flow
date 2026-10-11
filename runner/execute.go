@@ -13,7 +13,6 @@ import (
 	"github.com/nexssp/flow/compiler/contracts"
 )
 
-// Execution is the outcome of one Execute call.
 type Execution struct {
 	Output          any
 	Meta            map[string]any
@@ -27,22 +26,14 @@ type Execution struct {
 	RunAllocBytes     uint64
 }
 
-// Compilation is the result of compiling one source without invoking its
-// workflow actions. Program is nil for declaration-only sources such as a
-// file containing only @pipeline definitions.
 type Compilation struct {
 	Program  action.AnyAction
 	Meta     map[string]any
 	Resolver compiler.CapabilityResolver
 }
 
-// EntryPoint is a named action to invoke after compilation instead of
-// the top-level program. Hosts that route CLI commands to named
-// pipelines use it.
 type EntryPoint struct {
-	// Name is the action's registered name, e.g. "pipeline.pack".
-	Name string
-	// Payload is the typed request passed to the entrypoint.
+	Name    string
 	Payload any
 }
 
@@ -58,14 +49,10 @@ func withExecutionContext(ctx context.Context, cfg Config, resolver compiler.Cap
 	return contracts.WithActionResolver(ctx, resolver)
 }
 
-// Compile preprocesses source, materializes declarations, and compiles its
-// top-level program without invoking workflow actions.
 func Compile(ctx context.Context, cfg Config, src, name string) (Compilation, error) {
 	return CompileWithOptions(ctx, cfg, src, name)
 }
 
-// CompileWithOptions compiles a source with options scoped to this invocation.
-// The supplied Config is copied so callers can safely reuse it afterward.
 func CompileWithOptions(ctx context.Context, cfg Config, src, name string, opts ...compiler.CompileOption) (Compilation, error) {
 	if len(opts) > 0 {
 		cfg.CompileOpts = append(append([]compiler.CompileOption(nil), cfg.CompileOpts...), opts...)
@@ -77,18 +64,10 @@ func CompileWithOptions(ctx context.Context, cfg Config, src, name string, opts 
 	return compilePrepared(ctx, cfg, prepared)
 }
 
-// Preflight preprocesses source once and returns a value for reuse in
-// ExecutePrepared. Hosts use it to discover @schema declarations and
-// pipeline modifiers before parsing argv, so command-line values can
-// reach compile-time modifiers such as out.file:path=@config.output.
 func Preflight(ctx context.Context, cfg Config, src, name string) (*compiler.PreparedSource, error) {
 	return compiler.PrepareSource(ctx, cfg.Directives, src, name, cfg.CompileOpts...)
 }
 
-// ExecutePrepared compiles prepared source and invokes the named
-// entrypoint. extraOpts are appended to cfg.CompileOpts for this
-// invocation only, so hosts can inject argv-derived values with
-// compiler.WithConfigMap without re-running directives.
 func ExecutePrepared(
 	ctx context.Context,
 	cfg Config,
@@ -129,6 +108,10 @@ func ExecutePrepared(
 		return result, fmt.Errorf("runner: entrypoint %q is not registered in the compiled source", entry.Name)
 	}
 
+	if syms, ok := compiled.Meta["symbols"].(map[string]compiler.SymbolNamespace); ok && len(syms) > 0 {
+		ctx = compiler.WithLocalSymbols(ctx, syms)
+	}
+
 	ctx = withExecutionContext(ctx, cfg, compiled.Resolver)
 
 	runStart := time.Now()
@@ -160,9 +143,11 @@ func compilePrepared(ctx context.Context, cfg Config, prepared *compiler.Prepare
 	}
 
 	meta := prepared.Metadata()
+	if syms, ok := meta["symbols"].(map[string]compiler.SymbolNamespace); ok && len(syms) > 0 {
+		ctx = compiler.WithLocalSymbols(ctx, syms)
+	}
 	topContribs := prepared.Contributions()
 
-	// Variadic signature to accept modifiers for sub-pipelines:
 	compileSub := func(subName, subSource string, mods ...string) (action.AnyAction, error) {
 		wrapperMods, bodyMods := SplitPipelineModifiers(cfg.Modifiers, mods)
 
@@ -249,7 +234,6 @@ func compilePrepared(ctx context.Context, cfg Config, prepared *compiler.Prepare
 	}, nil
 }
 
-// Execute compiles and runs a .nflow source under the given configuration.
 func Execute(ctx context.Context, cfg Config, src, name string, payload map[string]any) (Execution, error) {
 	compileStart := time.Now()
 
@@ -272,6 +256,10 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 		result := Execution{Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
 		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
 		return result, errors.New("compile: source is empty")
+	}
+
+	if syms, ok := compiled.Meta["symbols"].(map[string]compiler.SymbolNamespace); ok && len(syms) > 0 {
+		ctx = compiler.WithLocalSymbols(ctx, syms)
 	}
 
 	ctx = withExecutionContext(ctx, cfg, compiled.Resolver)
@@ -325,11 +313,6 @@ func (a compilerAdapter) CompilePipeline(expr string) (action.Executable, error)
 	res, err := compiler.CompileAction(
 		a.cfg.Resolver, a.cfg.Directives, a.cfg.Modifiers,
 		a.cfg.Operators, a.cfg.Primaries,
-		// Note: cfg.CompileOpts deliberately omitted. The parent
-		// pipeline already applied its WrapPipeline wrappers; a
-		// compiled child re-applying them would stack duplicate
-		// layers (schema.wrap is not idempotent) and produce error
-		// chains that no longer match the parent's shape.
 	).Do(context.Background(), compiler.CompileReq{Source: expr, Name: "<child>"})
 	if err != nil {
 		return nil, err
@@ -341,14 +324,6 @@ func (a compilerAdapter) CompilePipeline(expr string) (action.Executable, error)
 	return exec, nil
 }
 
-// SplitPipelineModifiers separates a pipeline header's modifiers into
-// those that belong on the wrapper action and those that propagate to
-// the pipeline body. Inheritable policy modifiers (:timeout, :retry, …)
-// propagate; metadata modifiers (:tag, :status, :route, …) stay on the
-// wrapper.
-//
-// It is shared by compile-time pipeline materialization and callers that
-// need the same wrapper-versus-body modifier split.
 func SplitPipelineModifiers(table *compiler.ModifierTable, mods []string) (wrapper, body []string) {
 	if len(mods) == 0 {
 		return nil, nil
@@ -368,17 +343,11 @@ func SplitPipelineModifiers(table *compiler.ModifierTable, mods []string) (wrapp
 	return wrapper, body
 }
 
-// SourcedModifier is a modifier together with the origin that produced
-// it. SplitPipelineModifiersWithSources returns these so `nflow explain`
-// can attribute modifiers to a pipeline or a profile.
 type SourcedModifier struct {
 	Raw    string
 	Source compiler.ModifierSource
 }
 
-// SplitPipelineModifiersWithSources is SplitPipelineModifiers with the
-// per-modifier origin preserved. Sources must be parallel to mods;
-// missing entries default to Kind "pipeline" with no label.
 func SplitPipelineModifiersWithSources(
 	table *compiler.ModifierTable,
 	mods []string,

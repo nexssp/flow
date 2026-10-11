@@ -1,0 +1,14 @@
+@description "Symbols: file-local namespace overrides a same-named global"
+
+# `xerr` is registered by the match bundle globally. A file can shadow it
+# to encode local test-only semantics without touching the global registry.
+@symbols xerr {
+  KindTimeout: "local_timeout_sentinel"
+}
+
+{ signal: "local_timeout_sentinel" } -> match {
+  .signal == xerr.KindTimeout -> const @{ value: "handled_locally" },
+  _                           -> const @{ value: "unhandled" }
+}
+
+@assert: result == "handled_locally"

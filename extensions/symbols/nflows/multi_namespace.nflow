@@ -1,0 +1,21 @@
+@description "Symbols: multiple namespaces coexist in one compilation"
+
+@symbols queue {
+  billing: "billing-operations"
+  access:  "identity-operations"
+  general: "customer-support"
+}
+
+@symbols team {
+  billing: "team-billing"
+  access:  "team-identity"
+  general: "team-support"
+}
+
+{ category: "access" } -> match {
+  .category == "billing" -> const @{ value: queue.billing },
+  .category == "access"  -> const @{ value: queue.access },
+  _                      -> const @{ value: queue.general }
+}
+
+@assert: result == "identity-operations"

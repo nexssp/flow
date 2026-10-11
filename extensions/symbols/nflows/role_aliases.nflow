@@ -1,0 +1,15 @@
+@description "Symbols: role aliases remove repeated string literals from routing"
+
+@symbols roles {
+  billing_refund: "billing.refund"
+  support_triage: "support.triage"
+  on_call:        "on-call"
+}
+
+{ requested: "support.triage" } -> match {
+  .requested == roles.support_triage -> const @{ value: roles.support_triage },
+  .requested == roles.billing_refund -> const @{ value: roles.billing_refund },
+  _                                  -> const @{ value: roles.on_call }
+}
+
+@assert: result == "support.triage"

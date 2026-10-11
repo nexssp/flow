@@ -131,6 +131,9 @@ func BundleConfig(bundles ...Bundle) []CompileOption {
 	)
 	for i := range bundles {
 		b := &bundles[i]
+		for _, ns := range b.Symbols {
+			RegisterNamespace(ns)
+		}
 		if b.AtomAdvise != nil {
 			advisors = append(advisors, b.AtomAdvise)
 		}

@@ -23,6 +23,7 @@ func (a *Atom) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction,
 		return nil, xerr.Internal("build: capability resolver is nil")
 	}
 	resolveConfigRefsInAtom(ctx, a)
+	resolveSymbolsInAtom(ctx, a)
 
 	act, ok := bCtx.Resolver.Action(a.Name)
 	if !ok {
@@ -186,7 +187,7 @@ func buildSegmented(
 		action.IntrospectionChild{Node: rightAct, Relation: "sequence", Role: "right"}), nil
 }
 
-func atomStreamParams(atom *Atom) map[string]any {
+func atomStreamParams(ctx context.Context, atom *Atom) map[string]any {
 	params := ModifiersToMap(atom.Modifiers)
 	if len(atom.Params) > 0 {
 		if params == nil {
@@ -204,7 +205,7 @@ func atomStreamParams(atom *Atom) map[string]any {
 		}
 		for key, value := range atom.Args {
 			if _, exists := params[key]; !exists {
-				params[key] = resolveValue(value, nil)
+				params[key] = resolveValue(ctx, value, nil)
 			}
 		}
 	}
@@ -226,13 +227,14 @@ func buildStreamSource(
 	}
 
 	resolveConfigRefsInAtom(ctx, headAtom)
+	resolveSymbolsInAtom(ctx, headAtom)
 
 	src, ok := bCtx.Resolver.Stream(headAtom.Name)
 	if !ok {
 		return nil, xerr.NotFound(headAtom.Name + " is not a registered stream source")
 	}
 
-	headParams := atomStreamParams(headAtom)
+	headParams := atomStreamParams(ctx, headAtom)
 	if headAtom.ConfigInject {
 		cfg, _ := compileConfigFromCtx(ctx)
 		var err error
@@ -253,13 +255,14 @@ func buildStreamSource(
 		}
 
 		resolveConfigRefsInAtom(ctx, atom)
+		resolveSymbolsInAtom(ctx, atom)
 
 		named, ok := bCtx.Resolver.Operator(atom.Name)
 		if !ok {
 			return nil, xerr.NotFound(atom.Name + " is not a registered stream operator")
 		}
 
-		params := atomStreamParams(atom)
+		params := atomStreamParams(ctx, atom)
 		if atom.ConfigInject {
 			cfg, _ := compileConfigFromCtx(ctx)
 			var err error
@@ -680,10 +683,6 @@ func resolveConfigRefsInAtom(ctx context.Context, a *Atom) {
 	}
 }
 
-// resolveConfigRefsInModifier rewrites @config.X and @flag.X references
-// inside a raw modifier string of the form name=value. Modifiers
-// without a value or with an unrecognized reference are returned
-// unchanged.
 func resolveConfigRefsInModifier(cfg map[string]string, cliArgs []string, raw string) string {
 	eq := strings.IndexByte(raw, '=')
 	if eq <= 0 {
@@ -741,10 +740,9 @@ func hasInjections(a *Atom) bool {
 func wrapWithInjections(inner action.AnyAction, a *Atom) action.AnyAction {
 	pos := a.Pos
 	return action.New(a.Name, func(ctx context.Context, in any) (any, error) {
-		payload := buildPayload(in, a)
+		payload := buildPayload(ctx, in, a)
 		res, err := action.InvokeAny(ctx, inner, payload)
 		if err != nil {
-			// Add a clickable source location if the error lacks one.
 			if pos.File != "" && !strings.Contains(err.Error(), pos.File+":") {
 				return nil, SourceError(pos, "%w", err)
 			}
@@ -754,7 +752,7 @@ func wrapWithInjections(inner action.AnyAction, a *Atom) action.AnyAction {
 	}).Build()
 }
 
-func buildPayload(in any, a *Atom) map[string]any {
+func buildPayload(ctx context.Context, in any, a *Atom) map[string]any {
 	m, _ := in.(map[string]any)
 	merged := make(map[string]any, len(m)+len(a.Params)+len(a.Args)+4)
 	maps.Copy(merged, m)
@@ -765,7 +763,7 @@ func buildPayload(in any, a *Atom) map[string]any {
 		merged[k] = v
 	}
 	for k, v := range a.Args {
-		merged[k] = resolveValue(v, m)
+		merged[k] = resolveValue(ctx, v, m)
 	}
 	if a.Prompt != "" {
 		merged["prompt"] = a.Prompt
@@ -779,7 +777,7 @@ func buildPayload(in any, a *Atom) map[string]any {
 	return merged
 }
 
-func resolveValue(v *Value, state map[string]any) any {
+func resolveValue(ctx context.Context, v *Value, state map[string]any) any {
 	if v == nil {
 		return nil
 	}
@@ -787,6 +785,9 @@ func resolveValue(v *Value, state map[string]any) any {
 	case ValueString:
 		return v.Str
 	case ValueBare:
+		if val, ok := lookupSymbolValue(ctx, v.Str); ok {
+			return val
+		}
 		return v.Str
 	case ValueNumber:
 		return v.Num
@@ -803,17 +804,85 @@ func resolveValue(v *Value, state map[string]any) any {
 	case ValueMap:
 		out := make(map[string]any, len(v.Map))
 		for _, e := range v.Map {
-			out[e.Key] = resolveValue(e.Value, state)
+			out[e.Key] = resolveValue(ctx, e.Value, state)
 		}
 		return out
 	case ValueSlice:
 		out := make([]any, len(v.Slice))
 		for i, e := range v.Slice {
-			out[i] = resolveValue(e, state)
+			out[i] = resolveValue(ctx, e, state)
 		}
 		return out
 	}
 	return nil
+}
+
+func resolveSymbolsInAtom(ctx context.Context, a *Atom) {
+	for key, value := range a.Params {
+		if val, ok := lookupSymbolValue(ctx, value); ok {
+			a.Params[key] = fmt.Sprint(val)
+		}
+	}
+	for _, value := range a.Args {
+		resolveSymbolsInValue(ctx, value)
+	}
+}
+
+func resolveSymbolsInValue(ctx context.Context, value *Value) {
+	if value == nil {
+		return
+	}
+	switch value.Kind {
+	case ValueBare:
+		if val, ok := lookupSymbolValue(ctx, value.Str); ok {
+			switch v := val.(type) {
+			case string:
+				value.Kind = ValueString
+				value.Str = v
+			case float64:
+				value.Kind = ValueNumber
+				value.Num = v
+			case int:
+				value.Kind = ValueNumber
+				value.Num = float64(v)
+			case int64:
+				value.Kind = ValueNumber
+				value.Num = float64(v)
+			case bool:
+				value.Kind = ValueBool
+				value.Bool = v
+			default:
+				value.Kind = ValueString
+				value.Str = fmt.Sprint(val)
+			}
+		}
+	case ValueMap:
+		for i := range value.Map {
+			resolveSymbolsInValue(ctx, value.Map[i].Value)
+		}
+	case ValueSlice:
+		for _, item := range value.Slice {
+			resolveSymbolsInValue(ctx, item)
+		}
+	case ValueString, ValueNumber, ValueBool, ValueNull, ValueRef:
+	}
+}
+
+func lookupSymbolValue(ctx context.Context, raw string) (any, bool) {
+	ns, name, ok := strings.Cut(raw, ".")
+	if !ok {
+		return nil, false
+	}
+	if ctx != nil {
+		if local := LocalSymbolsFrom(ctx); local != nil {
+			if localNS, exists := local[ns]; exists {
+				if val, found := localNS.Symbols[name]; found {
+					return val, true
+				}
+			}
+		}
+	}
+	return LookupSymbol(ns, name)
 }
 
 func lookupPath(m map[string]any, path string) (any, bool) {
@@ -851,16 +920,6 @@ func BuildEnv(input any) map[string]any {
 	return map[string]any{"__root__": input, "result": input}
 }
 
-// PreprocessDots rewrites a user-authored expression for expr-lang:
-// leading-dot references become bare identifiers (`.name` → `name`),
-// a bare `.` becomes `__root__`, and `.` after an identifier, `)`, `]`,
-// `#`, or `@` is left alone as member access.
-//
-// Quoted strings (`"`, `'`, “ ` “) are copied verbatim; backslash
-// escapes inside them are honored, so a `.` inside `"a.b"` survives
-// untouched. This is the single implementation used by assert, loop,
-// match, @on_error, and projection — no other package should implement
-// its own dot rewriting.
 func PreprocessDots(src string) string {
 	var out strings.Builder
 	out.Grow(len(src))
@@ -895,7 +954,7 @@ func PreprocessDots(src string) string {
 				continue
 			}
 			if i+1 < n && isDotIdentStart(src[i+1]) {
-				i++ // drop the dot; the identifier itself follows
+				i++
 				continue
 			}
 			out.WriteString("__root__")
@@ -908,9 +967,6 @@ func PreprocessDots(src string) string {
 	return out.String()
 }
 
-// isDotMemberAccess reports whether prev, the byte immediately before a
-// `.`, indicates that the `.` is member access on the preceding token
-// (`foo.bar`, `arr[0].field`, `#.name`) rather than a root reference.
 func isDotMemberAccess(prev byte) bool {
 	switch {
 	case prev >= 'a' && prev <= 'z',
@@ -923,18 +979,10 @@ func isDotMemberAccess(prev byte) bool {
 	return false
 }
 
-// isDotIdentStart reports whether c may start an identifier. Used to
-// decide whether `.foo` is a root reference (yes) or a numeric literal
-// continuation `.5` (no).
 func isDotIdentStart(c byte) bool {
 	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
-// injectConfigIntoParams copies matching @config values into params,
-// coercing each value to the target field type. Existing params
-// (explicit :mod= values) win over injected config. target is either
-// an operator's ConfigType or a stream source's request payload type;
-// a nil target or a non-struct target is a no-op.
 func injectConfigIntoParams(params map[string]any, target any, cfg map[string]string) (map[string]any, error) {
 	if len(cfg) == 0 || target == nil {
 		return params, nil
@@ -1011,8 +1059,6 @@ func runAtomAdvisers(a *Atom, act action.AnyAction, bCtx *BuildContext, advisers
 			return nil, xerr.Validation("atom "+a.Name+" advisor: "+err.Error(), err)
 		}
 	}
-	// Avoid adding an InvokeAny wrapper when no adviser consumed a modifier;
-	// it would prefix action errors a second time.
 	if !slices.Equal(modifiersBefore, a.Modifiers) {
 		act = inspectBuiltChild(bCtx, builder.Build(), "advisor", action.IntrospectionChild{
 			Node: act, Relation: "wraps", Role: IntrospectionKindAction,

@@ -118,7 +118,7 @@ func (m *Expr) Build(ctx context.Context, bCtx *compiler.BuildContext) (action.A
 	}
 
 	program := action.New("match.evaluate", func(execCtx context.Context, in any) (any, error) {
-		env := WithKindEnvironment(compiler.BuildEnv(in))
+		env := WithSymbolEnvironment(execCtx, compiler.BuildEnv(in))
 
 		if subjectProg != nil {
 			subjVal, err := EvaluateProgram(subjectProg, env)

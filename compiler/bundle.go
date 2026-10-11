@@ -53,6 +53,7 @@ type Bundle struct {
 	ArgSchemas map[string][]ArgFieldSpec
 
 	AcceptedOptions []string
+	Symbols         []SymbolNamespace
 
 	SelfTest func() []SelfTestSection
 	Fixtures fs.FS
@@ -80,6 +81,21 @@ func ValidateBundle(b Bundle) error {
 			return fmt.Errorf("bundle %q: duplicate library %q", b.ID, name)
 		}
 		seen[name] = struct{}{}
+	}
+
+	seenNamespaces := make(map[string]struct{}, len(b.Symbols))
+	for i := range b.Symbols {
+		ns := b.Symbols[i]
+		if strings.TrimSpace(ns.Name) == "" {
+			return fmt.Errorf("bundle %q: symbol namespace %d has empty name", b.ID, i)
+		}
+		if len(ns.Symbols) == 0 {
+			return fmt.Errorf("bundle %q: symbol namespace %q has no symbols", b.ID, ns.Name)
+		}
+		if _, dup := seenNamespaces[ns.Name]; dup {
+			return fmt.Errorf("bundle %q: duplicate symbol namespace %q", b.ID, ns.Name)
+		}
+		seenNamespaces[ns.Name] = struct{}{}
 	}
 	return nil
 }

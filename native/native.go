@@ -58,6 +58,7 @@ import (
 	"github.com/nexssp/flow/extensions/scope"
 	"github.com/nexssp/flow/extensions/selftestkit"
 	"github.com/nexssp/flow/extensions/stream_ops"
+	"github.com/nexssp/flow/extensions/symbols"
 	"github.com/nexssp/flow/extensions/syntax"
 	"github.com/nexssp/flow/extensions/template"
 )
@@ -72,6 +73,7 @@ func Bundles() []core.Bundle {
 	return []core.Bundle{
 		syntax.Bundle(nil),
 		runtime.Bundle(nil),
+		symbols.Bundle(nil),
 		match.Bundle(nil),
 		modifiers_core.Bundle(nil),
 		modifiers_auth.Bundle(nil),
