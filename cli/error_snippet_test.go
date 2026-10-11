@@ -7,7 +7,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 func TestFormatCleanError_RendersSnippet(t *testing.T) {

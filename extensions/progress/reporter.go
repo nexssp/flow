@@ -76,8 +76,6 @@ func (r *Reporter) Shutdown() {
 	r.stopSpinnerLocked()
 }
 
-// ── step rendering ───────────────────────────────────────────────────
-
 func (r *Reporter) printStepLocked(message string) {
 	if !r.tty {
 		fmt.Fprintf(r.out, "✓ %s\n", message)
@@ -85,8 +83,6 @@ func (r *Reporter) printStepLocked(message string) {
 	}
 	fmt.Fprintf(r.out, "\x1b[32m✓\x1b[0m %s\n", message)
 }
-
-// ── wrap lifecycle ───────────────────────────────────────────────────
 
 func (r *Reporter) handleWrapLocked(p xctx.Progress) {
 	if p.Message == "" {

@@ -1,0 +1,43 @@
+@description "Order intake: validate, normalize, price, and classify a storefront order"
+@require ./bundle
+@config:retry_limit=2
+
+@schema Order struct {
+  OrderID string `json:"order_id" validate:"required"`
+  Email   string `json:"email" validate:"required,email"`
+}
+
+@macro require_positive_subtotal() {
+  assert(.subtotal > 0, "an order must have a positive subtotal")
+}
+
+@pipeline accept_order
+  Order.validate
+  -> order.normalize:retry=@config.retry_limit
+  -> @require_positive_subtotal()
+  -> {
+    order_id: .order_id,
+    customer_email: .customer_email,
+    item_count: len(.items),
+    subtotal: .subtotal,
+    currency: .currency,
+    source: "storefront",
+    status: "accepted"
+  }
+@end
+
+@assert: result.order_id == "SO-2048"
+@assert: result.customer_email == "ada@example.test"
+@assert: result.item_count == 2
+@assert: result.subtotal == 80
+@assert: result.source == "storefront"
+@assert: result.status == "accepted"
+{
+  order_id: "SO-2048",
+  email: "  ADA@EXAMPLE.TEST ",
+  items: [
+    { sku: "NOTEBOOK-01", unit_price: 25, quantity: 2 },
+    { sku: "USB-C-02", unit_price: 30, quantity: 1 }
+  ]
+}
+-> pipeline.accept_order

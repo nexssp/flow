@@ -7,7 +7,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
-	"github.com/nexssp/flow/contracts"
+	"github.com/nexssp/flow/compiler/contracts"
 )
 
 var Call = action.New("runtime.call", func(ctx context.Context, in any) (any, error) {

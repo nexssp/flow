@@ -11,14 +11,18 @@ package on
 
 import (
 	"context"
+	"embed"
 	"strings"
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const ID = "on"
+
+//go:embed nflows
+var fixturesFS embed.FS
 
 // EventTrigger is the structured result of an @on directive. Protocol
 // and Target are split at the first ":" so "nats:orders.x" yields
@@ -57,5 +61,6 @@ func Bundle(_ map[string]string) core.Bundle {
 		ID:         ID,
 		Libraries:  []action.Library{{Name: ID}},
 		Directives: []core.Directive{directive},
+		Fixtures:   fixturesFS,
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // Rule is a single conditional mapping in a @on_error block.

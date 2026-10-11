@@ -11,14 +11,18 @@ package description
 
 import (
 	"context"
+	"embed"
 	"strings"
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const ID = "description"
+
+//go:embed nflows
+var fixturesFS embed.FS
 
 var directive = core.Directive{
 	Name:    "description",
@@ -42,5 +46,6 @@ func Bundle(_ map[string]string) core.Bundle {
 		ID:         ID,
 		Libraries:  []action.Library{{Name: ID}},
 		Directives: []core.Directive{directive},
+		Fixtures:   fixturesFS,
 	}
 }

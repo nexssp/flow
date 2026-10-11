@@ -1,0 +1,3 @@
+@description "Attach bounded retry policy to an action"
+@assert: result == "served"
+runtime.const:retry=2 @{ value: "served" }

@@ -1,0 +1,5 @@
+@description "Single-line @config settings"
+@config:strict=true
+@config:silent=coverage
+@assert: result == "c"
+runtime.const @{ value: "c" }

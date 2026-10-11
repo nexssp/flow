@@ -46,6 +46,10 @@ The introductory flows are checked by CI: each one must pass `nflow lint` and ru
 
 Run the complete set locally with `task examples` or run an individual flow with `nflow run <file.nflow>`.
 
+## Integrated specifications
+
+The root [`spec/`](spec/README.md) suite contains deterministic, real-world workflows that combine extensions with scenario-local custom bundles. It covers order intake, support triage and safe recovery, and payment reconciliation. Run it with `task specs`; `task test` and `task ci` also run every extension's categorized NFlow conformance suite.
+
 ## Verify without running a flow 🌀
 
 Use `nflow lint <file.nflow>` for a static check, or pass a directory or Go-style recursive target such as `nflow lint ./examples/...` to discover sources automatically. It preprocesses each file, parses its pipeline, and checks referenced atoms and modifiers against that file's active registry; it does **not** execute flows. Recursive discovery sorts paths, skips `.git`, `.hg`, `.svn`, `vendor`, and `node_modules`, and does not follow symlinks. Lint is not a substitute for exercising runtime behavior, and it does not prove every expression or input will succeed. The broader `nflow lint ./...` also discovers internal developer sources and extension fixtures, some of which currently produce context-specific diagnostics; CI intentionally scopes its lint gate to `./examples/...`.
@@ -61,9 +65,10 @@ The similarly named build commands do different jobs:
 - [Language syntax and directives](docs/language.md)
 - [CLI and runtime](docs/cli.md)
 - [Extension bundles](extensions/README.md)
+- [Integrated specifications](spec/README.md)
 - [Practical secure-pipeline examples](examples/01_secure_pipeline/README.md)
 - [Editor setup for VS Code and Zed](docs/editors.md)
 
 ## Microkernel and extensions
 
-Nexss Flow uses a microkernel-style design: `core.Bundle` is the contract through which bundles contribute action libraries and compiler extensions. The CLI assembles its built-in bundles, while `@require` can load a bundle for a flow; a package's presence under `extensions/` alone does not enable it. See the [extension guide](extensions/README.md) for the current bundle model.
+Nexss Flow uses a microkernel-style design: `compiler.Bundle` is the contract through which bundles contribute action libraries and compiler extensions. The CLI assembles its built-in bundles, while `@require` can load a bundle for a flow; a package's presence under `extensions/` alone does not enable it. See the [extension guide](extensions/README.md) for the current bundle model.

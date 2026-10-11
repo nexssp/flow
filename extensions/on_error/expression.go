@@ -8,7 +8,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/match"
 )
 
@@ -35,6 +35,23 @@ func (g *ErrorGuardExpr) Children() []core.Expr {
 		children = append(children, g.Cases[i].Body)
 	}
 	return children
+}
+
+func (g *ErrorGuardExpr) DescribeActionGraph() core.ActionGraphDescription {
+	labels := make([]string, len(g.Cases)+1)
+	labels[0] = "protected"
+	for i, current := range g.Cases {
+		labels[i+1] = "on " + string(current.Kind)
+		if current.IsElse {
+			labels[i+1] = "else"
+		}
+	}
+	return core.ActionGraphDescription{
+		Kind:        "error.guard",
+		Name:        "on_error.guard",
+		Form:        core.ActionGraphCatch,
+		ChildLabels: labels,
+	}
 }
 
 func (g *ErrorGuardExpr) Analyze(resolver core.CapabilityResolver) error {
@@ -66,6 +83,13 @@ func (g *ErrorGuardExpr) Build(ctx context.Context, buildCtx *core.BuildContext)
 
 	conditionCases := make([]match.ConditionCase, len(g.Cases))
 	recoveryActions := make([]action.AnyAction, len(g.Cases))
+	var children []action.IntrospectionChild
+	if buildCtx.Introspect {
+		children = make([]action.IntrospectionChild, 0, len(g.Cases)+1)
+		children = append(children, action.IntrospectionChild{
+			Node: protected, Relation: "protects", Role: "protected",
+		})
+	}
 	seenKinds := make(map[xerr.Kind]bool, len(g.Cases))
 	seenElse := false
 	for i, current := range g.Cases {
@@ -94,9 +118,18 @@ func (g *ErrorGuardExpr) Build(ctx context.Context, buildCtx *core.BuildContext)
 		if err != nil {
 			return nil, err
 		}
+		if buildCtx.Introspect {
+			label := string(current.Kind)
+			if current.IsElse {
+				label = "else"
+			}
+			children = append(children, action.IntrospectionChild{
+				Node: recoveryActions[i], Relation: "recovers_to", Role: "handler", Label: label,
+			})
+		}
 	}
 
-	return action.CatchAny("on_error.guard", protected, func(execCtx context.Context, request any, primaryErr error) (any, error) {
+	program := action.CatchAny("on_error.guard", protected, func(execCtx context.Context, request any, primaryErr error) (any, error) {
 		if terminalErr := terminalRecoveryError(execCtx, primaryErr); terminalErr != nil {
 			return nil, terminalErr
 		}
@@ -113,7 +146,13 @@ func (g *ErrorGuardExpr) Build(ctx context.Context, buildCtx *core.BuildContext)
 			return nil, fmt.Errorf("on_error recovery handler failed: %w", both)
 		}
 		return result, nil
-	}).Tag("error", "recovery").Build(), nil
+	}).Tag("error", "recovery").Build()
+	composition := action.IntrospectionComposition{Kind: "error_recovery", Children: children}
+	if buildCtx.Introspect {
+		composition.Opaque = true
+		composition.Notes = []string{"handler selection predicate is closure-captured and omitted"}
+	}
+	return core.TrackActionComposition(buildCtx, program, composition), nil
 }
 
 type errorGuardPrimary struct{}
@@ -138,42 +177,10 @@ func (errorGuardPrimary) ParsePostfix(p *core.Parser, protected core.Expr) (core
 	seenKinds := make(map[xerr.Kind]bool)
 	seenElse := false
 	for p.Current().Type != core.TokRBrace && p.Current().Type != core.TokEOF {
-		current := p.Current()
-		if current.Type != core.TokIdent {
-			return nil, p.Fail(current.Line, "expected xerr.Kind symbol or else in on_error case")
-		}
-
-		parsedCase := ErrorGuardCase{}
-		if current.Lit == "else" {
-			if seenElse {
-				return nil, p.Fail(current.Line, "on_error else case may appear only once")
-			}
-			seenElse = true
-			parsedCase.IsElse = true
-			p.Advance()
-		} else {
-			kind, ok := match.ResolveKindSymbol(current.Lit)
-			if !ok {
-				return nil, p.Fail(current.Line, "unknown Kernel kind symbol %q", current.Lit)
-			}
-			if seenKinds[kind] {
-				return nil, p.Fail(current.Line, "duplicate Kernel kind case %q", current.Lit)
-			}
-			seenKinds[kind] = true
-			parsedCase.Kind = kind
-			p.Advance()
-		}
-
-		if p.Current().Type != core.TokArrow {
-			return nil, p.Fail(p.Current().Line, "expected '->' after on_error case")
-		}
-		p.Advance()
-
-		body, err := p.ParseExpr(0)
+		parsedCase, err := parseErrorGuardCase(p, seenKinds, &seenElse)
 		if err != nil {
 			return nil, err
 		}
-		parsedCase.Body = body
 		cases = append(cases, parsedCase)
 
 		if p.Current().Type == core.TokComma {
@@ -199,4 +206,45 @@ func (errorGuardPrimary) ParsePostfix(p *core.Parser, protected core.Expr) (core
 	}
 	p.Advance()
 	return &ErrorGuardExpr{Protected: protected, Cases: cases}, nil
+}
+
+func parseErrorGuardCase(
+	p *core.Parser,
+	seenKinds map[xerr.Kind]bool,
+	seenElse *bool,
+) (ErrorGuardCase, error) {
+	current := p.Current()
+	if current.Type != core.TokIdent {
+		return ErrorGuardCase{}, p.Fail(current.Line, "expected xerr.Kind symbol or else in on_error case")
+	}
+
+	parsedCase := ErrorGuardCase{}
+	if current.Lit == "else" {
+		if *seenElse {
+			return ErrorGuardCase{}, p.Fail(current.Line, "on_error else case may appear only once")
+		}
+		*seenElse = true
+		parsedCase.IsElse = true
+	} else {
+		kind, ok := match.ResolveKindSymbol(current.Lit)
+		if !ok {
+			return ErrorGuardCase{}, p.Fail(current.Line, "unknown Kernel kind symbol %q", current.Lit)
+		}
+		if seenKinds[kind] {
+			return ErrorGuardCase{}, p.Fail(current.Line, "duplicate Kernel kind case %q", current.Lit)
+		}
+		seenKinds[kind] = true
+		parsedCase.Kind = kind
+	}
+	p.Advance()
+	if p.Current().Type != core.TokArrow {
+		return ErrorGuardCase{}, p.Fail(p.Current().Line, "expected '->' after on_error case")
+	}
+	p.Advance()
+	body, err := p.ParseExpr(0)
+	if err != nil {
+		return ErrorGuardCase{}, err
+	}
+	parsedCase.Body = body
+	return parsedCase, nil
 }

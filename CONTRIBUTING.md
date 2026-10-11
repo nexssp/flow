@@ -11,6 +11,8 @@ public API unnecessarily.
 Every workflow in this repo goes through [Task](https://taskfile.dev). Do not
 invoke `go build`, `go test`, `golangci-lint`, or `govulncheck` directly — the
 `task` targets keep flags, ordering, and cache behavior identical to CI.
+This repository uses **one root Go module**; `compiler`, `builder`, `extensions`, `runner`,
+`native`, `cli`, and `integration` are package boundaries within the same module.
 
 Install Task once:
 
@@ -32,33 +34,35 @@ task setup     # fetch repo templates + install tool deps (gotestsum, govulnchec
 Run the full gate:
 
 ```bash
-task tidy       # go mod tidy — keep go.mod / go.sum clean
+task tidy       # go mod tidy — keep root go.mod / go.sum clean
 task fmt        # gofumpt + gci (auto-fix)
 task pre-push   # [fmt:check, lint, test:race]
-task ci         # [fmt:check, lint, test:race:nocache] — exactly what CI runs
+task ci:pr      # [fmt:check, lint:new, test:pr] — fast push/PR gate
+task ci         # [fmt:check, lint, test:race:nocache] — full uncached-race gate
 ```
 
 Optional extra checks when relevant:
 
 ```bash
 task vuln       # govulncheck
-task bench      # benchmark smoke test
 task examples   # run curated .nflow files as runtime smoke checks
-task lint:nflow # lint ./examples and ./spec
-task self       # nflow self test
+task lint:nflow # lint ./examples
+task self       # compiler and extension-contributed NFlow self-test; also included in task test and task ci
 task test:smoke # CLI smoke test
+task test:harness # CLI build and @require harness integration tests
 ```
 
 Run `task examples`, `task lint:nflow`, or `task test:smoke` whenever you touch
-the compiler, the DSL, `.nflow` files, or CLI wiring. A green `task test` is not
-enough on its own in those cases.
+the compiler, the DSL, `.nflow` files, or CLI wiring. Run `task test:harness`
+when changing CLI harness builds, generated-binary execution, or `@require`
+resolution. A green `task test` is not enough on its own in those cases.
 
 ## Requirements
 
 - A change to a **public interface** requires a compatibility explanation and tests.
 - A performance claim requires a benchmark on a documented Go version and hardware.
 - New dependencies require a clear reason, license review, and evidence that the
-  dependency is not better placed in an adapter module.
+dependency is not better placed in an adapter package.
 - Keep business rules, transports, hosted services, and provider-specific
   behavior outside this repository.
 - New DSL features must use the existing extension/bundle mechanism — scaffold

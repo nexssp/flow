@@ -9,8 +9,11 @@ bundle contract; the feature lives entirely here.
     extensions/loop/
     ├── library.go          # Package comment, ID, init(), Bundle()
     ├── keyword.go          # Feature logic (parser, action, operator, ...)
-    ├── nflows/             # Optional DSL fixtures, auto-discovered
-    │   └── basic.nflow
+    ├── nflows/             # Required executable conformance suite
+    │   ├── basic.nflow
+    │   ├── recovery.nflow
+    │   ├── load.nflow
+    │   └── load--settings.yml
     ├── keyword_test.go     # Tests for this package only
     └── library_test.go     # Wiring: Bundle() returns what it claims
 
@@ -31,7 +34,7 @@ what they provide: `keyword.go`, `directive.go`, `modifiers.go`,
             ID:        ID,
             Libraries: []action.Library{{Name: ID}},
             Primaries: []core.PrimaryExtension{loopKeyword{}},
-            Fixtures:  fixturesFS,  // optional
+            Fixtures:  fixturesFS,  // required for every extension
         }
     }
 
@@ -41,21 +44,42 @@ with the same ID panic at `init()`.
 
 ## Fixtures vs SelfTest
 
-Prefer `nflows/*.nflow` fixtures over inline `SelfTest()`. A fixture is
-a real `.nflow` file the runner executes like any pipeline:
+Every extension must embed at least one runnable `.nflow` fixture directly
+in `nflows/`. Keep behavior-specific names in the filenames rather than
+creating `happy/`, `errors/`, or `edge/` subdirectories. The complete suite
+runs through `nflow self test`; no extension should be left without a passing
+fixture.
+
+A fixture is a real `.nflow` file the runner executes like any pipeline:
 
     @description "Loop loop(...) until(...)"
     @assert: result.n == 3
     { n: 0 } -> loop( { n: .n + 1 } ) until( .n >= 3 )
 
-The `@description` names the feature in `nflow self test`. The file
-grows with the DSL — no Go code to change when the feature evolves.
+The `@description` names the feature in `nflow self test`. Companion files
+also live directly in `nflows/`: name them `<fixture-stem>--<relative-path>`,
+using `--` in place of each directory separator. For example, `read.nflow`,
+`read--input.json`, and `read--schemas--settings.yml` expose `input.json` and
+`schemas/settings.yml` to that fixture. A child flow such as
+`read--child.nflow` is treated as a companion, not a separate self-test. This
+keeps file-reading scenarios local and deterministic without nested folders.
+The fixture grows with the DSL — no inline Go DSL string to update when the
+feature evolves.
 
-Use inline `SelfTest()` only when the feature cannot be expressed in
-DSL: files from outside the repo (`Files:` map), a running process or
-network (`external.exec`, `http.request`), or runtime-only middleware where the
-DSL grammar accepts a modifier but no assertion can observe its effect
-(`:cache=`, `:retry=`).
+Keep behavior in the `.nflow` fixture whenever it can be expressed and
+asserted there. Use inline `SelfTest()` only when a deterministic NFlow
+cannot exercise the behavior, such as an unavoidable live external
+resource; do not keep duplicate inline DSL cases alongside fixtures.
+
+## Integrated specifications
+
+Real-world scenarios that combine several extensions belong in the root
+[`spec/`](../spec/README.md) tree, not in an extension's conformance
+suite. A scenario may own a custom `bundle/library.go` and use
+`@require ./bundle`; keep it deterministic, assert meaningful outcomes,
+and use it to demonstrate composition rather than repeat a single
+extension fixture. `task specs`, `task test`, and `task ci` execute these
+integrated scenarios.
 
 ## Tests
 

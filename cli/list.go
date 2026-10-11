@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 func runList(ctx context.Context, inv *invocation, args []string) int {

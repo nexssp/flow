@@ -3,7 +3,7 @@ package match
 import (
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 type matchKeyword struct{}

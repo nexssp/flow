@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/nexssp/flow/builder"
 	"github.com/nexssp/flow/cli/selftest"
 )
 
@@ -33,9 +34,11 @@ func setupLogger() {
 }
 
 var commands = map[string]func(context.Context, *invocation, []string) int{
-	"init":       func(_ context.Context, _ *invocation, args []string) int { return runInit(args) },
-	"run":        runFlowInInvocation,
-	"build":      runBuildInInvocation,
+	"init": func(_ context.Context, _ *invocation, args []string) int { return runInit(args) },
+	"run":  runFlowInInvocation,
+	"build": func(ctx context.Context, inv *invocation, args []string) int {
+		return builder.RunBuild(ctx, args, inv.sourceRequiresFromFile)
+	},
 	"serve":      runServe,
 	"lint":       runLintInInvocation,
 	"explain":    runExplain,

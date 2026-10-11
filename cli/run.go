@@ -8,12 +8,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	"github.com/nexssp/flow/builder"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 	"github.com/nexssp/flow/runner"
 )
 
-const harnessEnv = "NFLOW_HARNESS"
+const harnessEnv = builder.HarnessEnv
 
 func RunWithBundles(args []string, bundles []core.Bundle) int {
 	return RunWithBundlesForRequirements(args, bundles, nil)
@@ -83,11 +84,11 @@ func withHarnessRequirements(ctx context.Context, inv *invocation, subcommand, f
 		return inProcess(ctx, inv, args)
 	}
 
-	bin, err := EnsureHarnessContext(ctx, reqs, flowPath)
+	bin, err := builder.EnsureHarnessContext(ctx, reqs, flowPath)
 	if err != nil {
 		return fatalf("%v", err)
 	}
-	return ExecHarnessContext(ctx, bin, append([]string{subcommand}, args...))
+	return builder.ExecHarnessContext(ctx, bin, append([]string{subcommand}, args...))
 }
 
 func requirementsNeedExternalHarness(inv *invocation, reqs []require.Requirement) bool {
@@ -106,16 +107,6 @@ func requirementsNeedExternalHarness(inv *invocation, reqs []require.Requirement
 		return true
 	}
 	return false
-}
-
-func runFlow(args []string) int {
-	inv, err := newNativeInvocation(nil, nil)
-	if err != nil {
-		return fatalf("flow host: %v", err)
-	}
-	return runInvocation(context.Background(), inv, func(ctx context.Context) int {
-		return runFlowInInvocation(ctx, inv, args)
-	})
 }
 
 func runFlowInInvocation(ctx context.Context, inv *invocation, args []string) int {

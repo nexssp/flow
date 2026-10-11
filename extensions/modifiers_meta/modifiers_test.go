@@ -8,7 +8,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // TestModifiers_Translation verifies each modifier parses its DSL value
@@ -144,7 +144,7 @@ func TestModifiers_Translation(t *testing.T) {
 			modifier: "strict",
 			raw:      "",
 			verify: func(t *testing.T, meta *action.Meta) {
-				// strict/lenient are read by core/strict.go via
+				// strict/lenient are read by compiler/strict.go via
 				// hasModifier; the modifier itself must not mutate Meta.
 				ktest.RequireEqual(t, meta.Name, "probe")
 			},

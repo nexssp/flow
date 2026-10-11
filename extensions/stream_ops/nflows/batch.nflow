@@ -1,0 +1,4 @@
+@description "Batch a stream into bounded groups"
+@assert: len(result) == 2
+@assert: len(result[0]) == 2
+cov.items -> stream.batch @{ size: 2 } -> collect

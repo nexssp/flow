@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // Directive parses `@pool NAME [members] { options }` and appends a

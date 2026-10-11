@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 type Requirement struct {

@@ -21,12 +21,12 @@ func TickerSource() action.AnyStreamAction {
 		if req.Hz <= 0 {
 			return nil, xerr.BadRequest("hz must be positive")
 		}
-		maxDur := time.Duration(req.MaxCatchupMs) * time.Millisecond
-		if maxDur <= 0 {
-			maxDur = 100 * time.Millisecond
+		maxCatchupDuration := time.Duration(req.MaxCatchupMs) * time.Millisecond
+		if maxCatchupDuration <= 0 {
+			maxCatchupDuration = 100 * time.Millisecond
 		}
 		// Yields delta-time (dt) to feed the game loop
-		return stream.Ticks(ctx, req.Hz, maxDur), nil
+		return stream.Ticks(ctx, req.Hz, maxCatchupDuration), nil
 	})
 
 	// StreamAction has no fluent builder; modify Describe() directly.

@@ -6,7 +6,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // schemaRefAdvisor rejects atoms whose :schema= modifier names a schema

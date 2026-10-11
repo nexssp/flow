@@ -1,0 +1,3 @@
+@description "Attach human-readable workflow metadata"
+@assert: result == "description metadata is non-invasive"
+runtime.const @{ value: "description metadata is non-invasive" }

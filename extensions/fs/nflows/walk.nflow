@@ -1,0 +1,3 @@
+@description "Discover files recursively with fs.walk"
+@assert: len(result) == 2
+fs.walk -> collect

@@ -109,7 +109,7 @@ The error reaches the transport as `xerr.KindValidation` (HTTP 400).
 ## Dependencies
 
 `github.com/nexssp/validation` — the hook and `Struct` come from this
-package. `flow/core/strict.go` only orchestrates (flag precedence,
+package. `flow/compiler/strict.go` only orchestrates (flag precedence,
 installation order in `buildAtom`).
 
 ## Related

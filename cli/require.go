@@ -12,18 +12,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 )
 
-// runRequire generuje requires_gen.go na podstawie @require w .nflow.
+// runRequire generates requires_gen.go from @require declarations in a .nflow file.
 //
 //	nexssflow require <file.nflow> [-o out.go] [-pkg main]
 //
-// Domyślna ścieżka output: module root (katalog z go.mod), plik
-// requires_gen.go. Walidujemy package name, bo generowany plik musi
-// należeć do tego samego pakietu co main, aby init() odpaliło się
-// przed cli.Run.
+// By default, it writes to the module root. Use the executable package
+// (main by default) so the generated init runs before cli.Run.
 func runRequire(ctx context.Context, inv *invocation, args []string) int {
 	fs := flag.NewFlagSet("require", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -96,10 +94,7 @@ func runRequire(ctx context.Context, inv *invocation, args []string) int {
 	return 0
 }
 
-// resolveOutputPath zwraca docelową ścieżkę pliku. Kolejność:
-//  1. explicit -o
-//  2. <module_root>/requires_gen.go (znajdź go.mod w górę od .nflow)
-//  3. ./requires_gen.go (cwd fallback)
+// resolveOutputPath checks, in order: explicit -o, the module root, then the current directory.
 func resolveOutputPath(explicit, nflowPath string) (string, error) {
 	if explicit != "" {
 		return explicit, nil
@@ -131,7 +126,7 @@ func findModuleRoot(dir string) string {
 	}
 }
 
-// runRequirePin uzupełnia brakujące wersje w pliku .nflow.
+// runRequirePin pins missing versions for @require directives in a .nflow file.
 func runRequirePin(ctx context.Context, args []string) int {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "usage: nexssflow require pin <file.nflow>")

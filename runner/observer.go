@@ -10,7 +10,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/redact"
+	"github.com/nexssp/flow/compiler/redact"
 )
 
 // Observer tracks every action that passes through the runtime.

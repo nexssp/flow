@@ -1,0 +1,4 @@
+@description "Edge case: parse an HTTP event listener target"
+@on event "http::8080"
+@assert: result == "listener-ready"
+runtime.const @{ value: "listener-ready" }

@@ -219,8 +219,6 @@ func pctDelta(baseline, current uint64) float64 {
 	return (float64(current) - float64(baseline)) / float64(baseline) * 100
 }
 
-// ── persistence ──────────────────────────────────────────────────────
-
 const baselinePath = ".nflow_selftest_baseline.json"
 
 // baselineFile is the on-disk shape. It carries the correctness
@@ -310,8 +308,6 @@ func currentHostSignature() string {
 	return h.GOOS + "/" + h.GOARCH
 }
 
-// ── rankings ────────────────────────────────────────────────────────
-
 func topSlowest(results []Result, n int) []FeatureStat {
 	stats := nonSkippedStats(results)
 	slices.SortStableFunc(stats, func(a, b FeatureStat) int {
@@ -353,8 +349,6 @@ func nonSkippedStats(results []Result) []FeatureStat {
 	}
 	return out
 }
-
-// ── fingerprint ─────────────────────────────────────────────────────
 
 // fingerprintOf hashes every feature's name and status. Sorting makes
 // the hash independent of execution order, so a reordered suite with

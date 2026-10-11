@@ -1,0 +1,33 @@
+# Integrated specifications
+
+`spec/` contains deterministic, end-to-end scenarios that combine multiple Flow features and domain actions. These are acceptance-style examples: they show how a real workflow fits together and assert the result, rather than isolating one extension's syntax.
+
+## Scenarios
+
+1. **[Order intake](01_order_intake/main.nflow)** validates an order, normalizes the customer's email, calculates a safe subtotal, applies a bounded retry policy, enforces a macro invariant, and returns an explicit accepted-order record.
+2. **[Support triage](02_support_triage/happy.nflow)** validates and classifies a duplicate-charge ticket, routes it to the billing escalation queue, and creates a reply draft without sending a customer message. The [unavailable-upstream case](02_support_triage/fallback.nflow) preserves the ticket for manual review and explicitly keeps the reply unsent.
+3. **[Payment reconciliation](03_reconciliation/main.nflow)** matches payment and bank references, reports mismatches and bank-only rows as audit exceptions, calculates totals in integer cents, and asserts that the batch variance is zero.
+
+## Structure and conventions
+
+Each scenario is self-contained. When a workflow needs domain-specific Go actions, keep their implementation in that scenario's `bundle/library.go` and require it from the flow:
+
+```nflow
+@require ./bundle
+```
+
+The local package uses the repository's single root Go module; do not add a nested `go.mod`. Keep the NFlow entrypoint beside its scenario bundle, use additional entrypoints for meaningful paths such as happy, failure, and recovery, and make assertions describe observable outcomes. Use fixed inputs and local deterministic behavior so the checks run offline and do not send messages, change accounts, or mutate external systems.
+
+Use **`extensions/<name>/nflows/{happy,errors,edge}/`** for a single extension's conformance examples. Use **root `spec/`** when the value is the composition: multiple extensions, local domain actions, and a realistic workflow contract. Keep tutorial-first, smaller user walkthroughs in `examples/`.
+
+Run all integrated scenarios with:
+
+```sh
+task specs
+```
+
+`task test` and `task ci` run `task specs` together with every extension's `nflow self test` suite and the Go test gates. The extension self-test gate is also useful on its own:
+
+```sh
+task self
+```

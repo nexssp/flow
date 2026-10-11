@@ -10,8 +10,8 @@ import (
 	"github.com/nexssp/flow/native"
 )
 
-func TestNative_EveryBundleFixtureUsesOnlyNativeDirectives(t *testing.T) {
-	bundles := native.Bundles()
+func TestSelftest_EveryBundleFixtureUsesOnlyRegisteredDirectives(t *testing.T) {
+	bundles := native.SelftestBundles()
 
 	// Build the union of all directives registered by the native set.
 	known := map[string]bool{}
@@ -22,8 +22,8 @@ func TestNative_EveryBundleFixtureUsesOnlyNativeDirectives(t *testing.T) {
 	}
 
 	// For every embedded fixture, scan lines and assert that every
-	// `@name` at column 0 names a directive that is registered
-	// natively, or a macro invocation. Catches the class of bug where
+	// `@name` at column 0 names a directive that is registered in the
+	// self-test environment, or a macro invocation. Catches the class of bug where
 	// a bundle ships a fixture that requires a directive nobody
 	// registered — the same failure mode that put @hook:ai.error_analyzer
 	// in a fixture before the hook bundle was in native.Bundles().
@@ -61,6 +61,29 @@ func TestNative_EveryBundleFixtureUsesOnlyNativeDirectives(t *testing.T) {
 					b.ID, p, lineNo, name)
 			}
 			return nil
+		})
+	}
+}
+
+func TestSelftest_EveryExtensionHasNFlowFixtures(t *testing.T) {
+	for _, b := range native.SelftestBundles() {
+		t.Run(b.ID, func(t *testing.T) {
+			if b.Fixtures == nil {
+				t.Fatalf("bundle %q has no embedded Fixtures filesystem", b.ID)
+			}
+
+			var count int
+			err := fs.WalkDir(b.Fixtures, ".", func(path string, entry fs.DirEntry, walkErr error) error {
+				if walkErr != nil {
+					return walkErr
+				}
+				if !entry.IsDir() && strings.HasSuffix(path, ".nflow") {
+					count++
+				}
+				return nil
+			})
+			ktest.RequireNoError(t, err)
+			ktest.RequireCondition(t, count > 0, "bundle %q has no embedded .nflow fixture", b.ID)
 		})
 	}
 }

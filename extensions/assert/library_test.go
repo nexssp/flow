@@ -25,7 +25,7 @@ func TestBundle_WiresDirectiveKeywordFixtures(t *testing.T) {
 	ktest.RequireEqual(t, kw.Keyword(), "assert")
 
 	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
-	ktest.RequireCondition(t, b.SelfTest != nil, "SelfTest is nil")
+	ktest.RequireCondition(t, b.SelfTest == nil, "duplicate inline SelfTest remains")
 }
 
 func TestFixtures_Discoverable(t *testing.T) {

@@ -1,0 +1,3 @@
+@description "Allow a caller with a feature flag using :feature="
+@assert: result == "ok"
+runtime.const:feature=test.flag @{ value: "ok" }

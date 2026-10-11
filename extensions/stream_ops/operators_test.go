@@ -1,18 +1,19 @@
 package stream_ops_test
 
 import (
+	"context"
 	"iter"
 	"testing"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/stream_ops"
 )
 
 func streamSource(items ...any) action.AnyStreamAction {
-	return action.NewStream("test.source", func(_ any, _ struct{}) (iter.Seq2[any, error], error) {
+	return action.NewStream("test.source", func(_ context.Context, _ struct{}) (iter.Seq2[any, error], error) {
 		return func(yield func(any, error) bool) {
 			for _, item := range items {
 				if !yield(item, nil) {
@@ -48,7 +49,12 @@ func TestStreamOps_BatchAndWindow(t *testing.T) {
 	var batches [][]any
 	batched(func(item any, itemErr error) bool {
 		ktest.RequireNoError(t, itemErr)
-		batches = append(batches, item.([]any))
+		batch, ok := item.([]any)
+		if !ok {
+			t.Errorf("stream.batch emitted %T, want []any", item)
+			return false
+		}
+		batches = append(batches, batch)
 		return true
 	})
 

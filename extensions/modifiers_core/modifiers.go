@@ -5,7 +5,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // Modifiers returns the Kernel-owned policy modifiers. Every entry is

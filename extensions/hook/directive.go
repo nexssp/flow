@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // Directive parses `@hook:name1,name2` and appends every name to

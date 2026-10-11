@@ -13,12 +13,17 @@
 package retry
 
 import (
+	"embed"
+
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const ID = "retry"
+
+//go:embed nflows
+var fixturesFS embed.FS
 
 func init() {
 	core.Register(ID, Bundle)
@@ -40,6 +45,7 @@ func BundleWithConfig(cfg Config) core.Bundle {
 	return core.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID}},
+		Fixtures:  fixturesFS,
 		AtomAdvise: func(atom *core.Atom, builder *action.Builder[any, any]) error {
 			return advise(cfg, atom, builder)
 		},

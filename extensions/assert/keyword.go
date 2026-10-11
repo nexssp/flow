@@ -3,7 +3,7 @@ package assert
 import (
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // assertKeyword parses `assert(cond)` or `assert(cond, "msg")` and

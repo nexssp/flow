@@ -3,7 +3,7 @@
 //
 // The package is a native bundle — always mounted by native.Bundles()
 // and never requires @require. It lives under extensions/ rather than
-// core/ so core remains a pure mechanism: the parser knows how to call
+// compiler/ so the compiler remains a pure mechanism: the parser knows how to call
 // an operator, not what a pipe means.
 package syntax
 
@@ -13,7 +13,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const ID = "syntax"
@@ -31,38 +31,7 @@ func Bundle(_ map[string]string) core.Bundle {
 		Libraries: []action.Library{{Name: ID}},
 		Operators: []core.Operator{pipe, pipeAlias, parallel, fallback},
 		Primaries: []core.PrimaryExtension{namedParallelKeyword{}},
-		SelfTest:  selftest,
 		Fixtures:  fixturesFS,
-	}
-}
-
-func selftest() []core.SelfTestSection {
-	return []core.SelfTestSection{
-		{
-			Name: "Operators",
-			Features: []core.SelfTestFeature{
-				{
-					Name: "Sequential pipe ->",
-					DSL: `@assert: result == "piped"
-runtime.const @{ value: "piped" } -> runtime.noop`,
-				},
-				{
-					Name: "Pipe syntax sugar |",
-					DSL: `@assert: result == "same pipeline result"
-runtime.const @{ value: "same pipeline result" } | runtime.noop`,
-				},
-				{
-					Name: "Parallel &",
-					DSL: `@assert: result != nil
-( runtime.const @{ value: "left" } & runtime.const @{ value: "right" } )`,
-				},
-				{
-					Name: "Fallback ||",
-					DSL: `@assert: result == "recovered"
-runtime.fail @{ message: "boom", kind: "Unavailable" } || runtime.const @{ value: "recovered" }`,
-				},
-			},
-		},
 	}
 }
 
@@ -96,7 +65,7 @@ func pipeHandler(_ context.Context, req core.OperatorReq) (core.OperatorRes, err
 
 var parallel = core.Operator{
 	Meta: core.OperatorMeta{
-		Name:          "parallel",
+		Name:          parallelKeyword,
 		Token:         core.TokAmpersand,
 		Precedence:    5,
 		Associativity: core.Left,

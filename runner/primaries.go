@@ -1,7 +1,7 @@
 package runner
 
 import (
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // PrimariesFor returns the parser primary table the compiler installs

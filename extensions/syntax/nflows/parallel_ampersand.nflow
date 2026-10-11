@@ -1,0 +1,3 @@
+@description "Parallel ampersand joins two branches"
+@assert: result != nil
+( runtime.const @{ value: "left" } & runtime.const @{ value: "right" } )

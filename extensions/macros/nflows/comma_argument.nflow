@@ -1,0 +1,6 @@
+@description "Macro: comma inside a quoted argument"
+@macro echo(v) {
+  runtime.const @{ value: $v }
+}
+@assert: result == "a,b"
+@echo("a,b")

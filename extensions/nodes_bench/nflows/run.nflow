@@ -1,0 +1,4 @@
+@description "Benchmark a registered action once"
+@assert: result.action == "runtime.noop"
+@assert: result.iterations == 1
+bench.run @{ action: noop, iterations: 1, payload: { value: "b" } }

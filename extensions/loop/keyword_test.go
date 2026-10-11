@@ -5,7 +5,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // newTestParser wires a parser with only this extension's primary table,

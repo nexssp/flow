@@ -8,7 +8,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 type executionResolver struct {
@@ -212,7 +212,6 @@ func (r *executionResolver) Operators() []action.NamedOperator {
 	return r.operatorsSnapshot
 }
 
-// buildSnapshot is a DRY generic helper that deduplicates base+mounted entities.
 func buildSnapshot[T any](baseNames []string, mounted map[string]T, getLocked func(string) (T, bool)) []T {
 	names := append([]string(nil), baseNames...)
 	for name := range mounted {

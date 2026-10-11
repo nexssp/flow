@@ -8,7 +8,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
-	"github.com/nexssp/flow/contracts"
+	"github.com/nexssp/flow/compiler/contracts"
 )
 
 var DispatchByPrefix = action.New("runtime.dispatch_by_prefix", func(ctx context.Context, in any) (any, error) {

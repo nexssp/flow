@@ -12,7 +12,8 @@ func TestBundle_WiresModifiers(t *testing.T) {
 	ktest.RequireEqual(t, b.ID, ID)
 	ktest.RequireEqual(t, len(b.Libraries), 1)
 	ktest.RequireEqual(t, b.Libraries[0].Name, ID)
-	ktest.RequireCondition(t, b.SelfTest != nil, "SelfTest is nil")
+	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
+	ktest.RequireCondition(t, b.SelfTest == nil, "duplicate inline SelfTest remains")
 
 	want := []string{"timeout", "retry", "concurrency", "cache", "coalesce", "dedup", "idempotent", "rate_limit"}
 	got := map[string]bool{}

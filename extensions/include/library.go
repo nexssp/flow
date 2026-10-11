@@ -10,13 +10,17 @@ package include
 
 import (
 	"context"
+	"embed"
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const ID = "include"
+
+//go:embed nflows
+var fixturesFS embed.FS
 
 func init() {
 	core.Register(ID, Bundle)
@@ -27,7 +31,7 @@ func Bundle(_ map[string]string) core.Bundle {
 		ID:         ID,
 		Libraries:  []action.Library{{Name: ID}},
 		Directives: []core.Directive{Directive},
-		SelfTest:   selftest,
+		Fixtures:   fixturesFS,
 	}
 }
 

@@ -6,7 +6,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
-	"github.com/nexssp/flow/contracts"
+	"github.com/nexssp/flow/compiler/contracts"
 	"github.com/nexssp/flow/extensions/match"
 )
 

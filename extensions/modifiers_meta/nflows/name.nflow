@@ -1,0 +1,3 @@
+@description "Compile the :name= action metadata modifier"
+@assert: result == "ok"
+runtime.const:name=coverage_name @{ value: "ok" }

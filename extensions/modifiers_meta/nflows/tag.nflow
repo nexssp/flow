@@ -1,0 +1,3 @@
+@description "Compile comma-separated :tag= values"
+@assert: result == "ok"
+runtime.const:tag="test,coverage" @{ value: "ok" }

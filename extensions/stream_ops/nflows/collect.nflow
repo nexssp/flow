@@ -1,0 +1,4 @@
+@description "Collect a finite stream within its configured bound"
+@assert: len(result) == 1
+@assert: len(result[0]) == 3
+cov.items -> stream.collect @{ limit: 3 }

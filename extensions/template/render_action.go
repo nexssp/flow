@@ -5,8 +5,6 @@ import (
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
-
-	flowtemplate "github.com/nexssp/flow/template"
 )
 
 // RenderRequest is the input shape for the template.render Flow action.
@@ -17,7 +15,7 @@ type RenderRequest struct {
 
 // RenderAction exposes the package-agnostic renderer to Flow workflows.
 var RenderAction = action.New("template.render", func(_ context.Context, req RenderRequest) (string, error) {
-	result, err := flowtemplate.Render(req.Template, req.Variables)
+	result, err := Render(req.Template, req.Variables)
 	if err != nil {
 		return "", xerr.BadRequest(err.Error())
 	}

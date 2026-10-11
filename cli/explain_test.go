@@ -6,7 +6,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/modifiers_core"
 	"github.com/nexssp/flow/extensions/modifiers_meta"
 	"github.com/nexssp/flow/extensions/pipeline"
@@ -18,8 +18,12 @@ import (
 )
 
 func explainConfig(t *testing.T) runner.Config {
+	return explainConfigWithBundles(t)
+}
+
+func explainConfigWithBundles(t *testing.T, extra ...core.Bundle) runner.Config {
 	t.Helper()
-	cfg, err := runner.BuildConfig([]core.Bundle{
+	bundles := []core.Bundle{
 		syntax.Bundle(nil),
 		runtime.Bundle(nil),
 		projection.Bundle(nil),
@@ -27,7 +31,9 @@ func explainConfig(t *testing.T) runner.Config {
 		modifiers_meta.Bundle(nil),
 		pipeline.Bundle(nil),
 		scope.Bundle(nil),
-	})
+	}
+	bundles = append(bundles, extra...)
+	cfg, err := runner.BuildConfig(bundles)
 	ktest.RequireNoError(t, err)
 	return cfg
 }

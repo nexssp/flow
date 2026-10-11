@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // ConfigDirective parses both the single-line form

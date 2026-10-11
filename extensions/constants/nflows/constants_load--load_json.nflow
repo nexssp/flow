@@ -1,0 +1,4 @@
+@description "Load and flatten JSON constants"
+@const.load "settings.json" as catalog
+@assert: result == "catalog-v3"
+runtime.const @{ value: "${catalog.name}" }

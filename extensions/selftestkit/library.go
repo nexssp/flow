@@ -5,6 +5,7 @@ package selftestkit
 
 import (
 	"context"
+	"embed"
 	"iter"
 	"maps"
 	"sync/atomic"
@@ -13,10 +14,13 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const ID = "selftestkit"
+
+//go:embed nflows
+var fixturesFS embed.FS
 
 func init() {
 	core.Register(ID, Bundle)
@@ -26,6 +30,7 @@ func Bundle(_ map[string]string) core.Bundle {
 	return core.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{library()},
+		Fixtures:  fixturesFS,
 	}
 }
 

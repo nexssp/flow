@@ -5,7 +5,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // newTestParser builds a parser with only the macroPrimary wired.

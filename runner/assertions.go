@@ -8,7 +8,7 @@ import (
 
 	"github.com/expr-lang/expr"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // JSONMapView applies JSON tags to struct outputs before expr evaluation.
@@ -30,15 +30,9 @@ func JSONMapView(value any) any {
 	return normalized
 }
 
-// RunAssertions ewaluuje @assert: z meta plus CLI --assert.
-//
-// Env dostępny dla asercji:
-//
-//	result       — output ostatniej akcji w pipeline
-//	duration_ms  — całkowity czas wykonania
-//	actions      — lista nazw wykonanych akcji
-//
-// Verbosity < 1 → cisza przy sukcesie.
+// RunAssertions evaluates @assert and CLI --assert expressions. The environment
+// contains result, duration_ms, actions, and keys from a map result. Successful
+// assertions are silent when verbosity is below 1.
 func RunAssertions(w io.Writer, result any, durationMS int64, actions, asserts []string, verbosity int) int {
 	if len(asserts) == 0 {
 		return 0

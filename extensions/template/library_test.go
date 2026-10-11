@@ -7,7 +7,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 func TestBundle_WiresTemplateAction(t *testing.T) {

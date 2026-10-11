@@ -13,18 +13,23 @@ func TestFixtures_EmbeddedAndDescribed(t *testing.T) {
 
 	bundle := Bundle(nil)
 
-	entries, err := fs.ReadDir(bundle.Fixtures, "nflows")
-	ktest.RequireNoError(t, err)
-	ktest.RequireCondition(t, len(entries) >= 2,
-		"expected at least 2 fixtures, got %d", len(entries))
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".nflow") {
-			continue
+	var found int
+	err := fs.WalkDir(bundle.Fixtures, "nflows", func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
-		body, err := fs.ReadFile(bundle.Fixtures, "nflows/"+entry.Name())
-		ktest.RequireNoError(t, err)
+		if entry.IsDir() || !strings.HasSuffix(path, ".nflow") {
+			return nil
+		}
+		body, err := fs.ReadFile(bundle.Fixtures, path)
+		if err != nil {
+			return err
+		}
 		ktest.RequireStringContains(t, string(body), "@description")
 		ktest.RequireStringContains(t, string(body), "io.")
-	}
+		found++
+		return nil
+	})
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, found, 2)
 }

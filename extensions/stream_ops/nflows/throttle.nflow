@@ -1,0 +1,4 @@
+@description "Edge case: throttle a finite stream without dropping every item"
+@assert: len(result) >= 1
+@assert: len(result) <= 3
+cov.items -> stream.throttle @{ interval_ms: 1 } -> collect

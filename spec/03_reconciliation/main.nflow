@@ -1,0 +1,47 @@
+@description "Payment reconciliation: match bank rows, quantify exceptions, and prove batch totals balance"
+@require ./bundle
+
+@schema LedgerBatch struct {
+  BatchID  string `json:"batch_id" validate:"required"`
+  Currency string `json:"currency" validate:"required"`
+}
+
+@macro assert_balanced_totals() {
+  assert(.variance_cents == 0, "bank and payment totals must reconcile")
+}
+
+@pipeline reconcile
+  LedgerBatch.validate
+  -> ledger.reconcile
+  -> @assert_balanced_totals()
+  -> {
+    batch_id: .batch_id,
+    currency: .currency,
+    payment_total_cents: .payment_total_cents,
+    bank_total_cents: .bank_total_cents,
+    variance_cents: .variance_cents,
+    matched_count: .matched_count,
+    exception_count: .exception_count,
+    exceptions: .exceptions
+  }
+@end
+
+@assert: result.batch_id == "BATCH-2026-10-11"
+@assert: result.currency == "USD"
+@assert: result.variance_cents == 0
+@assert: result.matched_count == 1
+@assert: result.exception_count == 2
+{
+  batch_id: "BATCH-2026-10-11",
+  currency: "USD",
+  payments: [
+    { reference: "PAY-1001", cents: 12550 },
+    { reference: "PAY-1002", cents: 7450 }
+  ],
+  bank_rows: [
+    { reference: "PAY-1001", cents: 12550 },
+    { reference: "PAY-1002", cents: 7350 },
+    { reference: "BANK-FEE-01", cents: 100 }
+  ]
+}
+-> pipeline.reconcile

@@ -7,7 +7,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // advise scans the atom's modifiers for `:retry=N`, installs the retry

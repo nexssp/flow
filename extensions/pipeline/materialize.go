@@ -7,7 +7,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // materialize compiles every pipeline declared in meta and mounts it
@@ -39,7 +39,15 @@ func materialize(req core.MaterializeReq) error {
 		// Rename the action to its canonical name ("pipeline.<name>")
 		// so it does not collide with the root atom's name ("runtime.const").
 		// Dynamic preserves all modifiers, status codes, tags, and route bindings.
-		act := action.Dynamic(program).Name(canonicalName).Build()
+		var act action.AnyAction = action.Dynamic(program).Name(canonicalName).Build()
+		if req.Introspection {
+			act = action.WithComposition(act, action.IntrospectionComposition{
+				Kind: "pipeline",
+				Children: []action.IntrospectionChild{{
+					Node: program, Relation: "pipeline_body", Role: "body", Label: canonicalName,
+				}},
+			})
+		}
 
 		err = req.Resolver.Mount(action.Library{
 			Name: "pipeline." + name,

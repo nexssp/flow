@@ -1,0 +1,33 @@
+@description "Support triage: preserve a ticket for manual review when customer lookup is unavailable"
+@require ./bundle
+@schema SupportTicket {
+  TicketID   string `json:"ticket_id" validate:"required"`
+  CustomerID string `json:"customer_id" validate:"required"`
+  Subject    string `json:"subject" validate:"required"`
+  Message    string `json:"message" validate:"required"`
+}
+@include ./common/triage.nflow
+
+@pipeline manual_review
+  runtime.const @{ value: {
+    status: "manual_review",
+    queue: "customer-success-manual",
+    reply_status: "draft_not_sent"
+  } }
+@end
+
+@on_error {
+  when error.kind == xerr.KindUnavailable -> pipeline.manual_review,
+  else -> error.info
+}
+
+@assert: result.status == "manual_review"
+@assert: result.queue == "customer-success-manual"
+@assert: result.reply_status == "draft_not_sent"
+{
+  ticket_id: "SUP-9901",
+  customer_id: "offline-customer-99",
+  subject: "Payment status unclear",
+  message: "Please check whether the charge completed."
+}
+-> pipeline.triage

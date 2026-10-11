@@ -1,12 +1,17 @@
 package require
 
 import (
+	"embed"
+
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const ID = "require"
+
+//go:embed nflows
+var fixturesFS embed.FS
 
 func init() {
 	core.Register(ID, Bundle)
@@ -20,5 +25,6 @@ func Bundle(_ map[string]string) core.Bundle {
 			Actions: []action.AnyAction{Directive.Action()},
 		}},
 		Directives: []core.Directive{Directive},
+		Fixtures:   fixturesFS,
 	}
 }

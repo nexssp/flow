@@ -6,7 +6,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // runDirective drives handleDirective with a single line, returning

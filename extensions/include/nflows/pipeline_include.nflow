@@ -1,0 +1,4 @@
+@description "Include a file that defines a reusable pipeline"
+@include ./child.nflow
+@assert: result == "included"
+{} -> pipeline.included_flow

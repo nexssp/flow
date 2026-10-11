@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/native"
 	flowrunner "github.com/nexssp/flow/runner"
 )

@@ -1,0 +1,4 @@
+@description "Runtime.print accepts output and truncation options"
+@assert: len(result.list) == 5
+runtime.const @{ value: { list: [1, 2, 3, 4, 5], nested: { a: { b: { c: "deep" } } } } }
+-> print @{ label: "demo", limit: 2, depth: 2, stream: "stdout" }

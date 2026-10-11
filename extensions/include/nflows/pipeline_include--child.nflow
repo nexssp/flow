@@ -1,0 +1,3 @@
+@pipeline included_flow
+  runtime.const @{ value: "included" }
+@end

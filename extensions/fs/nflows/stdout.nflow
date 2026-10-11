@@ -1,0 +1,3 @@
+@description "Send file stream entries to stdout"
+@assert: result != nil
+fs.walk -> out.stdout

@@ -1,0 +1,3 @@
+@description "Render a customer-facing invoice summary"
+@assert: result == "Invoice INV-2048 is ready for Ada"
+template.render @{ template: "Invoice {{.id}} is ready for {{.customer}}", variables: { id: "INV-2048", customer: "Ada" } }

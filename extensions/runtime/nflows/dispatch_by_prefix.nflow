@@ -1,0 +1,3 @@
+@description "Runtime.dispatch_by_prefix invokes the matching action"
+@assert: result.value == "x"
+{ prefix: "cov", key: "echo", payload: { value: "x" } } -> runtime.dispatch_by_prefix

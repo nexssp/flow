@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // Extension is the compile-time parser extension. It

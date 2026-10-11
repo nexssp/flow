@@ -13,8 +13,6 @@ import (
 	"github.com/nexssp/flow/runner"
 )
 
-// ── collectExpansions ─────────────────────────────────────────────────
-
 func TestCollectExpansions_RecordsEveryInvocation(t *testing.T) {
 	src := `
 @macro hi() { runtime.const @{ value: "hi" } }
@@ -61,8 +59,6 @@ func TestCollectExpansions_ParseFailureStillReturnsRecorded(t *testing.T) {
 	ktest.RequireEqual(t, exps[0].Macro, "broken")
 	ktest.RequireNotNil(t, exps[0].Err)
 }
-
-// ── renderExpansions ──────────────────────────────────────────────────
 
 func TestRenderExpansions_EmitsMacroAndBody(t *testing.T) {
 	var buf bytes.Buffer

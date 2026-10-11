@@ -1,0 +1,3 @@
+# Incident brief
+
+The payment API recovered after a short network interruption.

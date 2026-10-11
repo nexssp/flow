@@ -1,0 +1,3 @@
+@description "Enable deduplication on an action"
+@assert: result == "ok"
+runtime.const:dedup @{ value: "ok" }

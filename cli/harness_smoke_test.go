@@ -85,8 +85,6 @@ py.echo
 	}
 }
 
-// ── module fixtures ─────────────────────────────────────────────────
-
 func writeForkModule(t *testing.T, workDir, flowRoot, kernelRoot string) {
 	t.Helper()
 	myLib := filepath.Join(workDir, "mylib")
@@ -105,7 +103,7 @@ package nexssflow
 import (
 	"context"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 )
 
@@ -150,7 +148,7 @@ import (
 	"encoding/json"
 	"os/exec"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 )
@@ -233,8 +231,6 @@ func moduleGoMod(modulePath, flowRoot, kernelRoot string) string {
 		"replace github.com/nexssp/kernel => " + kernelRoot + "\n"
 }
 
-// ── harness invocation ─────────────────────────────────────────────
-
 // runNflow runs `go run ./cmd/nflow ARGS...` inside flowRoot and
 // returns the combined stdout+stderr. Failing invocations print both
 // streams in the test failure message.
@@ -252,8 +248,6 @@ func runNflow(t *testing.T, goBin, flowRoot string, args ...string) string {
 	}
 	return stdout.String() + stderr.String()
 }
-
-// ── helpers ────────────────────────────────────────────────────────
 
 // requireTool returns the path to a tool that both resolves in PATH and
 // actually executes. A Windows Store shim resolves but fails on run,

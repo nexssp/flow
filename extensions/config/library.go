@@ -13,14 +13,18 @@
 package config
 
 import (
+	"embed"
 	"sync/atomic"
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const ID = "config"
+
+//go:embed nflows
+var fixturesFS embed.FS
 
 func init() {
 	core.Register(ID, Bundle)
@@ -32,7 +36,7 @@ func Bundle(_ map[string]string) core.Bundle {
 		Libraries:    []action.Library{{Name: ID}},
 		Directives:   []core.Directive{ConfigDirective, ConfigLoadDirective},
 		OnPreprocess: forwardConfigToCompiler,
-		SelfTest:     selftest,
+		Fixtures:     fixturesFS,
 	}
 }
 

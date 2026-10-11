@@ -1,0 +1,6 @@
+@pipeline triage
+  SupportTicket.validate
+  -> support.lookup_tier:retry=2
+  -> support.classify
+  -> support.draft_reply
+@end

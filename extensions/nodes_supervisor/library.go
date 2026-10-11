@@ -11,10 +11,15 @@
 package nodes_supervisor
 
 import (
+	"embed"
+
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
+
+//go:embed nflows
+var fixturesFS embed.FS
 
 const ID = "nodes_supervisor"
 
@@ -26,6 +31,6 @@ func Bundle(_ map[string]string) core.Bundle {
 	return core.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{Supervisor}}},
-		SelfTest:  selftest,
+		Fixtures:  fixturesFS,
 	}
 }

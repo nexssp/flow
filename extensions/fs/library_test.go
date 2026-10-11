@@ -6,13 +6,14 @@ import (
 	"github.com/nexssp/kernel/xtest/ktest"
 )
 
-func TestBundle_WiresLibraryAndSelfTest(t *testing.T) {
+func TestBundle_WiresLibraryAndFixtures(t *testing.T) {
 	t.Parallel()
 	b := Bundle(nil)
 	ktest.RequireEqual(t, b.ID, ID)
 	ktest.RequireEqual(t, len(b.Libraries), 1)
 	ktest.RequireEqual(t, b.Libraries[0].Name, ID)
-	ktest.RequireCondition(t, b.SelfTest != nil, "SelfTest is nil")
+	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
+	ktest.RequireCondition(t, b.SelfTest == nil, "duplicate inline SelfTest remains")
 }
 
 func TestLibrary_HasSourceAndOperators(t *testing.T) {
@@ -34,9 +35,9 @@ func TestLibrary_HasSourceAndOperators(t *testing.T) {
 	}
 }
 
-func TestSelfTestShape(t *testing.T) {
+func TestFixturesShape(t *testing.T) {
 	t.Parallel()
-	sections := Bundle(nil).SelfTest()
+	sections := Bundle(nil).AllSelfTests()
 	ktest.RequireCondition(t, len(sections) > 0, "no sections")
 
 	seen := make(map[string]bool)

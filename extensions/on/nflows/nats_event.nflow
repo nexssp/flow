@@ -1,0 +1,4 @@
+@description "Declare an event-driven NATS workflow"
+@on event "nats:orders.incoming"
+@assert: result == "accepted"
+runtime.const @{ value: "accepted" }

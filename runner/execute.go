@@ -9,15 +9,15 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/contracts"
-	"github.com/nexssp/flow/core"
+	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler/contracts"
 )
 
 // Execution is the outcome of one Execute call.
 type Execution struct {
 	Output          any
 	Meta            map[string]any
-	Resolver        core.CapabilityResolver
+	Resolver        compiler.CapabilityResolver
 	CompileDuration time.Duration
 	RunDuration     time.Duration
 
@@ -33,7 +33,7 @@ type Execution struct {
 type Compilation struct {
 	Program  action.AnyAction
 	Meta     map[string]any
-	Resolver core.CapabilityResolver
+	Resolver compiler.CapabilityResolver
 }
 
 // EntryPoint is a named action to invoke after compilation instead of
@@ -50,9 +50,9 @@ func readMemStats(dst *runtime.MemStats) {
 	runtime.ReadMemStats(dst)
 }
 
-var defaultRunAction = core.RunAction()
+var defaultRunAction = compiler.RunAction()
 
-func withExecutionContext(ctx context.Context, cfg Config, resolver core.CapabilityResolver) context.Context {
+func withExecutionContext(ctx context.Context, cfg Config, resolver compiler.CapabilityResolver) context.Context {
 	cfg.Resolver = resolver
 	ctx = contracts.WithCompiler(ctx, compilerAdapter{cfg: cfg})
 	return contracts.WithActionResolver(ctx, resolver)
@@ -61,7 +61,16 @@ func withExecutionContext(ctx context.Context, cfg Config, resolver core.Capabil
 // Compile preprocesses source, materializes declarations, and compiles its
 // top-level program without invoking workflow actions.
 func Compile(ctx context.Context, cfg Config, src, name string) (Compilation, error) {
-	prepared, err := core.PrepareSource(ctx, cfg.Directives, src, name, cfg.CompileOpts...)
+	return CompileWithOptions(ctx, cfg, src, name)
+}
+
+// CompileWithOptions compiles a source with options scoped to this invocation.
+// The supplied Config is copied so callers can safely reuse it afterward.
+func CompileWithOptions(ctx context.Context, cfg Config, src, name string, opts ...compiler.CompileOption) (Compilation, error) {
+	if len(opts) > 0 {
+		cfg.CompileOpts = append(append([]compiler.CompileOption(nil), cfg.CompileOpts...), opts...)
+	}
+	prepared, err := compiler.PrepareSource(ctx, cfg.Directives, src, name, cfg.CompileOpts...)
 	if err != nil {
 		return Compilation{}, err
 	}
@@ -72,23 +81,23 @@ func Compile(ctx context.Context, cfg Config, src, name string) (Compilation, er
 // ExecutePrepared. Hosts use it to discover @schema declarations and
 // pipeline modifiers before parsing argv, so command-line values can
 // reach compile-time modifiers such as out.file:path=@config.output.
-func Preflight(ctx context.Context, cfg Config, src, name string) (*core.PreparedSource, error) {
-	return core.PrepareSource(ctx, cfg.Directives, src, name, cfg.CompileOpts...)
+func Preflight(ctx context.Context, cfg Config, src, name string) (*compiler.PreparedSource, error) {
+	return compiler.PrepareSource(ctx, cfg.Directives, src, name, cfg.CompileOpts...)
 }
 
 // ExecutePrepared compiles prepared source and invokes the named
 // entrypoint. extraOpts are appended to cfg.CompileOpts for this
 // invocation only, so hosts can inject argv-derived values with
-// core.WithConfigMap without re-running directives.
+// compiler.WithConfigMap without re-running directives.
 func ExecutePrepared(
 	ctx context.Context,
 	cfg Config,
-	prepared *core.PreparedSource,
+	prepared *compiler.PreparedSource,
 	entry EntryPoint,
-	extraOpts ...core.CompileOption,
+	extraOpts ...compiler.CompileOption,
 ) (Execution, error) {
 	if len(extraOpts) > 0 {
-		cfg.CompileOpts = append(append([]core.CompileOption{}, cfg.CompileOpts...), extraOpts...)
+		cfg.CompileOpts = append(append([]compiler.CompileOption{}, cfg.CompileOpts...), extraOpts...)
 	}
 
 	compileStart := time.Now()
@@ -144,7 +153,7 @@ func ExecutePrepared(
 	return result, nil
 }
 
-func compilePrepared(ctx context.Context, cfg Config, prepared *core.PreparedSource) (Compilation, error) {
+func compilePrepared(ctx context.Context, cfg Config, prepared *compiler.PreparedSource) (Compilation, error) {
 	resolver, err := newExecutionResolver(cfg.Resolver, cfg.Hooks)
 	if err != nil {
 		return Compilation{}, err
@@ -157,12 +166,12 @@ func compilePrepared(ctx context.Context, cfg Config, prepared *core.PreparedSou
 	compileSub := func(subName, subSource string, mods ...string) (action.AnyAction, error) {
 		wrapperMods, bodyMods := SplitPipelineModifiers(cfg.Modifiers, mods)
 
-		subOpts := append([]core.CompileOption(nil), cfg.CompileOpts...)
+		subOpts := append([]compiler.CompileOption(nil), cfg.CompileOpts...)
 		subOpts = append(subOpts, topContribs.CompileOpts...)
 		if len(bodyMods) > 0 {
 			captured := append([]string(nil), bodyMods...)
-			subOpts = append(subOpts, core.WithLineModifiers(core.LineLookup{
-				Source: core.ModifierSource{
+			subOpts = append(subOpts, compiler.WithLineModifiers(compiler.LineLookup{
+				Source: compiler.ModifierSource{
 					Kind:  "pipeline",
 					Label: subName,
 				},
@@ -172,10 +181,10 @@ func compilePrepared(ctx context.Context, cfg Config, prepared *core.PreparedSou
 			}))
 		}
 
-		subRes, subErr := core.CompileAction(
+		subRes, subErr := compiler.CompileAction(
 			resolver, cfg.Directives, cfg.Modifiers,
 			cfg.Operators, cfg.Primaries, subOpts...,
-		).Do(ctx, core.CompileReq{
+		).Do(ctx, compiler.CompileReq{
 			Source:             subSource,
 			Name:               subName,
 			InheritedPrimaries: topContribs.Primaries,
@@ -190,6 +199,15 @@ func compilePrepared(ctx context.Context, cfg Config, prepared *core.PreparedSou
 			if merr != nil {
 				return nil, merr
 			}
+			if _, introspected := program.(action.IntrospectionProvider); introspected {
+				applied = action.WithComposition(applied, action.IntrospectionComposition{
+					Kind: "pipeline_modifier", Opaque: true,
+					Notes: []string{"modifier values are omitted"},
+					Children: []action.IntrospectionChild{{
+						Node: program, Relation: compiler.IntrospectionKindWraps, Role: "program",
+					}},
+				})
+			}
 			program = applied
 		}
 
@@ -200,11 +218,12 @@ func compilePrepared(ctx context.Context, cfg Config, prepared *core.PreparedSou
 		if m == nil {
 			continue
 		}
-		if matErr := m(core.MaterializeReq{
-			Ctx:      ctx,
-			Meta:     meta,
-			Resolver: resolver,
-			Compile:  compileSub,
+		if matErr := m(compiler.MaterializeReq{
+			Ctx:           ctx,
+			Meta:          meta,
+			Resolver:      resolver,
+			Compile:       compileSub,
+			Introspection: prepared.ActionIntrospectionEnabled(),
 		}); matErr != nil {
 			return Compilation{Meta: meta, Resolver: resolver}, fmt.Errorf("materialize: %w", matErr)
 		}
@@ -212,12 +231,12 @@ func compilePrepared(ctx context.Context, cfg Config, prepared *core.PreparedSou
 
 	ctx = withExecutionContext(ctx, cfg, resolver)
 
-	compileAct := core.CompileAction(
+	compileAct := compiler.CompileAction(
 		resolver, cfg.Directives, cfg.Modifiers,
 		cfg.Operators, cfg.Primaries, cfg.CompileOpts...,
 	)
 
-	compiledRes, err := compileAct.Do(ctx, core.CompileReq{
+	compiledRes, err := compileAct.Do(ctx, compiler.CompileReq{
 		Prepared: prepared,
 	})
 	if err != nil {
@@ -257,7 +276,7 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 
 	ctx = withExecutionContext(ctx, cfg, compiled.Resolver)
 	runStart := time.Now()
-	runRes, err := defaultRunAction.Do(ctx, core.RunReq{
+	runRes, err := defaultRunAction.Do(ctx, compiler.RunReq{
 		Program: compiled.Program,
 		Payload: payload,
 	})
@@ -303,7 +322,7 @@ type compilerAdapter struct {
 }
 
 func (a compilerAdapter) CompilePipeline(expr string) (action.Executable, error) {
-	res, err := core.CompileAction(
+	res, err := compiler.CompileAction(
 		a.cfg.Resolver, a.cfg.Directives, a.cfg.Modifiers,
 		a.cfg.Operators, a.cfg.Primaries,
 		// Note: cfg.CompileOpts deliberately omitted. The parent
@@ -311,7 +330,7 @@ func (a compilerAdapter) CompilePipeline(expr string) (action.Executable, error)
 		// compiled child re-applying them would stack duplicate
 		// layers (schema.wrap is not idempotent) and produce error
 		// chains that no longer match the parent's shape.
-	).Do(context.Background(), core.CompileReq{Source: expr, Name: "<child>"})
+	).Do(context.Background(), compiler.CompileReq{Source: expr, Name: "<child>"})
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +349,7 @@ func (a compilerAdapter) CompilePipeline(expr string) (action.Executable, error)
 //
 // It is shared by compile-time pipeline materialization and callers that
 // need the same wrapper-versus-body modifier split.
-func SplitPipelineModifiers(table *core.ModifierTable, mods []string) (wrapper, body []string) {
+func SplitPipelineModifiers(table *compiler.ModifierTable, mods []string) (wrapper, body []string) {
 	if len(mods) == 0 {
 		return nil, nil
 	}
@@ -339,7 +358,7 @@ func SplitPipelineModifiers(table *core.ModifierTable, mods []string) (wrapper, 
 			wrapper = append(wrapper, raw)
 			continue
 		}
-		name := core.ModifierName(raw)
+		name := compiler.ModifierName(raw)
 		if m, ok := table.ByName(name); ok && m.Inheritable {
 			body = append(body, raw)
 			continue
@@ -354,25 +373,25 @@ func SplitPipelineModifiers(table *core.ModifierTable, mods []string) (wrapper, 
 // can attribute modifiers to a pipeline or a profile.
 type SourcedModifier struct {
 	Raw    string
-	Source core.ModifierSource
+	Source compiler.ModifierSource
 }
 
 // SplitPipelineModifiersWithSources is SplitPipelineModifiers with the
 // per-modifier origin preserved. Sources must be parallel to mods;
 // missing entries default to Kind "pipeline" with no label.
 func SplitPipelineModifiersWithSources(
-	table *core.ModifierTable,
+	table *compiler.ModifierTable,
 	mods []string,
-	sources []core.ModifierSource,
+	sources []compiler.ModifierSource,
 ) (wrapper, body []SourcedModifier) {
 	for i, raw := range mods {
-		src := core.ModifierSource{Kind: "pipeline"}
+		src := compiler.ModifierSource{Kind: "pipeline"}
 		if i < len(sources) {
 			src = sources[i]
 		}
 		entry := SourcedModifier{Raw: raw, Source: src}
 		if table != nil {
-			if mod, ok := table.ByName(core.ModifierName(raw)); ok && mod.Inheritable {
+			if mod, ok := table.ByName(compiler.ModifierName(raw)); ok && mod.Inheritable {
 				body = append(body, entry)
 				continue
 			}

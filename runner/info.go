@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // PrintInfo describes a .nflow file without executing it. It shows

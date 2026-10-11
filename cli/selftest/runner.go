@@ -14,7 +14,7 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/nexssp/kernel/xctx"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	flowrunner "github.com/nexssp/flow/runner"
 )
 

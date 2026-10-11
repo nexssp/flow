@@ -11,7 +11,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 	"github.com/nexssp/flow/native"
 )
@@ -362,6 +362,7 @@ func TestInvocationAdoptsDynamicBundleBeforeOptionValidationFailure(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
+	inv.nativeFactory = func() []core.Bundle { return nil }
 	code := runInvocation(context.Background(), inv, func(context.Context) int {
 		_, err := inv.buildConfig([]require.Requirement{
 			{Import: "lifecycle_dynamic_first"},
@@ -405,6 +406,7 @@ func TestInvocationDynamicFactoryPanicClosesPreviouslyReturnedBundles(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	inv.nativeFactory = func() []core.Bundle { return nil }
 	defer func() {
 		if got := recover(); got != panicValue {
 			t.Fatalf("factory panic changed: got %#v want %#v", got, panicValue)

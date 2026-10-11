@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // RunLean executes an embedded flow source using only the provided bundles.
@@ -20,8 +20,11 @@ func RunLean(ctx context.Context, source, name string, bundles []core.Bundle, ar
 
 	payload := map[string]any{}
 	for _, arg := range args {
-		if len(arg) > 0 && arg[0] == '{' {
-			_ = json.Unmarshal([]byte(arg), &payload)
+		if arg != "" && arg[0] == '{' {
+			if payloadErr := json.Unmarshal([]byte(arg), &payload); payloadErr != nil {
+				fmt.Fprintf(os.Stderr, "payload error: %v\n", payloadErr)
+				return 2
+			}
 		}
 	}
 
@@ -35,7 +38,11 @@ func RunLean(ctx context.Context, source, name string, bundles []core.Bundle, ar
 		if str, ok := ex.Output.(string); ok {
 			fmt.Println(str)
 		} else {
-			data, _ := json.Marshal(ex.Output)
+			data, err := json.Marshal(ex.Output)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "output encoding error: %v\n", err)
+				return 1
+			}
 			fmt.Println(string(data))
 		}
 	}

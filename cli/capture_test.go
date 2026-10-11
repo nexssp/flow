@@ -85,7 +85,7 @@ func captureIO(t *testing.T, fn func()) (stdout, stderr string) {
 
 	fn()
 
-	// Przed odczytem z buforów musimy zamknąć rury i poczekać na zakończenie goroutines!
+	// Close the pipes and wait for the readers before inspecting the buffers.
 	cleanup()
 
 	return outBuf.String(), errBuf.String()

@@ -7,18 +7,23 @@
 //
 //	order.create:name="order.create":tag="orders,mutation":scope=public
 //
-// :strict and :lenient are recognized by core/strict.go through
+// :strict and :lenient are recognized by compiler/strict.go through
 // hasModifier and toggle runtime request validation; their apply
 // callback is deliberately an identity function.
 package modifiers_meta
 
 import (
+	"embed"
+
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const ID = "modifiers_meta"
+
+//go:embed nflows
+var fixturesFS embed.FS
 
 func init() {
 	core.Register(ID, Bundle)
@@ -29,6 +34,6 @@ func Bundle(_ map[string]string) core.Bundle {
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID}},
 		Modifiers: Modifiers(),
-		SelfTest:  selftest,
+		Fixtures:  fixturesFS,
 	}
 }

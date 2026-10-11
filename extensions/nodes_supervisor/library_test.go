@@ -13,7 +13,8 @@ func TestBundle_WiresSupervisor(t *testing.T) {
 	ktest.RequireEqual(t, len(b.Libraries), 1)
 	ktest.RequireEqual(t, len(b.Libraries[0].Actions), 1)
 	ktest.RequireEqual(t, b.Libraries[0].Actions[0].Describe().Name, "supervisor.run")
-	ktest.RequireCondition(t, b.SelfTest != nil, "SelfTest is nil")
+	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
+	ktest.RequireCondition(t, b.SelfTest == nil, "duplicate inline SelfTest remains")
 }
 
 func TestChildResult_ZeroValue(t *testing.T) {

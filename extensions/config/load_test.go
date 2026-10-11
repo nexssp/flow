@@ -8,7 +8,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 func runLoad(tb testing.TB, baseDir, line string) (map[string]string, error) {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/redact"
+	"github.com/nexssp/flow/compiler/redact"
 )
 
 // LogInfo, LogWarn, LogError emit a structured line at the matching

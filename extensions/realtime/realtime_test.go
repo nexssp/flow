@@ -10,7 +10,7 @@ import (
 	"github.com/nexssp/kernel/timing"
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/realtime"
 )
 
@@ -58,12 +58,19 @@ func TestRealtime_WheelScheduleAndAdvance(t *testing.T) {
 	// Advance only 10ms -> should not expire
 	res, err := action.InvokeAny(ctx, advanceAction, map[string]any{"dt_ms": 10})
 	ktest.RequireNoError(t, err)
-	ktest.RequireEqual(t, len(res.([]any)), 0)
+	unexpired, ok := res.([]any)
+	if !ok {
+		t.Fatalf("advance result has type %T, want []any", res)
+	}
+	ktest.RequireEqual(t, len(unexpired), 0)
 
 	// Advance remaining 30ms -> should expire
 	res, err = action.InvokeAny(ctx, advanceAction, map[string]any{"dt_ms": 30})
 	ktest.RequireNoError(t, err)
-	expired := res.([]any)
+	expired, ok := res.([]any)
+	if !ok {
+		t.Fatalf("advance result has type %T, want []any", res)
+	}
 	ktest.RequireEqual(t, len(expired), 1)
 	ktest.RequireEqual(t, expired[0], "buff_expired")
 }

@@ -1,0 +1,5 @@
+@description "Load YAML configuration from a local file"
+@config.load:path="settings.yml"
+@assert: result.host == "api.example.test"
+@assert: result.port == "8443"
+runtime.const @{ value: { host: "@config.host", port: "@config.port" } }

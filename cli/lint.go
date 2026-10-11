@@ -9,7 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	"github.com/nexssp/flow/builder"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 	"github.com/nexssp/flow/runner"
 )
@@ -58,11 +59,11 @@ func runLintInInvocation(ctx context.Context, inv *invocation, args []string) in
 	if os.Getenv(harnessEnv) != "" || !requirementsNeedExternalHarness(inv, allRequirements) {
 		return runLintBatchForInvocation(ctx, inv, files)
 	}
-	bin, err := EnsureHarnessContext(ctx, allRequirements, files...)
+	bin, err := builder.EnsureHarnessContext(ctx, allRequirements, files[0])
 	if err != nil {
 		return runLintBatchForInvocationWithHarnessError(ctx, inv, files, err)
 	}
-	return ExecHarnessContext(ctx, bin, append([]string{"lint"}, files...))
+	return builder.ExecHarnessContext(ctx, bin, append([]string{"lint"}, files...))
 }
 
 var lintDiscoveryExcludedDirs = map[string]struct{}{

@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 func TestRunCLIWithSignals_CancellationWaitsForActionThenShutsDownOnce(t *testing.T) {
@@ -62,7 +62,7 @@ func TestRunCLIWithSignals_CancellationWaitsForActionThenShutsDownOnce(t *testin
 						}
 						return nil
 					})
-					inv, err := newInvocation([]core.Bundle{bundle}, nil)
+					inv, err := newNativeInvocation([]core.Bundle{bundle}, nil)
 					if err != nil {
 						t.Fatal(err)
 					}

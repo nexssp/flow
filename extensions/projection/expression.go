@@ -3,7 +3,7 @@ package projection
 import (
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // buildProgramSource produces the expr-lang source string from the raw

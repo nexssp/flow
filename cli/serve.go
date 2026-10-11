@@ -6,7 +6,7 @@ import (
 	"os"
 	"slices"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/on"
 )
 

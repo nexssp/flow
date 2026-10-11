@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	flowrunner "github.com/nexssp/flow/runner"
 )
 
@@ -43,8 +43,6 @@ func newRenderer(opts Options) *Renderer {
 	}
 }
 
-// ── Duration formatting ──────────────────────────────────────────────
-
 func formatElapsed(d time.Duration) string {
 	switch {
 	case d <= 0:
@@ -59,8 +57,6 @@ func formatElapsed(d time.Duration) string {
 		return fmt.Sprintf("%.2fs", d.Seconds())
 	}
 }
-
-// ── ANSI helpers ─────────────────────────────────────────────────────
 
 const (
 	ansiReset   = "\x1b[0m"
@@ -89,8 +85,6 @@ func (r *Renderer) yellow(s string) string { return r.paint(ansiYellow, s) }
 func (r *Renderer) cyan(s string) string   { return r.paint(ansiCyan, s) }
 func (r *Renderer) mag(s string) string    { return r.paint(ansiMagenta, s) }
 
-// ── Banner ───────────────────────────────────────────────────────────
-
 func (r *Renderer) Banner(sections []core.SelfTestSection) {
 	for _, s := range sections {
 		r.total += len(s.Features)
@@ -105,8 +99,6 @@ func (r *Renderer) Banner(sections []core.SelfTestSection) {
 	r.printf("%s\n", r.dim("  "+host.FormatBanner()))
 	r.printf("%s\n\n", r.mag(line))
 }
-
-// ── Section ──────────────────────────────────────────────────────────
 
 func (r *Renderer) SectionStart(s core.SelfTestSection) {
 	r.printf("\n%s %s  %s\n\n",
@@ -155,8 +147,6 @@ func featureInSection(f core.SelfTestFeature, s core.SelfTestSection) bool {
 	}
 	return false
 }
-
-// ── Feature ──────────────────────────────────────────────────────────
 
 func (r *Renderer) FeatureStart(_ core.SelfTestFeature) {
 	// Live spinner was removed; kept as a no-op hook so call sites stay
@@ -226,8 +216,6 @@ func (r *Renderer) FeatureDone(res Result) {
 		}
 	}
 }
-
-// ── Summary ──────────────────────────────────────────────────────────
 
 func (r *Renderer) Summary(results []Result, elapsed time.Duration) {
 	line := strings.Repeat("─", 70)
@@ -340,8 +328,6 @@ func (r *Renderer) printFailures(failures []Result) {
 	}
 }
 
-// ── Score summary ────────────────────────────────────────────────────
-
 func (r *Renderer) ScoreSummary(s Score, host HostInfo) {
 	line := strings.Repeat("─", 70)
 	r.printf("\n%s\n", r.mag(line))
@@ -443,8 +429,6 @@ func (r *Renderer) TopMetrics(s Score) {
 	r.printf("%s\n", r.mag(line))
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────
-
 func (r *Renderer) printf(format string, args ...any) {
 	fmt.Fprintf(r.w, format, args...)
 }
@@ -464,8 +448,6 @@ func isTerminal(w io.Writer) bool {
 	}
 	return info.Mode()&os.ModeCharDevice != 0
 }
-
-// ── JSON output ──────────────────────────────────────────────────────
 
 type jsonEnvironment struct {
 	GOOS       string `json:"goos"`

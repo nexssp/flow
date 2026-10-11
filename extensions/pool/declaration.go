@@ -1,6 +1,6 @@
 package pool
 
-import "github.com/nexssp/flow/core"
+import core "github.com/nexssp/flow/compiler"
 
 // Declaration is the parsed form of a single `@pool NAME [...] { ... }`
 // directive. Members are statically resolved capability references;

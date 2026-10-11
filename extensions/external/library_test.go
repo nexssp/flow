@@ -12,7 +12,8 @@ func TestBundle_WiresLibrary(t *testing.T) {
 	ktest.RequireEqual(t, b.ID, ID)
 	ktest.RequireEqual(t, len(b.Libraries), 1)
 	ktest.RequireEqual(t, b.Libraries[0].Name, ID)
-	ktest.RequireCondition(t, b.SelfTest != nil, "SelfTest is nil")
+	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
+	ktest.RequireCondition(t, b.SelfTest == nil, "duplicate inline SelfTest remains")
 }
 
 func TestLibrary_ActionNames(t *testing.T) {

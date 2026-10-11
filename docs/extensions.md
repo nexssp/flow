@@ -18,8 +18,11 @@ extensions/loop/
 ├── library.go            # Package comment, ID, init(), Bundle()
 ├── keyword.go            # Feature logic (parser, action, operator, ...)
 ├── selftest.go           # Optional inline SelfTest()
-├── nflows/               # Optional DSL fixtures, auto-discovered
-│   └── basic.nflow
+├── nflows/               # Required executable conformance suite
+│   ├── basic.nflow
+│   ├── recovery.nflow
+│   ├── load.nflow
+│   └── load--settings.yml
 ├── keyword_test.go       # Tests for this package only
 └── library_test.go       # Wiring: Bundle() returns what it claims
 ```
@@ -45,7 +48,7 @@ import (
 
     "github.com/nexssp/kernel/action"
 
-    "github.com/nexssp/flow/core"
+    core "github.com/nexssp/flow/compiler"
 )
 
 const ID = "hello"
@@ -133,7 +136,7 @@ or operator named `const`, `noop`, `pick`, `wrap`, `fail`, `sleep`,
 library "mybundle": action "const" is a reserved language name
 ```
 
-The reserved list is in `core/reserved.go` and is not extensible.
+The reserved list is in `compiler/reserved.go` and is not extensible.
 
 ### 3.2 No reserved modifiers
 
@@ -276,7 +279,7 @@ core.Modifier{
 ### 6.1 Use the typed constructors
 
 Every modifier should parse its payload through a constructor from
-`core/modifier.go`. `core.Duration`, `core.Int`, `core.Int32`,
+`compiler/modifier.go`. `core.Duration`, `core.Int`, `core.Int32`,
 `core.Int64`, `core.Float64`, `core.String`, `core.StringList`,
 `core.Flag`. These set `ValueKind` automatically, so the linter can
 catch `:budget=abc` statically.
@@ -423,36 +426,53 @@ recommended shape for options with more than two fields.
 
 ## 9. Fixtures vs SelfTest
 
-Fixtures are the preferred way to test your bundle. A fixture is a real
-`.nflow` file that `nflow self test` runs like any pipeline:
+Every extension must embed at least one runnable `.nflow` fixture. These
+are executable conformance cases, not snippets: `nflow self test` runs
+each through the real compiler and runtime, and every fixture should have
+an `@description` and assert meaningful behavior where possible. Keep every
+`.nflow` directly in `nflows/`; use descriptive filenames instead of
+`happy/`, `errors/`, or `edge/` subdirectories. For example:
 
 ```
-extensions/loop/nflows/basic.nflow
+extensions/loop/nflows/basic_loop.nflow
 ```
 
-```
-@description "Loop loop(...) until(...)"
+```nflow
+@description "Loop until the counter reaches three"
 @assert: result.n == 3
 { n: 0 } -> loop( { n: .n + 1 } ) until( .n >= 3 )
 ```
 
-The `@description` names the feature. Fixtures are discovered by
-walking the embedded `Fixtures` FS, so adding a file is the whole
-change.
+Fixtures are discovered by walking the bundle's embedded `Fixtures` FS.
+Companion inputs live directly in `nflows/` and use the name
+`<fixture-stem>--<relative-path>`, with `--` standing for a directory
+separator. For example, `read--input.json` is staged as `input.json`, while
+`read--schemas--settings.yml` is staged as `schemas/settings.yml`. Companion
+flows use the same convention and are staged for their parent rather than
+run as standalone fixtures.
 
-Inline `SelfTest()` is for cases a fixture cannot express:
+Keep DSL behavior in NFlow fixtures whenever it can be expressed and
+asserted there. Inline `SelfTest()` is reserved for behavior that cannot
+be exercised deterministically from a `.nflow` file, such as a truly live
+external resource. Do not keep duplicate inline DSL strings alongside
+fixture files. Unique Go tests for parser output, modifier translation,
+action behavior, and bundle wiring remain in `*_test.go`.
 
-- **Files outside the workspace.** Fixtures can declare a `Files` map
-  of names to content; anything else needs `SelfTest` with a
-  `t.TempDir`.
-- **Live subprocesses or network.** `external.exec` and `http.request`
-  are self-tested here, not as fixtures.
-- **Runtime middleware with no observable output.** `:cache=` and
-  `:retry=` are tested through behavioral fixtures; if a policy has no
-  observable effect, inline `SelfTest` with a spy hook is the pattern.
+### Extension fixtures vs integrated specs
 
-The rule of thumb: if the behavior can be expressed as a `.nflow` file
-with an `@assert`, use a fixture.
+Use `extensions/<name>/nflows/` to prove that one extension's syntax and
+behavior work. Use the root [`spec/`](../spec/README.md) tree when the
+value is in a practical, multi-extension workflow. An integrated spec
+may own a local `bundle/library.go` and require it with `@require ./bundle`;
+keep these scenarios deterministic and assert their observable contract.
+The root `examples/` tree remains the place for smaller tutorial-first
+walkthroughs. `task self` runs all extension fixtures, while `task specs`
+runs integrated scenarios; both gates are included in `task test` and
+`task ci`.
+
+Compiler-only lexer, parser, AST, and compile-contract cases belong in
+`compiler/*_test.go`; executable `.nflow` flows exercise registered
+extensions and should not be collected into a compiler-owned bundle.
 
 ---
 

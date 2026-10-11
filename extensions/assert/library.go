@@ -17,7 +17,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const ID = "assert"
@@ -35,7 +35,6 @@ func Bundle(_ map[string]string) core.Bundle {
 		Libraries:  []action.Library{{Name: ID}},
 		Directives: []core.Directive{Directive},
 		Primaries:  []core.PrimaryExtension{assertKeyword{}},
-		SelfTest:   selftest,
 		Fixtures:   fixturesFS,
 	}
 }

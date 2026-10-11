@@ -52,7 +52,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 )
 
@@ -175,7 +175,7 @@ func scaffoldBundle(targetDir string) int {
 import (
 	"context"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 )
 

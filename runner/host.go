@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const defaultShutdownTimeout = 10 * time.Second

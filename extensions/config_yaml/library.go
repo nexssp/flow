@@ -7,14 +7,19 @@
 package config_yaml
 
 import (
+	"embed"
+
 	"github.com/nexssp/kernel/action"
 	"gopkg.in/yaml.v3"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/config"
 )
 
 const ID = "config_yaml"
+
+//go:embed nflows
+var fixturesFS embed.FS
 
 func init() {
 	core.Register(ID, Bundle)
@@ -25,7 +30,7 @@ func Bundle(_ map[string]string) core.Bundle {
 	return core.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID}},
-		SelfTest:  selftest,
+		Fixtures:  fixturesFS,
 	}
 }
 

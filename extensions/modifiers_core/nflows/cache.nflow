@@ -1,0 +1,3 @@
+@description "Apply a cache policy modifier"
+@assert: result == "ok"
+runtime.const:cache=1m @{ value: "ok" }

@@ -14,8 +14,6 @@ func run(tb testing.TB, act action.AnyAction, in any) (any, error) {
 	return action.InvokeAny(tb.Context(), act, in)
 }
 
-// ── const ────────────────────────────────────────────────────────
-
 func TestConst_Coercion(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -54,8 +52,6 @@ func TestConst_MissingValue(t *testing.T) {
 	ktest.RequireErrorKind(t, err, xerr.KindBadRequest)
 }
 
-// ── noop ─────────────────────────────────────────────────────────
-
 func TestNoop_PassThrough(t *testing.T) {
 	t.Parallel()
 	in := map[string]any{"x": 1}
@@ -64,16 +60,12 @@ func TestNoop_PassThrough(t *testing.T) {
 	ktest.RequireEqual[any](t, got, in)
 }
 
-// ── debug ────────────────────────────────────────────────────────
-
 func TestDebug_PassThrough(t *testing.T) {
 	t.Parallel()
 	got, err := run(t, Debug, map[string]any{"x": 1})
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual[any](t, got, map[string]any{"x": 1})
 }
-
-// ── fail ─────────────────────────────────────────────────────────
 
 func TestFail_DefaultKindInternal(t *testing.T) {
 	t.Parallel()
@@ -112,8 +104,6 @@ func TestFail_DefaultMessage(t *testing.T) {
 	ktest.RequireErrorContains(t, err, "pipeline deliberately aborted")
 }
 
-// ── pick ─────────────────────────────────────────────────────────
-
 func TestPick_ExtractsNested(t *testing.T) {
 	t.Parallel()
 	got, err := run(t, Pick, map[string]any{
@@ -136,8 +126,6 @@ func TestPick_NoFieldArg(t *testing.T) {
 	ktest.RequireErrorKind(t, err, xerr.KindBadRequest)
 }
 
-// ── wrap ─────────────────────────────────────────────────────────
-
 func TestWrap_UnderKey(t *testing.T) {
 	t.Parallel()
 	got, err := run(t, Wrap, map[string]any{"key": "data", "x": 1})
@@ -150,8 +138,6 @@ func TestWrap_NoKey(t *testing.T) {
 	_, err := run(t, Wrap, map[string]any{"x": 1})
 	ktest.RequireErrorKind(t, err, xerr.KindBadRequest)
 }
-
-// ── env ──────────────────────────────────────────────────────────
 
 func TestEnv_ReadsValue(t *testing.T) {
 	t.Setenv("NEXSS_TEST_ENV", "hello")
@@ -172,8 +158,6 @@ func TestEnv_MissingRequired(t *testing.T) {
 	_, err := run(t, Env, map[string]any{"name": "NEXSS_TEST_MISSING_XYZ", "required": "true"})
 	ktest.RequireErrorKind(t, err, xerr.KindNotFound)
 }
-
-// ── uuid ─────────────────────────────────────────────────────────
 
 func TestUUID_GeneratesString(t *testing.T) {
 	t.Parallel()
@@ -196,8 +180,6 @@ func TestUUID_MergesUnderKey(t *testing.T) {
 	ktest.RequireEqual(t, m["x"], 1)
 	ktest.RequireCondition(t, m["trace_id"] != nil, "trace_id not set")
 }
-
-// ── json.clean ───────────────────────────────────────────────────
 
 func TestJSONClean_StripsFence(t *testing.T) {
 	t.Parallel()
@@ -235,8 +217,6 @@ func TestJSONClean_MapPassthrough(t *testing.T) {
 	ktest.RequireEqual(t, m["content"], `{"a":1}`)
 	ktest.RequireEqual(t, m["model"], "x")
 }
-
-// ── helpers ──────────────────────────────────────────────────────
 
 func TestReadStringArg(t *testing.T) {
 	t.Parallel()

@@ -1,0 +1,95 @@
+name: Harness integration and scheduled full CI
+
+on:
+  pull_request:
+    paths:
+      - 'cli/**'
+      - 'cmd/nflow/**'
+      - 'compiler/**'
+      - 'builder/**'
+      - 'extensions/**'
+      - 'integration/**'
+      - 'native/**'
+      - 'runner/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Taskfile.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cli/**'
+      - 'cmd/nflow/**'
+      - 'compiler/**'
+      - 'builder/**'
+      - 'extensions/**'
+      - 'integration/**'
+      - 'native/**'
+      - 'runner/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Taskfile.yml'
+  schedule:
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  harness:
+    name: harness integration / scheduled full suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install golangci-lint
+        if: github.event_name == 'schedule'
+        uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: v2.14.0
+          install-only: true
+
+      - name: Verify root module manifest is tidy
+        if: github.event_name == 'schedule'
+        run: |
+          task tidy
+          if [ -n "$(git status --porcelain -- go.mod go.sum)" ]; then
+            echo "::error::go.mod or go.sum is not tidy."
+            git status --porcelain -- go.mod go.sum
+            git diff -- go.mod go.sum
+            exit 1
+          fi
+
+      - name: Tools
+        if: github.event_name == 'schedule'
+        run: task tools
+
+      - name: Build all packages
+        if: github.event_name == 'schedule'
+        run: task build
+
+      - name: Run harness integration tests
+        if: github.event_name != 'schedule'
+        run: task test:harness
+
+      - name: Run full scheduled CI gate
+        if: github.event_name == 'schedule'
+        run: task ci
+
+      - name: Run examples
+        if: github.event_name == 'schedule'
+        run: task examples

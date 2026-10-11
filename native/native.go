@@ -19,10 +19,12 @@
 package native
 
 import (
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/assert"
 	"github.com/nexssp/flow/extensions/config"
+	"github.com/nexssp/flow/extensions/config_yaml"
 	"github.com/nexssp/flow/extensions/constants"
+	"github.com/nexssp/flow/extensions/decide"
 	"github.com/nexssp/flow/extensions/description"
 	"github.com/nexssp/flow/extensions/external"
 	"github.com/nexssp/flow/extensions/flow_version"
@@ -57,7 +59,7 @@ import (
 	"github.com/nexssp/flow/extensions/selftestkit"
 	"github.com/nexssp/flow/extensions/stream_ops"
 	"github.com/nexssp/flow/extensions/syntax"
-	"github.com/nexssp/flow/spec"
+	"github.com/nexssp/flow/extensions/template"
 )
 
 // Bundles returns the complete set of bundles the shipped CLI loads.
@@ -68,7 +70,6 @@ import (
 // scratch — never both, because BuildConfig rejects a duplicate ID.
 func Bundles() []core.Bundle {
 	return []core.Bundle{
-		spec.Bundle(nil),
 		syntax.Bundle(nil),
 		runtime.Bundle(nil),
 		match.Bundle(nil),
@@ -108,8 +109,10 @@ func Bundles() []core.Bundle {
 	}
 }
 
-// SelftestBundles returns Bundles plus the bundles that exist only to
-// exercise other bundles' fixtures.
+// SelftestBundles returns Bundles plus bundles used only for conformance
+// testing. Optional extensions are deliberately excluded from Bundles(),
+// but their fixtures still run here so every repository extension has a
+// verified self-test suite.
 //
 // selftestkit ships cov.* actions and a cov.items stream source. Its
 // fixtures live in other bundles' nflows/ directories and reference
@@ -117,10 +120,9 @@ func Bundles() []core.Bundle {
 // selftestkit is not in Bundles(). A self-test fixture must always find
 // them, so it is here.
 //
-// This is the only difference between the production environment and
-// the self-test environment. If you add to this list, you are
-// widening the delta; consider whether the bundle can be exposed via
-// @require instead.
+// These test-only bundles are not available to ordinary CLI flows unless
+// explicitly required. Keep the set aligned with extension packages so
+// the self-test environment can compile and execute every extension fixture.
 func SelftestBundles() []core.Bundle {
 	return SelftestBundlesFrom(Bundles())
 }
@@ -130,7 +132,12 @@ func SelftestBundles() []core.Bundle {
 // instead of invoking every native factory a second time.
 func SelftestBundlesFrom(bundles []core.Bundle) []core.Bundle {
 	out := append([]core.Bundle(nil), bundles...)
-	return append(out, selftestkit.Bundle(nil))
+	return append(out,
+		selftestkit.Bundle(nil),
+		config_yaml.Bundle(nil),
+		decide.Bundle(nil),
+		template.Bundle(nil),
+	)
 }
 
 // Primaries returns the primary extensions contributed by the native

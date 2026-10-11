@@ -6,7 +6,7 @@ import (
 	"github.com/nexssp/kernel/xtest/ktest"
 )
 
-func TestBundle_WiresActionAndSelfTest(t *testing.T) {
+func TestBundle_WiresActionAndFixture(t *testing.T) {
 	t.Parallel()
 	b := Bundle(nil)
 	ktest.RequireEqual(t, b.ID, ID)
@@ -14,5 +14,6 @@ func TestBundle_WiresActionAndSelfTest(t *testing.T) {
 	ktest.RequireEqual(t, b.Libraries[0].Name, ID)
 	ktest.RequireEqual(t, len(b.Libraries[0].Actions), 1)
 	ktest.RequireEqual(t, b.Libraries[0].Actions[0].Describe().Name, "decide.run")
-	ktest.RequireCondition(t, b.SelfTest != nil, "SelfTest is nil")
+	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
+	ktest.RequireCondition(t, b.SelfTest == nil, "duplicate inline SelfTest remains")
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/nexssp/kernel/xerr"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/nexssp/flow/contracts"
+	"github.com/nexssp/flow/compiler/contracts"
 )
 
 const (
@@ -62,7 +62,6 @@ var DistributeMap = action.New("distribute.map", func(ctx context.Context, req D
 		concurrency = maxConcurrency
 	}
 
-	// ─── Kernel Composition ──────────────────────────────────────────────
 	// Compose target once with Kernel's native middleware. All goroutines
 	// share the rate limiter, and each execution gets its own retry/timeout.
 	builder := action.Dynamic(target)

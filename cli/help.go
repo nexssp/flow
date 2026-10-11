@@ -90,14 +90,20 @@ var helpRegistry = map[string]helpText{
 		},
 	},
 	"explain": {
-		Summary: "Show the effective modifiers for each atom, with source attribution. With --ast, render the effective AST after every directive and macro has been resolved.",
-		Usage:   "nflow explain <file.nflow> [--ast] [--json]",
-		Flags: `      --ast         show the effective AST instead of the policy view
-      --json        emit the AST as JSON (requires --ast)`,
+		Summary: "Show effective modifiers, the resolved AST, the built Kernel action graph, or the AST-derived plan.",
+		Usage:   "nflow explain <file.nflow> [--ast|--actions|--plan] [--json|--dot]",
+		Flags: `      --ast         show the effective AST
+			      --actions     show the built Kernel action graph; argument values are omitted
+			      --plan        show the AST-derived Flow lowering plan (not the built graph)
+		      --json        emit the selected view as JSON
+			      --dot         emit an action graph or plan in Graphviz DOT format`,
 		Examples: []string{
 			`nflow explain flows/client.nflow`,
 			`nflow explain --ast flows/client.nflow`,
 			`nflow explain --ast --json flows/client.nflow > ast.json`,
+			`nflow explain --actions flows/client.nflow`,
+			`nflow explain --plan --dot flows/client.nflow > plan.dot`,
+			`nflow explain --actions --dot flows/client.nflow > actions.dot`,
 		},
 	},
 	"expand": {

@@ -7,7 +7,7 @@ import (
 	"github.com/nexssp/kernel/xctx"
 	"github.com/nexssp/kernel/xerr"
 
-	"github.com/nexssp/flow/contracts"
+	"github.com/nexssp/flow/compiler/contracts"
 )
 
 // StepAction renders one progress line and passes its input through

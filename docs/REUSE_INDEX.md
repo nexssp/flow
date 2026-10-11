@@ -194,7 +194,7 @@ polling loops, never `time.Sleep` for synchronization.
 This repository. Packages are top-level; there is no `compiler/`
 wrapper.
 
-### `flow/core` — compiler internals
+### `flow/compiler` — compiler internals
 
 | API | Use |
 |---|---|
@@ -333,7 +333,7 @@ time. The one alias mechanism Flow supports is `@require ... as NAME`,
 which is per-compilation and does not mutate the source library.
 
 Native keywords (`const`, `noop`, `pick`, ...) are grammar, not
-aliases. They live in `core/reserved.go` and are not extensible.
+aliases. They live in `compiler/reserved.go` and are not extensible.
 
 ---
 

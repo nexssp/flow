@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// Włączamy kolory domyślnie (chyba że użytkownik ustawi NO_COLOR=1)
+// Colors are enabled unless NO_COLOR is set.
 var useColor = os.Getenv("NO_COLOR") == ""
 
 const (

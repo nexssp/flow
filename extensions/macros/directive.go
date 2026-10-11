@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const (

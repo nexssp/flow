@@ -3,7 +3,7 @@ package modifiers_auth
 import (
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // Modifiers returns the identity guards exposed by this bundle. Each

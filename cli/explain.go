@@ -2,13 +2,14 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"sort"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/runner"
 )
 
@@ -17,25 +18,22 @@ import (
 // produced it. It parses with the same line-indexed modifier chain
 // the runtime compiler uses, so its output is what the compiler sees.
 func runExplain(ctx context.Context, inv *invocation, args []string) int {
-	if len(args) == 0 {
-		return fatalf("usage: nflow explain <file.nflow>")
+	options, err := parseExplainOptions(args)
+	if err != nil {
+		return fatalf("usage: nflow explain <file.nflow> [--ast|--actions|--plan] [--json|--dot]: %v", err)
 	}
-	path := args[0]
-	if _, err := os.Stat(path); err != nil {
+	if _, err := os.Stat(options.path); err != nil {
 		return fatalf("read: %v", err)
 	}
-	return withHarness(ctx, inv, "explain", path, args, runExplainInProcess)
+	return withHarness(ctx, inv, "explain", options.path, args, runExplainInProcess)
 }
 
-// runExplainInProcess gains flag parsing and the --ast / --json paths.
 func runExplainInProcess(ctx context.Context, inv *invocation, args []string) int {
-	if len(args) < 1 {
-		return fatalf("usage: nflow explain <file.nflow> [--ast] [--json]")
+	options, err := parseExplainOptions(args)
+	if err != nil {
+		return fatalf("usage: nflow explain <file.nflow> [--ast|--actions|--plan] [--json|--dot]: %v", err)
 	}
-	path := args[0]
-
-	wantAST := hasFlag(args[1:], "--ast")
-	wantJSON := hasFlag(args[1:], "--json")
+	path := options.path
 
 	src, err := os.ReadFile(path)
 	if err != nil {
@@ -52,16 +50,21 @@ func runExplainInProcess(ctx context.Context, inv *invocation, args []string) in
 		return fatalf("config: %v", err)
 	}
 
-	// --json has no meaning for the policy view; it exists only for
-	// the AST view, which carries a machine-readable shape. Refusing
-	// the combination explicitly is better than silently ignoring one
-	// of the two flags.
-	if wantJSON && !wantAST {
-		return fatalf("--json requires --ast (the policy view has no JSON shape)")
+	if options.actions {
+		if err := renderExplainActionGraph(ctx, os.Stdout, cfg, string(src), path, options.json, options.dot); err != nil {
+			return fatalf("%v", err)
+		}
+		return 0
+	}
+	if options.plan {
+		if err := renderExplainActionPlan(ctx, os.Stdout, cfg, string(src), path, options.json, options.dot); err != nil {
+			return fatalf("%v", err)
+		}
+		return 0
 	}
 
-	if wantAST {
-		if err := renderExplainASTWithContext(ctx, os.Stdout, cfg, string(src), path, wantJSON); err != nil {
+	if options.ast {
+		if err := renderExplainASTWithContext(ctx, os.Stdout, cfg, string(src), path, options.json); err != nil {
 			return fatalf("%v", err)
 		}
 		return 0
@@ -71,6 +74,82 @@ func runExplainInProcess(ctx context.Context, inv *invocation, args []string) in
 		return fatalf("%v", err)
 	}
 	return 0
+}
+
+type explainOptions struct {
+	path    string
+	ast     bool
+	actions bool
+	plan    bool
+	json    bool
+	dot     bool
+}
+
+func parseExplainOptions(args []string) (explainOptions, error) {
+	var options explainOptions
+	for _, arg := range args {
+		if err := applyExplainOption(&options, arg); err != nil {
+			return explainOptions{}, err
+		}
+	}
+	if err := validateExplainOptions(options); err != nil {
+		return explainOptions{}, err
+	}
+	return options, nil
+}
+
+func applyExplainOption(options *explainOptions, arg string) error {
+	switch arg {
+	case "--ast":
+		options.ast = true
+	case "--actions":
+		options.actions = true
+	case "--plan":
+		options.plan = true
+	case "--json":
+		options.json = true
+	case "--dot":
+		options.dot = true
+	default:
+		return setExplainPath(options, arg)
+	}
+	return nil
+}
+
+func setExplainPath(options *explainOptions, path string) error {
+	if strings.HasPrefix(path, "-") {
+		return fmt.Errorf("unknown flag %q", path)
+	}
+	if options.path != "" {
+		return fmt.Errorf("unexpected argument %q", path)
+	}
+	options.path = path
+	return nil
+}
+
+func validateExplainOptions(options explainOptions) error {
+	if options.path == "" {
+		return errors.New("missing source file")
+	}
+	views := 0
+	for _, selected := range []bool{options.ast, options.actions, options.plan} {
+		if selected {
+			views++
+		}
+	}
+	if views > 1 {
+		return errors.New("--ast, --actions, and --plan select different views")
+	}
+	if options.dot && !options.actions && !options.plan {
+		return errors.New("--dot requires --actions or --plan")
+	}
+	if options.dot && options.json {
+		return errors.New("--dot and --json are mutually exclusive")
+	}
+	if options.json && !options.ast && !options.actions && !options.plan {
+		return errors.New("--json requires --ast, --actions, or --plan")
+	}
+	return nil
 }
 
 // renderExplain is the pure function behind runExplainInProcess. It

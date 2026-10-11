@@ -3,7 +3,7 @@ package loop
 import (
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // loopKeyword is the compile-time parser extension. It has no runtime

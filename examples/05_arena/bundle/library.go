@@ -8,7 +8,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const (
@@ -156,8 +156,8 @@ func (w *world) advance(_ context.Context, _ struct{}) (TickRes, error) {
 	w.tick++
 	for id, c := range w.players {
 		oldRow, oldCol := sectorOf(c.x, c.y)
-		c.x = clamp(c.x+c.dx, 0, gridWidth-1)
-		c.y = clamp(c.y+c.dy, 0, gridHeight-1)
+		c.x = clamp(c.x+c.dx, gridWidth-1)
+		c.y = clamp(c.y+c.dy, gridHeight-1)
 		newRow, newCol := sectorOf(c.x, c.y)
 		if newRow != oldRow || newCol != oldCol {
 			delete(w.sectors[oldRow][oldCol], id)
@@ -218,12 +218,12 @@ func (w *world) view(_ context.Context, req ViewReq) (View, error) {
 }
 
 func sectorOf(x, y int) (row, col int) {
-	return clamp(y/sectorSize, 0, sectorRows-1), clamp(x/sectorSize, 0, sectorCols-1)
+	return clamp(y/sectorSize, sectorRows-1), clamp(x/sectorSize, sectorCols-1)
 }
 
-func clamp(v, lo, hi int) int {
-	if v < lo {
-		return lo
+func clamp(v, hi int) int {
+	if v < 0 {
+		return 0
 	}
 	if v > hi {
 		return hi

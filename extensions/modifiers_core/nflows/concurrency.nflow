@@ -1,0 +1,3 @@
+@description "Apply a concurrency policy modifier"
+@assert: result == "ok"
+runtime.const:concurrency=4 @{ value: "ok" }

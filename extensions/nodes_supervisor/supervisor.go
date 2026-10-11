@@ -9,7 +9,7 @@ import (
 	"github.com/nexssp/kernel/xerr"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/nexssp/flow/contracts"
+	"github.com/nexssp/flow/compiler/contracts"
 )
 
 const (

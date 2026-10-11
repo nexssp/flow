@@ -8,7 +8,7 @@ import (
 
 	"github.com/nexssp/kernel/xctx"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const (

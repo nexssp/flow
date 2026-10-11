@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/native"
 )
 

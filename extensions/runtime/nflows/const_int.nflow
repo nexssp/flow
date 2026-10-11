@@ -1,0 +1,3 @@
+@description "Runtime.const preserves an integer payload"
+@assert: result == 42
+runtime.const @{ value: 42 }

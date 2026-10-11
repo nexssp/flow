@@ -24,7 +24,7 @@ func TestBundle_WiresKeywordAndFixtures(t *testing.T) {
 	ktest.RequireEqual(t, kw.Keyword(), "loop")
 
 	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
-	ktest.RequireCondition(t, b.SelfTest != nil, "SelfTest is nil")
+	ktest.RequireCondition(t, b.SelfTest == nil, "duplicate inline SelfTest remains")
 }
 
 // TestFixtures_Discoverable verifies that at least one .nflow fixture

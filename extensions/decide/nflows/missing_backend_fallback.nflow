@@ -1,0 +1,4 @@
+@description "Error recovery: route an unavailable decision backend to fallback"
+@assert: result == "recovered"
+{ backend: "missing", questions: { x: { type: "label" } } } -> decide.run
+|| runtime.const @{ value: "recovered" }

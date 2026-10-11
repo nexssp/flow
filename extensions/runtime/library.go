@@ -11,10 +11,15 @@
 package runtime
 
 import (
+	"embed"
+
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
+
+//go:embed nflows
+var fixturesFS embed.FS
 
 const ID = "runtime"
 
@@ -29,7 +34,7 @@ func Bundle(_ map[string]string) core.Bundle {
 		ArgSchemas: map[string][]core.ArgFieldSpec{
 			"runtime.call": {{Name: "name", Kind: core.ArgCapabilityRef, Optional: true}},
 		},
-		SelfTest: selftest,
+		Fixtures: fixturesFS,
 	}
 }
 

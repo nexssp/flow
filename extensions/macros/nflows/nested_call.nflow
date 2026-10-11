@@ -1,0 +1,9 @@
+@description "Macro: nested invocation"
+@macro echo(v) {
+  const @{ value: $v }
+}
+@macro seq(a, b) {
+  $a -> $b
+}
+@assert: result == "inner"
+@seq(@echo("inner"), runtime.noop)

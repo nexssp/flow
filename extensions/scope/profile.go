@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // profilesKey is the meta slot where @profile declarations live.

@@ -9,12 +9,17 @@
 package decide
 
 import (
+	"embed"
+
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const ID = "decide"
+
+//go:embed nflows
+var fixturesFS embed.FS
 
 func init() {
 	core.Register(ID, Bundle)
@@ -24,6 +29,6 @@ func Bundle(_ map[string]string) core.Bundle {
 	return core.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{DecideAction}}},
-		SelfTest:  selftest,
+		Fixtures:  fixturesFS,
 	}
 }

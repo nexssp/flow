@@ -5,7 +5,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/modifiers_core"
 	"github.com/nexssp/flow/extensions/modifiers_meta"
 	"github.com/nexssp/flow/extensions/pipeline"

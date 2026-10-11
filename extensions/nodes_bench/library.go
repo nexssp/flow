@@ -10,12 +10,17 @@
 package nodes_bench
 
 import (
+	"embed"
+
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const ID = "nodes_bench"
+
+//go:embed nflows
+var fixturesFS embed.FS
 
 func init() {
 	core.Register(ID, Bundle)
@@ -28,7 +33,7 @@ func Bundle(_ map[string]string) core.Bundle {
 		ArgSchemas: map[string][]core.ArgFieldSpec{
 			"bench.run": {{Name: "action", Kind: core.ArgCapabilityRef}},
 		},
-		SelfTest: selftest,
+		Fixtures: fixturesFS,
 	}
 }
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // Directive parses `@schema NAME { ... }` into a Schema appended to
@@ -125,8 +125,7 @@ func resolveEmbeds(raw []Field, declared []Schema, pos core.Position, schemaName
 	return out, nil
 }
 
-// parseSchemaField parses one field line: `Name Type `tags“. Returns
-// nil for a blank line.
+// parseSchemaField parses a field line with optional struct tags.
 func parseSchemaField(line string) (*Field, error) {
 	line = strings.TrimSpace(line)
 	if line == "" {

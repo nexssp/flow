@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 	"github.com/nexssp/flow/runner"
 )
@@ -51,7 +51,7 @@ func runWithBundleFactories(
 	construct func(func(core.Bundle) error) error,
 	dispatch func(*invocation, context.Context) int,
 ) int {
-	inv, err := newInvocation(nil, targets)
+	inv, err := newNativeInvocation(nil, targets)
 	if err != nil {
 		return fatalf("flow host: %v", err)
 	}

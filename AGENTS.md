@@ -30,12 +30,16 @@ Do not duplicate Kernel behavior in Flow nodes, runner code, transports, or exte
 
 ## 2. Architecture boundaries
 
-- `compiler/` owns parsing, AST, compilation, and compiler contracts.
-- `compiler/extensions/` owns pluggable Flow language features and `@require` integration.
-- `nodes/` owns Flow-facing actions and domain adapters; runtime mechanics belong to Kernel.
+This repository is one Go module with package boundaries, not nested release modules.
+
+- `compiler/` owns the compiler engine, parsing, AST, compile contracts, and the NFlow spec frontend.
+- `extensions/` owns pluggable language features, adapters, `@require` integration, and extension-contributed self-test/conformance cases.
 - `runner/` owns Flow execution assembly, capability resolution, lifecycle wiring, and cleanup.
-- `transport/` owns transport abstractions and bindings; concrete transports remain separate packages.
-- `contracts/` owns execution-context bridges between runner and extensions.
+- `builder/` owns standalone binary builds, external-module harness builds, and build metadata.
+- `cli/` and `cmd/nflow/` provide the thin CLI frontend and dispatch to `builder/`.
+- `native/` defines the shipped default bundle catalog/preset while preserving package discovery and tree-shaking.
+- `integration/` owns assembled app-level tests that cross package boundaries.
+- `compiler/contracts/` owns execution-context bridges shared by runner and extensions.
 - `nexssp/ai`, `nexssp/cost`, and other sibling packages own their domain logic.
 
 Do not put AI, filesystem, provider, transport, or cost policy into the compiler core or Kernel core.

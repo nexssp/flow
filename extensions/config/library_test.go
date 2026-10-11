@@ -13,7 +13,8 @@ func TestBundle_WiresDirectivesAndPreprocess(t *testing.T) {
 	ktest.RequireEqual(t, b.Libraries[0].Name, ID)
 	ktest.RequireEqual(t, len(b.Directives), 2)
 	ktest.RequireCondition(t, b.OnPreprocess != nil, "OnPreprocess is nil")
-	ktest.RequireCondition(t, b.SelfTest != nil, "SelfTest is nil")
+	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
+	ktest.RequireCondition(t, b.SelfTest == nil, "duplicate inline SelfTest remains")
 }
 
 func TestForwardConfigToCompiler_Empty(t *testing.T) {
@@ -35,8 +36,8 @@ func TestMetaConfig_CreatesAndReuses(t *testing.T) {
 	ktest.RequireEqual(t, second["a"], "1")
 }
 
-func TestSelfTestShape(t *testing.T) {
-	sections := Bundle(nil).SelfTest()
+func TestFixturesShape(t *testing.T) {
+	sections := Bundle(nil).AllSelfTests()
 	ktest.RequireCondition(t, len(sections) > 0, "no sections")
 
 	seen := make(map[string]bool)

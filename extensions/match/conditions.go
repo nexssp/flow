@@ -7,7 +7,7 @@ import (
 	"github.com/expr-lang/expr/vm"
 	"github.com/nexssp/kernel/xerr"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // ConditionCase is one ordered expression condition, or a default branch.

@@ -18,7 +18,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 const ID = "macros"
@@ -77,7 +77,6 @@ func Bundle(_ map[string]string) core.Bundle {
 				Primaries: []core.PrimaryExtension{&macroPrimary{byName: byName}},
 			}
 		},
-		SelfTest: selftest,
 		Fixtures: fixturesFS,
 	}
 }

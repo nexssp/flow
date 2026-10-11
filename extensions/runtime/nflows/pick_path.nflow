@@ -1,0 +1,4 @@
+@description "Runtime.pick selects a nested field path"
+@assert: result == "alice@example.test"
+{ user: { email: "alice@example.test" }, ignored: true }
+-> runtime.pick @{ field: "user.email" }

@@ -34,8 +34,6 @@ func Completion(shell string, w io.Writer) error {
 // may return nothing. Kept for API stability.
 var ErrCompletionEmpty = errors.New("completion: nothing to complete")
 
-// ── bash ─────────────────────────────────────────────────────────────
-
 const bashCompletion = `# nexssflow bash completion.
 # Install:
 #   nexssflow completion bash | sudo tee /etc/bash_completion.d/nexssflow > /dev/null
@@ -87,8 +85,6 @@ _nexssflow() {
 complete -F _nexssflow nexssflow
 `
 
-// ── zsh ──────────────────────────────────────────────────────────────
-
 const zshCompletion = `#compdef nexssflow
 # nexssflow zsh completion.
 # Install: nexssflow completion zsh > "${fpath[1]}/_nexssflow"
@@ -132,7 +128,6 @@ _nexssflow() {
 _nexssflow "$@"
 `
 
-// ── pwsh ─────────────────────────────────────────────────────────────
 //
 //nolint:gosec // G101 false positive: shell completion script, not credentials.
 const pwshCompletion = `# nexssflow PowerShell completion.

@@ -8,11 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/runner"
 )
-
-// ── public entry ─────────────────────────────────────────────────────
 
 func renderExplainASTWithContext(ctx context.Context, w io.Writer, cfg runner.Config, src, path string, jsonOut bool) error {
 	topAST, pipelines, err := parseExplainASTWithContext(ctx, cfg, src, path)
@@ -26,8 +24,6 @@ func renderExplainASTWithContext(ctx context.Context, w io.Writer, cfg runner.Co
 	renderExplainASTText(w, path, topAST, pipelines)
 	return nil
 }
-
-// ── parsing ──────────────────────────────────────────────────────────
 
 // parseExplainAST preprocesses the source and returns the top-level
 // AST plus one AST per @pipeline body. It mirrors the parse path the
@@ -85,8 +81,6 @@ func parseExplainASTWithContext(
 
 	return topAST, pipelines, nil
 }
-
-// ── text rendering ───────────────────────────────────────────────────
 
 func renderExplainASTText(w io.Writer, path string, topAST core.Expr, pipelines map[string]core.Expr) {
 	useColor := colorEnabled(w)
@@ -265,8 +259,6 @@ type ASTPosition struct {
 	Line int    `json:"line,omitempty"`
 	Col  int    `json:"col,omitempty"`
 }
-
-// ── JSON rendering ───────────────────────────────────────────────────
 
 // ASTNode is the machine-readable form of one AST node. Fields are
 // populated selectively based on Kind:

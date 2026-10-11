@@ -6,10 +6,8 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
-
-// ── Correctness ──────────────────────────────────────────────────────
 
 func TestScore_SkippedDoesNotReduceValue(t *testing.T) {
 	// 91 passed, 0 failed, 1 skipped. The skipped feature was
@@ -57,8 +55,6 @@ func TestScore_GradeThresholds(t *testing.T) {
 	}
 }
 
-// ── Backward compatibility: flat fields stay where they were ─────────
-
 func TestScore_FlatFieldsStillReadable(t *testing.T) {
 	// Every caller that reads s.TotalAllocs, s.Slowest, or
 	// s.Fingerprint directly must keep compiling. This test is the
@@ -82,8 +78,6 @@ func TestScore_FlatFieldsStillReadable(t *testing.T) {
 	ktest.RequireLen(t, s.Slowest, 1)
 	ktest.RequireLen(t, s.TopAllocators, 1)
 }
-
-// ── PerfBaseline thresholds ──────────────────────────────────────────
 
 func TestPerfBaseline_WithinTolerance_NotRegressed(t *testing.T) {
 	// A run that grew allocations by 3% is within the 5% tolerance
@@ -129,8 +123,6 @@ func TestPctDelta_Growth(t *testing.T) {
 	ktest.RequireEqual(t, pctDelta(100, 110), 10.0)
 	ktest.RequireEqual(t, pctDelta(100, 90), -10.0)
 }
-
-// ── ComputeScore wiring ──────────────────────────────────────────────
 
 func TestComputeScore_FillsFlatFields(t *testing.T) {
 	results := []Result{

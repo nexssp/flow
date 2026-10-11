@@ -9,26 +9,28 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/nexssp/flow/builder"
 )
 
 // SelfBuild rebuilds the running nexssflow binary in place, injecting
 // VCS metadata from the source directory. It replaces the manual
 // `go install` step for developers who want consistent version output.
 func SelfBuild(ctx context.Context) error {
-	dir, err := selfModuleRoot()
+	dir, err := builder.FlowModuleRoot()
 	if err != nil {
 		return err
 	}
 
 	output := goInstallTarget(ctx, "nexssflow")
 
-	version := gitDescribe(ctx, dir)
-	commit := gitCommit(ctx, dir)
+	version := builder.GitDescribe(ctx, dir)
+	commit := builder.GitCommit(ctx, dir)
 	builtAt := time.Now().UTC().Format(time.RFC3339)
 
 	ldflags := fmt.Sprintf(
-		"-s -w -X nexssflow/cli.Version=%s -X nexssflow/cli.Commit=%s -X nexssflow/cli.BuiltAt=%s",
-		version, commit, builtAt,
+		"-s -w -X nexssflow/cli.Version=%s -X nexssflow/cli.Commit=%s -X nexssflow/cli.BuiltAt=%s -X nexssflow/builder.Version=%s -X nexssflow/builder.Commit=%s -X nexssflow/builder.BuiltAt=%s",
+		version, commit, builtAt, version, commit, builtAt,
 	)
 
 	fmt.Fprintf(os.Stderr, "building nexssflow\n")
@@ -38,7 +40,7 @@ func SelfBuild(ctx context.Context) error {
 	fmt.Fprintf(os.Stderr, "  commit:   %s\n", commit)
 
 	//nolint:gosec // G204: output path and ldflags are derived from the local module root.
-	cmd := exec.CommandContext(ctx, "go", "build", "-ldflags="+ldflags, "-o", output, "./cmd/nexssflow")
+	cmd := exec.CommandContext(ctx, "go", "build", "-ldflags="+ldflags, "-o", output, "./cmd/nflow")
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -75,36 +77,4 @@ func goInstallTarget(ctx context.Context, name string) string {
 		name += ".exe"
 	}
 	return filepath.Join(bin, name)
-}
-
-func gitDescribe(ctx context.Context, dir string) string {
-	if out, err := runGit(ctx, dir, "describe", "--tags", "--always", "--dirty"); err == nil {
-		return strings.TrimSpace(out)
-	}
-	if out, err := runGit(ctx, dir, "rev-parse", "--short", "HEAD"); err == nil {
-		return strings.TrimSpace(out)
-	}
-	return "dev"
-}
-
-func gitCommit(ctx context.Context, dir string) string {
-	out, err := runGit(ctx, dir, "rev-parse", "--short", "HEAD")
-	if err != nil {
-		return "unknown"
-	}
-	commit := strings.TrimSpace(out)
-	if dirty, err := runGit(ctx, dir, "status", "--porcelain"); err == nil && strings.TrimSpace(dirty) != "" {
-		commit += "-dirty"
-	}
-	return commit
-}
-
-func runGit(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return string(out), nil
 }

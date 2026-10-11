@@ -1,0 +1,4 @@
+@description "Sort filesystem entries by relative path"
+@assert: len(result) == 2
+@assert: result[0].rel_path < result[1].rel_path
+fs.walk -> fs.sort:by="rel_path" -> collect

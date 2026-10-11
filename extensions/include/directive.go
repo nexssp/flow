@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/nexssp/flow/core"
+	core "github.com/nexssp/flow/compiler"
 )
 
 // Directive parses `@include "path"` and merges the referenced file's

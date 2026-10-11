@@ -16,7 +16,7 @@ else parses `:name=value` strings.
 
 | Layer | Location | Owns |
 |---|---|---|
-| Parsing primitives | `flow/core/modifier.go` | `Duration`, `Int`, `Int32`, `Int64`, `Float64`, `String`, `StringList`, `Flag` |
+| Parsing primitives | `flow/compiler/modifier.go` | `Duration`, `Int`, `Int32`, `Int64`, `Float64`, `String`, `StringList`, `Flag` |
 | Standard modifiers | `flow/modifiers/standard.go` | `:timeout=`, `:retry=`, `:cache=`, `:auth`, `:role=`, `:name=`, `:tag=`, `:read_only`, … |
 | Extension modifiers | `flow/extensions/<domain>/modifiers.go` | Everything else: `:breaker_failures=`, `:budget=`, `:model=`, `:nats=`, … |
 
@@ -68,7 +68,7 @@ no-op.
 
 ### Strict-mode markers
 
-`:strict` and `:lenient` are read by `core/strict.go` through
+`:strict` and `:lenient` are read by `compiler/strict.go` through
 `hasModifier`, not by the builder. Their apply callbacks are identity
 lambdas returning the builder unchanged. They exist so the parser
 accepts the syntax and so `core.ModifierTable.All()` lists them for the

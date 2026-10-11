@@ -1,0 +1,3 @@
+@description "Mark an action as idempotent"
+@assert: result == "ok"
+runtime.const:idempotent @{ value: "ok" }
