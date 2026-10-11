@@ -9,15 +9,13 @@ permissions:
 
 jobs:
   verify:
-    name: fast PR checks
+    name: build · lint · test
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -31,14 +29,14 @@ jobs:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Fast binary install (~2s), isolates linter dependencies from go.mod.
+      # Fast binary install (~2s), isolates linter dependencies from go.mod
       - name: Install golangci-lint
         uses: golangci/golangci-lint-action@v9.3.0
         with:
           version: v2.14.0
           install-only: true
 
-      - name: Verify module manifest is tidy
+      - name: Verify go.mod and go.sum are tidy
         run: |
           task tidy
           if [ -n "$(git status --porcelain -- go.mod go.sum)" ]; then
@@ -51,8 +49,14 @@ jobs:
       - name: Tools
         run: task tools
 
-      - name: Run fast PR gate
-        run: task ci:pr
+      - name: Build
+        run: task build
+
+      - name: Run CI gate
+        run: task ci
+
+      - name: Benchmark smoke check
+        run: task bench
 
       - name: Run examples
         run: task examples
