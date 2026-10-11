@@ -334,16 +334,19 @@ func (r *Renderer) ScoreSummary(s Score, host HostInfo) {
 
 	r.printf("  %-14s %s\n", r.bold("HOST"), r.dim(host.FormatBanner()))
 
-	// Correctness.
+	// CHANGED: score and grade are tinted from the correctness value.
+	// Green only fires on a perfect 100 / 100; a run with any failure
+	// at all is yellow (still passing most checks) or red (meaningful
+	// fraction failed).
+	tint := scoreColor(s.Value())
 	r.printf("  %-14s %s  %s  %s\n",
 		r.bold("CORRECTNESS"),
-		r.green(r.bold(fmt.Sprintf("%.1f / 100", s.Value()))),
-		r.cyan(s.Grade()),
+		r.paint(tint, r.bold(fmt.Sprintf("%.1f / 100", s.Value()))),
+		r.paint(tint, s.Grade()),
 		r.dim(fmt.Sprintf("(%d passed, %d failed, %d skipped)",
 			s.Passed, s.Failed, s.Skipped)),
 	)
 
-	// Performance — the raw measurements, split by phase.
 	if s.TotalAllocs > 0 {
 		r.printf("  %-14s %s allocs · %s\n",
 			r.bold("PERFORMANCE"),
@@ -357,7 +360,6 @@ func (r *Renderer) ScoreSummary(s Score, host HostInfo) {
 		)
 	}
 
-	// Baseline delta, when the baseline was recorded on this host.
 	if pb := s.PerfBaseline; pb != nil {
 		marker := ""
 		if pb.Regressed {
@@ -584,4 +586,15 @@ func (r *Renderer) UnmatchedFilters(filters []string) {
 	r.printf("%s\n", r.red(line))
 	r.printf("  %s\n", r.dim("run `nflow self test` with no arguments to list every feature"))
 	r.printf("%s\n", r.red(line))
+}
+
+func scoreColor(value float64) string {
+	switch {
+	case value >= 100:
+		return ansiGreen
+	case value >= 70:
+		return ansiYellow
+	default:
+		return ansiRed
+	}
 }

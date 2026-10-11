@@ -7,20 +7,16 @@ import (
 	core "github.com/nexssp/flow/compiler"
 )
 
-// Rule is a single conditional mapping in a @on_error block.
 type Rule struct {
 	Condition string
 	Target    string
 }
 
-// Config is the parsed @on_error block.
 type Config struct {
 	Rules      []Rule
 	ElseTarget string
 }
 
-// Directive parses the `@on_error { ... }` block and writes it to
-// meta["on_error"].
 var Directive = core.Directive{
 	Name: "on_error",
 	Example: `@on_error {
@@ -32,6 +28,36 @@ var Directive = core.Directive{
 
 func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
 	pos := core.Position{File: req.File, Line: req.I + 1}
+	line := strings.TrimSpace(req.Lines[req.I])
+
+	// NEW: short form — `@on_error target` or `@on_error:target`.
+	//
+	// When the rest of the declaration line does not begin with `{`,
+	// treat it as a bare target action name and record it as the sole
+	// (catch-all) recovery. This is exactly equivalent to
+	//
+	//     @on_error {
+	//       else -> target
+	//     }
+	//
+	// The target is resolved at runtime through the action resolver,
+	// so it may name a pipeline (`pipeline.recover`), a bundled action
+	// (`error.passthrough`), or any other registered capability.
+	rest := strings.TrimSpace(strings.TrimPrefix(line, "@on_error"))
+	rest = strings.TrimPrefix(rest, ":")
+	rest = strings.TrimSpace(rest)
+
+	if !strings.HasPrefix(rest, "{") {
+		target := strings.TrimSpace(core.StripExprComments(rest))
+		if target == "" {
+			return core.DirectiveRes{}, core.SourceError(pos,
+				"@on_error: expected `{ ... }` block or a target action name")
+		}
+		req.Out["on_error"] = Config{ElseTarget: target}
+		return core.DirectiveRes{Next: req.I + 1}, nil
+	}
+
+	// Long form: unchanged.
 	lines, next, err := core.ReadBlock(req.Lines, req.I)
 	if err != nil {
 		return core.DirectiveRes{}, core.SourceError(pos, "@on_error: %v", err)

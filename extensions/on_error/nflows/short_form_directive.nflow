@@ -1,0 +1,7 @@
+@description "Short form @on_error target recovers from any error"
+@pipeline recover
+  runtime.const @{ value: "recovered" }
+@end
+@on_error pipeline.recover
+@assert: result == "recovered"
+runtime.fail @{ kind: "Internal", message: "boom" }

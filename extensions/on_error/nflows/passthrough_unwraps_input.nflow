@@ -1,0 +1,9 @@
+@description "error.passthrough unwraps the original input from the error env"
+@pipeline guarded
+  runtime.fail @{ kind: "Validation", message: "boom" } ? on_error {
+    xerr.KindValidation -> error.passthrough,
+    else -> error.reraise
+  }
+@end
+@assert: result.original == 42
+{ original: 42 } -> pipeline.guarded

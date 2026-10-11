@@ -48,19 +48,19 @@ func TestValidate_Success(t *testing.T) {
 		"attrs":  map[string]any{"x": 1},
 		"active": nil,
 	}
-	ktest.RequireNoError(t, Validate(sampleSchema(), payload))
+	ktest.RequireNoError(t, Validate(t.Context(), sampleSchema(), payload))
 }
 
 func TestValidate_MissingRequired(t *testing.T) {
 	t.Parallel()
-	err := Validate(sampleSchema(), map[string]any{"age": 42})
+	err := Validate(t.Context(), sampleSchema(), map[string]any{"age": 42})
 	detail := requireValidationField(t, err, "name")
 	ktest.RequireEqual(t, detail.Validation, "required")
 }
 
 func TestValidate_OptionalMissing(t *testing.T) {
 	t.Parallel()
-	ktest.RequireNoError(t, Validate(sampleSchema(), map[string]any{"name": "Maksymilian"}))
+	ktest.RequireNoError(t, Validate(t.Context(), sampleSchema(), map[string]any{"name": "Maksymilian"}))
 }
 
 func TestValidate_TypeErrors(t *testing.T) {
@@ -79,7 +79,7 @@ func TestValidate_TypeErrors(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			err := Validate(sampleSchema(), c.payload)
+			err := Validate(t.Context(), sampleSchema(), c.payload)
 			detail := requireValidationField(t, err, c.field)
 			ktest.RequireEqual(t, detail.Validation, c.wantValidate)
 		})
@@ -88,7 +88,7 @@ func TestValidate_TypeErrors(t *testing.T) {
 
 func TestValidate_NotAnObject(t *testing.T) {
 	t.Parallel()
-	err := Validate(sampleSchema(), "not-an-object")
+	err := Validate(t.Context(), sampleSchema(), "not-an-object")
 	ktest.RequireErrorKind(t, err, xerr.KindValidation)
 	ktest.RequireErrorContains(t, err, "expected object")
 }
@@ -98,7 +98,7 @@ func TestValidate_MultipleFailures(t *testing.T) {
 	// Both `name` (missing required) and `age` (wrong type) fail in
 	// one call; both details must be reported, not just the first.
 	payload := map[string]any{"age": "young"}
-	err := Validate(sampleSchema(), payload)
+	err := Validate(t.Context(), sampleSchema(), payload)
 
 	appErr, ok := errors.AsType[*xerr.AppError](err)
 	ktest.RequireCondition(t, ok, "error is %T, want *xerr.AppError", err)

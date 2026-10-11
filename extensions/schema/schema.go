@@ -1,15 +1,21 @@
 package schema
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/nexssp/kernel/xerr"
+	"github.com/nexssp/validation"
 )
 
-const typeString = "string"
+const (
+	typeString = "string"
+	typeNumber = "number"
+	typeObject = "object"
+)
 
-// SchemaKind is a coarse classification used by Validate.
 type Kind uint8
 
 const (
@@ -21,7 +27,6 @@ const (
 	KindStruct
 )
 
-// SchemaField is one parsed field declaration.
 type Field struct {
 	Name     string
 	JSONName string
@@ -32,35 +37,19 @@ type Field struct {
 	Slice    bool
 	Map      bool
 	Tags     map[string]string
-	// Embed is set only while a @schema body is being parsed: a line with
-	// a single identifier is a composition (embed) of another declared
-	// schema, not a field. Resolved schemas never carry Embed.
-	Embed string
+	Embed    string
 }
 
-// Schema is one complete declaration.
 type Schema struct {
 	Name   string
 	Fields []Field
 }
 
-// SchemasFromMap returns the schemas stored under meta["schemas"].
-// Nil-safe.
 func SchemasFromMap(meta map[string]any) []Schema {
 	schemas, _ := meta["schemas"].([]Schema)
 	return schemas
 }
 
-// SplitFields classifies schema fields by their transport tags.
-//
-//	A field with config:"true" goes only to compile config unless it
-//	also declares payload:"true".
-//	A field without config:"true" goes only to payload unless it
-//	declares config:"true" without payload.
-//
-// A field without either tag defaults to payload. A field with both
-// goes to both channels. Any tag value other than "true" is treated
-// as absent. Result slices preserve declaration order.
 func SplitFields(s Schema) (payload, config []string) {
 	payload = make([]string, 0, len(s.Fields))
 	config = make([]string, 0, len(s.Fields))
@@ -79,7 +68,6 @@ func SplitFields(s Schema) (payload, config []string) {
 	return payload, config
 }
 
-// SchemaByName returns the named schema if declared.
 func ByName(meta map[string]any, name string) (Schema, bool) {
 	for _, s := range SchemasFromMap(meta) {
 		if s.Name == name {
@@ -89,10 +77,26 @@ func ByName(meta map[string]any, name string) (Schema, bool) {
 	return Schema{}, false
 }
 
-// Validate checks payload against schema. It only enforces required
-// fields and coarse type compatibility; richer validation is the
-// job of the validation package.
-func Validate(schema Schema, payload any) error {
+// Validate checks payload against the declared schema.
+//
+// For every field that is present, the check proceeds in two stages:
+//
+//  1. Go-kind check (checkFieldKind): the payload value's kind must
+//     match the schema field's declared type.
+//  2. Tag check (validation.Var): when the field carries a
+//     `validate:"..."` tag beyond bare "required", the value is
+//     validated against the tag expression using the same
+//     validator/v10 instance that powers validation.Struct.
+//
+// The presence check for validate:"required" is handled inline, so a
+// missing field reports as "is required" without invoking the
+// validator. An empty string for a required field is also reported as
+// "is required" because validator/v10 treats empty as the zero value.
+//
+// ctx is threaded from the caller so context-aware custom rules
+// registered via validation.RegisterCustom see the live context, and
+// so a canceled invocation aborts validation promptly.
+func Validate(ctx context.Context, schema Schema, payload any) error {
 	m, ok := payload.(map[string]any)
 	if !ok {
 		return xerr.Validation(fmt.Sprintf("schema %s: expected object, got %T", schema.Name, payload))
@@ -101,19 +105,34 @@ func Validate(schema Schema, payload any) error {
 	var details xerr.ValidationDetails
 	for _, field := range schema.Fields {
 		value, present := m[field.JSONName]
-		required := hasValidationTag(field.Tags["validate"], "required")
+		rule := field.Tags["validate"]
+		required := hasValidationTag(rule, "required")
 
 		if !present {
 			if required {
 				details = append(details, xerr.ValidationDetail{
 					Field:      field.JSONName,
 					Validation: "required",
+					Value:      "is required",
 				})
 			}
 			continue
 		}
+
 		if detail, bad := checkFieldKind(field, value); bad {
 			details = append(details, detail)
+			continue
+		}
+
+		if rule == "" {
+			continue
+		}
+		// Bare "required" is already satisfied by presence above; every
+		// other tag (including "required,email", "oneof=…", "gt=0", and
+		// the plain "email", "min=3", … forms) goes through the
+		// validator.
+		if err := validation.Var(ctx, value, rule); err != nil {
+			details = append(details, detailsFromVarError(err, field.JSONName)...)
 		}
 	}
 
@@ -123,11 +142,15 @@ func Validate(schema Schema, payload any) error {
 		b.WriteString(schema.Name)
 		b.WriteString(" failed:")
 		for _, d := range details {
-			b.WriteString("\n    • ")
+			b.WriteString("\n    • field ")
+			fmt.Fprintf(&b, "%q", d.Field)
+			b.WriteByte(' ')
 			if d.Value != "" {
-				fmt.Fprintf(&b, "field %q: expected %s, %s", d.Field, d.Validation, d.Value)
+				b.WriteString(d.Value)
 			} else {
-				fmt.Fprintf(&b, "field %q: %s", d.Field, d.Validation)
+				b.WriteString("failed ")
+				b.WriteString(d.Validation)
+				b.WriteString(" check")
 			}
 		}
 		return &xerr.AppError{
@@ -139,8 +162,31 @@ func Validate(schema Schema, payload any) error {
 	return nil
 }
 
-// checkFieldKind returns a ValidationDetail describing the mismatch,
-// or ok=false when the value is compatible.
+// detailsFromVarError unwraps a *xerr.AppError produced by
+// validation.Var and rekeys each ValidationDetail with the JSON field
+// name schema.Validate was checking. Var operates on a single scalar,
+// so its details carry an empty Field.
+func detailsFromVarError(err error, fieldName string) xerr.ValidationDetails {
+	if appErr, ok := errors.AsType[*xerr.AppError](err); ok && len(appErr.ValidationDetails) > 0 {
+		out := make(xerr.ValidationDetails, 0, len(appErr.ValidationDetails))
+		for _, d := range appErr.ValidationDetails {
+			if d.Field == "" {
+				d.Field = fieldName
+			}
+			out = append(out, d)
+		}
+		return out
+	}
+	return xerr.ValidationDetails{{
+		Field:      fieldName,
+		Validation: "custom",
+		Value:      err.Error(),
+	}}
+}
+
+// checkFieldKind compares the runtime kind of value against the
+// schema field's declared Go kind. Each mismatch produces a
+// ValidationDetail whose Value reads "must be X (got Y)".
 func checkFieldKind(field Field, value any) (xerr.ValidationDetail, bool) {
 	if field.Pointer && value == nil {
 		return xerr.ValidationDetail{}, false
@@ -151,14 +197,14 @@ func checkFieldKind(field Field, value any) (xerr.ValidationDetail, bool) {
 	case field.Slice:
 		if _, ok := value.([]any); !ok {
 			detail.Validation = "slice"
-			detail.Value = fmt.Sprintf("got %T", value)
+			detail.Value = fmt.Sprintf("must be an array (got %s)", friendlyType(value))
 			return detail, true
 		}
 		return detail, false
 	case field.Map:
 		if _, ok := value.(map[string]any); !ok {
 			detail.Validation = "map"
-			detail.Value = fmt.Sprintf("got %T", value)
+			detail.Value = fmt.Sprintf("must be an object (got %s)", friendlyType(value))
 			return detail, true
 		}
 		return detail, false
@@ -168,7 +214,7 @@ func checkFieldKind(field Field, value any) (xerr.ValidationDetail, bool) {
 	case KindString:
 		if _, ok := value.(string); !ok {
 			detail.Validation = typeString
-			detail.Value = fmt.Sprintf("got %T", value)
+			detail.Value = fmt.Sprintf("must be a string (got %s)", friendlyType(value))
 			return detail, true
 		}
 	case KindInt, KindFloat:
@@ -177,26 +223,51 @@ func checkFieldKind(field Field, value any) (xerr.ValidationDetail, bool) {
 			uint, uint8, uint16, uint32, uint64,
 			float32, float64:
 		default:
-			detail.Validation = "number"
-			detail.Value = fmt.Sprintf("got %T", value)
+			detail.Validation = typeNumber
+			detail.Value = fmt.Sprintf("must be a number (got %s)", friendlyType(value))
 			return detail, true
 		}
 	case KindBool:
 		if _, ok := value.(bool); !ok {
 			detail.Validation = "bool"
-			detail.Value = fmt.Sprintf("got %T", value)
+			detail.Value = fmt.Sprintf("must be a boolean (got %s)", friendlyType(value))
 			return detail, true
 		}
 	case KindStruct:
 		if _, ok := value.(map[string]any); !ok {
-			detail.Validation = "object"
-			detail.Value = fmt.Sprintf("got %T", value)
+			detail.Validation = typeObject
+			detail.Value = fmt.Sprintf("must be an object (got %s)", friendlyType(value))
 			return detail, true
 		}
 	case KindAny:
 	}
 
 	return detail, false
+}
+
+// friendlyType names a runtime value in vocabulary the schema uses:
+// "string", typeNumber, "boolean", "array", typeObject, "null". Anything
+// unrecognized falls back to Go's %T.
+func friendlyType(v any) string {
+	if v == nil {
+		return "null"
+	}
+	switch v.(type) {
+	case string:
+		return "string"
+	case bool:
+		return "boolean"
+	case int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		float32, float64:
+		return typeNumber
+	case []any:
+		return "array"
+	case map[string]any:
+		return typeObject
+	default:
+		return fmt.Sprintf("%T", v)
+	}
 }
 
 func hasValidationTag(tag, name string) bool {
@@ -208,8 +279,6 @@ func hasValidationTag(tag, name string) bool {
 	return false
 }
 
-// ToJSONSchema converts a declared Schema into a standard JSON Schema object
-// without runtime reflection.
 func ToJSONSchema(s Schema) map[string]any {
 	properties := make(map[string]any, len(s.Fields))
 	var required []string
@@ -220,18 +289,18 @@ func ToJSONSchema(s Schema) map[string]any {
 		case KindString, KindAny:
 			prop["type"] = typeString
 		case KindInt, KindFloat:
-			prop["type"] = "number"
+			prop["type"] = typeNumber
 		case KindBool:
 			prop["type"] = "boolean"
 		case KindStruct:
-			prop["type"] = "object"
+			prop["type"] = typeObject
 		}
 
 		if f.Slice {
 			elemType := typeString
 			switch f.Kind {
 			case KindInt, KindFloat:
-				elemType = "number"
+				elemType = typeNumber
 			case KindBool:
 				elemType = "boolean"
 			case KindString, KindAny, KindStruct:
@@ -270,7 +339,7 @@ func ToJSONSchema(s Schema) map[string]any {
 	}
 
 	out := map[string]any{
-		"type":       "object",
+		"type":       typeObject,
 		"properties": properties,
 	}
 	if len(required) > 0 {

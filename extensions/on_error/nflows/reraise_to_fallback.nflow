@@ -1,0 +1,5 @@
+@description "error.reraise re-propagates so an enclosing || catches it"
+@assert: result == "caught"
+runtime.fail @{ kind: "Validation", message: "boom" }
+  ? on_error error.reraise
+  || runtime.const @{ value: "caught" }

@@ -1,0 +1,9 @@
+@description "validate=required rejects an empty string"
+@schema Named {
+  Name string `json:"name" validate:"required"`
+}
+@assert: result.status == "rejected"
+{ name: "" } -> Named.validate ? on_error {
+  xerr.KindValidation -> { status: "rejected" },
+  else -> { status: "unexpected" }
+}

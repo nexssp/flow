@@ -48,6 +48,8 @@ func Library() action.Library {
 		Actions: []action.AnyAction{
 			Directive.Action(),
 			ErrorInfoAction,
+			ErrorReraiseAction,
+			ErrorPassthroughAction,
 		},
 	}
 }

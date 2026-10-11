@@ -44,7 +44,7 @@ func handleConst(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, e
 	return core.DirectiveRes{Next: req.I + 1}, nil
 }
 
-func handleConstLoad(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
+func handleConstLoad(ctx context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
 	pos := core.Position{File: req.File, Line: req.I + 1}
 	line := strings.TrimSpace(strings.TrimPrefix(req.Lines[req.I], "@const.load"))
 
@@ -66,7 +66,7 @@ func handleConstLoad(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 	}
 
 	if schemaName != "" {
-		if err := validateConstLoadSchema(req.Out, schemaName, parsed, pos); err != nil {
+		if err := validateConstLoadSchema(ctx, req.Out, schemaName, parsed, pos); err != nil {
 			return core.DirectiveRes{}, err
 		}
 	}
@@ -78,9 +78,6 @@ func handleConstLoad(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 	return core.DirectiveRes{Next: req.I + 1}, nil
 }
 
-// parseConstLoadLine parses: "<path>" as <namespace> [:schema=<Name>]
-// The path may be quoted with any of " ' `; the namespace is a bare
-// identifier; the :schema modifier is optional.
 func parseConstLoadLine(line, baseDir string) (path, namespace, schemaName string, err error) {
 	fields := strings.Fields(line)
 	if len(fields) < 3 || fields[1] != "as" {
@@ -106,11 +103,7 @@ func parseConstLoadLine(line, baseDir string) (path, namespace, schemaName strin
 	return path, namespace, schemaName, nil
 }
 
-// validateConstLoadSchema fails the build when the loaded JSON does not
-// match the declared @schema. Ordering is deliberate: the schema must
-// appear above the @const.load in the same file, matching the
-// declaration-before-use rule that @profile and @pipeline already obey.
-func validateConstLoadSchema(out map[string]any, name string, parsed any, pos core.Position) error {
+func validateConstLoadSchema(ctx context.Context, out map[string]any, name string, parsed any, pos core.Position) error {
 	declared := schema.SchemasFromMap(out)
 	if len(declared) == 0 {
 		return core.SourceError(pos,
@@ -122,19 +115,13 @@ func validateConstLoadSchema(out map[string]any, name string, parsed any, pos co
 			"@const.load :schema=%s: unknown schema (declared: %s)",
 			name, declaredSchemaNames(declared))
 	}
-	if err := schema.Validate(decl, parsed); err != nil {
+	if err := schema.Validate(ctx, decl, parsed); err != nil {
 		return core.SourceError(pos, "@const.load :schema=%s: %s",
 			name, describeValidationError(err))
 	}
 	return nil
 }
 
-// describeValidationError renders an xerr.AppError with its per-field
-// details. schema.Validate returns an *xerr.AppError whose Error() is
-// only "schema X: validation failed"; the actionable information lives
-// in ValidationDetails, one entry per failed field. Without this the
-// compile-time diagnostic would name the schema but not the field the
-// user mistyped.
 func describeValidationError(err error) string {
 	appErr, ok := errors.AsType[*xerr.AppError](err)
 	if !ok || len(appErr.ValidationDetails) == 0 {
@@ -142,11 +129,11 @@ func describeValidationError(err error) string {
 	}
 	parts := make([]string, 0, len(appErr.ValidationDetails))
 	for _, d := range appErr.ValidationDetails {
-		field := d.Field + ": " + d.Validation
 		if d.Value != "" {
-			field += " (" + d.Value + ")"
+			parts = append(parts, d.Field+" "+d.Value)
+			continue
 		}
-		parts = append(parts, field)
+		parts = append(parts, d.Field+" failed "+d.Validation+" check")
 	}
 	return appErr.Message + ": " + strings.Join(parts, ", ")
 }
@@ -170,9 +157,6 @@ func storeAndApply(req core.DirectiveReq, newConsts map[string]string) {
 	Apply(req.Lines, req.I+1, newConsts)
 }
 
-// Apply rewrites `${key}` references in lines[start:] to their values.
-// It delegates to core.ApplyConstants, which is also what the @include
-// merge path calls — one substitution primitive, one behavior.
 func Apply(lines []string, start int, constants map[string]string) {
 	core.ApplyConstants(lines, start, constants)
 }

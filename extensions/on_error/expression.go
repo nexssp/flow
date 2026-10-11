@@ -12,15 +12,12 @@ import (
 	"github.com/nexssp/flow/extensions/match"
 )
 
-// ErrorGuardCase handles one built-in Kernel kind or the optional else arm.
 type ErrorGuardCase struct {
 	Kind   xerr.Kind
 	IsElse bool
 	Body   core.Expr
 }
 
-// ErrorGuardExpr wraps any preceding expression and conditionally recovers its
-// runtime error using ordered Kernel-kind cases.
 type ErrorGuardExpr struct {
 	Protected core.Expr
 	Cases     []ErrorGuardCase
@@ -155,6 +152,15 @@ func (g *ErrorGuardExpr) Build(ctx context.Context, buildCtx *core.BuildContext)
 	return core.TrackActionComposition(buildCtx, program, composition), nil
 }
 
+// primaryOnlyPrecedence is higher than every DSL binary operator
+// precedence (-> = 7, | = 7, & = 5, || = 3, ? = 1). Parsing at this
+// precedence consumes exactly one primary expression and no operator
+// continuation, which is what the short form needs so it does not
+// swallow a following `->` or `|`.
+//
+// NEW: introduced for the short-form `? on_error target` syntax.
+const primaryOnlyPrecedence = 100
+
 type errorGuardPrimary struct{}
 
 func (errorGuardPrimary) Name() string { return "on_error.guard" }
@@ -162,15 +168,42 @@ func (errorGuardPrimary) Parse(p *core.Parser) (core.Expr, error) {
 	return nil, p.Fail(p.Current().Line, "on_error guard must follow an expression")
 }
 func (errorGuardPrimary) PostfixToken() core.TokenType { return core.TokQuestion }
+
+// CHANGED: previously required a `{` at Peek(2) so only the block
+// form matched. The short form `? on_error target` is now also
+// accepted; the short/long decision is made in ParsePostfix.
 func (errorGuardPrimary) MatchesPostfix(p *core.Parser) bool {
 	return p.Current().Type == core.TokQuestion &&
-		p.Peek(1).Type == core.TokIdent && p.Peek(1).Lit == "on_error" &&
-		p.Peek(2).Type == core.TokLBrace
+		p.Peek(1).Type == core.TokIdent && p.Peek(1).Lit == "on_error"
 }
 
 func (errorGuardPrimary) ParsePostfix(p *core.Parser, protected core.Expr) (core.Expr, error) {
 	p.Advance() // ?
 	p.Advance() // on_error
+
+	// NEW: short form — `expr ? on_error target`.
+	//
+	// When the token after `on_error` is not `{`, parse a single
+	// primary expression at primaryOnlyPrecedence and treat it as the
+	// catch-all recovery arm. This is exactly equivalent to
+	//
+	//     expr ? on_error { else -> target }
+	//
+	// but reads better when there is only one recovery and no kind
+	// discrimination. The handler still receives the error environment,
+	// so `error.passthrough` is the recommended catch-all when the
+	// original input should be returned unchanged.
+	if p.Current().Type != core.TokLBrace {
+		body, err := p.ParseExpr(primaryOnlyPrecedence)
+		if err != nil {
+			return nil, err
+		}
+		return &ErrorGuardExpr{
+			Protected: protected,
+			Cases:     []ErrorGuardCase{{IsElse: true, Body: body}},
+		}, nil
+	}
+
 	p.Advance() // {
 
 	var cases []ErrorGuardCase

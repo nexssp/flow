@@ -1,0 +1,9 @@
+@description "validate=oneof rejects a value outside the declared set"
+@schema Priority {
+  Level string `json:"level" validate:"required,oneof=low medium high"`
+}
+@assert: result.status == "rejected"
+{ level: "urgent" } -> Priority.validate ? on_error {
+  xerr.KindValidation -> { status: "rejected" },
+  else -> { status: "unexpected" }
+}

@@ -19,11 +19,12 @@ func materialize(req core.MaterializeReq) error {
 		targetSchema := s
 		canonicalName := targetSchema.Name + ".validate"
 
-		validateAct := action.New(canonicalName, func(_ context.Context, in any) (any, error) {
+		// was: func(_ context.Context, in any)
+		validateAct := action.New(canonicalName, func(ctx context.Context, in any) (any, error) {
 			if in == nil {
 				return nil, xerr.BadRequest("schema: payload is nil")
 			}
-			if err := Validate(targetSchema, in); err != nil {
+			if err := Validate(ctx, targetSchema, in); err != nil {
 				return nil, err
 			}
 			return in, nil

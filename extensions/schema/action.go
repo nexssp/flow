@@ -10,7 +10,6 @@ import (
 
 var schemasContextKey = xctx.NewKey[map[string]Schema]("flow.schemas.active")
 
-// WithContextSchemas binds workflow schemas into the runtime context.
 func WithContextSchemas(ctx context.Context, schemas []Schema) context.Context {
 	if len(schemas) == 0 {
 		return ctx
@@ -22,13 +21,11 @@ func WithContextSchemas(ctx context.Context, schemas []Schema) context.Context {
 	return schemasContextKey.With(ctx, m)
 }
 
-// ValidateRequest specifies which schema to run against the input.
 type ValidateRequest struct {
 	Name    string `json:"name"              validate:"required"`
 	Payload any    `json:"payload,omitempty"`
 }
 
-// ValidateAction provides runtime schema validation on arbitrary payload maps.
 var ValidateAction = action.New("schema.validate", func(ctx context.Context, req ValidateRequest) (any, error) {
 	if req.Name == "" {
 		return nil, xerr.BadRequest("schema.validate: schema name is required (use @{ name: \"SchemaName\" })")
@@ -49,7 +46,11 @@ var ValidateAction = action.New("schema.validate", func(ctx context.Context, req
 		return nil, xerr.BadRequest("schema.validate: no payload available to validate")
 	}
 
-	if err := Validate(targetSchema, targetPayload); err != nil {
+	// CHANGED: ctx is now threaded through so validation.Var (called
+	// from schema.Validate) can honor context cancellation and pass
+	// ctx to any context-aware custom rules registered via
+	// validation.RegisterCustom.
+	if err := Validate(ctx, targetSchema, targetPayload); err != nil {
 		return nil, err
 	}
 

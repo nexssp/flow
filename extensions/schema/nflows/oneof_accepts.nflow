@@ -1,0 +1,6 @@
+@description "validate=oneof accepts a value in the declared set"
+@schema Priority {
+  Level string `json:"level" validate:"required,oneof=low medium high"`
+}
+@assert: result.level == "medium"
+{ level: "medium" } -> Priority.validate
