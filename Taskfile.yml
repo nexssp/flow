@@ -67,8 +67,8 @@ tasks:
 
   # ── Workflows (Gates) ────────────────────────────────────────────
 
-  pre-commit: { desc: "[lint:new, test]", deps: [lint:new, test] }
-  pre-push:   { desc: "[lint, test:race]", deps: [lint, test:race] }
+  pre-commit: { desc: "[self, lint:new, test]", deps: [self, lint:new, test] }
+  pre-push:   { desc: "[self, lint, test:race]", deps: [self, lint, test:race] }
   ci:
     desc: "[lint, test:race:nocache] (parallel + failfast)"
     deps: [lint, test:race:nocache]

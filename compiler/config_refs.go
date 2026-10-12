@@ -21,7 +21,7 @@ func validateConfigRefs(ast Expr, cfg map[string]string, cliArgs []string) error
 	if err := validateAllConfigRefs(ast, cfg); err != nil {
 		return err
 	}
-	return validateAllFlagRefs(ast, cliArgs)
+	return validateAllFlagAndArgRefs(ast, cliArgs)
 }
 
 func validateAllConfigRefs(ast Expr, cfg map[string]string) error {
@@ -44,6 +44,105 @@ func validateAllConfigRefs(ast Expr, cfg map[string]string) error {
 	return firstErr
 }
 
+func validateAllFlagAndArgRefs(ast Expr, cliArgs []string) error {
+	knownFlags := make(map[string]struct{})
+	var positional []string
+	for _, arg := range cliArgs {
+		if name, ok := flagNameFromArg(arg); ok {
+			knownFlags[name] = struct{}{}
+		} else if !strings.HasPrefix(arg, "-") {
+			positional = append(positional, arg)
+		}
+	}
+	var firstErr error
+	walkExpr(ast, func(node Expr) {
+		if firstErr != nil {
+			return
+		}
+		atom, ok := node.(*Atom)
+		if !ok {
+			return
+		}
+		firstErr = walkAtomValues(atom, func(raw, where string) error {
+			if err := checkFlagRef(atom, raw, where, knownFlags); err != nil {
+				return err
+			}
+			return checkArgRef(atom, raw, where, len(positional))
+		})
+	})
+	return firstErr
+}
+
+func checkConfigRef(atom *Atom, raw, where string, cfg map[string]string) error {
+	expr, fallback, hasFallback := strings.Cut(raw, "??")
+	if hasFallback && strings.TrimSpace(fallback) != "" {
+		return nil
+	}
+	key, ok := strings.CutPrefix(strings.TrimSpace(expr), "@config.")
+	if !ok {
+		return nil
+	}
+	if _, exists := cfg[key]; exists {
+		return nil
+	}
+	return SourceError(atom.Pos,
+		"%s: unknown @config.%s (declared: %s)",
+		where, key, declaredConfigKeys(cfg))
+}
+
+func checkFlagRef(atom *Atom, raw, where string, known map[string]struct{}) error {
+	expr, fallback, hasFallback := strings.Cut(raw, "??")
+	if hasFallback && strings.TrimSpace(fallback) != "" {
+		return nil
+	}
+	name, ok := strings.CutPrefix(strings.TrimSpace(expr), "@flag.")
+	if !ok {
+		return nil
+	}
+	if _, exists := known[name]; exists {
+		return nil
+	}
+	return SourceError(atom.Pos,
+		"%s: unknown @flag.%s (available: %s)"+
+			"\n  hint: pass --%s=VALUE on the command line",
+		where, name, availableFlagNames(known), name)
+}
+
+func checkArgRef(atom *Atom, raw, where string, positionalCount int) error {
+	expr, fallback, hasFallback := strings.Cut(raw, "??")
+	if hasFallback && strings.TrimSpace(fallback) != "" {
+		return nil
+	}
+	idxStr, ok := strings.CutPrefix(strings.TrimSpace(expr), "@arg.")
+	if !ok {
+		return nil
+	}
+	idx, err := strconv.Atoi(idxStr)
+	if err != nil || idx < 1 {
+		return SourceError(atom.Pos, "%s: invalid positional argument index %q (use @arg.1, @arg.2, ...)", where, idxStr)
+	}
+	if idx > positionalCount {
+		return SourceError(atom.Pos,
+			"%s: missing required positional argument %d (received %d)"+
+				"\n  hint: pass argument %d on the command line (e.g. nflow <file.nflow> <arg%d>)",
+			where, idx, positionalCount, idx, idx)
+	}
+	return nil
+}
+
+// validateAllFlagRefs is a flag-only variant of the @flag check: it
+// walks the AST and validates every @flag.NAME reference against the
+// names present in cliArgs, without performing the @arg.N arity check
+// that validateAllFlagAndArgRefs layers on top.
+//
+// It is retained because the two checks are conceptually separable —
+// a caller that has already decided arg references are not its concern
+// (for example, a future lint mode that inspects positional-argument
+// usage independently from flags) needs the flag pass on its own. The
+// current compile path uses validateAllFlagAndArgRefs because it wants
+// both diagnostics in a single walk.
+//
+//nolint:unused // Reserved for the flag-only validation mode; the compile path currently uses validateAllFlagAndArgRefs.
 func validateAllFlagRefs(ast Expr, cliArgs []string) error {
 	if cliArgs == nil {
 		return nil
@@ -104,6 +203,10 @@ func walkValueStrings(v *Value, where string, visit func(raw, where string) erro
 	switch v.Kind {
 	case ValueString:
 		return visit(v.Str, where)
+	case ValueRef:
+		if strings.HasPrefix(v.Ref, "arg.") {
+			return visit("@"+v.Ref, where)
+		}
 	case ValueMap:
 		for _, entry := range v.Map {
 			if err := walkValueStrings(entry.Value, where+"."+entry.Key, visit); err != nil {
@@ -116,36 +219,9 @@ func walkValueStrings(v *Value, where string, visit func(raw, where string) erro
 				return err
 			}
 		}
-	case ValueBare, ValueNumber, ValueBool, ValueNull, ValueRef:
+	case ValueBare, ValueNumber, ValueBool, ValueNull:
 	}
 	return nil
-}
-
-func checkConfigRef(atom *Atom, raw, where string, cfg map[string]string) error {
-	key, ok := strings.CutPrefix(raw, "@config.")
-	if !ok {
-		return nil
-	}
-	if _, exists := cfg[key]; exists {
-		return nil
-	}
-	return SourceError(atom.Pos,
-		"%s: unknown @config.%s (declared: %s)",
-		where, key, declaredConfigKeys(cfg))
-}
-
-func checkFlagRef(atom *Atom, raw, where string, known map[string]struct{}) error {
-	name, ok := strings.CutPrefix(raw, "@flag.")
-	if !ok {
-		return nil
-	}
-	if _, exists := known[name]; exists {
-		return nil
-	}
-	return SourceError(atom.Pos,
-		"%s: unknown @flag.%s (available: %s)"+
-			"\n  hint: pass --%s=VALUE on the command line",
-		where, name, availableFlagNames(known), name)
 }
 
 // flagNameFromArg extracts the flag name from a "-x=y" or "--x=y"

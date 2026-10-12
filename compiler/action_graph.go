@@ -1,14 +1,11 @@
 package compiler
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
 
-// ActionGraph is a reviewable, high-level plan of the actions and control/data
-// relationships produced from one expression. It deliberately contains no
-// action arguments or parameter values. Kernel action implementations remain
-// opaque; this graph describes Flow's lowering decisions, not their internals.
 type ActionGraph struct {
 	Entry string            `json:"entry,omitempty"`
 	Exit  string            `json:"exit,omitempty"`
@@ -16,7 +13,6 @@ type ActionGraph struct {
 	Edges []ActionGraphEdge `json:"edges,omitempty"`
 }
 
-// ActionGraphNode is one action or synthetic control node in an ActionGraph.
 type ActionGraphNode struct {
 	ID        string   `json:"id"`
 	Kind      string   `json:"kind"`
@@ -27,30 +23,21 @@ type ActionGraphNode struct {
 	Modifiers []string `json:"modifiers,omitempty"`
 }
 
-// ActionGraphEdge connects action outputs, branch routes, or loop control.
 type ActionGraphEdge struct {
 	From string `json:"from"`
 	To   string `json:"to"`
 	Kind string `json:"kind"`
 }
 
-// ActionGraphForm describes the control shape of an extension expression.
 type ActionGraphForm uint8
 
 const (
-	// ActionGraphOpaque marks an extension whose execution shape is not declared.
 	ActionGraphOpaque ActionGraphForm = iota
-	// ActionGraphParallel represents concurrent branches with a join.
 	ActionGraphParallel
-	// ActionGraphChoice represents mutually exclusive branches with a join.
 	ActionGraphChoice
-	// ActionGraphCatch represents protected work with recovery branches.
 	ActionGraphCatch
 )
 
-// ActionGraphDescription lets an expression extension describe its plan node
-// and the labels for its Children. Labels should describe branch roles, not
-// include runtime values or secrets.
 type ActionGraphDescription struct {
 	Kind        string
 	Name        string
@@ -58,16 +45,10 @@ type ActionGraphDescription struct {
 	ChildLabels []string
 }
 
-// ActionGraphProvider is an optional Expr extension contract. Expressions that
-// do not implement it are shown as opaque extension nodes with contained child
-// plans, rather than guessed execution semantics.
 type ActionGraphProvider interface {
 	DescribeActionGraph() ActionGraphDescription
 }
 
-// BuildActionGraph builds the deterministic, high-level action graph for expr.
-// It is only run when explicitly requested; normal compilation adds no graph
-// construction or allocation. Action and stream parameters are never copied.
 func BuildActionGraph(resolver CapabilityResolver, expr Expr) (*ActionGraph, error) {
 	graph := &ActionGraph{}
 	if expr == nil {
@@ -118,6 +99,8 @@ func (b *actionGraphBuilder) build(expr Expr) (actionGraphSegment, error) {
 		return b.buildLoop(node)
 	case *DecoratedExpr:
 		return b.buildDecorated(node)
+	case *LiteralExpr:
+		return b.addAction(fmt.Sprintf("literal(%v)", node.Val), node.Pos, nil), nil
 	default:
 		return b.buildExtension(expr)
 	}
@@ -433,6 +416,8 @@ func expressionPosition(expr Expr) Position {
 	case *LoopExpr:
 		return node.Pos
 	case *DecoratedExpr:
+		return node.Pos
+	case *LiteralExpr:
 		return node.Pos
 	default:
 		return Position{}

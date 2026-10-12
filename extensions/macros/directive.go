@@ -278,15 +278,49 @@ func readBody(lines []string, start, openBrace int) (body string, bodyLine, next
 		parts = append(parts, after)
 	}
 
+	depth := 1
 	for j := start + 1; j < len(lines); j++ {
-		if strings.TrimSpace(lines[j]) == "}" {
+		currentLine := lines[j]
+		delta := lineBraceDelta(currentLine)
+		if depth+delta <= 0 && strings.TrimSpace(currentLine) == "}" {
 			bodyLine := start + 2
 			if inline {
 				bodyLine = start + 1
 			}
 			return strings.TrimSpace(strings.Join(parts, "\n")), bodyLine, j + 1, nil
 		}
-		parts = append(parts, lines[j])
+		depth += delta
+		parts = append(parts, currentLine)
 	}
 	return "", 0, 0, errors.New("unclosed '{'")
+}
+
+func lineBraceDelta(line string) int {
+	delta := 0
+	var quote byte
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+		if quote != 0 {
+			if c == '\\' && i+1 < len(line) {
+				i++
+				continue
+			}
+			if c == quote {
+				quote = 0
+			}
+			continue
+		}
+		if c == '#' || (c == '/' && i+1 < len(line) && line[i+1] == '/') {
+			break
+		}
+		switch c {
+		case '"', '\'', '`':
+			quote = c
+		case '{':
+			delta++
+		case '}':
+			delta--
+		}
+	}
+	return delta
 }

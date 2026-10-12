@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -238,7 +239,8 @@ func evalAsserts(result any, assertions []string) []error {
 
 	normalized := flowrunner.JSONMapView(result)
 	environment := map[string]any{
-		"result": normalized,
+		"result":   normalized,
+		"__root__": normalized,
 	}
 	if resultMap, ok := normalized.(map[string]any); ok {
 		maps.Copy(environment, resultMap)
@@ -246,7 +248,13 @@ func evalAsserts(result any, assertions []string) []error {
 
 	var errorsList []error
 	for _, assertionExpr := range assertions {
-		program, err := expr.Compile(assertionExpr, expr.Env(environment))
+		trimmed := strings.TrimSpace(core.StripExprComments(assertionExpr))
+		cleanExpr := trimmed
+		if strings.HasPrefix(trimmed, ".") {
+			cleanExpr = core.PreprocessDots(trimmed)
+		}
+
+		program, err := expr.Compile(cleanExpr, expr.Env(environment))
 		if err != nil {
 			errorsList = append(errorsList, fmt.Errorf("assert %q syntax: %w", assertionExpr, err))
 			continue

@@ -16,6 +16,21 @@ type Expr interface {
 	Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction, error)
 }
 
+type LiteralExpr struct {
+	Val any
+	Pos Position
+}
+
+func (*LiteralExpr) Node()                            {}
+func (*LiteralExpr) Children() []Expr                 { return nil }
+func (*LiteralExpr) Analyze(CapabilityResolver) error { return nil }
+func (l *LiteralExpr) Build(_ context.Context, bCtx *BuildContext) (action.AnyAction, error) {
+	act := action.New("literal", func(_ context.Context, _ any) (any, error) {
+		return l.Val, nil
+	}).Build()
+	return inspectBuiltAction(bCtx, act), nil
+}
+
 // Atom is a single runtime action call.
 type Atom struct {
 	Name            string

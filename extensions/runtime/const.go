@@ -12,35 +12,41 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
-// Const returns a fixed literal. Numbers, bools, JSON objects, JSON
-// arrays, and JSON-quoted strings are auto-coerced from the string
-// representation so the DSL stays readable: runtime.const @{ value: 42 }
-// produces int64(42), not "42".
 var Const = action.New("runtime.const", func(_ context.Context, in any) (any, error) {
-	if s, ok := in.(string); ok {
-		return coerceLiteral(s), nil
+	switch v := in.(type) {
+	case string, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, bool:
+		return coerceLiteral(v), nil
 	}
 
 	m, ok := in.(map[string]any)
 	if !ok {
-		return nil, xerr.BadRequest("const: expected object with 'value' key or raw scalar, got " + typeName(in))
+		return nil, xerr.BadRequest("const: expected object or scalar, got " + typeName(in))
 	}
 
-	raw, ok := m["value"]
-	if !ok {
-		raw, ok = m["val"]
+	// 1. If explicit "value" or "val" was passed, unwrap it (even if upstream state merged into m)
+	if raw, exists := m["value"]; exists {
+		return coerceLiteral(raw), nil
 	}
-	if !ok {
-		return nil, xerr.BadRequest("const: missing required field 'value'")
+	if raw, exists := m["val"]; exists {
+		return coerceLiteral(raw), nil
 	}
-	return coerceLiteral(raw), nil
+
+	// 2. Object mode: const @{ server: "alpha", port: 8080 }
+	if len(m) > 0 {
+		clean := make(map[string]any, len(m))
+		for k, v := range m {
+			if k != "__root__" {
+				clean[k] = v
+			}
+		}
+		return clean, nil
+	}
+
+	return nil, xerr.BadRequest("const: missing required field 'value'")
 }).Description("Return a fixed literal; numbers, bools, and JSON auto-parse").
 	Tag("base", "literal").
 	Build()
 
-// coerceLiteral turns a string into its natural type when the string
-// looks like JSON, a number, or a bool. Everything else is returned
-// as-is.
 func coerceLiteral(raw any) any {
 	if number, ok := raw.(float64); ok {
 		const twoTo63 = 1 << 63

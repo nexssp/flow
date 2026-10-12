@@ -25,20 +25,6 @@ func renderExplainASTWithContext(ctx context.Context, w io.Writer, cfg runner.Co
 	return nil
 }
 
-// parseExplainAST preprocesses the source and returns the top-level
-// AST plus one AST per @pipeline body. It mirrors the parse path the
-// runtime compiler uses:
-//
-//   - Preprocess strips directives and yields meta.
-//   - The cleaned top-level source is parsed with cfg.PrimariesFor(meta)
-//     so per-source primaries (the macro engine) are installed.
-//   - Each @pipeline body is preprocessed in isolation, then parsed
-//     with the parent's primaries stacked in front of its own —
-//     mirroring CompileReq.InheritedPrimaries.
-//
-// A source whose cleaned top-level is whitespace-only (a file that
-// contains only @pipeline definitions) yields a nil topAST. That is
-// not an error: the pipeline bodies are still rendered.
 func parseExplainASTWithContext(
 	ctx context.Context, cfg runner.Config, src, path string,
 ) (topAST core.Expr, pipelines map[string]core.Expr, err error) {
@@ -107,13 +93,6 @@ func renderExplainASTText(w io.Writer, path string, topAST core.Expr, pipelines 
 	}
 }
 
-// renderASTNode walks one node and prints it indented. Composite
-// nodes print a header line and recurse into children; leaves print a
-// single line with the relevant payload.
-//
-// The operators that appear in the header lines (->, &, ||, ?:) are
-// the source forms a reader wrote, so the tree reads the same way the
-// file does.
 func renderASTNode(w io.Writer, expr core.Expr, indent string, useColor bool) {
 	if expr == nil {
 		fmt.Fprintf(w, "%s%s\n", indent, dim("(nil)", useColor))
@@ -127,6 +106,13 @@ func renderASTNode(w io.Writer, expr core.Expr, indent string, useColor bool) {
 			cyan("Atom", useColor),
 			cyan(n.Name, useColor),
 			formatASTArgs(n.Args, useColor),
+		)
+
+	case *core.LiteralExpr:
+		fmt.Fprintf(w, "%s%-12s %v\n",
+			indent,
+			cyan("Literal", useColor),
+			n.Val,
 		)
 
 	case *core.PipeExpr:
@@ -193,10 +179,6 @@ func renderASTNode(w io.Writer, expr core.Expr, indent string, useColor bool) {
 	}
 }
 
-// formatASTArgs renders the @{...} payload for an atom on one line.
-// Keys are sorted so two runs of the same file produce identical
-// output; a map iteration order leak would make the view useless in a
-// diff.
 func formatASTArgs(args map[string]*core.Value, useColor bool) string {
 	if len(args) == 0 {
 		return ""
@@ -222,10 +204,6 @@ func formatASTArgs(args map[string]*core.Value, useColor bool) string {
 	return dim(b.String(), useColor)
 }
 
-// formatASTValue renders one argument value in its source form.
-// Composite values (maps, slices) are elided: their full shape would
-// dominate the line, and the JSON output carries the full tree when
-// detail is needed.
 func formatASTValue(v *core.Value) string {
 	if v == nil {
 		return "nil"
@@ -260,22 +238,6 @@ type ASTPosition struct {
 	Col  int    `json:"col,omitempty"`
 }
 
-// ASTNode is the machine-readable form of one AST node. Fields are
-// populated selectively based on Kind:
-//
-//	Atom          — Name, Args
-//	Pipe          — L, R
-//	Parallel      — Branches
-//	Fallback      — L, R
-//	Conditional   — Cond, Then, Else
-//	Projection    — Raw
-//	Loop          — Body, Until
-//	Assert        — Condition, Message
-//
-// A consumer that switches on Kind only reads the fields the Kind
-// documents. Unknown kinds carry only Kind, which is the extension
-// point: a future AST node type adds a new Kind string and its own
-// fields without breaking existing consumers.
 type ASTNode struct {
 	Kind string       `json:"kind"`
 	Pos  *ASTPosition `json:"pos,omitempty"`
@@ -297,14 +259,11 @@ type ASTNode struct {
 	Branches []*ASTNode `json:"branches,omitempty"`
 }
 
-// ASTPipeline is one named pipeline definition.
 type ASTPipeline struct {
 	Name string   `json:"name"`
 	Body *ASTNode `json:"body"`
 }
 
-// ASTReport is the top-level JSON envelope. TopLevel is omitted when
-// the file contains only @pipeline definitions.
 type ASTReport struct {
 	Path      string        `json:"path"`
 	TopLevel  *ASTNode      `json:"top_level,omitempty"`
@@ -346,9 +305,6 @@ func astNodeOf(expr core.Expr) *ASTNode {
 	return node
 }
 
-// buildASTNode lowers one expression to its machine-readable shape,
-// without touching positions — that step is handled by astNodeOf, which
-// can also walk children when a composite node has no explicit Pos.
 func buildASTNode(expr core.Expr) *ASTNode {
 	switch n := expr.(type) {
 	case *core.Atom:
@@ -360,6 +316,9 @@ func buildASTNode(expr core.Expr) *ASTNode {
 			}
 		}
 		return &ASTNode{Kind: "Atom", Name: n.Name, Args: args}
+
+	case *core.LiteralExpr:
+		return &ASTNode{Kind: "Literal", Name: fmt.Sprintf("%v", n.Val)}
 
 	case *core.PipeExpr:
 		return &ASTNode{Kind: "Pipe", L: astNodeOf(n.L), R: astNodeOf(n.R)}
@@ -394,58 +353,86 @@ func buildASTNode(expr core.Expr) *ASTNode {
 	return &ASTNode{Kind: fmt.Sprintf("Unknown(%T)", expr)}
 }
 
-// resolveExprPos returns the node's own Pos when set, otherwise the
-// leftmost non-zero Pos in its subtree. Composite nodes built by operator
-// handlers often leave Pos zero; this makes the JSON useful anyway.
+// resolveExprPos returns the source position to attribute to expr: its
+// own stored position when set, otherwise the first non-zero position
+// recovered from the specific children the original traversal
+// considered. Returns the zero Position for a nil expression or when
+// nothing in the considered subtree carries a position.
+//
+// The traversal order is load-bearing for diagnostics and is pinned by
+// resolveExprPos tests: PipeExpr and LoopExpr only descend into their
+// left / body arm respectively, FallbackExpr tries L then R,
+// ConditionalExpr tries Cond then Then then Else, ParallelExpr tries
+// each branch in order, and DecoratedExpr contributes no position (it
+// was never part of the original traversal).
 func resolveExprPos(e core.Expr) core.Position {
 	if e == nil {
 		return core.Position{}
 	}
-	switch n := e.(type) {
-	case *core.Atom:
-		return n.Pos
-	case *core.ProjectionExpr:
-		return n.Pos
-	case *core.AssertExpr:
-		return n.Pos
-	case *core.LoopExpr:
-		if n.Pos != (core.Position{}) {
-			return n.Pos
-		}
-		return resolveExprPos(n.Body)
-	case *core.PipeExpr:
-		if n.Pos != (core.Position{}) {
-			return n.Pos
-		}
-		return resolveExprPos(n.L)
-	case *core.FallbackExpr:
-		if n.Pos != (core.Position{}) {
-			return n.Pos
-		}
-		if p := resolveExprPos(n.L); p != (core.Position{}) {
-			return p
-		}
-		return resolveExprPos(n.R)
-	case *core.ConditionalExpr:
-		if n.Pos != (core.Position{}) {
-			return n.Pos
-		}
-		for _, c := range []core.Expr{n.Cond, n.Then, n.Else} {
-			if p := resolveExprPos(c); p != (core.Position{}) {
-				return p
-			}
-		}
-	case *core.ParallelExpr:
-		if n.Pos != (core.Position{}) {
-			return n.Pos
-		}
-		for _, b := range n.Branches {
-			if p := resolveExprPos(b); p != (core.Position{}) {
-				return p
-			}
-		}
+	if p, ok := leafPos(e); ok {
+		return p
+	}
+	if p, ok := compositePos(e); ok {
+		return p
 	}
 	return core.Position{}
+}
+
+// leafPos handles the expression kinds that carry their own position
+// directly and unconditionally — a zero position is still returned as
+// the node's own, not as "not found". Every other expression kind
+// returns false so resolveExprPos falls through to compositePos.
+func leafPos(e core.Expr) (core.Position, bool) {
+	switch n := e.(type) {
+	case *core.Atom:
+		return n.Pos, true
+	case *core.LiteralExpr:
+		return n.Pos, true
+	case *core.ProjectionExpr:
+		return n.Pos, true
+	case *core.AssertExpr:
+		return n.Pos, true
+	default:
+		return core.Position{}, false
+	}
+}
+
+// compositePos handles expression kinds whose position may be stored
+// locally or recovered from a specific subset of children. The subset
+// for each kind matches the original single-function switch; changing
+// it would change which errors are attributed to which line.
+func compositePos(e core.Expr) (core.Position, bool) {
+	switch n := e.(type) {
+	case *core.LoopExpr:
+		return ownOrChild(n.Pos, n.Body)
+	case *core.PipeExpr:
+		return ownOrChild(n.Pos, n.L)
+	case *core.FallbackExpr:
+		return ownOrChild(n.Pos, n.L, n.R)
+	case *core.ConditionalExpr:
+		return ownOrChild(n.Pos, n.Cond, n.Then, n.Else)
+	case *core.ParallelExpr:
+		return ownOrChild(n.Pos, n.Branches...)
+	default:
+		return core.Position{}, false
+	}
+}
+
+// ownOrChild returns pos when it is set, otherwise the first non-zero
+// position found by walking children in the given order. The variadic
+// signature lets compositePos express each kind's traversal directly;
+// nil children (ConditionalExpr.Else can be nil) are skipped by
+// resolveExprPos.
+func ownOrChild(pos core.Position, children ...core.Expr) (core.Position, bool) {
+	if pos != (core.Position{}) {
+		return pos, true
+	}
+	for _, c := range children {
+		if p := resolveExprPos(c); p != (core.Position{}) {
+			return p, true
+		}
+	}
+	return core.Position{}, false
 }
 
 func valueToAny(v *core.Value) any {

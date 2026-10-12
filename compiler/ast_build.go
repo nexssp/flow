@@ -6,6 +6,7 @@ import (
 	"maps"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/expr-lang/expr"
@@ -696,42 +697,6 @@ func resolveConfigRefsInModifier(cfg map[string]string, cliArgs []string, raw st
 	return raw[:eq+1] + resolved
 }
 
-func resolveConfigRefsInValue(cfg map[string]string, cliArgs []string, value *Value) {
-	if value == nil {
-		return
-	}
-	switch value.Kind {
-	case ValueString:
-		value.Str = resolveConfigString(cfg, cliArgs, value.Str)
-	case ValueMap:
-		for i := range value.Map {
-			resolveConfigRefsInValue(cfg, cliArgs, value.Map[i].Value)
-		}
-	case ValueSlice:
-		for _, item := range value.Slice {
-			resolveConfigRefsInValue(cfg, cliArgs, item)
-		}
-	case ValueNumber, ValueBool, ValueNull, ValueRef, ValueBare:
-	}
-}
-
-func resolveConfigString(cfg map[string]string, cliArgs []string, value string) string {
-	if key, ok := strings.CutPrefix(value, "@config."); ok {
-		return cfg[key]
-	}
-	if name, ok := strings.CutPrefix(value, "@flag."); ok {
-		for _, arg := range cliArgs {
-			for _, prefix := range []string{"--" + name + "=", "-" + name + "="} {
-				if resolved, found := strings.CutPrefix(arg, prefix); found {
-					return resolved
-				}
-			}
-		}
-		return ""
-	}
-	return value
-}
-
 func hasInjections(a *Atom) bool {
 	return len(a.Params) > 0 || len(a.Args) > 0 ||
 		a.Prompt != "" || len(a.Targets) > 0 || len(a.Excludes) > 0
@@ -743,6 +708,7 @@ func wrapWithInjections(inner action.AnyAction, a *Atom) action.AnyAction {
 		payload := buildPayload(ctx, in, a)
 		res, err := action.InvokeAny(ctx, inner, payload)
 		if err != nil {
+			// Attach pos to the error when not already tagged with that file.
 			if pos.File != "" && !strings.Contains(err.Error(), pos.File+":") {
 				return nil, SourceError(pos, "%w", err)
 			}
@@ -752,8 +718,106 @@ func wrapWithInjections(inner action.AnyAction, a *Atom) action.AnyAction {
 	}).Build()
 }
 
+func resolveConfigString(cfg map[string]string, cliArgs []string, value string) string {
+	// Guard: only parse strings that declare an @ reference. Never touch raw projections or data.
+	if !strings.HasPrefix(value, "@") {
+		return value
+	}
+
+	// 1. Fallback operator: @flag.name ?? "default" or @arg.1 ?? 8080
+	if left, right, ok := strings.Cut(value, "??"); ok {
+		resolved := resolveConfigString(cfg, cliArgs, strings.TrimSpace(left))
+		if resolved != "" {
+			return resolved
+		}
+		return resolveConfigString(cfg, cliArgs, TrimQuotes(strings.TrimSpace(right)))
+	}
+
+	// 2. Compile-time configuration reference
+	if key, ok := strings.CutPrefix(value, "@config."); ok {
+		return cfg[key]
+	}
+
+	// 3. Command-line flag reference (--name=val or -name=val)
+	if name, ok := strings.CutPrefix(value, "@flag."); ok {
+		for _, arg := range cliArgs {
+			for _, prefix := range []string{"--" + name + "=", "-" + name + "="} {
+				if resolved, found := strings.CutPrefix(arg, prefix); found {
+					return resolved
+				}
+			}
+		}
+		return ""
+	}
+
+	// 4. Positional CLI argument (@arg.1, @arg.2)
+	if idxStr, ok := strings.CutPrefix(value, "@arg."); ok {
+		idx, err := strconv.Atoi(idxStr)
+		if err == nil && idx >= 1 {
+			var positional []string
+			for _, arg := range cliArgs {
+				if !strings.HasPrefix(arg, "-") {
+					positional = append(positional, arg)
+				}
+			}
+			if idx <= len(positional) {
+				return positional[idx-1]
+			}
+		}
+		return ""
+	}
+
+	return value
+}
+
+func resolveConfigRefsInValue(cfg map[string]string, cliArgs []string, value *Value) {
+	if value == nil {
+		return
+	}
+	switch value.Kind {
+	case ValueString:
+		// Explicit string stays string (preserves quotes in "@config.retries" -> "3")
+		value.Str = resolveConfigString(cfg, cliArgs, value.Str)
+	case ValueRef:
+		// Unquoted positional argument (@arg.1) auto-coerces to number if numeric
+		if strings.HasPrefix(value.Ref, "arg.") {
+			resolved := resolveConfigString(cfg, cliArgs, "@"+value.Ref)
+			if n, err := strconv.ParseInt(resolved, 10, 64); err == nil {
+				value.Kind = ValueNumber
+				value.Num = float64(n)
+			} else {
+				value.Kind = ValueString
+				value.Str = resolved
+			}
+		}
+	case ValueMap:
+		for i := range value.Map {
+			resolveConfigRefsInValue(cfg, cliArgs, value.Map[i].Value)
+		}
+	case ValueSlice:
+		for _, item := range value.Slice {
+			resolveConfigRefsInValue(cfg, cliArgs, item)
+		}
+	case ValueNumber, ValueBool, ValueNull, ValueBare:
+	}
+}
+
 func buildPayload(ctx context.Context, in any, a *Atom) map[string]any {
 	m, _ := in.(map[string]any)
+
+	// runtime.const is a generator: it resolves references against input m (e.g. .id),
+	// but emits ONLY its own declared parameters/arguments without echoing unrequested keys
+	if a.Name == "runtime.const" {
+		out := make(map[string]any, len(a.Params)+len(a.Args))
+		for k, v := range a.Params {
+			out[k] = v
+		}
+		for k, v := range a.Args {
+			out[k] = resolveValue(ctx, v, m)
+		}
+		return out
+	}
+
 	merged := make(map[string]any, len(m)+len(a.Params)+len(a.Args)+4)
 	maps.Copy(merged, m)
 	if m == nil && in != nil {
@@ -954,7 +1018,7 @@ func PreprocessDots(src string) string {
 				continue
 			}
 			if i+1 < n && isDotIdentStart(src[i+1]) {
-				i++
+				i++ // member access: skip the dot prefix so identifier is recognized
 				continue
 			}
 			out.WriteString("__root__")
@@ -1059,6 +1123,7 @@ func runAtomAdvisers(a *Atom, act action.AnyAction, bCtx *BuildContext, advisers
 			return nil, xerr.Validation("atom "+a.Name+" advisor: "+err.Error(), err)
 		}
 	}
+	// Wrap the advised action with introspection metadata when the adviser modifies the atom.
 	if !slices.Equal(modifiersBefore, a.Modifiers) {
 		act = inspectBuiltChild(bCtx, builder.Build(), "advisor", action.IntrospectionChild{
 			Node: act, Relation: "wraps", Role: IntrospectionKindAction,

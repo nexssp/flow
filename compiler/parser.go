@@ -4,43 +4,34 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"strconv"
 	"strings"
 )
 
 const maxParseDepth = 64
 
 type Parser struct {
-	ctx       context.Context
-	file      string
-	lineBase  int
-	src       string
-	toks      []Token
-	pos       int
-	ops       *OperatorTable
-	primaries *PrimaryExtensionTable
-	depth     int
-	// lineModifiers is the parser's line-indexed modifier lookup chain.
-	// Called for every atom during parseAtom. Later lookups win over
-	// earlier ones on modifier-name collision. The Source field of each
-	// lookup is recorded alongside every modifier it produces.
+	ctx           context.Context
+	file          string
+	lineBase      int
+	src           string
+	toks          []Token
+	pos           int
+	ops           *OperatorTable
+	primaries     *PrimaryExtensionTable
+	depth         int
 	lineModifiers []LineLookup
 }
 
-// LineLookup pairs a line-indexed modifier function with the source
-// that produced it. Every modifier Fn returns is attributed to Source.
 type LineLookup struct {
 	Source ModifierSource
 	Fn     func(line int) []string
 }
 
-// NewParser is the no-file convenience used in tests. Parse errors
-// report only the line number.
 func NewParser(ctx context.Context, ops *OperatorTable, src string) *Parser {
 	return NewParserWithFileOffset(ctx, ops, DefaultPrimaryExtensions(), src, "", 0)
 }
 
-// NewParserWithPrimaries is kept for compatibility with callers that
-// pass a primaries table explicitly.
 func NewParserWithPrimaries(
 	ctx context.Context,
 	ops *OperatorTable,
@@ -50,8 +41,6 @@ func NewParserWithPrimaries(
 	return NewParserWithFileOffset(ctx, ops, primaries, src, "", 0)
 }
 
-// NewParserWithFile carries the source path so parse errors are
-// formatted as `file:line`, which terminals make clickable.
 func NewParserWithFile(
 	ctx context.Context,
 	ops *OperatorTable,
@@ -61,9 +50,6 @@ func NewParserWithFile(
 	return NewParserWithFileOffset(ctx, ops, primaries, src, file, 0)
 }
 
-// NewParserWithFileOffset additionally shifts reported line numbers by
-// lineBase. Used when a fragment (e.g. a @pipeline body) is parsed in
-// isolation but its errors must point at the parent file's lines.
 func NewParserWithFileOffset(
 	ctx context.Context,
 	ops *OperatorTable,
@@ -94,14 +80,10 @@ func NewParserWithFileOffset(
 	}
 }
 
-// Cur returns the token under the cursor.
 func (p *Parser) Cur() Token { return p.toks[p.pos] }
 
-// Current is an alias for Cur, exported for external primary extensions.
 func (p *Parser) Current() Token { return p.toks[p.pos] }
 
-// Peek returns the token at offset from Cur without advancing. Peek(0) is the
-// current token; offsets beyond the input return the final EOF token.
 func (p *Parser) Peek(offset int) Token {
 	index := max(p.pos+offset, 0)
 	if index >= len(p.toks) {
@@ -110,14 +92,12 @@ func (p *Parser) Peek(offset int) Token {
 	return p.toks[index]
 }
 
-// Next advances the cursor by one token.
 func (p *Parser) Next() {
 	if p.pos < len(p.toks)-1 {
 		p.pos++
 	}
 }
 
-// Advance is an alias for Next, exported for external primary extensions.
 func (p *Parser) Advance() { p.Next() }
 
 func (p *Parser) errorf(_ int, format string, args ...any) error {
@@ -129,39 +109,23 @@ func (p *Parser) currentPos() Position {
 	col := 0
 	if tok.Offset >= 0 && tok.Offset <= len(p.src) {
 		lastNL := strings.LastIndexByte(p.src[:tok.Offset], '\n')
-		// Column calculation is 1-based; without a newline, lastNL is -1.
 		col = tok.Offset - lastNL
 	}
 	return Position{File: p.file, Line: tok.Line + p.lineBase, Col: col}
 }
 
-// Position returns the parser's current source position, including file,
-// line, and column. Exposed so primary extensions can stamp AST nodes
-// they construct without re-implementing column arithmetic.
 func (p *Parser) Position() Position { return p.currentPos() }
 
-// Fail reports a parse error at the given line offset by lineBase.
-// Exported so external primary extensions can format errors the same
-// way the built-in parser does.
 func (p *Parser) Fail(_ int, format string, args ...any) error {
 	return p.errorf(0, format, args...)
 }
 
-// Src returns the source text under parse.
 func (p *Parser) Src() string { return p.src }
 
-// Context returns the parser's context. Extensions reach caller-installed
-// values through it — a trace sink, a policy context, a filename-keyed
-// cache. The parser itself never reads those values; only primaries and
-// line lookups do. It is the sanctioned way for an extension to reach a
-// caller-provided sink without package-level state.
 func (p *Parser) Context() context.Context { return p.ctx }
 
-// File returns the source file path, or "".
 func (p *Parser) File() string { return p.file }
 
-// isTernaryColon reports whether ':' separates a ternary expression (whitespace
-// on both sides) rather than starting an atom modifier.
 func (p *Parser) isTernaryColon() bool {
 	if p.Cur().Type != TokColon || p.pos+1 >= len(p.toks) {
 		return false
@@ -195,17 +159,10 @@ func (p *Parser) Parse() (Expr, error) {
 	return e, nil
 }
 
-// ParseExpr parses a sub-expression with the given minimum precedence.
-// Exported so primary extensions can recurse without reimplementing
-// the precedence-climbing loop.
 func (p *Parser) ParseExpr(minPrec int) (Expr, error) {
 	return p.parseExpr(minPrec)
 }
 
-// SubParse parses a fresh source fragment in this parser's context.
-// The same operator table, primary table, and source-file metadata are
-// reused. External primary extensions call it to re-enter the parser
-// with substituted text.
 func (p *Parser) SubParse(src string) (Expr, error) {
 	if p.depth >= maxParseDepth {
 		return nil, fmt.Errorf("core: parse depth exceeded (%d)", maxParseDepth)
@@ -216,8 +173,6 @@ func (p *Parser) SubParse(src string) (Expr, error) {
 	return sub.Parse()
 }
 
-// parseExpr uses precedence climbing. Ternary has the lowest precedence and is
-// right-associative, so it is parsed outside the operator table.
 func (p *Parser) parseExpr(minPrec int) (Expr, error) {
 	left, err := p.parsePrimary()
 	if err != nil {
@@ -275,14 +230,6 @@ func (p *Parser) parseExpr(minPrec int) (Expr, error) {
 	}
 }
 
-// parsePrimary is the seam. Extensions get first refusal: token-based
-// extensions on their token, keyword-based extensions on identifier
-// tokens. Built-in primaries handle only what no extension claims:
-// parenthesised groups and atoms.
-//
-// After the primary is produced, any trailing `:mod=value` chain is
-// absorbed as a DecoratedExpr so projection, loop, match, assert, and
-// every other primary accept the same policy modifiers an atom does.
 func (p *Parser) parsePrimary() (Expr, error) {
 	expr, err := p.parsePrimaryInner()
 	if err != nil {
@@ -297,6 +244,20 @@ func (p *Parser) parsePrimaryInner() (Expr, error) {
 	}
 
 	if p.Cur().Type == TokIdent {
+		switch p.Cur().Lit {
+		case "true":
+			pos := p.currentPos()
+			p.Next()
+			return &LiteralExpr{Val: true, Pos: pos}, nil
+		case "false":
+			pos := p.currentPos()
+			p.Next()
+			return &LiteralExpr{Val: false, Pos: pos}, nil
+		case "null":
+			pos := p.currentPos()
+			p.Next()
+			return &LiteralExpr{Val: nil, Pos: pos}, nil
+		}
 		if ext, ok := p.primaries.ByKeyword(p.Cur().Lit); ok {
 			return ext.Parse(p)
 		}
@@ -315,6 +276,26 @@ func (p *Parser) parsePrimaryInner() (Expr, error) {
 		return e, nil
 	}
 
+	if p.Cur().Type == TokString {
+		s := p.Cur().Lit
+		pos := p.currentPos()
+		p.Next()
+		return &LiteralExpr{Val: s, Pos: pos}, nil
+	}
+
+	if p.Cur().Type == TokNumber {
+		raw := p.Cur().Lit
+		pos := p.currentPos()
+		p.Next()
+		if n, err := strconv.ParseInt(raw, 10, 64); err == nil {
+			return &LiteralExpr{Val: n, Pos: pos}, nil
+		}
+		if f, err := strconv.ParseFloat(raw, 64); err == nil {
+			return &LiteralExpr{Val: f, Pos: pos}, nil
+		}
+		return &LiteralExpr{Val: raw, Pos: pos}, nil
+	}
+
 	if p.Cur().Type == TokIdent {
 		return p.parseAtom()
 	}
@@ -325,10 +306,6 @@ func (p *Parser) parsePrimaryInner() (Expr, error) {
 	return nil, p.errorf(p.Cur().Line, "unexpected token %q", p.Cur().Lit)
 }
 
-// parsePostfixModifiers absorbs a trailing `:name` / `:name=value` chain
-// that follows a non-atom primary. Atoms read their own modifiers inside
-// parseAtomInner; if we reach an Atom here it already owns its chain, so
-// the first `:` we see must be a stray ternary separator or an error.
 func (p *Parser) parsePostfixModifiers(expr Expr) (Expr, error) {
 	if p.Cur().Type != TokColon || p.isTernaryColon() {
 		return expr, nil
@@ -359,8 +336,6 @@ func (p *Parser) parsePostfixModifiers(expr Expr) (Expr, error) {
 	return &DecoratedExpr{Inner: expr, Modifiers: mods, Pos: startPos}, nil
 }
 
-// parseAtomInner parses an atom's parameters, modifiers, targets, excludes,
-// prompt, and @{...} block.
 func (p *Parser) parseAtomInner() (Expr, error) {
 	name := p.Cur().Lit
 	p.Next()
@@ -433,8 +408,7 @@ func (p *Parser) parseAtom() (Expr, error) {
 		return expr, nil
 	}
 	a.Pos = pos
-	// Every modifier produced by parseAtomInner is written directly on
-	// the atom, so its source is "atom".
+	// Sourced modifiers start with those directly placed on the atom.
 	a.ModifierSources = make([]ModifierSource, len(a.Modifiers))
 	for i := range a.ModifierSources {
 		a.ModifierSources[i] = ModifierSource{Kind: "atom"}
@@ -443,11 +417,6 @@ func (p *Parser) parseAtom() (Expr, error) {
 	return expr, nil
 }
 
-// prependInherited prepends the lookup chain's modifiers to a,
-// skipping any name the atom already declares. Later lookups win over
-// earlier ones on collision, so an inner scope overrides an outer one.
-// Sources are recorded in parallel so `nflow explain` can attribute
-// each modifier to its producer.
 func (p *Parser) prependInherited(a *Atom, line int) {
 	if len(p.lineModifiers) == 0 {
 		return
@@ -550,9 +519,6 @@ func (p *Parser) parseModifier(a *Atom) error {
 	return nil
 }
 
-// consumeValue joins adjacent identifier, number, and string tokens into one
-// value. Commas are included so `:role=admin,editor` parses as a single value
-// for WithStringList.
 func (p *Parser) consumeValue() (string, error) {
 	var sb strings.Builder
 	for p.valueTokenContinues() {
@@ -565,9 +531,6 @@ func (p *Parser) consumeValue() (string, error) {
 	return sb.String(), nil
 }
 
-// valueTokenContinues reports whether the token under the cursor is
-// part of the value currently being consumed. It owns the two edge
-// rules: ternary `? :` breaks the value, and so does `ident =`.
 func (p *Parser) valueTokenContinues() bool {
 	t := p.Cur().Type
 
@@ -595,8 +558,6 @@ func (p *Parser) valueTokenContinues() bool {
 	}
 }
 
-// writeValueToken emits the current token's raw text (and any prefix
-// byte for the punctuation tokens that carry one) into sb.
 func (p *Parser) writeValueToken(sb *strings.Builder) {
 	switch p.Cur().Type {
 	case TokAtPrompt:
@@ -610,7 +571,7 @@ func (p *Parser) writeValueToken(sb *strings.Builder) {
 	case TokEOF, TokIdent, TokString, TokNumber, TokArrow, TokPipe,
 		TokAmpersand, TokOrOr, TokLParen, TokRParen, TokLBrace,
 		TokRBrace, TokEquals, TokComma, TokQuestion, TokAtBrace:
-		// no prefix byte; the literal is written below
+		// Other tokens write only their literal value.
 	}
 	sb.WriteString(p.Cur().Lit)
 }
@@ -629,9 +590,6 @@ func (p *Parser) appendList(dst []string) []string {
 	}
 }
 
-// WithLineModifiers replaces the parser's line-modifier lookup chain.
-// The parser calls them in order; later lookups win over earlier ones
-// on modifier-name collision.
 func (p *Parser) WithLineModifiers(lookups ...LineLookup) *Parser {
 	p.lineModifiers = lookups
 	return p

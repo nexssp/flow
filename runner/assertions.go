@@ -6,6 +6,7 @@ import (
 	"io"
 	"maps"
 	"os"
+	"strings"
 
 	"github.com/expr-lang/expr"
 
@@ -57,6 +58,7 @@ func RunAssertions(w io.Writer, result any, durationMS int64, actions, asserts [
 	normalized := JSONMapView(result)
 	env := map[string]any{
 		"result":      normalized,
+		"__root__":    normalized,
 		"duration_ms": durationMS,
 		"actions":     actions,
 	}
@@ -70,8 +72,13 @@ func RunAssertions(w io.Writer, result any, durationMS int64, actions, asserts [
 
 	failed := 0
 	for _, src := range asserts {
-		src = core.StripExprComments(src)
-		prog, cerr := expr.Compile(src, expr.Env(env))
+		trimmed := strings.TrimSpace(core.StripExprComments(src))
+		cleanExpr := trimmed
+		if strings.HasPrefix(trimmed, ".") {
+			cleanExpr = core.PreprocessDots(trimmed)
+		}
+
+		prog, cerr := expr.Compile(cleanExpr, expr.Env(env))
 		if cerr != nil {
 			fmt.Fprintf(w, "  %s %s  (syntax: %v)\n",
 				paintAssert("✗", assertRed, color), src, cerr)
@@ -98,9 +105,6 @@ func RunAssertions(w io.Writer, result any, durationMS int64, actions, asserts [
 	}
 
 	if failed > 0 {
-		// Exit-status trailer. Only on failure — on the pass path the
-		// caller knows the process will return 0, and printing it
-		// would just be noise.
 		_, _ = fmt.Fprintf(w, "  %s\n",
 			paintAssert(fmt.Sprintf("exit status: %d", 1), assertRed, color))
 		return 1
