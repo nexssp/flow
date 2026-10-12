@@ -5,16 +5,16 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 )
 
 // stubToken is a minimal TokenPrimary on TokAtPrompt. Parse is never
 // invoked from these tests; it exists only to satisfy the interface.
 type stubToken struct{ tag string }
 
-func (s stubToken) Name() string                        { return s.tag }
-func (stubToken) TokenType() core.TokenType             { return core.TokAtPrompt }
-func (stubToken) Parse(*core.Parser) (core.Expr, error) { return nil, nil }
+func (s stubToken) Name() string                                { return s.tag }
+func (stubToken) TokenType() compiler.TokenType                 { return compiler.TokAtPrompt }
+func (stubToken) Parse(*compiler.Parser) (compiler.Expr, error) { return nil, nil }
 
 // stubMergeable appends the tags it has seen in call order, so MergeWith's
 // effect is directly observable from the test.
@@ -23,7 +23,7 @@ type stubMergeable struct {
 	seen []string
 }
 
-func (s *stubMergeable) MergeWith(older core.PrimaryExtension) core.PrimaryExtension {
+func (s *stubMergeable) MergeWith(older compiler.PrimaryExtension) compiler.PrimaryExtension {
 	o, ok := older.(*stubMergeable)
 	if !ok {
 		return s
@@ -38,16 +38,16 @@ func (s *stubMergeable) MergeWith(older core.PrimaryExtension) core.PrimaryExten
 // (byToken, byKeyword) are covered independently.
 type stubKeyword struct{ tag string }
 
-func (s stubKeyword) Name() string                        { return s.tag }
-func (stubKeyword) Keyword() string                       { return "stub_keyword" }
-func (stubKeyword) Parse(*core.Parser) (core.Expr, error) { return nil, nil }
+func (s stubKeyword) Name() string                                { return s.tag }
+func (stubKeyword) Keyword() string                               { return "stub_keyword" }
+func (stubKeyword) Parse(*compiler.Parser) (compiler.Expr, error) { return nil, nil }
 
 type mergeableKeyword struct {
 	stubKeyword
 	seen []string
 }
 
-func (s *mergeableKeyword) MergeWith(older core.PrimaryExtension) core.PrimaryExtension {
+func (s *mergeableKeyword) MergeWith(older compiler.PrimaryExtension) compiler.PrimaryExtension {
 	o, ok := older.(*mergeableKeyword)
 	if !ok {
 		return s
@@ -59,15 +59,15 @@ func (s *mergeableKeyword) MergeWith(older core.PrimaryExtension) core.PrimaryEx
 }
 
 func TestPrimaryTable_SingleToken_Registered(t *testing.T) {
-	table := core.NewPrimaryExtensionTable(stubToken{tag: "a"})
+	table := compiler.NewPrimaryExtensionTable(stubToken{tag: "a"})
 
-	ext, ok := table.ByToken(core.TokAtPrompt)
+	ext, ok := table.ByToken(compiler.TokAtPrompt)
 	ktest.RequireTrue(t, ok)
 	ktest.RequireEqual(t, ext.Name(), "a")
 }
 
 func TestPrimaryTable_SingleKeyword_Registered(t *testing.T) {
-	table := core.NewPrimaryExtensionTable(stubKeyword{tag: "a"})
+	table := compiler.NewPrimaryExtensionTable(stubKeyword{tag: "a"})
 
 	ext, ok := table.ByKeyword("stub_keyword")
 	ktest.RequireTrue(t, ok)
@@ -76,13 +76,13 @@ func TestPrimaryTable_SingleKeyword_Registered(t *testing.T) {
 
 func TestPrimaryTable_NilExtension_Panics(t *testing.T) {
 	ktest.RequirePanics(t, func() {
-		core.NewPrimaryExtensionTable(nil)
+		compiler.NewPrimaryExtensionTable(nil)
 	})
 }
 
 func TestPrimaryTable_EmptyName_Panics(t *testing.T) {
 	ktest.RequirePanics(t, func() {
-		core.NewPrimaryExtensionTable(stubToken{tag: ""})
+		compiler.NewPrimaryExtensionTable(stubToken{tag: ""})
 	})
 }
 
@@ -91,7 +91,7 @@ func TestPrimaryTable_PlainDuplicateToken_Panics(t *testing.T) {
 	// no merge contract cannot claim the same token. If this ever stops
 	// panicking, the "duplicates fail loudly" rule has been weakened.
 	ktest.RequirePanics(t, func() {
-		core.NewPrimaryExtensionTable(
+		compiler.NewPrimaryExtensionTable(
 			stubToken{tag: "a"},
 			stubToken{tag: "b"},
 		)
@@ -100,7 +100,7 @@ func TestPrimaryTable_PlainDuplicateToken_Panics(t *testing.T) {
 
 func TestPrimaryTable_PlainDuplicateKeyword_Panics(t *testing.T) {
 	ktest.RequirePanics(t, func() {
-		core.NewPrimaryExtensionTable(
+		compiler.NewPrimaryExtensionTable(
 			stubKeyword{tag: "a"},
 			stubKeyword{tag: "b"},
 		)
@@ -108,12 +108,12 @@ func TestPrimaryTable_PlainDuplicateKeyword_Panics(t *testing.T) {
 }
 
 func TestPrimaryTable_MergeableToken_Merges(t *testing.T) {
-	table := core.NewPrimaryExtensionTable(
+	table := compiler.NewPrimaryExtensionTable(
 		&stubMergeable{stubToken: stubToken{tag: "older"}, seen: []string{"older"}},
 		&stubMergeable{stubToken: stubToken{tag: "newer"}, seen: []string{"newer"}},
 	)
 
-	ext, ok := table.ByToken(core.TokAtPrompt)
+	ext, ok := table.ByToken(compiler.TokAtPrompt)
 	ktest.RequireTrue(t, ok)
 
 	merged, ok := ext.(*stubMergeable)
@@ -122,7 +122,7 @@ func TestPrimaryTable_MergeableToken_Merges(t *testing.T) {
 }
 
 func TestPrimaryTable_MergeableKeyword_Merges(t *testing.T) {
-	table := core.NewPrimaryExtensionTable(
+	table := compiler.NewPrimaryExtensionTable(
 		&mergeableKeyword{stubKeyword: stubKeyword{tag: "older"}, seen: []string{"older"}},
 		&mergeableKeyword{stubKeyword: stubKeyword{tag: "newer"}, seen: []string{"newer"}},
 	)
@@ -140,7 +140,7 @@ func TestPrimaryTable_PlainNewerOverMergeableOlder_Panics(t *testing.T) {
 	// extension. A mergeable older does not protect a plain newer: the
 	// interface is opt-in for the entrant, not a property of the slot.
 	ktest.RequirePanics(t, func() {
-		core.NewPrimaryExtensionTable(
+		compiler.NewPrimaryExtensionTable(
 			&stubMergeable{stubToken: stubToken{tag: "older"}, seen: []string{"older"}},
 			stubToken{tag: "newer"},
 		)
@@ -148,13 +148,13 @@ func TestPrimaryTable_PlainNewerOverMergeableOlder_Panics(t *testing.T) {
 }
 
 func TestPrimaryTable_ThreeWayMerge_Ordered(t *testing.T) {
-	table := core.NewPrimaryExtensionTable(
+	table := compiler.NewPrimaryExtensionTable(
 		&stubMergeable{stubToken: stubToken{tag: "one"}, seen: []string{"one"}},
 		&stubMergeable{stubToken: stubToken{tag: "two"}, seen: []string{"two"}},
 		&stubMergeable{stubToken: stubToken{tag: "three"}, seen: []string{"three"}},
 	)
 
-	ext, ok := table.ByToken(core.TokAtPrompt)
+	ext, ok := table.ByToken(compiler.TokAtPrompt)
 	ktest.RequireTrue(t, ok)
 
 	merged, ok := ext.(*stubMergeable)
@@ -163,7 +163,7 @@ func TestPrimaryTable_ThreeWayMerge_Ordered(t *testing.T) {
 }
 
 func TestPrimaryTable_All_PreservesInputOrder(t *testing.T) {
-	table := core.NewPrimaryExtensionTable(
+	table := compiler.NewPrimaryExtensionTable(
 		stubToken{tag: "a"},
 		stubKeyword{tag: "b"},
 	)
@@ -180,14 +180,14 @@ func TestPrimaryTable_All_HoldsOriginalEntriesAfterMerge(t *testing.T) {
 	// on the base table (cfg.Primaries), which never contains a mergeable
 	// primary — a merge can only occur when the same source contributes
 	// its primary twice, which happens one level up, on a fresh table.
-	table := core.NewPrimaryExtensionTable(
+	table := compiler.NewPrimaryExtensionTable(
 		&stubMergeable{stubToken: stubToken{tag: "older"}, seen: []string{"older"}},
 		&stubMergeable{stubToken: stubToken{tag: "newer"}, seen: []string{"newer"}},
 	)
 
 	ktest.RequireLen(t, table.All(), 2)
 
-	ext, ok := table.ByToken(core.TokAtPrompt)
+	ext, ok := table.ByToken(compiler.TokAtPrompt)
 	ktest.RequireTrue(t, ok)
 	merged, ok := ext.(*stubMergeable)
 	ktest.RequireTrue(t, ok)

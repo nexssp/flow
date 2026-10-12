@@ -1,11 +1,11 @@
 package cli
 
 import (
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/native"
 )
 
-func newNativeInvocation(bundles []core.Bundle, targets []string) (*invocation, error) {
+func newNativeInvocation(bundles []compiler.Bundle, targets []string) (*invocation, error) {
 	inv, err := newInvocation(bundles, targets)
 	if err != nil {
 		return nil, err

@@ -5,7 +5,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 )
 
 func TestStripExprComments_DepthAware(t *testing.T) {
@@ -66,7 +66,7 @@ func TestStripExprComments_DepthAware(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			ktest.RequireEqual(t, core.StripExprComments(tc.in), tc.want)
+			ktest.RequireEqual(t, compiler.StripExprComments(tc.in), tc.want)
 		})
 	}
 }

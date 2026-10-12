@@ -198,29 +198,29 @@ wrapper.
 
 | API | Use |
 |---|---|
-| `core.Bundle` | The extension contract — see `docs/extensions.md` |
-| `core.Register(id, factory)` | Register a bundle at `init()` |
-| `core.CompileAction(...)` | Lower a source string to a runnable action |
-| `core.CompileReq` / `core.CompileRes` | Compile request/result |
-| `core.Build(ctx, resolver, table, expr)` | Lower an AST fragment |
-| `core.Preprocess(ctx, dt, src, name)` | Run directives, return `(clean, meta, err)` |
-| `core.NewParserWithFileOffset(ctx, ops, primaries, src, file, lineBase)` | Parse with position tracking |
-| `core.Directive` / `DirectiveTable` | Directive contract and registry |
-| `core.Modifier` / `ModifierTable` | Modifier contract and registry |
-| `core.Operator` / `OperatorTable` | Compiler-level operators (`->`, `&`, `||`) |
-| `core.PrimaryExtension` | Parser extension contract (`TokenPrimary`, `KeywordPrimary`) |
-| `core.CapabilityResolver` | Runtime capability lookup (`Action`, `Stream`, `Operator`) |
-| `core.DynamicResolver` | Default resolver; supports `Mount`, `MountWithAlias` |
-| `core.CapabilityRef` / `ParseCapabilityRef` | Bare-identifier capability references |
-| `core.ArgFieldSpec` / `ArgKind` | Argument schemas for capability arguments |
-| `core.LineLookup` / `ModifierSource` | Line-indexed modifier chain and its provenance |
-| `core.WithLineModifiers(...)` | Compile option that installs the chain |
-| `core.LineModifiersFromOptions(mt, opts)` | Extract the chain from compile options |
-| `core.ModifierName(raw)` | Name portion of a raw modifier |
-| `core.SourceError(pos, ...)` | Compile-time error with a position |
-| `core.BuildCatalog(...)` | Dump the compiler surface |
-| `core.KeywordMappings()` / `TranslateKeyword` | Native keyword grammar |
-| `core.IsReservedActionName`, `RequiredModifierOwner` | Reserved-name policy |
+| `compiler.Bundle` | The extension contract — see `docs/extensions.md` |
+| `compiler.Register(id, factory)` | Register a bundle at `init()` |
+| `compiler.CompileAction(...)` | Lower a source string to a runnable action |
+| `compiler.CompileReq` / `compiler.CompileRes` | Compile request/result |
+| `compiler.Build(ctx, resolver, table, expr)` | Lower an AST fragment |
+| `compiler.Preprocess(ctx, dt, src, name)` | Run directives, return `(clean, meta, err)` |
+| `compiler.NewParserWithFileOffset(ctx, ops, primaries, src, file, lineBase)` | Parse with position tracking |
+| `compiler.Directive` / `DirectiveTable` | Directive contract and registry |
+| `compiler.Modifier` / `ModifierTable` | Modifier contract and registry |
+| `compiler.Operator` / `OperatorTable` | Compiler-level operators (`->`, `&`, `||`) |
+| `compiler.PrimaryExtension` | Parser extension contract (`TokenPrimary`, `KeywordPrimary`) |
+| `compiler.CapabilityResolver` | Runtime capability lookup (`Action`, `Stream`, `Operator`) |
+| `compiler.DynamicResolver` | Default resolver; supports `Mount`, `MountWithAlias` |
+| `compiler.CapabilityRef` / `ParseCapabilityRef` | Bare-identifier capability references |
+| `compiler.ArgFieldSpec` / `ArgKind` | Argument schemas for capability arguments |
+| `compiler.LineLookup` / `ModifierSource` | Line-indexed modifier chain and its provenance |
+| `compiler.WithLineModifiers(...)` | Compile option that installs the chain |
+| `compiler.LineModifiersFromOptions(mt, opts)` | Extract the chain from compile options |
+| `compiler.ModifierName(raw)` | Name portion of a raw modifier |
+| `compiler.SourceError(pos, ...)` | Compile-time error with a position |
+| `compiler.BuildCatalog(...)` | Dump the compiler surface |
+| `compiler.KeywordMappings()` / `TranslateKeyword` | Native keyword grammar |
+| `compiler.IsReservedActionName`, `RequiredModifierOwner` | Reserved-name policy |
 
 ### `flow/runner` — execution assembly
 
@@ -240,7 +240,7 @@ wrapper.
 ### `flow/native` — built-in bundles
 
 ```go
-native.Bundles()      // all standard extensions as []core.Bundle
+native.Bundles()      // all standard extensions as []compiler.Bundle
 native.Directives()   // the standard DirectiveTable
 native.Primaries()    // the standard primary extensions
 ```

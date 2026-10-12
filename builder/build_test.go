@@ -33,15 +33,15 @@ import (
 const ID = "mylocal"
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(opts map[string]string) core.Bundle {
+func Bundle(opts map[string]string) compiler.Bundle {
 	prefix := opts["prefix"]
 	act := action.New("mylocal.echo", func(_ context.Context, _ any) (map[string]any, error) {
 		return map[string]any{"value": prefix + ":ok"}, nil
 	}).Build()
-	return core.Bundle{
+	return compiler.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{act}}},
 	}
@@ -151,15 +151,15 @@ import (
 const ID = "worker"
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(opts map[string]string) core.Bundle {
+func Bundle(opts map[string]string) compiler.Bundle {
 	prefix := opts["prefix"]
 	act := action.New("worker.echo", func(_ context.Context, _ any) (map[string]any, error) {
 		return map[string]any{"value": prefix + ":ok"}, nil
 	}).Build()
-	return core.Bundle{
+	return compiler.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{act}}},
 	}

@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 )
 
 var bundleTestSequence atomic.Uint64
@@ -21,7 +21,7 @@ func TestRegister_RejectsNilFactory(t *testing.T) {
 			t.Fatal("expected panic on nil factory")
 		}
 	}()
-	core.Register("test_nil_factory_ext", nil)
+	compiler.Register("test_nil_factory_ext", nil)
 }
 
 func TestRegister_RejectsEmptyID(t *testing.T) {
@@ -30,7 +30,7 @@ func TestRegister_RejectsEmptyID(t *testing.T) {
 			t.Fatal("expected panic on empty ID")
 		}
 	}()
-	core.Register("", func(map[string]string) core.Bundle { return core.Bundle{} })
+	compiler.Register("", func(map[string]string) compiler.Bundle { return compiler.Bundle{} })
 }
 
 func TestRegister_RejectsWhitespaceID(t *testing.T) {
@@ -39,13 +39,13 @@ func TestRegister_RejectsWhitespaceID(t *testing.T) {
 			t.Fatal("expected panic on whitespace-only ID")
 		}
 	}()
-	core.Register("   ", func(map[string]string) core.Bundle { return core.Bundle{} })
+	compiler.Register("   ", func(map[string]string) compiler.Bundle { return compiler.Bundle{} })
 }
 
 func TestRegister_DuplicatePanics(t *testing.T) {
 	id := bundleTestID("test_dup_external")
-	factory := func(map[string]string) core.Bundle { return core.Bundle{ID: id} }
-	core.Register(id, factory)
+	factory := func(map[string]string) compiler.Bundle { return compiler.Bundle{ID: id} }
+	compiler.Register(id, factory)
 
 	defer func() {
 		r := recover()
@@ -57,23 +57,23 @@ func TestRegister_DuplicatePanics(t *testing.T) {
 			t.Fatalf("panic message = %v, want substring %q", r, "duplicate")
 		}
 	}()
-	core.Register(id, factory)
+	compiler.Register(id, factory)
 }
 
 func TestLookup_ExactID(t *testing.T) {
 	id := bundleTestID("test_exact_external")
-	core.Register(id, func(map[string]string) core.Bundle {
-		return core.Bundle{ID: id}
+	compiler.Register(id, func(map[string]string) compiler.Bundle {
+		return compiler.Bundle{ID: id}
 	})
-	if _, ok := core.LookupBundleForModule(id); !ok {
+	if _, ok := compiler.LookupBundleForModule(id); !ok {
 		t.Fatal("exact ID lookup failed")
 	}
 }
 
 func TestLookup_ModulePathVariants(t *testing.T) {
 	id := bundleTestID("test_module_external")
-	core.Register(id, func(map[string]string) core.Bundle {
-		return core.Bundle{ID: id}
+	compiler.Register(id, func(map[string]string) compiler.Bundle {
+		return compiler.Bundle{ID: id}
 	})
 
 	cases := []struct {
@@ -96,7 +96,7 @@ func TestLookup_ModulePathVariants(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.query, func(t *testing.T) {
-			_, ok := core.LookupBundleForModule(c.query)
+			_, ok := compiler.LookupBundleForModule(c.query)
 			if ok != c.want {
 				t.Fatalf("LookupBundleForModule(%q) = %v, want %v", c.query, ok, c.want)
 			}
@@ -106,8 +106,8 @@ func TestLookup_ModulePathVariants(t *testing.T) {
 
 func TestLookup_ForkSafe(t *testing.T) {
 	id := bundleTestID("test_macros_external")
-	core.Register(id, func(map[string]string) core.Bundle {
-		return core.Bundle{ID: id}
+	compiler.Register(id, func(map[string]string) compiler.Bundle {
+		return compiler.Bundle{ID: id}
 	})
 
 	for _, target := range []string{
@@ -115,22 +115,22 @@ func TestLookup_ForkSafe(t *testing.T) {
 		"github.com/nexssp/flow/extensions/" + id,
 		fmt.Sprintf("github.com/nexssp/flow/extensions/%s/nexssflow", id),
 	} {
-		if _, ok := core.LookupBundleForModule(target); !ok {
+		if _, ok := compiler.LookupBundleForModule(target); !ok {
 			t.Errorf("target %q did not resolve", target)
 		}
 	}
 }
 
 func TestLookup_Unknown(t *testing.T) {
-	if _, ok := core.LookupBundleForModule("github.com/nonexistent/package"); ok {
+	if _, ok := compiler.LookupBundleForModule("github.com/nonexistent/package"); ok {
 		t.Error("unknown module path should not resolve")
 	}
 }
 
 func TestLookup_NormalizationEdges(t *testing.T) {
 	id := bundleTestID("test_edge_external")
-	core.Register(id, func(map[string]string) core.Bundle {
-		return core.Bundle{ID: id}
+	compiler.Register(id, func(map[string]string) compiler.Bundle {
+		return compiler.Bundle{ID: id}
 	})
 
 	cases := []struct {
@@ -149,7 +149,7 @@ func TestLookup_NormalizationEdges(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, ok := core.LookupBundleForModule(c.query)
+			_, ok := compiler.LookupBundleForModule(c.query)
 			if ok != c.want {
 				t.Fatalf("LookupBundleForModule(%q) = %v, want %v", c.query, ok, c.want)
 			}

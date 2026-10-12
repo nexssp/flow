@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 )
 
@@ -49,7 +49,7 @@ func runRequire(ctx context.Context, inv *invocation, args []string) int {
 	if err != nil {
 		return fatalf("directives: %v", err)
 	}
-	_, meta, err := core.Preprocess(ctx, dt, string(src), path)
+	_, meta, err := compiler.Preprocess(ctx, dt, string(src), path)
 	if err != nil {
 		return fatalf("preprocess: %v", err)
 	}

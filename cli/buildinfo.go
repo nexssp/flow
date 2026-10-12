@@ -4,7 +4,7 @@ import (
 	"io"
 
 	"github.com/nexssp/flow/builder"
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 )
 
 // The exported fields remain for source compatibility; build metadata is owned by builder.
@@ -14,7 +14,7 @@ var (
 	BuiltAt = builder.BuiltAt
 )
 
-func init() { core.Version = builder.Version }
+func init() { compiler.Version = builder.Version }
 
 func Print(w io.Writer) { builder.Print(w) }
 

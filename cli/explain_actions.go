@@ -10,7 +10,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/runner"
 )
 
@@ -35,7 +35,7 @@ func renderExplainActionGraph(
 	jsonOut bool,
 	dotOut bool,
 ) error {
-	compiled, err := runner.CompileWithOptions(ctx, cfg, src, path, core.WithActionIntrospection())
+	compiled, err := runner.CompileWithOptions(ctx, cfg, src, path, compiler.WithActionIntrospection())
 	if err != nil {
 		return err
 	}

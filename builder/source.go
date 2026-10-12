@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 	"github.com/nexssp/flow/native"
 )
@@ -16,7 +16,7 @@ func SourceRequires(ctx context.Context, path string) ([]require.Requirement, er
 	if err != nil {
 		return nil, err
 	}
-	_, meta, err := core.Preprocess(ctx, native.Directives(), string(source), path)
+	_, meta, err := compiler.Preprocess(ctx, native.Directives(), string(source), path)
 	if err != nil {
 		return nil, err
 	}

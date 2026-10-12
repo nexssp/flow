@@ -6,7 +6,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 )
 
 func TestScore_SkippedDoesNotReduceValue(t *testing.T) {
@@ -148,6 +148,6 @@ func TestComputeScore_FillsFlatFields(t *testing.T) {
 	ktest.RequireNotNil(t, s.Fingerprint)
 }
 
-func feature(name string) core.SelfTestFeature {
-	return core.SelfTestFeature{Name: name, DSL: "noop"}
+func feature(name string) compiler.SelfTestFeature {
+	return compiler.SelfTestFeature{Name: name, DSL: "noop"}
 }

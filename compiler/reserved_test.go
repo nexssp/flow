@@ -5,7 +5,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 )
 
 func TestTranslateKeyword(t *testing.T) {
@@ -23,23 +23,23 @@ func TestTranslateKeyword(t *testing.T) {
 		{"", "", false},
 	}
 	for _, tc := range tests {
-		target, ok := core.TranslateKeyword(tc.in)
+		target, ok := compiler.TranslateKeyword(tc.in)
 		ktest.RequireEqual(t, ok, tc.ok)
 		ktest.RequireEqual(t, target, tc.target)
 	}
 }
 
 func TestIsReservedActionName(t *testing.T) {
-	ktest.RequireCondition(t, core.IsReservedActionName("const"), "const should be reserved")
-	ktest.RequireCondition(t, core.IsReservedActionName("noop"), "noop should be reserved")
-	ktest.RequireCondition(t, core.IsReservedActionName("parallel"), "parallel should be reserved")
-	ktest.RequireCondition(t, !core.IsReservedActionName("runtime.const"), "runtime.const should not be reserved")
-	ktest.RequireCondition(t, !core.IsReservedActionName("http.request"), "http.request should not be reserved")
+	ktest.RequireCondition(t, compiler.IsReservedActionName("const"), "const should be reserved")
+	ktest.RequireCondition(t, compiler.IsReservedActionName("noop"), "noop should be reserved")
+	ktest.RequireCondition(t, compiler.IsReservedActionName("parallel"), "parallel should be reserved")
+	ktest.RequireCondition(t, !compiler.IsReservedActionName("runtime.const"), "runtime.const should not be reserved")
+	ktest.RequireCondition(t, !compiler.IsReservedActionName("http.request"), "http.request should not be reserved")
 }
 
 func TestRequiredModifierOwner(t *testing.T) {
-	ktest.RequireEqual(t, core.RequiredModifierOwner("timeout"), core.OwnerKernel)
-	ktest.RequireEqual(t, core.RequiredModifierOwner("retry"), core.OwnerKernel)
-	ktest.RequireEqual(t, core.RequiredModifierOwner("profile"), core.OwnerGrammar)
-	ktest.RequireEqual(t, core.RequiredModifierOwner("model"), core.OwnerBundle)
+	ktest.RequireEqual(t, compiler.RequiredModifierOwner("timeout"), compiler.OwnerKernel)
+	ktest.RequireEqual(t, compiler.RequiredModifierOwner("retry"), compiler.OwnerKernel)
+	ktest.RequireEqual(t, compiler.RequiredModifierOwner("profile"), compiler.OwnerGrammar)
+	ktest.RequireEqual(t, compiler.RequiredModifierOwner("model"), compiler.OwnerBundle)
 }

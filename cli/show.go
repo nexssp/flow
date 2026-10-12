@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 )
 
@@ -50,7 +50,7 @@ func runShowInProcess(ctx context.Context, inv *invocation, args []string) int {
 		return fatalf("config: %v", err)
 	}
 
-	cat := core.BuildCatalog(cfg.Resolver, cfg.Modifiers, cfg.Directives, cfg.Operators)
+	cat := compiler.BuildCatalog(cfg.Resolver, cfg.Modifiers, cfg.Directives, cfg.Operators)
 	useColor := !*noColor && colorEnabled(os.Stdout)
 
 	switch {
@@ -74,7 +74,7 @@ func sourceRequiresFromOptional(ctx context.Context, inv *invocation, path strin
 	return inv.sourceRequiresFromFile(ctx, path)
 }
 
-func showAtom(atoms []core.AtomSpec, name string, useColor bool) bool {
+func showAtom(atoms []compiler.AtomSpec, name string, useColor bool) bool {
 	for i := range atoms {
 		a := &atoms[i]
 		if a.Name != name {
@@ -120,7 +120,7 @@ func showAtom(atoms []core.AtomSpec, name string, useColor bool) bool {
 	return false
 }
 
-func renderFieldSection(title string, fields []core.FieldSpec, useColor bool) {
+func renderFieldSection(title string, fields []compiler.FieldSpec, useColor bool) {
 	if len(fields) == 0 {
 		return
 	}
@@ -139,7 +139,7 @@ func renderFieldSection(title string, fields []core.FieldSpec, useColor bool) {
 	}
 }
 
-func showModifier(mods []core.ModifierSpec, name string, useColor bool) bool {
+func showModifier(mods []compiler.ModifierSpec, name string, useColor bool) bool {
 	for _, m := range mods {
 		if m.Name != name {
 			continue
@@ -154,7 +154,7 @@ func showModifier(mods []core.ModifierSpec, name string, useColor bool) bool {
 	return false
 }
 
-func showDirective(dirs []core.DirectiveSpec, name string, useColor bool) bool {
+func showDirective(dirs []compiler.DirectiveSpec, name string, useColor bool) bool {
 	for _, d := range dirs {
 		if d.Name != name {
 			continue
@@ -170,7 +170,7 @@ func showDirective(dirs []core.DirectiveSpec, name string, useColor bool) bool {
 	return false
 }
 
-func showOperator(ops []core.OperatorSpec, name string, useColor bool) bool {
+func showOperator(ops []compiler.OperatorSpec, name string, useColor bool) bool {
 	for _, o := range ops {
 		if o.Name != name {
 			continue

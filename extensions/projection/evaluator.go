@@ -10,6 +10,8 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
 	"github.com/nexssp/kernel/xerr"
+
+	core "github.com/nexssp/flow/compiler"
 )
 
 // Request is one projection evaluation.
@@ -48,7 +50,7 @@ func NewExprEvaluator() Evaluator {
 			return nil, err
 		}
 
-		output, err := expr.Run(program, buildEnv(req.Input))
+		output, err := expr.Run(program, core.MergeSymbolNamespaces(ctx, buildEnv(req.Input)))
 		if err != nil {
 			return nil, xerr.BadRequest(fmt.Sprintf("projection %q: %v", strings.TrimSpace(req.Raw), err))
 		}

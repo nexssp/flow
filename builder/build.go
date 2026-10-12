@@ -48,6 +48,11 @@ var allNativeBundles = []nativeBundleInfo{
 		matcher: func(string) bool { return true },
 	},
 	{
+		id:      "symbols",
+		pkg:     "github.com/nexssp/flow/extensions/symbols",
+		matcher: func(s string) bool { return strings.Contains(s, "@symbols") },
+	},
+	{
 		id:      "pipeline",
 		pkg:     "github.com/nexssp/flow/extensions/pipeline",
 		matcher: func(s string) bool { return strings.Contains(s, "@pipeline") || strings.Contains(s, "pipeline.") },
@@ -690,7 +695,7 @@ import (
 	"os"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/runner"
 `)
 
@@ -743,7 +748,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "nexssflow %s (built %s)\n", Version, BuiltAt)
 		}
 
-		bundles := []core.Bundle{
+		bundles := []compiler.Bundle{
 `)
 	for i := range usedBundles {
 		fmt.Fprintf(&b, "\t\tnative%d.Bundle(nil),\n", i)
@@ -760,7 +765,7 @@ func main() {
 
 	if len(imports) > 0 {
 		b.WriteString(`
-	adopt := func(bundle core.Bundle) error {
+	adopt := func(bundle compiler.Bundle) error {
 		if err := host.Own(bundle); err != nil {
 			return err
 		}

@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/native"
 	flowrunner "github.com/nexssp/flow/runner"
 )
@@ -35,7 +35,7 @@ type Options struct {
 
 // filterResult carries the outcome of one filter application.
 type filterResult struct {
-	Sections         []core.SelfTestSection
+	Sections         []compiler.SelfTestSection
 	UnmatchedFilters []string
 }
 
@@ -66,7 +66,7 @@ func Run(ctx context.Context, opts Options) int {
 // RunWithHost executes the suite using bundles already owned by host. It is
 // used by the CLI so self-test shares the command's native bundle instances and
 // its outer invocation lifetime.
-func RunWithHost(ctx context.Context, opts Options, bundles []core.Bundle, host *flowrunner.Host) int {
+func RunWithHost(ctx context.Context, opts Options, bundles []compiler.Bundle, host *flowrunner.Host) int {
 	_ = host // ownership is established by the caller; retained in the contract.
 	return runWithBundles(ctx, opts, bundles)
 }
@@ -78,7 +78,7 @@ func optionOutput(opts Options) io.Writer {
 	return os.Stdout
 }
 
-func runWithBundles(ctx context.Context, opts Options, bundles []core.Bundle) int {
+func runWithBundles(ctx context.Context, opts Options, bundles []compiler.Bundle) int {
 	if opts.Out == nil {
 		opts.Out = os.Stdout
 	}
@@ -171,7 +171,7 @@ func runWithBundles(ctx context.Context, opts Options, bundles []core.Bundle) in
 //   - a filter that only matches individual features keeps those features
 //   - a filter that matches nothing is reported back to the caller as
 //     "unmatched" so the renderer can list it in the summary
-func filterSections(in []core.SelfTestSection, filters []string) filterResult {
+func filterSections(in []compiler.SelfTestSection, filters []string) filterResult {
 	norm := make([]string, 0, len(filters))
 	for _, f := range filters {
 		if f = strings.ToLower(strings.TrimSpace(f)); f != "" {
@@ -195,20 +195,20 @@ func filterSections(in []core.SelfTestSection, filters []string) filterResult {
 		return false
 	}
 
-	out := make([]core.SelfTestSection, 0, len(in))
+	out := make([]compiler.SelfTestSection, 0, len(in))
 	for _, s := range in {
 		if matches(s.Name) {
 			out = append(out, s)
 			continue
 		}
-		kept := make([]core.SelfTestFeature, 0, len(s.Features))
+		kept := make([]compiler.SelfTestFeature, 0, len(s.Features))
 		for _, f := range s.Features {
 			if matches(f.Name) {
 				kept = append(kept, f)
 			}
 		}
 		if len(kept) > 0 {
-			out = append(out, core.SelfTestSection{Name: s.Name, Features: kept})
+			out = append(out, compiler.SelfTestSection{Name: s.Name, Features: kept})
 		}
 	}
 

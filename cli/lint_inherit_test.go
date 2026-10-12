@@ -5,7 +5,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/modifiers_core"
 	"github.com/nexssp/flow/extensions/modifiers_meta"
 	"github.com/nexssp/flow/extensions/pipeline"
@@ -18,7 +18,7 @@ import (
 
 func inheritLintConfig(t *testing.T) runner.Config {
 	t.Helper()
-	cfg, err := runner.BuildConfig([]core.Bundle{
+	cfg, err := runner.BuildConfig([]compiler.Bundle{
 		syntax.Bundle(nil),
 		runtime.Bundle(nil),
 		projection.Bundle(nil),

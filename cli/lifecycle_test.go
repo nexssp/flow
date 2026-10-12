@@ -11,7 +11,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 	"github.com/nexssp/flow/native"
 )
@@ -25,29 +25,29 @@ func writeLifecycleFlow(t *testing.T, source string) string {
 	return path
 }
 
-func lifecycleBundle(id string, run func(context.Context) (any, error), shutdown func(context.Context) error) core.Bundle {
+func lifecycleBundle(id string, run func(context.Context) (any, error), shutdown func(context.Context) error) compiler.Bundle {
 	act := action.New(id+".run", func(ctx context.Context, _ any) (any, error) {
 		if run == nil {
 			return "ok", nil
 		}
 		return run(ctx)
 	}).Build()
-	return core.Bundle{
+	return compiler.Bundle{
 		ID:        id,
 		Libraries: []action.Library{{Name: id, Actions: []action.AnyAction{act}}},
-		Shutdowns: []core.ShutdownFunc{shutdown},
+		Shutdowns: []compiler.ShutdownFunc{shutdown},
 	}
 }
 
 func TestRunWithBundles_ClosesOnHelpAndVersionEarlyReturns(t *testing.T) {
 	for _, args := range [][]string{{"help"}, {"version"}, nil, {"not-a-command"}, {"list", "--not-a-flag"}} {
 		calls := atomic.Int32{}
-		bundle := core.Bundle{ID: "lifecycle_early", Shutdowns: []core.ShutdownFunc{func(context.Context) error {
+		bundle := compiler.Bundle{ID: "lifecycle_early", Shutdowns: []compiler.ShutdownFunc{func(context.Context) error {
 			calls.Add(1)
 			return nil
 		}}}
 		_, _ = captureIO(t, func() {
-			_ = RunWithBundles(args, []core.Bundle{bundle})
+			_ = RunWithBundles(args, []compiler.Bundle{bundle})
 		})
 		if got := calls.Load(); got != 1 {
 			t.Fatalf("RunWithBundles(%v) shutdown calls = %d, want 1", args, got)
@@ -66,8 +66,8 @@ func TestRunWithBundleFactories_ClosesEarlierBundleWhenLaterFactoryPanics(t *tes
 			t.Fatalf("earlier bundle cleanup calls = %d, want 1", got)
 		}
 	}()
-	_ = RunWithBundleFactoriesForRequirements(nil, nil, func(adopt func(core.Bundle) error) error {
-		bundle := core.Bundle{ID: "lifecycle_generated_first", Shutdowns: []core.ShutdownFunc{func(context.Context) error {
+	_ = RunWithBundleFactoriesForRequirements(nil, nil, func(adopt func(compiler.Bundle) error) error {
+		bundle := compiler.Bundle{ID: "lifecycle_generated_first", Shutdowns: []compiler.ShutdownFunc{func(context.Context) error {
 			closed.Add(1)
 			return nil
 		}}}
@@ -81,7 +81,7 @@ func TestRunWithBundleFactories_ClosesEarlierBundleWhenLaterFactoryPanics(t *tes
 func TestRunWithBundlesForRequirements_UsesInjectedBundleForInfoAndCloses(t *testing.T) {
 	t.Setenv(harnessEnv, "")
 	var closed atomic.Int32
-	bundle := core.Bundle{ID: "lifecycle_injected", Shutdowns: []core.ShutdownFunc{func(context.Context) error {
+	bundle := compiler.Bundle{ID: "lifecycle_injected", Shutdowns: []compiler.ShutdownFunc{func(context.Context) error {
 		closed.Add(1)
 		return nil
 	}}}
@@ -89,7 +89,7 @@ func TestRunWithBundlesForRequirements_UsesInjectedBundleForInfoAndCloses(t *tes
 
 	code := RunWithBundlesForRequirements(
 		[]string{"run", path, "--info"},
-		[]core.Bundle{bundle},
+		[]compiler.Bundle{bundle},
 		[]string{"lifecycle.example"},
 	)
 	if code != 0 {
@@ -111,11 +111,11 @@ func TestRunEmbeddedWithBundles_InfoBranchesCloseOnSuccessAndParseError(t *testi
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var closed atomic.Int32
-			bundle := core.Bundle{ID: "lifecycle_embedded_info", Shutdowns: []core.ShutdownFunc{func(context.Context) error {
+			bundle := compiler.Bundle{ID: "lifecycle_embedded_info", Shutdowns: []compiler.ShutdownFunc{func(context.Context) error {
 				closed.Add(1)
 				return nil
 			}}}
-			code := RunEmbeddedWithBundles(context.Background(), test.source, []string{"info"}, []core.Bundle{bundle})
+			code := RunEmbeddedWithBundles(context.Background(), test.source, []string{"info"}, []compiler.Bundle{bundle})
 			if test.wantOK && code != 0 {
 				t.Fatalf("info code = %d, want 0", code)
 			}
@@ -143,7 +143,7 @@ func TestRunEmbeddedWithBundles_MaterializedPipelineDoesNotCloseBeforeAction(t *
 		return nil
 	})
 	source := "@pipeline nested\n  lifecycle_pipeline.run\n@end\npipeline.nested\n"
-	code := RunEmbeddedWithBundles(context.Background(), source, []string{"--json"}, []core.Bundle{bundle})
+	code := RunEmbeddedWithBundles(context.Background(), source, []string{"--json"}, []compiler.Bundle{bundle})
 	if code != 0 {
 		t.Fatalf("embedded pipeline exit code = %d, want 0", code)
 	}
@@ -159,8 +159,8 @@ func TestRunEmbeddedWithBundleFactories_AdoptsBeforeInfoDispatch(t *testing.T) {
 		"@description \"factory embedded\"\nruntime.const @{ value: 1 }",
 		[]string{"info"},
 		nil,
-		func(adopt func(core.Bundle) error) error {
-			return adopt(core.Bundle{ID: "lifecycle_factory_embedded", Shutdowns: []core.ShutdownFunc{func(context.Context) error {
+		func(adopt func(compiler.Bundle) error) error {
+			return adopt(compiler.Bundle{ID: "lifecycle_factory_embedded", Shutdowns: []compiler.ShutdownFunc{func(context.Context) error {
 				closed.Add(1)
 				return nil
 			}}})
@@ -185,7 +185,7 @@ func TestRunEmbeddedWithBundles_SupervisorChildrenFinishBeforeShutdown(t *testin
 		return nil
 	})
 	source := `supervisor.run @{ tasks: [{ id: "child", dsl: "lifecycle_supervisor_child.run", payload: {} }] }`
-	code := RunEmbeddedWithBundles(context.Background(), source, []string{"--json"}, []core.Bundle{bundle})
+	code := RunEmbeddedWithBundles(context.Background(), source, []string{"--json"}, []compiler.Bundle{bundle})
 	if code != 0 || !ran.Load() || !closed.Load() {
 		t.Fatalf("supervisor exit=%d child-ran=%v shutdown=%v", code, ran.Load(), closed.Load())
 	}
@@ -211,7 +211,7 @@ func TestRunEmbeddedWithBundles_CompileAndActionErrorsStillClose(t *testing.T) {
 				closed.Add(1)
 				return nil
 			})
-			code := RunEmbeddedWithBundles(context.Background(), test.source, nil, []core.Bundle{bundle})
+			code := RunEmbeddedWithBundles(context.Background(), test.source, nil, []compiler.Bundle{bundle})
 			if code == 0 {
 				t.Fatal("expected a nonzero result")
 			}
@@ -232,7 +232,7 @@ func TestRunEmbeddedWithBundles_CanceledActionReceivesFreshCleanupContext(t *tes
 		cleanupErr = ctx.Err()
 		return cleanupErr
 	})
-	code := RunEmbeddedWithBundles(ctx, "lifecycle_cancel.run", nil, []core.Bundle{bundle})
+	code := RunEmbeddedWithBundles(ctx, "lifecycle_cancel.run", nil, []compiler.Bundle{bundle})
 	if code == 0 {
 		t.Fatal("expected canceled action to fail")
 	}
@@ -243,10 +243,10 @@ func TestRunEmbeddedWithBundles_CanceledActionReceivesFreshCleanupContext(t *tes
 
 func TestRunEmbeddedWithBundles_CleanupErrorChangesOnlySuccessfulStatus(t *testing.T) {
 	cleanupErr := errors.New("cleanup-only failure")
-	bundle := core.Bundle{ID: "lifecycle_cleanup_error", Shutdowns: []core.ShutdownFunc{func(context.Context) error {
+	bundle := compiler.Bundle{ID: "lifecycle_cleanup_error", Shutdowns: []compiler.ShutdownFunc{func(context.Context) error {
 		return cleanupErr
 	}}}
-	if code := RunEmbeddedWithBundles(context.Background(), "@description \"help\"", []string{"help"}, []core.Bundle{bundle}); code == 0 {
+	if code := RunEmbeddedWithBundles(context.Background(), "@description \"help\"", []string{"help"}, []compiler.Bundle{bundle}); code == 0 {
 		t.Fatal("cleanup failure should convert success to nonzero")
 	}
 }
@@ -265,11 +265,11 @@ func TestCLICompileAndInspectionCommandsCloseAfterTheirHelpersReturn(t *testing.
 	for _, args := range commands {
 		t.Run(strings.Join(args, "_"), func(t *testing.T) {
 			var closed atomic.Int32
-			bundle := core.Bundle{ID: "lifecycle_compile_only", Shutdowns: []core.ShutdownFunc{func(context.Context) error {
+			bundle := compiler.Bundle{ID: "lifecycle_compile_only", Shutdowns: []compiler.ShutdownFunc{func(context.Context) error {
 				closed.Add(1)
 				return nil
 			}}}
-			code := RunWithBundles(args, []core.Bundle{bundle})
+			code := RunWithBundles(args, []compiler.Bundle{bundle})
 			if got := closed.Load(); got != 1 {
 				t.Fatalf("%v shutdown calls = %d, want 1 (exit code %d)", args, got, code)
 			}
@@ -291,20 +291,20 @@ func TestInvocationReusesNativeBundleInstancesForDirectivesAndConfig(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	inv.nativeFactory = func() []core.Bundle {
+	inv.nativeFactory = func() []compiler.Bundle {
 		factories.Add(1)
 		bundles := native.Bundles()
-		return append(bundles, core.Bundle{
+		return append(bundles, compiler.Bundle{
 			ID: "lifecycle_native",
-			Directives: []core.Directive{{
+			Directives: []compiler.Directive{{
 				Name: "lifecycle_probe",
-				Handler: func(context.Context, core.DirectiveReq) (core.DirectiveRes, error) {
+				Handler: func(context.Context, compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 					directiveCalls.Add(1)
-					return core.DirectiveRes{}, nil
+					return compiler.DirectiveRes{}, nil
 				},
 			}},
 			Libraries: []action.Library{{Name: "lifecycle_native"}},
-			Shutdowns: []core.ShutdownFunc{func(context.Context) error {
+			Shutdowns: []compiler.ShutdownFunc{func(context.Context) error {
 				closed.Add(1)
 				return nil
 			}},
@@ -317,7 +317,7 @@ func TestInvocationReusesNativeBundleInstancesForDirectivesAndConfig(t *testing.
 			t.Errorf("directiveTable: %v", err)
 			return 1
 		}
-		if _, _, err := core.Preprocess(ctx, directives, "@lifecycle_probe\nruntime.const @{ value: 1 }", "same.nflow"); err != nil {
+		if _, _, err := compiler.Preprocess(ctx, directives, "@lifecycle_probe\nruntime.const @{ value: 1 }", "same.nflow"); err != nil {
 			t.Errorf("preprocess: %v", err)
 			return 1
 		}
@@ -346,14 +346,14 @@ func TestInvocationReusesNativeBundleInstancesForDirectivesAndConfig(t *testing.
 
 func TestInvocationAdoptsDynamicBundleBeforeOptionValidationFailure(t *testing.T) {
 	var got []string
-	core.Register("lifecycle_dynamic_first", func(map[string]string) core.Bundle {
-		return core.Bundle{ID: "lifecycle_dynamic_first", Shutdowns: []core.ShutdownFunc{func(context.Context) error {
+	compiler.Register("lifecycle_dynamic_first", func(map[string]string) compiler.Bundle {
+		return compiler.Bundle{ID: "lifecycle_dynamic_first", Shutdowns: []compiler.ShutdownFunc{func(context.Context) error {
 			got = append(got, "first")
 			return nil
 		}}}
 	})
-	core.Register("lifecycle_dynamic_second", func(map[string]string) core.Bundle {
-		return core.Bundle{ID: "lifecycle_dynamic_second", AcceptedOptions: []string{}, Shutdowns: []core.ShutdownFunc{func(context.Context) error {
+	compiler.Register("lifecycle_dynamic_second", func(map[string]string) compiler.Bundle {
+		return compiler.Bundle{ID: "lifecycle_dynamic_second", AcceptedOptions: []string{}, Shutdowns: []compiler.ShutdownFunc{func(context.Context) error {
 			got = append(got, "second")
 			return nil
 		}}}
@@ -362,7 +362,7 @@ func TestInvocationAdoptsDynamicBundleBeforeOptionValidationFailure(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	inv.nativeFactory = func() []core.Bundle { return nil }
+	inv.nativeFactory = func() []compiler.Bundle { return nil }
 	code := runInvocation(context.Background(), inv, func(context.Context) int {
 		_, err := inv.buildConfig([]require.Requirement{
 			{Import: "lifecycle_dynamic_first"},
@@ -385,13 +385,13 @@ func TestInvocationDynamicFactoryPanicClosesPreviouslyReturnedBundles(t *testing
 	var closed atomic.Int32
 	var factoryRolledBack atomic.Bool
 	panicValue := &struct{ name string }{"factory panic"}
-	core.Register("lifecycle_panic_first", func(map[string]string) core.Bundle {
-		return core.Bundle{ID: "lifecycle_panic_first", Shutdowns: []core.ShutdownFunc{func(context.Context) error {
+	compiler.Register("lifecycle_panic_first", func(map[string]string) compiler.Bundle {
+		return compiler.Bundle{ID: "lifecycle_panic_first", Shutdowns: []compiler.ShutdownFunc{func(context.Context) error {
 			closed.Add(1)
 			return nil
 		}}}
 	})
-	core.Register("lifecycle_panic_later", func(map[string]string) core.Bundle {
+	compiler.Register("lifecycle_panic_later", func(map[string]string) compiler.Bundle {
 		partialResourceOpen := true
 		defer func() {
 			if recovered := recover(); recovered != nil {
@@ -406,7 +406,7 @@ func TestInvocationDynamicFactoryPanicClosesPreviouslyReturnedBundles(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	inv.nativeFactory = func() []core.Bundle { return nil }
+	inv.nativeFactory = func() []compiler.Bundle { return nil }
 	defer func() {
 		if got := recover(); got != panicValue {
 			t.Fatalf("factory panic changed: got %#v want %#v", got, panicValue)
@@ -429,14 +429,14 @@ func TestInvocationDynamicFactoryPanicClosesPreviouslyReturnedBundles(t *testing
 
 func TestBatchLintRetainsAndClosesBundlesAfterLaterConfigFailure(t *testing.T) {
 	var closed []string
-	core.Register("lifecycle_batch_good", func(map[string]string) core.Bundle {
-		return core.Bundle{ID: "lifecycle_batch_good", Shutdowns: []core.ShutdownFunc{func(context.Context) error {
+	compiler.Register("lifecycle_batch_good", func(map[string]string) compiler.Bundle {
+		return compiler.Bundle{ID: "lifecycle_batch_good", Shutdowns: []compiler.ShutdownFunc{func(context.Context) error {
 			closed = append(closed, "good")
 			return nil
 		}}}
 	})
-	core.Register("lifecycle_batch_bad", func(map[string]string) core.Bundle {
-		return core.Bundle{ID: "lifecycle_batch_bad", AcceptedOptions: []string{}, Shutdowns: []core.ShutdownFunc{func(context.Context) error {
+	compiler.Register("lifecycle_batch_bad", func(map[string]string) compiler.Bundle {
+		return compiler.Bundle{ID: "lifecycle_batch_bad", AcceptedOptions: []string{}, Shutdowns: []compiler.ShutdownFunc{func(context.Context) error {
 			closed = append(closed, "bad")
 			return nil
 		}}}

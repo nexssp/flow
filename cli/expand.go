@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/macros"
 	"github.com/nexssp/flow/runner"
 )
@@ -81,12 +81,12 @@ func runExpandInProcess(ctx context.Context, inv *invocation, args []string) int
 func collectExpansionsWithContext(ctx context.Context, cfg runner.Config, src, path string) ([]macros.Expansion, error) {
 	trace := &macros.Trace{}
 
-	clean, meta, err := core.Preprocess(ctx, cfg.Directives, src, path)
+	clean, meta, err := compiler.Preprocess(ctx, cfg.Directives, src, path)
 	if err != nil {
 		return nil, fmt.Errorf("preprocess: %w", err)
 	}
 
-	topContribs := core.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
+	topContribs := compiler.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
 
 	// The cleaned source can be whitespace-only when every line was a
 	// directive. Parsing it produces "expected expression, got end of
@@ -111,7 +111,7 @@ func collectExpansionsWithContext(ctx context.Context, cfg runner.Config, src, p
 
 	for _, name := range names {
 		body := pipelines[name]
-		fragClean, fragMeta, perr := core.Preprocess(ctx, cfg.Directives, body, name)
+		fragClean, fragMeta, perr := compiler.Preprocess(ctx, cfg.Directives, body, name)
 		if perr != nil {
 			return trace.Expansions(), fmt.Errorf("@pipeline %s: %w", name, perr)
 		}
@@ -133,11 +133,11 @@ func collectExpansionsWithContext(ctx context.Context, cfg runner.Config, src, p
 
 func parseWithTrace(
 	ctx context.Context,
-	ops *core.OperatorTable,
-	primaries *core.PrimaryExtensionTable,
+	ops *compiler.OperatorTable,
+	primaries *compiler.PrimaryExtensionTable,
 	src, name string,
 ) error {
-	_, err := core.NewParserWithFileOffset(ctx, ops, primaries, src, name, 0).Parse()
+	_, err := compiler.NewParserWithFileOffset(ctx, ops, primaries, src, name, 0).Parse()
 	return err
 }
 

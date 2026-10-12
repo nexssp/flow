@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/runner"
 )
 
@@ -164,14 +164,14 @@ func renderExplain(w io.Writer, cfg runner.Config, src, path string) error {
 func renderExplainWithContext(ctx context.Context, w io.Writer, cfg runner.Config, src, path string) error {
 	useColor := colorEnabled(w)
 
-	clean, meta, err := core.Preprocess(ctx, cfg.Directives, src, path)
+	clean, meta, err := compiler.Preprocess(ctx, cfg.Directives, src, path)
 	if err != nil {
 		return fmt.Errorf("preprocess: %w", err)
 	}
 
 	fmt.Fprintf(w, "%s\n\n", bold(path, useColor))
 
-	topContribs := core.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
+	topContribs := compiler.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
 
 	topLineMods := computeLineMods(cfg, meta)
 	renderExplainTopLevel(ctx, w, cfg, clean, meta, path, topLineMods, useColor)
@@ -189,13 +189,13 @@ func renderExplainTopLevel(
 	clean string,
 	meta map[string]any,
 	path string,
-	lineMods []core.LineLookup,
+	lineMods []compiler.LineLookup,
 	useColor bool,
 ) {
 	if strings.TrimSpace(clean) == "" {
 		return
 	}
-	ast, err := core.NewParserWithFileOffset(
+	ast, err := compiler.NewParserWithFileOffset(
 		ctx, cfg.Operators, cfg.PrimariesFor(meta), clean, path, 0,
 	).
 		WithLineModifiers(lineMods...).
@@ -215,8 +215,8 @@ func renderExplainPipeline(
 	cfg runner.Config,
 	name, body string,
 	mods []string,
-	modSources []core.ModifierSource,
-	parentPrimaries []core.PrimaryExtension,
+	modSources []compiler.ModifierSource,
+	parentPrimaries []compiler.PrimaryExtension,
 	useColor bool,
 ) {
 	canonical := name
@@ -239,7 +239,7 @@ func renderExplainPipeline(
 		}
 	}
 
-	clean, fragMeta, err := core.Preprocess(ctx, cfg.Directives, body, name)
+	clean, fragMeta, err := compiler.Preprocess(ctx, cfg.Directives, body, name)
 	if err != nil {
 		fmt.Fprintf(w, "    %s\n\n", red(fmt.Sprintf("<preprocess error: %v>", err), useColor))
 		return
@@ -249,15 +249,15 @@ func renderExplainPipeline(
 		return
 	}
 
-	opts := append([]core.CompileOption(nil), cfg.CompileOpts...)
-	contribs := core.PreprocessContributionsFromMeta(fragMeta, cfg.CompileOpts...)
+	opts := append([]compiler.CompileOption(nil), cfg.CompileOpts...)
+	contribs := compiler.PreprocessContributionsFromMeta(fragMeta, cfg.CompileOpts...)
 	opts = append(opts, contribs.CompileOpts...)
 
 	if len(bodyMods) > 0 {
 		// Group body modifiers by their origin so each source keeps its
 		// attribution through the parser's lookup chain.
-		bySource := make(map[core.ModifierSource][]string)
-		order := make([]core.ModifierSource, 0, len(bodyMods))
+		bySource := make(map[compiler.ModifierSource][]string)
+		order := make([]compiler.ModifierSource, 0, len(bodyMods))
 		for _, sm := range bodyMods {
 			if _, seen := bySource[sm.Source]; !seen {
 				order = append(order, sm.Source)
@@ -266,20 +266,20 @@ func renderExplainPipeline(
 		}
 		for _, src := range order {
 			raws := bySource[src]
-			opts = append(opts, core.WithLineModifiers(core.LineLookup{
+			opts = append(opts, compiler.WithLineModifiers(compiler.LineLookup{
 				Source: src,
 				Fn:     func(int) []string { return raws },
 			}))
 		}
 	}
 
-	lineMods := core.LineModifiersFromOptions(cfg.Modifiers, opts)
+	lineMods := compiler.LineModifiersFromOptions(cfg.Modifiers, opts)
 
 	// A pipeline body sees its own macros plus the parent's, the same
 	// way the runtime compiler stacks CompileReq.InheritedPrimaries.
 	fragPrimaries := cfg.PrimariesFor(fragMeta, parentPrimaries...)
 
-	ast, perr := core.NewParserWithFileOffset(
+	ast, perr := compiler.NewParserWithFileOffset(
 		ctx, cfg.Operators, fragPrimaries, clean, name, 0,
 	).
 		WithLineModifiers(lineMods...).
@@ -293,19 +293,19 @@ func renderExplainPipeline(
 	fmt.Fprintln(w)
 }
 
-func renderExplainNodes(w io.Writer, ast core.Expr, indent string, useColor bool) {
+func renderExplainNodes(w io.Writer, ast compiler.Expr, indent string, useColor bool) {
 	rendered := false
 	first := true
-	walkExplainNodes(ast, func(node core.Expr) {
+	walkExplainNodes(ast, func(node compiler.Expr) {
 		if !first {
 			fmt.Fprintln(w)
 		}
 		first = false
 		rendered = true
 		switch n := node.(type) {
-		case *core.Atom:
+		case *compiler.Atom:
 			renderExplainAtom(w, n, indent, useColor)
-		case *core.ProjectionExpr:
+		case *compiler.ProjectionExpr:
 			renderExplainProjection(w, n, indent, useColor)
 		}
 	})
@@ -314,7 +314,7 @@ func renderExplainNodes(w io.Writer, ast core.Expr, indent string, useColor bool
 	}
 }
 
-func renderExplainAtom(w io.Writer, a *core.Atom, indent string, useColor bool) {
+func renderExplainAtom(w io.Writer, a *compiler.Atom, indent string, useColor bool) {
 	label := ""
 	if strings.HasPrefix(a.Name, "pipeline.") {
 		label = "  " + dim("[invocation]", useColor)
@@ -325,7 +325,7 @@ func renderExplainAtom(w io.Writer, a *core.Atom, indent string, useColor bool) 
 		return
 	}
 	for i, raw := range a.Modifiers {
-		var src core.ModifierSource
+		var src compiler.ModifierSource
 		if i < len(a.ModifierSources) {
 			src = a.ModifierSources[i]
 		}
@@ -333,7 +333,7 @@ func renderExplainAtom(w io.Writer, a *core.Atom, indent string, useColor bool) 
 	}
 }
 
-func renderExplainProjection(w io.Writer, p *core.ProjectionExpr, indent string, useColor bool) {
+func renderExplainProjection(w io.Writer, p *compiler.ProjectionExpr, indent string, useColor bool) {
 	body := strings.TrimSpace(p.Raw)
 	fmt.Fprintf(w, "%s%s\n", indent, cyan("{ projection }", useColor))
 	if body == "" {
@@ -347,8 +347,8 @@ func renderExplainProjection(w io.Writer, p *core.ProjectionExpr, indent string,
 	}
 }
 
-func renderExplainModifier(w io.Writer, raw string, src core.ModifierSource, indent string, useColor bool) {
-	name := core.ModifierName(raw)
+func renderExplainModifier(w io.Writer, raw string, src compiler.ModifierSource, indent string, useColor bool) {
+	name := compiler.ModifierName(raw)
 	value := ""
 	if i := strings.IndexByte(raw, '='); i > 0 {
 		value = raw[i+1:]
@@ -375,31 +375,31 @@ func renderExplainModifier(w io.Writer, raw string, src core.ModifierSource, ind
 // walkExplainNodes visits atoms and projections in document order. It
 // descends into ProjectionExpr so the report reflects the whole shape
 // of the file, not just its atoms.
-func walkExplainNodes(node core.Expr, visit func(core.Expr)) {
+func walkExplainNodes(node compiler.Expr, visit func(compiler.Expr)) {
 	switch n := node.(type) {
-	case *core.Atom:
+	case *compiler.Atom:
 		visit(n)
-	case *core.ProjectionExpr:
+	case *compiler.ProjectionExpr:
 		visit(n)
-	case *core.PipeExpr:
+	case *compiler.PipeExpr:
 		walkExplainNodes(n.L, visit)
 		walkExplainNodes(n.R, visit)
-	case *core.ParallelExpr:
+	case *compiler.ParallelExpr:
 		for _, c := range n.Branches {
 			walkExplainNodes(c, visit)
 		}
-	case *core.FallbackExpr:
+	case *compiler.FallbackExpr:
 		walkExplainNodes(n.L, visit)
 		walkExplainNodes(n.R, visit)
-	case *core.ConditionalExpr:
+	case *compiler.ConditionalExpr:
 		walkExplainNodes(n.Cond, visit)
 		walkExplainNodes(n.Then, visit)
 		if n.Else != nil {
 			walkExplainNodes(n.Else, visit)
 		}
-	case *core.LoopExpr:
+	case *compiler.LoopExpr:
 		walkExplainNodes(n.Body, visit)
-	case *core.AssertExpr:
+	case *compiler.AssertExpr:
 		// Assert carries a raw expression, not a callable node.
 	}
 }
@@ -412,7 +412,7 @@ func renderExplainPipelines(
 	w io.Writer,
 	cfg runner.Config,
 	meta map[string]any,
-	parentPrimaries []core.PrimaryExtension,
+	parentPrimaries []compiler.PrimaryExtension,
 	useColor bool,
 ) {
 	pipelines, _ := meta["pipelines"].(map[string]string)
@@ -421,7 +421,7 @@ func renderExplainPipelines(
 	}
 
 	pipelineMods, _ := meta["pipeline_modifiers"].(map[string][]string)
-	pipelineModSources, _ := meta["pipeline_modifier_sources"].(map[string][]core.ModifierSource)
+	pipelineModSources, _ := meta["pipeline_modifier_sources"].(map[string][]compiler.ModifierSource)
 
 	names := make([]string, 0, len(pipelines))
 	for name := range pipelines {

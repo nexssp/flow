@@ -9,7 +9,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xtest"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 )
 
 // ApplyAll must not allocate per modifier; a 100-modifier atom costs the
@@ -21,7 +21,7 @@ func TestApplyAll_ConstantAllocs(t *testing.T) {
 	target := action.New("target", func(_ context.Context, in any) (any, error) { return in, nil }).Build()
 
 	noop := func(_ *action.Builder[any, any], _ string) error { return nil }
-	table := core.NewModifierTable(core.Modifier{Name: "a", Apply: noop})
+	table := compiler.NewModifierTable(compiler.Modifier{Name: "a", Apply: noop})
 
 	oneAllocs := xtest.AllocsPerRun(200, func() {
 		_, _ = table.ApplyAll(target, []string{"a=1"})
@@ -53,9 +53,9 @@ func TestApplyAll_AppliesModifiersInOrder(t *testing.T) {
 		return nil
 	}
 
-	table := core.NewModifierTable(
-		core.Modifier{Name: "a", Apply: capture},
-		core.Modifier{Name: "b", Apply: capture},
+	table := compiler.NewModifierTable(
+		compiler.Modifier{Name: "a", Apply: capture},
+		compiler.Modifier{Name: "b", Apply: capture},
 	)
 
 	if _, err := table.ApplyAll(target, []string{"a=1", "b", "a=2"}); err != nil {
@@ -71,7 +71,7 @@ func TestApplyAll_AppliesModifiersInOrder(t *testing.T) {
 func TestApplyAll_RejectsUnknownModifier(t *testing.T) {
 	t.Parallel()
 	target := action.New("target", func(_ context.Context, in any) (any, error) { return in, nil }).Build()
-	table := core.NewModifierTable(core.Modifier{
+	table := compiler.NewModifierTable(compiler.Modifier{
 		Name:  "a",
 		Apply: func(_ *action.Builder[any, any], _ string) error { return nil },
 	})
@@ -90,7 +90,7 @@ func TestApplyAll_PassesValueToModifier(t *testing.T) {
 	target := action.New("target", func(_ context.Context, in any) (any, error) { return in, nil }).Build()
 
 	var captured string
-	table := core.NewModifierTable(core.Modifier{
+	table := compiler.NewModifierTable(compiler.Modifier{
 		Name: "x",
 		Apply: func(_ *action.Builder[any, any], raw string) error {
 			captured = raw
@@ -113,8 +113,8 @@ func TestNewModifierTable_RejectsDuplicate(t *testing.T) {
 			t.Fatal("expected panic on duplicate modifier")
 		}
 	}()
-	core.NewModifierTable(
-		core.Modifier{Name: "a", Apply: func(*action.Builder[any, any], string) error { return nil }},
-		core.Modifier{Name: "a", Apply: func(*action.Builder[any, any], string) error { return nil }},
+	compiler.NewModifierTable(
+		compiler.Modifier{Name: "a", Apply: func(*action.Builder[any, any], string) error { return nil }},
+		compiler.Modifier{Name: "a", Apply: func(*action.Builder[any, any], string) error { return nil }},
 	)
 }

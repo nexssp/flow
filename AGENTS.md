@@ -42,7 +42,7 @@ This repository is one Go module with package boundaries, not nested release mod
 - `compiler/contracts/` owns execution-context bridges shared by runner and extensions.
 - `nexssp/ai`, `nexssp/cost`, and other sibling packages own their domain logic.
 
-Do not put AI, filesystem, provider, transport, or cost policy into the compiler core or Kernel core.
+Do not put AI, filesystem, provider, transport, or cost policy into the compiler or Kernel core.
 
 ## 3. Extension rule
 
@@ -82,7 +82,7 @@ When changing registration code, add tests for:
 
 ## 5. Errors and context
 
-- Compile/preprocess errors: `core.SourceError` with source file and line.
+- Compile/preprocess errors: `compiler.SourceError` with source file and line.
 - Runtime/user errors: `xerr` (`BadRequest`, `Validation`, `NotFound`, `Forbidden`, `Conflict`, `Unavailable`, `Timeout`, `RateLimit`, `Internal`, as appropriate).
 - Do not leak bare `errors.New` or unclassified `fmt.Errorf` across package boundaries.
 - Context keys must use `xctx.NewKey[T]`; never string keys.
@@ -96,7 +96,7 @@ When changing registration code, add tests for:
 - Reject absolute paths, `..` traversal, and symlinks escaping the permitted root.
 - Use `xfs.WriteFileAtomic` for durable state.
 - Do not put Sandbox-specific behavior into generic `@embed`; embedding is a compile-time asset feature, while Sandbox is one possible consumer.
-- External processes, WASM, HTTP, NATS, databases, and provider calls belong in adapters/extensions, not compiler core.
+- External processes, WASM, HTTP, NATS, databases, and provider calls belong in adapters/extensions, not compiler.
 
 ## 7. Performance and concurrency
 

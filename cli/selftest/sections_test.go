@@ -3,16 +3,16 @@ package selftest
 import (
 	"testing"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 )
 
 func TestSectionsFromBundlesPreservesFeatureDescriptions(t *testing.T) {
-	bundle := core.Bundle{
+	bundle := compiler.Bundle{
 		ID: "sample",
-		SelfTest: func() []core.SelfTestSection {
-			return []core.SelfTestSection{{
+		SelfTest: func() []compiler.SelfTestSection {
+			return []compiler.SelfTestSection{{
 				Name: "sample",
-				Features: []core.SelfTestFeature{
+				Features: []compiler.SelfTestFeature{
 					{Name: "Include a reusable pipeline"},
 					{Name: "Another feature"},
 					{Name: "Handle an edge case"},
@@ -21,7 +21,7 @@ func TestSectionsFromBundlesPreservesFeatureDescriptions(t *testing.T) {
 		},
 	}
 
-	sections := SectionsFromBundles([]core.Bundle{bundle})
+	sections := SectionsFromBundles([]compiler.Bundle{bundle})
 	if len(sections) != 1 {
 		t.Fatalf("got %d sections, want 1", len(sections))
 	}

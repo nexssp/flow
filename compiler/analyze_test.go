@@ -35,7 +35,7 @@ func typedAction[Req, Res any](name string) *action.BuiltAction[Req, Res] {
 // testPipe and testParallel are the minimal operator table the analyzer
 // test needs to build PipeExpr and ParallelExpr from source text. Kept
 // inline because importing extensions/syntax would create an import
-// cycle: extensions/syntax imports core.
+// cycle: extensions/syntax imports compiler.
 func testPipe() Operator {
 	return Operator{
 		Meta: OperatorMeta{

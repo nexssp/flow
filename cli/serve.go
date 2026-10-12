@@ -6,7 +6,7 @@ import (
 	"os"
 	"slices"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/on"
 )
 
@@ -55,7 +55,7 @@ func runServeInProcess(parent context.Context, inv *invocation, path string, all
 		return fatalf("build config: %v", err)
 	}
 
-	clean, meta, err := core.Preprocess(parent, cfg.Directives, string(src), path)
+	clean, meta, err := compiler.Preprocess(parent, cfg.Directives, string(src), path)
 	if err != nil {
 		return fatalf("preprocess: %v", err)
 	}
@@ -65,9 +65,9 @@ func runServeInProcess(parent context.Context, inv *invocation, path string, all
 		return fatalf("file does not declare an '@on event' trigger")
 	}
 
-	compiled, err := core.CompileAction(
+	compiled, err := compiler.CompileAction(
 		cfg.Resolver, cfg.Directives, cfg.Modifiers, cfg.Operators, cfg.Primaries,
-	).Do(parent, core.CompileReq{Source: clean, Name: path})
+	).Do(parent, compiler.CompileReq{Source: clean, Name: path})
 	if err != nil {
 		return fatalf("compile: %v", err)
 	}
@@ -93,11 +93,11 @@ func runServeInProcess(parent context.Context, inv *invocation, path string, all
 	return 0
 }
 
-func firstExecCapability(ast core.Expr) (string, bool) {
+func firstExecCapability(ast compiler.Expr) (string, bool) {
 	if ast == nil {
 		return "", false
 	}
-	for _, name := range core.AtomNames(ast) {
+	for _, name := range compiler.AtomNames(ast) {
 		if slices.Contains(execCapabilities, name) {
 			return name, true
 		}

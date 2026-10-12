@@ -5,7 +5,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 )
 
 func TestPreprocessDots_UnifiedBehavior(t *testing.T) {
@@ -34,7 +34,7 @@ func TestPreprocessDots_UnifiedBehavior(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			ktest.RequireEqual(t, core.PreprocessDots(tc.in), tc.want)
+			ktest.RequireEqual(t, compiler.PreprocessDots(tc.in), tc.want)
 		})
 	}
 }

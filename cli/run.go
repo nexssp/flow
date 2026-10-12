@@ -9,18 +9,18 @@ import (
 	"strings"
 
 	"github.com/nexssp/flow/builder"
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 	"github.com/nexssp/flow/runner"
 )
 
 const harnessEnv = builder.HarnessEnv
 
-func RunWithBundles(args []string, bundles []core.Bundle) int {
+func RunWithBundles(args []string, bundles []compiler.Bundle) int {
 	return RunWithBundlesForRequirements(args, bundles, nil)
 }
 
-func RunWithBundlesForRequirements(args []string, bundles []core.Bundle, targets []string) int {
+func RunWithBundlesForRequirements(args []string, bundles []compiler.Bundle, targets []string) int {
 	inv, err := newNativeInvocation(bundles, targets)
 	if err != nil {
 		return fatalf("flow host: %v", err)
@@ -28,7 +28,7 @@ func RunWithBundlesForRequirements(args []string, bundles []core.Bundle, targets
 	return runCLIWithSignals(context.Background(), inv, args, registerProcessSignals)
 }
 
-func RunWithBundleFactoriesForRequirements(args, targets []string, construct func(func(core.Bundle) error) error) int {
+func RunWithBundleFactoriesForRequirements(args, targets []string, construct func(func(compiler.Bundle) error) error) int {
 	return withSignalContext(context.Background(), registerProcessSignals, func(ctx context.Context) int {
 		return runWithBundleFactories(ctx, targets, construct, func(inv *invocation, runCtx context.Context) int {
 			withNativeDefaults(inv)
@@ -39,8 +39,8 @@ func RunWithBundleFactoriesForRequirements(args, targets []string, construct fun
 
 func RunWithBundleFactoriesAndNative(
 	args, targets []string,
-	nativeFactory func() []core.Bundle,
-	construct func(func(core.Bundle) error) error,
+	nativeFactory func() []compiler.Bundle,
+	construct func(func(compiler.Bundle) error) error,
 ) int {
 	return withSignalContext(context.Background(), registerProcessSignals, func(ctx context.Context) int {
 		return runWithBundleFactories(ctx, targets, construct, func(inv *invocation, runCtx context.Context) int {
@@ -50,9 +50,9 @@ func RunWithBundleFactoriesAndNative(
 	})
 }
 
-func dedupeBundleIDs(bundles []core.Bundle) []core.Bundle {
+func dedupeBundleIDs(bundles []compiler.Bundle) []compiler.Bundle {
 	seen := make(map[string]int, len(bundles))
-	out := make([]core.Bundle, 0, len(bundles))
+	out := make([]compiler.Bundle, 0, len(bundles))
 	for i := range bundles {
 		b := bundles[i]
 		if idx, ok := seen[b.ID]; ok {
@@ -98,10 +98,10 @@ func requirementsNeedExternalHarness(inv *invocation, reqs []require.Requirement
 			continue
 		}
 		targetID := require.NormalizeID(r.Import)
-		if _, ok := core.Lookup(targetID); ok {
+		if _, ok := compiler.Lookup(targetID); ok {
 			continue
 		}
-		if _, ok := core.Lookup(r.Import); ok {
+		if _, ok := compiler.Lookup(r.Import); ok {
 			continue
 		}
 		return true
@@ -152,11 +152,11 @@ func isInlineSource(target string) bool {
 		strings.Contains(target, "noop")
 }
 
-func RunEmbeddedWithBundles(ctx context.Context, source string, args []string, bundles []core.Bundle) int {
+func RunEmbeddedWithBundles(ctx context.Context, source string, args []string, bundles []compiler.Bundle) int {
 	return RunEmbeddedWithBundlesForRequirements(ctx, source, args, bundles, nil)
 }
 
-func RunEmbeddedWithBundlesForRequirements(ctx context.Context, source string, args []string, bundles []core.Bundle, targets []string) int {
+func RunEmbeddedWithBundlesForRequirements(ctx context.Context, source string, args []string, bundles []compiler.Bundle, targets []string) int {
 	inv, err := newNativeInvocation(bundles, targets)
 	if err != nil {
 		return fatalf("flow host: %v", err)
@@ -166,7 +166,7 @@ func RunEmbeddedWithBundlesForRequirements(ctx context.Context, source string, a
 	})
 }
 
-func RunEmbeddedWithBundleFactoriesForRequirements(ctx context.Context, source string, args, targets []string, construct func(func(core.Bundle) error) error) int {
+func RunEmbeddedWithBundleFactoriesForRequirements(ctx context.Context, source string, args, targets []string, construct func(func(compiler.Bundle) error) error) int {
 	return runWithBundleFactories(ctx, targets, construct, func(inv *invocation, runCtx context.Context) int {
 		return runEmbeddedInInvocation(runCtx, inv, source, args)
 	})
@@ -211,7 +211,7 @@ func runEmbeddedInfo(ctx context.Context, inv *invocation, source string, args [
 	if err != nil {
 		return fatalf("directives: %v", err)
 	}
-	clean, meta, err := core.Preprocess(ctx, directives, source, "<embedded>")
+	clean, meta, err := compiler.Preprocess(ctx, directives, source, "<embedded>")
 	if err != nil {
 		return fatalf("preprocess: %v", err)
 	}
@@ -221,7 +221,7 @@ func runEmbeddedInfo(ctx context.Context, inv *invocation, source string, args [
 		return fatalf("config: %v", err)
 	}
 
-	ast, err := core.NewParserWithFileOffset(
+	ast, err := compiler.NewParserWithFileOffset(
 		ctx, cfg.Operators, cfg.PrimariesFor(meta), clean, "<embedded>", 0,
 	).Parse()
 	if err != nil {
@@ -311,7 +311,7 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 	if err != nil {
 		return fatalf("directives: %v", err)
 	}
-	clean, meta, err := core.Preprocess(ctx, directives, src, name)
+	clean, meta, err := compiler.Preprocess(ctx, directives, src, name)
 	if err != nil {
 		return fatalf("preprocess: %v", err)
 	}
@@ -328,7 +328,7 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 	if err != nil {
 		return fatalf("config: %v", err)
 	}
-	cfg.CompileOpts = append(cfg.CompileOpts, core.WithCLIArgs(flags))
+	cfg.CompileOpts = append(cfg.CompileOpts, compiler.WithCLIArgs(flags))
 
 	useColorErr := colorEnabled(os.Stderr)
 	useColorOut := colorEnabled(os.Stdout)
@@ -338,7 +338,7 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 
 	if isInfo {
 		primaries := cfg.PrimariesFor(meta)
-		ast, parseErr := core.NewParserWithFileOffset(
+		ast, parseErr := compiler.NewParserWithFileOffset(
 			ctx, cfg.Operators, primaries, clean, name, 0,
 		).Parse()
 		if parseErr != nil {
@@ -606,7 +606,7 @@ func formatCleanError(err error, useColor bool) string {
 	}
 	msg = strings.TrimSpace(msg)
 
-	pos, ok := core.PositionOf(err)
+	pos, ok := compiler.PositionOf(err)
 	if !ok || pos.File == "" || strings.HasPrefix(pos.File, "<") {
 		return msg
 	}
@@ -617,7 +617,7 @@ func formatCleanError(err error, useColor bool) string {
 	return msg + "\n" + snippet
 }
 
-func renderSnippet(pos core.Position, useColor bool) string {
+func renderSnippet(pos compiler.Position, useColor bool) string {
 	data, err := os.ReadFile(pos.File)
 	if err != nil {
 		return ""

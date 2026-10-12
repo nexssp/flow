@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 )
 
@@ -251,10 +251,10 @@ func filterExternalRequires(reqs []require.Requirement) []require.Requirement {
 	for i := range reqs {
 		r := &reqs[i]
 		targetID := require.NormalizeID(r.Import)
-		if _, ok := core.Lookup(targetID); ok {
+		if _, ok := compiler.Lookup(targetID); ok {
 			continue
 		}
-		if _, ok := core.Lookup(r.Import); ok {
+		if _, ok := compiler.Lookup(r.Import); ok {
 			continue
 		}
 
@@ -512,10 +512,10 @@ func resolveRequirementPackagesWithContext(ctx context.Context, reqs []require.R
 	resolved := append([]require.Requirement(nil), reqs...)
 	for i := range resolved {
 		r := &resolved[i]
-		if _, ok := core.Lookup(require.NormalizeID(r.Import)); ok {
+		if _, ok := compiler.Lookup(require.NormalizeID(r.Import)); ok {
 			continue
 		}
-		if _, ok := core.Lookup(r.Import); ok {
+		if _, ok := compiler.Lookup(r.Import); ok {
 			continue
 		}
 		switch {
@@ -783,8 +783,8 @@ func writeHarness(
 	mainBuilder.WriteString("\tos.Exit(cli.RunWithBundleFactoriesAndNative(\n")
 	mainBuilder.WriteString("\t\tos.Args[1:],\n")
 	mainBuilder.WriteString("\t\ttargets,\n")
-	mainBuilder.WriteString("\t\tfunc() []core.Bundle {\n")
-	mainBuilder.WriteString("\t\t\treturn []core.Bundle{\n")
+	mainBuilder.WriteString("\t\tfunc() []compiler.Bundle {\n")
+	mainBuilder.WriteString("\t\t\treturn []compiler.Bundle{\n")
 
 	for i := range usedNative {
 		fmt.Fprintf(&mainBuilder, "\t\t\t\tnative%d.Bundle(nil),\n", i)
@@ -792,7 +792,7 @@ func writeHarness(
 
 	mainBuilder.WriteString("\t\t\t}\n")
 	mainBuilder.WriteString("\t\t},\n")
-	mainBuilder.WriteString("\t\tfunc(adopt func(core.Bundle) error) error {\n")
+	mainBuilder.WriteString("\t\tfunc(adopt func(compiler.Bundle) error) error {\n")
 
 	writeBundleConstruction(&mainBuilder, imports)
 
@@ -927,7 +927,7 @@ func explainBuildError(err error, requirements []require.Requirement) error {
 			return fmt.Errorf(
 				"@require %s: compilation failed for loose package %q:\n%s\n\n"+
 					"  💡 Check that your .go files:\n"+
-					"     1. Declare `func Bundle(opts map[string]string) core.Bundle`\n"+
+					"     1. Declare `func Bundle(opts map[string]string) compiler.Bundle`\n"+
 					"     2. Do not declare `package main` (use `package %s` instead)",
 				r.LocalPath, r.LocalPath, message, tailSegment(r.LocalPath))
 		}
@@ -941,9 +941,9 @@ func explainBuildError(err error, requirements []require.Requirement) error {
 					"        \"github.com/nexssp/kernel/action\"\n"+
 					"    )\n\n"+
 					"    const ID = %q\n\n"+
-					"    func init() { core.Register(ID, Bundle) }\n\n"+
-					"    func Bundle(_ map[string]string) core.Bundle {\n"+
-					"        return core.Bundle{\n"+
+					"    func init() { compiler.Register(ID, Bundle) }\n\n"+
+					"    func Bundle(_ map[string]string) compiler.Bundle {\n"+
+					"        return compiler.Bundle{\n"+
 					"            ID:        ID,\n"+
 					"            Libraries: []action.Library{{Name: ID}},\n"+
 					"        }\n"+
@@ -983,7 +983,7 @@ func missingBundleSymbolError(r require.Requirement) error {
 		return fmt.Errorf(
 			"@require %s: package %q does not export Bundle.\n\n"+
 				"Every Flow extension package must declare:\n"+
-				"    func Bundle(opts map[string]string) core.Bundle\n\n"+
+				"    func Bundle(opts map[string]string) compiler.Bundle\n\n"+
 				"Check that %s contains library.go with a Bundle function",
 			r.Import, resolved, resolved)
 	}
@@ -996,7 +996,7 @@ func missingBundleSymbolError(r require.Requirement) error {
 			"    requested:  %s\n"+
 			"    resolved:   %s\n\n"+
 			"Check that the adapter package %q exists and declares:\n"+
-			"    func Bundle(opts map[string]string) core.Bundle\n\n"+
+			"    func Bundle(opts map[string]string) compiler.Bundle\n\n"+
 			"  💡 If this repository is a Flow extension with Bundle at its root,\n"+
 			"     not under /nexssflow, verify the module path in its go.mod",
 		r.Import, resolved, r.Import, resolved, suggestion)
@@ -1083,10 +1083,10 @@ func writeRequires(b *strings.Builder, reqs []require.Requirement, driverVersion
 			continue
 		}
 		targetID := require.NormalizeID(r.Import)
-		if _, ok := core.Lookup(targetID); ok {
+		if _, ok := compiler.Lookup(targetID); ok {
 			continue
 		}
-		if _, ok := core.Lookup(r.Import); ok {
+		if _, ok := compiler.Lookup(r.Import); ok {
 			continue
 		}
 		mod := modulePathForRequirement(*r)

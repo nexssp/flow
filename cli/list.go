@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 )
 
 func runList(ctx context.Context, inv *invocation, args []string) int {
@@ -60,7 +60,7 @@ func runListInProcess(ctx context.Context, inv *invocation, args []string) int {
 		pattern = "" // Do not search for the filename as a pattern
 	}
 
-	var cfg core.Catalog
+	var cfg compiler.Catalog
 	if *flowPath != "" {
 		loaded, err := inv.sourceRequiresFromFile(ctx, *flowPath)
 		if err != nil {
@@ -70,13 +70,13 @@ func runListInProcess(ctx context.Context, inv *invocation, args []string) int {
 		if err != nil {
 			return fatalf("config: %v", err)
 		}
-		cfg = core.BuildCatalog(runnerCfg.Resolver, runnerCfg.Modifiers, runnerCfg.Directives, runnerCfg.Operators)
+		cfg = compiler.BuildCatalog(runnerCfg.Resolver, runnerCfg.Modifiers, runnerCfg.Directives, runnerCfg.Operators)
 	} else {
 		runnerCfg, err := inv.buildConfig(nil)
 		if err != nil {
 			return fatalf("config: %v", err)
 		}
-		cfg = core.BuildCatalog(runnerCfg.Resolver, runnerCfg.Modifiers, runnerCfg.Directives, runnerCfg.Operators)
+		cfg = compiler.BuildCatalog(runnerCfg.Resolver, runnerCfg.Modifiers, runnerCfg.Directives, runnerCfg.Operators)
 	}
 
 	if *jsonOut {
@@ -91,7 +91,7 @@ func runListInProcess(ctx context.Context, inv *invocation, args []string) int {
 	return 0
 }
 
-func renderList(cat core.Catalog, pattern string, useColor bool) {
+func renderList(cat compiler.Catalog, pattern string, useColor bool) {
 	if matchesSources(cat.Sources, pattern) {
 		fmt.Fprintf(os.Stdout, "\n%s\n\n", bold("SOURCES", useColor))
 		for _, s := range cat.Sources {
@@ -160,7 +160,7 @@ func renderList(cat core.Catalog, pattern string, useColor bool) {
 	fmt.Fprintln(os.Stdout)
 }
 
-func atomMatches(a core.AtomSpec, pattern string) bool {
+func atomMatches(a compiler.AtomSpec, pattern string) bool {
 	if pattern == "" {
 		return true
 	}
@@ -176,7 +176,7 @@ func atomMatches(a core.AtomSpec, pattern string) bool {
 	return false
 }
 
-func matchesAtoms(atoms []core.AtomSpec, pattern string) bool {
+func matchesAtoms(atoms []compiler.AtomSpec, pattern string) bool {
 	for i := range atoms {
 		if atomMatches(atoms[i], pattern) {
 			return true
@@ -185,7 +185,7 @@ func matchesAtoms(atoms []core.AtomSpec, pattern string) bool {
 	return false
 }
 
-func matchesSimpleMods(mods []core.ModifierSpec, pattern string) bool {
+func matchesSimpleMods(mods []compiler.ModifierSpec, pattern string) bool {
 	for _, m := range mods {
 		if strings.Contains(strings.ToLower(m.Name), pattern) {
 			return true
@@ -194,7 +194,7 @@ func matchesSimpleMods(mods []core.ModifierSpec, pattern string) bool {
 	return false
 }
 
-func matchesSimpleDirs(dirs []core.DirectiveSpec, pattern string) bool {
+func matchesSimpleDirs(dirs []compiler.DirectiveSpec, pattern string) bool {
 	for _, d := range dirs {
 		if strings.Contains(strings.ToLower(d.Name), pattern) {
 			return true
@@ -203,7 +203,7 @@ func matchesSimpleDirs(dirs []core.DirectiveSpec, pattern string) bool {
 	return false
 }
 
-func matchesSimpleOps(ops []core.OperatorSpec, pattern string) bool {
+func matchesSimpleOps(ops []compiler.OperatorSpec, pattern string) bool {
 	for _, o := range ops {
 		if strings.Contains(strings.ToLower(o.Name), pattern) {
 			return true
@@ -212,7 +212,7 @@ func matchesSimpleOps(ops []core.OperatorSpec, pattern string) bool {
 	return false
 }
 
-func sourceMatches(s core.SourceSpec, pattern string) bool {
+func sourceMatches(s compiler.SourceSpec, pattern string) bool {
 	if pattern == "" {
 		return true
 	}
@@ -228,7 +228,7 @@ func sourceMatches(s core.SourceSpec, pattern string) bool {
 	return false
 }
 
-func matchesSources(sources []core.SourceSpec, pattern string) bool {
+func matchesSources(sources []compiler.SourceSpec, pattern string) bool {
 	for _, s := range sources {
 		if sourceMatches(s, pattern) {
 			return true

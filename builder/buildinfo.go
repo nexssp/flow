@@ -7,11 +7,11 @@ import (
 	"runtime/debug"
 	"time"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 )
 
 func init() {
-	core.Version = Version
+	compiler.Version = Version
 }
 
 // Build metadata. Injected at build time with:

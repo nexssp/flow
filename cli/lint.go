@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/nexssp/flow/builder"
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 	"github.com/nexssp/flow/runner"
 )
@@ -257,11 +257,11 @@ func runLintBatchForInvocationWithHarnessError(ctx context.Context, inv *invocat
 	return 1
 }
 
-func computeLineMods(cfg runner.Config, meta map[string]any) []core.LineLookup {
-	opts := append([]core.CompileOption(nil), cfg.CompileOpts...)
-	contribs := core.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
+func computeLineMods(cfg runner.Config, meta map[string]any) []compiler.LineLookup {
+	opts := append([]compiler.CompileOption(nil), cfg.CompileOpts...)
+	contribs := compiler.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
 	opts = append(opts, contribs.CompileOpts...)
-	return core.LineModifiersFromOptions(cfg.Modifiers, opts)
+	return compiler.LineModifiersFromOptions(cfg.Modifiers, opts)
 }
 
 func lintFile(path, src string, cfg runner.Config) []LintIssue {

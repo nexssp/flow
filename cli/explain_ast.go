@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/runner"
 )
 
@@ -27,14 +27,14 @@ func renderExplainASTWithContext(ctx context.Context, w io.Writer, cfg runner.Co
 
 func parseExplainASTWithContext(
 	ctx context.Context, cfg runner.Config, src, path string,
-) (topAST core.Expr, pipelines map[string]core.Expr, err error) {
-	clean, meta, err := core.Preprocess(ctx, cfg.Directives, src, path)
+) (topAST compiler.Expr, pipelines map[string]compiler.Expr, err error) {
+	clean, meta, err := compiler.Preprocess(ctx, cfg.Directives, src, path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("preprocess: %w", err)
 	}
 
 	if strings.TrimSpace(clean) != "" {
-		ast, parseErr := core.NewParserWithFileOffset(
+		ast, parseErr := compiler.NewParserWithFileOffset(
 			ctx, cfg.Operators, cfg.PrimariesFor(meta), clean, path, 0,
 		).Parse()
 		if parseErr != nil {
@@ -44,11 +44,11 @@ func parseExplainASTWithContext(
 	}
 
 	rawPipelines, _ := meta["pipelines"].(map[string]string)
-	topContribs := core.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
+	topContribs := compiler.PreprocessContributionsFromMeta(meta, cfg.CompileOpts...)
 
-	pipelines = make(map[string]core.Expr, len(rawPipelines))
+	pipelines = make(map[string]compiler.Expr, len(rawPipelines))
 	for name, body := range rawPipelines {
-		fragClean, fragMeta, perr := core.Preprocess(ctx, cfg.Directives, body, name)
+		fragClean, fragMeta, perr := compiler.Preprocess(ctx, cfg.Directives, body, name)
 		if perr != nil {
 			return nil, nil, fmt.Errorf("@pipeline %s: preprocess: %w", name, perr)
 		}
@@ -56,7 +56,7 @@ func parseExplainASTWithContext(
 			continue
 		}
 		fragPrimaries := cfg.PrimariesFor(fragMeta, topContribs.Primaries...)
-		ast, parseErr := core.NewParserWithFileOffset(
+		ast, parseErr := compiler.NewParserWithFileOffset(
 			ctx, cfg.Operators, fragPrimaries, fragClean, name, 0,
 		).Parse()
 		if parseErr != nil {
@@ -68,7 +68,7 @@ func parseExplainASTWithContext(
 	return topAST, pipelines, nil
 }
 
-func renderExplainASTText(w io.Writer, path string, topAST core.Expr, pipelines map[string]core.Expr) {
+func renderExplainASTText(w io.Writer, path string, topAST compiler.Expr, pipelines map[string]compiler.Expr) {
 	useColor := colorEnabled(w)
 
 	fmt.Fprintf(w, "%s\n\n", bold(path, useColor))
@@ -93,14 +93,14 @@ func renderExplainASTText(w io.Writer, path string, topAST core.Expr, pipelines 
 	}
 }
 
-func renderASTNode(w io.Writer, expr core.Expr, indent string, useColor bool) {
+func renderASTNode(w io.Writer, expr compiler.Expr, indent string, useColor bool) {
 	if expr == nil {
 		fmt.Fprintf(w, "%s%s\n", indent, dim("(nil)", useColor))
 		return
 	}
 
 	switch n := expr.(type) {
-	case *core.Atom:
+	case *compiler.Atom:
 		fmt.Fprintf(w, "%s%-12s %s%s\n",
 			indent,
 			cyan("Atom", useColor),
@@ -108,30 +108,30 @@ func renderASTNode(w io.Writer, expr core.Expr, indent string, useColor bool) {
 			formatASTArgs(n.Args, useColor),
 		)
 
-	case *core.LiteralExpr:
+	case *compiler.LiteralExpr:
 		fmt.Fprintf(w, "%s%-12s %v\n",
 			indent,
 			cyan("Literal", useColor),
 			n.Val,
 		)
 
-	case *core.PipeExpr:
+	case *compiler.PipeExpr:
 		fmt.Fprintf(w, "%s%s\n", indent, dim("Pipe ->", useColor))
 		renderASTNode(w, n.L, indent+"  ", useColor)
 		renderASTNode(w, n.R, indent+"  ", useColor)
 
-	case *core.ParallelExpr:
+	case *compiler.ParallelExpr:
 		fmt.Fprintf(w, "%s%s\n", indent, dim("Parallel &", useColor))
 		for _, b := range n.Branches {
 			renderASTNode(w, b, indent+"  ", useColor)
 		}
 
-	case *core.FallbackExpr:
+	case *compiler.FallbackExpr:
 		fmt.Fprintf(w, "%s%s\n", indent, dim("Fallback ||", useColor))
 		renderASTNode(w, n.L, indent+"  ", useColor)
 		renderASTNode(w, n.R, indent+"  ", useColor)
 
-	case *core.ConditionalExpr:
+	case *compiler.ConditionalExpr:
 		fmt.Fprintf(w, "%s%s\n", indent, dim("Conditional ?:", useColor))
 		fmt.Fprintf(w, "%s  %s\n", indent, dim("Cond:", useColor))
 		renderASTNode(w, n.Cond, indent+"    ", useColor)
@@ -142,7 +142,7 @@ func renderASTNode(w io.Writer, expr core.Expr, indent string, useColor bool) {
 			renderASTNode(w, n.Else, indent+"    ", useColor)
 		}
 
-	case *core.ProjectionExpr:
+	case *compiler.ProjectionExpr:
 		raw := strings.TrimSpace(n.Raw)
 		if len(raw) > 60 {
 			raw = raw[:57] + "..."
@@ -153,7 +153,7 @@ func renderASTNode(w io.Writer, expr core.Expr, indent string, useColor bool) {
 			dim("{ "+raw+" }", useColor),
 		)
 
-	case *core.LoopExpr:
+	case *compiler.LoopExpr:
 		fmt.Fprintf(w, "%s%-12s %s\n",
 			indent,
 			cyan("Loop", useColor),
@@ -161,7 +161,7 @@ func renderASTNode(w io.Writer, expr core.Expr, indent string, useColor bool) {
 		)
 		renderASTNode(w, n.Body, indent+"  ", useColor)
 
-	case *core.AssertExpr:
+	case *compiler.AssertExpr:
 		msg := ""
 		if n.Message != "" {
 			msg = " " + dim(`"`+n.Message+`"`, useColor)
@@ -179,7 +179,7 @@ func renderASTNode(w io.Writer, expr core.Expr, indent string, useColor bool) {
 	}
 }
 
-func formatASTArgs(args map[string]*core.Value, useColor bool) string {
+func formatASTArgs(args map[string]*compiler.Value, useColor bool) string {
 	if len(args) == 0 {
 		return ""
 	}
@@ -204,29 +204,29 @@ func formatASTArgs(args map[string]*core.Value, useColor bool) string {
 	return dim(b.String(), useColor)
 }
 
-func formatASTValue(v *core.Value) string {
+func formatASTValue(v *compiler.Value) string {
 	if v == nil {
 		return "nil"
 	}
 	switch v.Kind {
-	case core.ValueString:
+	case compiler.ValueString:
 		return fmt.Sprintf("%q", v.Str)
-	case core.ValueBare:
+	case compiler.ValueBare:
 		return v.Str
-	case core.ValueNumber:
+	case compiler.ValueNumber:
 		return fmt.Sprintf("%g", v.Num)
-	case core.ValueBool:
+	case compiler.ValueBool:
 		return strconv.FormatBool(v.Bool)
-	case core.ValueNull:
+	case compiler.ValueNull:
 		return "null"
-	case core.ValueRef:
+	case compiler.ValueRef:
 		if v.Ref == "" {
 			return "."
 		}
 		return "." + v.Ref
-	case core.ValueMap:
+	case compiler.ValueMap:
 		return "{...}"
-	case core.ValueSlice:
+	case compiler.ValueSlice:
 		return "[...]"
 	}
 	return "?"
@@ -271,7 +271,7 @@ type ASTReport struct {
 }
 
 func writeExplainASTJSON(
-	w io.Writer, path string, topAST core.Expr, pipelines map[string]core.Expr,
+	w io.Writer, path string, topAST compiler.Expr, pipelines map[string]compiler.Expr,
 ) error {
 	report := ASTReport{
 		Path:     path,
@@ -294,20 +294,20 @@ func writeExplainASTJSON(
 	return writeJSON(w, report, true)
 }
 
-func astNodeOf(expr core.Expr) *ASTNode {
+func astNodeOf(expr compiler.Expr) *ASTNode {
 	if expr == nil {
 		return nil
 	}
 	node := buildASTNode(expr)
-	if p := resolveExprPos(expr); p != (core.Position{}) {
+	if p := resolveExprPos(expr); p != (compiler.Position{}) {
 		node.Pos = &ASTPosition{File: p.File, Line: p.Line, Col: p.Col}
 	}
 	return node
 }
 
-func buildASTNode(expr core.Expr) *ASTNode {
+func buildASTNode(expr compiler.Expr) *ASTNode {
 	switch n := expr.(type) {
-	case *core.Atom:
+	case *compiler.Atom:
 		var args map[string]any
 		if len(n.Args) > 0 {
 			args = make(map[string]any, len(n.Args))
@@ -317,23 +317,23 @@ func buildASTNode(expr core.Expr) *ASTNode {
 		}
 		return &ASTNode{Kind: "Atom", Name: n.Name, Args: args}
 
-	case *core.LiteralExpr:
+	case *compiler.LiteralExpr:
 		return &ASTNode{Kind: "Literal", Name: fmt.Sprintf("%v", n.Val)}
 
-	case *core.PipeExpr:
+	case *compiler.PipeExpr:
 		return &ASTNode{Kind: "Pipe", L: astNodeOf(n.L), R: astNodeOf(n.R)}
 
-	case *core.ParallelExpr:
+	case *compiler.ParallelExpr:
 		branches := make([]*ASTNode, len(n.Branches))
 		for i, b := range n.Branches {
 			branches[i] = astNodeOf(b)
 		}
 		return &ASTNode{Kind: "Parallel", Branches: branches}
 
-	case *core.FallbackExpr:
+	case *compiler.FallbackExpr:
 		return &ASTNode{Kind: "Fallback", L: astNodeOf(n.L), R: astNodeOf(n.R)}
 
-	case *core.ConditionalExpr:
+	case *compiler.ConditionalExpr:
 		return &ASTNode{
 			Kind: "Conditional",
 			Cond: astNodeOf(n.Cond),
@@ -341,13 +341,13 @@ func buildASTNode(expr core.Expr) *ASTNode {
 			Else: astNodeOf(n.Else),
 		}
 
-	case *core.ProjectionExpr:
+	case *compiler.ProjectionExpr:
 		return &ASTNode{Kind: "Projection", Raw: n.Raw}
 
-	case *core.LoopExpr:
+	case *compiler.LoopExpr:
 		return &ASTNode{Kind: "Loop", Body: astNodeOf(n.Body), Until: n.Until}
 
-	case *core.AssertExpr:
+	case *compiler.AssertExpr:
 		return &ASTNode{Kind: "Assert", Condition: n.Condition, Message: n.Message}
 	}
 	return &ASTNode{Kind: fmt.Sprintf("Unknown(%T)", expr)}
@@ -365,9 +365,9 @@ func buildASTNode(expr core.Expr) *ASTNode {
 // ConditionalExpr tries Cond then Then then Else, ParallelExpr tries
 // each branch in order, and DecoratedExpr contributes no position (it
 // was never part of the original traversal).
-func resolveExprPos(e core.Expr) core.Position {
+func resolveExprPos(e compiler.Expr) compiler.Position {
 	if e == nil {
-		return core.Position{}
+		return compiler.Position{}
 	}
 	if p, ok := leafPos(e); ok {
 		return p
@@ -375,25 +375,25 @@ func resolveExprPos(e core.Expr) core.Position {
 	if p, ok := compositePos(e); ok {
 		return p
 	}
-	return core.Position{}
+	return compiler.Position{}
 }
 
 // leafPos handles the expression kinds that carry their own position
 // directly and unconditionally — a zero position is still returned as
 // the node's own, not as "not found". Every other expression kind
 // returns false so resolveExprPos falls through to compositePos.
-func leafPos(e core.Expr) (core.Position, bool) {
+func leafPos(e compiler.Expr) (compiler.Position, bool) {
 	switch n := e.(type) {
-	case *core.Atom:
+	case *compiler.Atom:
 		return n.Pos, true
-	case *core.LiteralExpr:
+	case *compiler.LiteralExpr:
 		return n.Pos, true
-	case *core.ProjectionExpr:
+	case *compiler.ProjectionExpr:
 		return n.Pos, true
-	case *core.AssertExpr:
+	case *compiler.AssertExpr:
 		return n.Pos, true
 	default:
-		return core.Position{}, false
+		return compiler.Position{}, false
 	}
 }
 
@@ -401,20 +401,20 @@ func leafPos(e core.Expr) (core.Position, bool) {
 // locally or recovered from a specific subset of children. The subset
 // for each kind matches the original single-function switch; changing
 // it would change which errors are attributed to which line.
-func compositePos(e core.Expr) (core.Position, bool) {
+func compositePos(e compiler.Expr) (compiler.Position, bool) {
 	switch n := e.(type) {
-	case *core.LoopExpr:
+	case *compiler.LoopExpr:
 		return ownOrChild(n.Pos, n.Body)
-	case *core.PipeExpr:
+	case *compiler.PipeExpr:
 		return ownOrChild(n.Pos, n.L)
-	case *core.FallbackExpr:
+	case *compiler.FallbackExpr:
 		return ownOrChild(n.Pos, n.L, n.R)
-	case *core.ConditionalExpr:
+	case *compiler.ConditionalExpr:
 		return ownOrChild(n.Pos, n.Cond, n.Then, n.Else)
-	case *core.ParallelExpr:
+	case *compiler.ParallelExpr:
 		return ownOrChild(n.Pos, n.Branches...)
 	default:
-		return core.Position{}, false
+		return compiler.Position{}, false
 	}
 }
 
@@ -423,45 +423,45 @@ func compositePos(e core.Expr) (core.Position, bool) {
 // signature lets compositePos express each kind's traversal directly;
 // nil children (ConditionalExpr.Else can be nil) are skipped by
 // resolveExprPos.
-func ownOrChild(pos core.Position, children ...core.Expr) (core.Position, bool) {
-	if pos != (core.Position{}) {
+func ownOrChild(pos compiler.Position, children ...compiler.Expr) (compiler.Position, bool) {
+	if pos != (compiler.Position{}) {
 		return pos, true
 	}
 	for _, c := range children {
-		if p := resolveExprPos(c); p != (core.Position{}) {
+		if p := resolveExprPos(c); p != (compiler.Position{}) {
 			return p, true
 		}
 	}
-	return core.Position{}, false
+	return compiler.Position{}, false
 }
 
-func valueToAny(v *core.Value) any {
+func valueToAny(v *compiler.Value) any {
 	if v == nil {
 		return nil
 	}
 	switch v.Kind {
-	case core.ValueString:
+	case compiler.ValueString:
 		return v.Str
-	case core.ValueBare:
+	case compiler.ValueBare:
 		return v.Str
-	case core.ValueNumber:
+	case compiler.ValueNumber:
 		return v.Num
-	case core.ValueBool:
+	case compiler.ValueBool:
 		return v.Bool
-	case core.ValueNull:
+	case compiler.ValueNull:
 		return nil
-	case core.ValueRef:
+	case compiler.ValueRef:
 		if v.Ref == "" {
 			return "."
 		}
 		return "." + v.Ref
-	case core.ValueMap:
+	case compiler.ValueMap:
 		m := make(map[string]any, len(v.Map))
 		for _, e := range v.Map {
 			m[e.Key] = valueToAny(e.Value)
 		}
 		return m
-	case core.ValueSlice:
+	case compiler.ValueSlice:
 		s := make([]any, len(v.Slice))
 		for i, e := range v.Slice {
 			s[i] = valueToAny(e)

@@ -52,17 +52,17 @@ import (
 	"fmt"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 )
 
 const ID = "helpers"
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(opts map[string]string) core.Bundle {
+func Bundle(opts map[string]string) compiler.Bundle {
 	prefix := opts["prefix"]
 	if prefix == "" {
 		prefix = "FLOW"
@@ -76,7 +76,7 @@ func Bundle(opts map[string]string) core.Bundle {
 		}, nil
 	}).Description("Format input text with prefix").Build()
 
-	return core.Bundle{
+	return compiler.Bundle{
 		ID: ID,
 		Libraries: []action.Library{
 			{
@@ -182,10 +182,10 @@ import (
 const ID = %q
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(opts map[string]string) core.Bundle {
+func Bundle(opts map[string]string) compiler.Bundle {
 	runAction := action.New("%s.run", func(ctx context.Context, in map[string]any) (map[string]any, error) {
 		return map[string]any{
 			"status":   "ok",
@@ -193,7 +193,7 @@ func Bundle(opts map[string]string) core.Bundle {
 		}, nil
 	}).Description("Extension action for " + ID).Build()
 
-	return core.Bundle{
+	return compiler.Bundle{
 		ID: ID,
 		Libraries: []action.Library{
 			{

@@ -1,8 +1,6 @@
 package runner
 
-import (
-	core "github.com/nexssp/flow/compiler"
-)
+import "github.com/nexssp/flow/compiler"
 
 // PrimariesFor returns the parser primary table the compiler installs
 // for a source that produced meta. Parent primaries, when supplied, are
@@ -28,13 +26,13 @@ import (
 // "duplicates fail loudly" rule.
 func (c Config) PrimariesFor(
 	meta map[string]any,
-	parent ...core.PrimaryExtension,
-) *core.PrimaryExtensionTable {
-	var all []core.PrimaryExtension
+	parent ...compiler.PrimaryExtension,
+) *compiler.PrimaryExtensionTable {
+	var all []compiler.PrimaryExtension
 	if c.Primaries != nil {
 		all = append(all, c.Primaries.All()...)
 	}
 	all = append(all, parent...)
-	all = append(all, core.PreprocessContributionsFromMeta(meta, c.CompileOpts...).Primaries...)
-	return core.NewPrimaryExtensionTable(all...)
+	all = append(all, compiler.PreprocessContributionsFromMeta(meta, c.CompileOpts...).Primaries...)
+	return compiler.NewPrimaryExtensionTable(all...)
 }

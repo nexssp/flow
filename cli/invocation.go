@@ -8,29 +8,29 @@ import (
 	"path/filepath"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 	"github.com/nexssp/flow/runner"
 )
 
 type invocation struct {
 	host            *runner.Host
-	injected        []core.Bundle
+	injected        []compiler.Bundle
 	targets         map[string]struct{}
-	nativeFactory   func() []core.Bundle
-	native          []core.Bundle
+	nativeFactory   func() []compiler.Bundle
+	native          []compiler.Bundle
 	nativeErr       error
 	nativeMade      bool
-	directives      *core.DirectiveTable
-	selftest        []core.Bundle
-	selftestFactory func([]core.Bundle) []core.Bundle
+	directives      *compiler.DirectiveTable
+	selftest        []compiler.Bundle
+	selftestFactory func([]compiler.Bundle) []compiler.Bundle
 	selfErr         error
 	selfMade        bool
 }
 
-func newInvocation(bundles []core.Bundle, targets []string) (*invocation, error) {
+func newInvocation(bundles []compiler.Bundle, targets []string) (*invocation, error) {
 	host := runner.NewHost()
-	injected := append([]core.Bundle(nil), bundles...)
+	injected := append([]compiler.Bundle(nil), bundles...)
 	if err := host.OwnAll(injected); err != nil {
 		return nil, err
 	}
@@ -48,7 +48,7 @@ func newInvocation(bundles []core.Bundle, targets []string) (*invocation, error)
 func runWithBundleFactories(
 	ctx context.Context,
 	targets []string,
-	construct func(func(core.Bundle) error) error,
+	construct func(func(compiler.Bundle) error) error,
 	dispatch func(*invocation, context.Context) int,
 ) int {
 	inv, err := newNativeInvocation(nil, targets)
@@ -57,7 +57,7 @@ func runWithBundleFactories(
 	}
 	return runInvocation(ctx, inv, func(runCtx context.Context) int {
 		if construct != nil {
-			if err := construct(func(bundle core.Bundle) error {
+			if err := construct(func(bundle compiler.Bundle) error {
 				if err := inv.host.Own(bundle); err != nil {
 					return err
 				}
@@ -94,7 +94,7 @@ func runInvocation(ctx context.Context, inv *invocation, dispatch func(context.C
 	return code
 }
 
-func (inv *invocation) nativeBundles() ([]core.Bundle, error) {
+func (inv *invocation) nativeBundles() ([]compiler.Bundle, error) {
 	if inv.nativeMade {
 		return inv.native, inv.nativeErr
 	}
@@ -111,7 +111,7 @@ func (inv *invocation) nativeBundles() ([]core.Bundle, error) {
 	return inv.native, nil
 }
 
-func (inv *invocation) directiveTable() (*core.DirectiveTable, error) {
+func (inv *invocation) directiveTable() (*compiler.DirectiveTable, error) {
 	if inv.directives != nil {
 		return inv.directives, nil
 	}
@@ -119,15 +119,15 @@ func (inv *invocation) directiveTable() (*core.DirectiveTable, error) {
 	if err != nil {
 		return nil, err
 	}
-	var directives []core.Directive
+	var directives []compiler.Directive
 	for i := range bundles {
 		directives = append(directives, bundles[i].Directives...)
 	}
-	inv.directives = core.NewDirectiveTable(directives...)
+	inv.directives = compiler.NewDirectiveTable(directives...)
 	return inv.directives, nil
 }
 
-func (inv *invocation) selftestBundles() ([]core.Bundle, error) {
+func (inv *invocation) selftestBundles() ([]compiler.Bundle, error) {
 	if inv.selfMade {
 		return inv.selftest, inv.selfErr
 	}
@@ -165,7 +165,7 @@ func (inv *invocation) buildConfig(reqs []require.Requirement) (runner.Config, e
 	}
 
 	var ownershipErr error
-	required, err := require.ResolveBundlesWith(unresolved, func(bundle core.Bundle) {
+	required, err := require.ResolveBundlesWith(unresolved, func(bundle compiler.Bundle) {
 		if ownershipErr == nil {
 			ownershipErr = inv.host.Own(bundle)
 		}
@@ -177,7 +177,7 @@ func (inv *invocation) buildConfig(reqs []require.Requirement) (runner.Config, e
 		return runner.Config{}, ownershipErr
 	}
 
-	bundles := append([]core.Bundle(nil), nativeBundles...)
+	bundles := append([]compiler.Bundle(nil), nativeBundles...)
 	bundles = append(bundles, inv.injected...)
 	bundles = append(bundles, required...)
 	return runner.BuildConfig(dedupeBundleIDs(bundles))
@@ -212,7 +212,7 @@ func (inv *invocation) sourceRequiresFromFile(ctx context.Context, path string) 
 	if err != nil {
 		return nil, err
 	}
-	_, meta, err := core.Preprocess(ctx, directives, string(src), path)
+	_, meta, err := compiler.Preprocess(ctx, directives, string(src), path)
 	if err != nil {
 		return nil, err
 	}

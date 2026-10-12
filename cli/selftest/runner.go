@@ -15,7 +15,7 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/nexssp/kernel/xctx"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	flowrunner "github.com/nexssp/flow/runner"
 )
 
@@ -35,7 +35,7 @@ const (
 // run phase is the actual runtime cost of the pipeline. In a feature
 // like `noop` all the work is in CompileAllocs and RunAllocs is zero.
 type Result struct {
-	core.SelfTestFeature
+	compiler.SelfTestFeature
 	Section           string
 	Status            Status
 	Elapsed           time.Duration
@@ -113,7 +113,7 @@ func captureExecution(runFunc func() (any, error)) captureResult {
 // allocation measurement enabled. The config is built once per Run and
 // passed in; the phase boundaries for allocation measurement live
 // inside runner.Execute, not here.
-func runFeature(ctx context.Context, cfg flowrunner.Config, feature core.SelfTestFeature) Result {
+func runFeature(ctx context.Context, cfg flowrunner.Config, feature compiler.SelfTestFeature) Result {
 	started := time.Now()
 
 	cleanup, err := prepareFeatureDir(feature)
@@ -189,7 +189,7 @@ func runFeature(ctx context.Context, cfg flowrunner.Config, feature core.SelfTes
 // prepareFeatureDir materializes feature.Files into a temp directory
 // and chdirs there so relative paths in the DSL resolve as written.
 // Returns a no-op cleanup for features without Files.
-func prepareFeatureDir(feature core.SelfTestFeature) (cleanup func(), err error) {
+func prepareFeatureDir(feature compiler.SelfTestFeature) (cleanup func(), err error) {
 	if len(feature.Files) == 0 {
 		return func() {}, nil
 	}
@@ -248,10 +248,10 @@ func evalAsserts(result any, assertions []string) []error {
 
 	var errorsList []error
 	for _, assertionExpr := range assertions {
-		trimmed := strings.TrimSpace(core.StripExprComments(assertionExpr))
+		trimmed := strings.TrimSpace(compiler.StripExprComments(assertionExpr))
 		cleanExpr := trimmed
 		if strings.HasPrefix(trimmed, ".") {
-			cleanExpr = core.PreprocessDots(trimmed)
+			cleanExpr = compiler.PreprocessDots(trimmed)
 		}
 
 		program, err := expr.Compile(cleanExpr, expr.Env(environment))

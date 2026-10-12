@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strconv"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/runner"
 )
 
@@ -28,10 +28,10 @@ type ActionPlanPipeline struct {
 // ActionPlanGraph contains only control-flow structure and source positions.
 // It intentionally excludes modifiers and action argument values.
 type ActionPlanGraph struct {
-	Entry string                 `json:"entry,omitempty"`
-	Exit  string                 `json:"exit,omitempty"`
-	Nodes []ActionPlanNode       `json:"nodes,omitempty"`
-	Edges []core.ActionGraphEdge `json:"edges,omitempty"`
+	Entry string                     `json:"entry,omitempty"`
+	Exit  string                     `json:"exit,omitempty"`
+	Nodes []ActionPlanNode           `json:"nodes,omitempty"`
+	Edges []compiler.ActionGraphEdge `json:"edges,omitempty"`
 }
 
 // ActionPlanNode describes a planned action without carrying request data.
@@ -72,10 +72,10 @@ func renderExplainActionPlan(
 }
 
 func actionPlanReport(
-	resolver core.CapabilityResolver,
+	resolver compiler.CapabilityResolver,
 	path string,
-	topAST core.Expr,
-	pipelines map[string]core.Expr,
+	topAST compiler.Expr,
+	pipelines map[string]compiler.Expr,
 ) (ActionPlanReport, error) {
 	report := ActionPlanReport{Path: path}
 	if topAST != nil {
@@ -100,15 +100,15 @@ func actionPlanReport(
 	return report, nil
 }
 
-func buildActionPlanGraph(resolver core.CapabilityResolver, expr core.Expr) (*ActionPlanGraph, error) {
-	graph, err := core.BuildActionGraph(resolver, expr)
+func buildActionPlanGraph(resolver compiler.CapabilityResolver, expr compiler.Expr) (*ActionPlanGraph, error) {
+	graph, err := compiler.BuildActionGraph(resolver, expr)
 	if err != nil {
 		return nil, err
 	}
 	plan := &ActionPlanGraph{
 		Entry: graph.Entry,
 		Exit:  graph.Exit,
-		Edges: append([]core.ActionGraphEdge(nil), graph.Edges...),
+		Edges: append([]compiler.ActionGraphEdge(nil), graph.Edges...),
 		Nodes: make([]ActionPlanNode, len(graph.Nodes)),
 	}
 	for i, node := range graph.Nodes {

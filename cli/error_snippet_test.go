@@ -7,7 +7,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 )
 
 func TestFormatCleanError_RendersSnippet(t *testing.T) {
@@ -15,8 +15,8 @@ func TestFormatCleanError_RendersSnippet(t *testing.T) {
 	file := filepath.Join(dir, "flow.nflow")
 	os.WriteFile(file, []byte("line one\nline two\nline three\n"), 0o600)
 
-	err := core.SourceError(
-		core.Position{File: file, Line: 2, Col: 6},
+	err := compiler.SourceError(
+		compiler.Position{File: file, Line: 2, Col: 6},
 		"boom",
 	)
 	out := formatCleanError(err, false)

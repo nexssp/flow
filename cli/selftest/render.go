@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	flowrunner "github.com/nexssp/flow/runner"
 )
 
@@ -85,7 +85,7 @@ func (r *Renderer) yellow(s string) string { return r.paint(ansiYellow, s) }
 func (r *Renderer) cyan(s string) string   { return r.paint(ansiCyan, s) }
 func (r *Renderer) mag(s string) string    { return r.paint(ansiMagenta, s) }
 
-func (r *Renderer) Banner(sections []core.SelfTestSection) {
+func (r *Renderer) Banner(sections []compiler.SelfTestSection) {
 	for _, s := range sections {
 		r.total += len(s.Features)
 		r.sectSize[s.Name] = len(s.Features)
@@ -100,7 +100,7 @@ func (r *Renderer) Banner(sections []core.SelfTestSection) {
 	r.printf("%s\n\n", r.mag(line))
 }
 
-func (r *Renderer) SectionStart(s core.SelfTestSection) {
+func (r *Renderer) SectionStart(s compiler.SelfTestSection) {
 	r.printf("\n%s %s  %s\n\n",
 		r.cyan("▸"),
 		r.bold(strings.ToUpper(s.Name)),
@@ -108,7 +108,7 @@ func (r *Renderer) SectionStart(s core.SelfTestSection) {
 	)
 }
 
-func (r *Renderer) SectionDone(s core.SelfTestSection, all []Result, elapsed time.Duration) {
+func (r *Renderer) SectionDone(s compiler.SelfTestSection, all []Result, elapsed time.Duration) {
 	passed, failed, skipped := 0, 0, 0
 	for i := range all {
 		res := all[i]
@@ -139,7 +139,7 @@ func (r *Renderer) SectionDone(s core.SelfTestSection, all []Result, elapsed tim
 	)
 }
 
-func featureInSection(f core.SelfTestFeature, s core.SelfTestSection) bool {
+func featureInSection(f compiler.SelfTestFeature, s compiler.SelfTestSection) bool {
 	for _, sf := range s.Features {
 		if sf.Name == f.Name {
 			return true
@@ -148,7 +148,7 @@ func featureInSection(f core.SelfTestFeature, s core.SelfTestSection) bool {
 	return false
 }
 
-func (r *Renderer) FeatureStart(_ core.SelfTestFeature) {
+func (r *Renderer) FeatureStart(_ compiler.SelfTestFeature) {
 	// Live spinner was removed; kept as a no-op hook so call sites stay
 	// symmetrical.
 }
@@ -490,7 +490,7 @@ type jsonReport struct {
 	Score       Score           `json:"score"`
 }
 
-func runJSON(ctx context.Context, opts Options, cfg flowrunner.Config, sections []core.SelfTestSection) int {
+func runJSON(ctx context.Context, opts Options, cfg flowrunner.Config, sections []compiler.SelfTestSection) int {
 	host := DetectHost()
 
 	report := jsonReport{

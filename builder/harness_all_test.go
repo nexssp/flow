@@ -34,21 +34,21 @@ func TestHarness_LoosePackage_AutoBundling(t *testing.T) {
 
 import (
 	"context"
-	core "github.com/nexssp/flow/compiler"
+compiler.
 	"github.com/nexssp/kernel/action"
 )
 
 const ID = "mylocal"
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(opts map[string]string) core.Bundle {
+func Bundle(opts map[string]string) compiler.Bundle {
 	act := action.New("mylocal.echo", func(_ context.Context, in map[string]any) (map[string]any, error) {
 		return map[string]any{"val": "loose_ok"}, nil
 	}).Build()
-	return core.Bundle{
+	return compiler.Bundle{
 		ID: ID,
 		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{act}}},
 	}
@@ -104,21 +104,21 @@ go 1.23
 
 import (
 	"context"
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 )
 
 const ID = "worker"
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(opts map[string]string) core.Bundle {
+func Bundle(opts map[string]string) compiler.Bundle {
 	act := action.New("worker.run", func(_ context.Context, in map[string]any) (map[string]any, error) {
 		return map[string]any{"status": "monorepo_ok"}, nil
 	}).Build()
-	return core.Bundle{
+	return compiler.Bundle{
 		ID: ID,
 		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{act}}},
 	}
@@ -164,22 +164,22 @@ func TestHarness_OptionsChange_InvalidatesCache(t *testing.T) {
 
 import (
 	"context"
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 )
 
 const ID = "optlocal"
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(opts map[string]string) core.Bundle {
+func Bundle(opts map[string]string) compiler.Bundle {
 	val := opts["custom_option"]
 	act := action.New("optlocal.get", func(_ context.Context, in map[string]any) (map[string]any, error) {
 		return map[string]any{"opt": val}, nil
 	}).Build()
-	return core.Bundle{
+	return compiler.Bundle{
 		ID: ID,
 		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{act}}},
 	}
@@ -236,21 +236,21 @@ func TestHarness_SourceEdit_InvalidatesCache(t *testing.T) {
 
 import (
 	"context"
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 )
 
 const ID = "editlocal"
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(opts map[string]string) core.Bundle {
+func Bundle(opts map[string]string) compiler.Bundle {
 	act := action.New("editlocal.run", func(_ context.Context, in map[string]any) (map[string]any, error) {
 		return map[string]any{"version": "v1"}, nil
 	}).Build()
-	return core.Bundle{
+	return compiler.Bundle{
 		ID: ID,
 		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{act}}},
 	}
@@ -277,21 +277,21 @@ func Bundle(opts map[string]string) core.Bundle {
 
 import (
 	"context"
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 )
 
 const ID = "editlocal"
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(opts map[string]string) core.Bundle {
+func Bundle(opts map[string]string) compiler.Bundle {
 	act := action.New("editlocal.run", func(_ context.Context, in map[string]any) (map[string]any, error) {
 		return map[string]any{"version": "v2_updated"}, nil
 	}).Build()
-	return core.Bundle{
+	return compiler.Bundle{
 		ID: ID,
 		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{act}}},
 	}
@@ -673,20 +673,20 @@ func testBundleSource(bundleID string) string {
 import (
 	"context"
 
-	core "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 )
 
 const ID = %q
 
-func init() { core.Register(ID, Bundle) }
+func init() { compiler.Register(ID, Bundle) }
 
-func Bundle(opts map[string]string) core.Bundle {
+func Bundle(opts map[string]string) compiler.Bundle {
 	prefix := opts["prefix"]
 	act := action.New(ID+".echo", func(_ context.Context, _ any) (map[string]any, error) {
 		return map[string]any{"value": prefix + ":ok"}, nil
 	}).Build()
-	return core.Bundle{ID: ID, Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{act}}}}
+	return compiler.Bundle{ID: ID, Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{act}}}}
 }
 `, bundleID)
 }
