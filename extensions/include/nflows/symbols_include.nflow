@@ -1,0 +1,7 @@
+@description "Include file-local symbols and use them in the parent flow"
+@symbols invoice {
+  needs_review: "NEEDS_REVIEW"
+}
+@include ./child.nflow
+{ status: invoice.needs_review, queue: queues.review }
+@assert: result.status == invoice.needs_review && result.queue == queues.review

@@ -10,7 +10,7 @@ import (
 	"github.com/nexssp/kernel/timing"
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/realtime"
 )
 
@@ -21,7 +21,7 @@ func TestRealtime_TopicPublish(t *testing.T) {
 	ctx := realtime.TopicKey.With(context.Background(), topic)
 
 	bundle := realtime.Bundle(nil)
-	resolver, _ := core.NewDynamicResolver(bundle.Libraries...)
+	resolver, _ := compiler.NewDynamicResolver(bundle.Libraries...)
 
 	pubAction, ok := resolver.Action("realtime.topic.publish")
 	ktest.RequireTrue(t, ok)
@@ -44,7 +44,7 @@ func TestRealtime_WheelScheduleAndAdvance(t *testing.T) {
 	ctx := realtime.WheelKey.With(context.Background(), wheel)
 
 	bundle := realtime.Bundle(nil)
-	resolver, _ := core.NewDynamicResolver(bundle.Libraries...)
+	resolver, _ := compiler.NewDynamicResolver(bundle.Libraries...)
 
 	schedAction, _ := resolver.Action("realtime.wheel.schedule")
 	advanceAction, _ := resolver.Action("realtime.wheel.advance")

@@ -6,10 +6,10 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
-func materialize(req core.MaterializeReq) error {
+func materialize(req compiler.MaterializeReq) error {
 	schemas := SchemasFromMap(req.Meta)
 	if len(schemas) == 0 {
 		return nil

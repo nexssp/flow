@@ -7,7 +7,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // TestModifiers_Translation verifies each identity guard sets the
@@ -16,7 +16,7 @@ import (
 // the kernel's own test suite.
 func TestModifiers_Translation(t *testing.T) {
 	t.Parallel()
-	table := core.NewModifierTable(Modifiers()...)
+	table := compiler.NewModifierTable(Modifiers()...)
 
 	cases := []struct {
 		name     string

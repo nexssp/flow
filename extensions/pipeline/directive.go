@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/scope"
 )
 
@@ -20,7 +20,7 @@ import (
 //
 // `@pipeline name` with no modifiers is valid and behaves exactly as it
 // did before modifiers were supported.
-var Directive = core.Directive{
+var Directive = compiler.Directive{
 	Name:    "pipeline",
 	Example: "@pipeline pack:route=\"POST /pack\"\n  src -> dst\n@end",
 	Handler: handleDirective,
@@ -31,16 +31,16 @@ var Directive = core.Directive{
 // attribute every effective modifier to a pipeline or profile.
 type AppliedModifier struct {
 	Raw    string
-	Source core.ModifierSource
+	Source compiler.ModifierSource
 }
 
-func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
-	pos := core.Position{File: req.File, Line: req.I + 1}
+func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
+	pos := compiler.Position{File: req.File, Line: req.I + 1}
 	header := strings.TrimSpace(req.Lines[req.I])
 
 	name, mods := parsePipelineHeader(header)
 	if name == "" {
-		return core.DirectiveRes{}, core.SourceError(pos, "@pipeline requires a name")
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@pipeline requires a name")
 	}
 
 	next := req.I + 1
@@ -57,7 +57,7 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 
 	applied, err := expandProfiles(mods, req.Out, pos, name)
 	if err != nil {
-		return core.DirectiveRes{}, err
+		return compiler.DirectiveRes{}, err
 	}
 
 	var bodyLines []string
@@ -89,19 +89,19 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 		}
 		pipelineMods[name] = raw
 
-		sources, _ := req.Out["pipeline_modifier_sources"].(map[string][]core.ModifierSource)
+		sources, _ := req.Out["pipeline_modifier_sources"].(map[string][]compiler.ModifierSource)
 		if sources == nil {
-			sources = make(map[string][]core.ModifierSource)
+			sources = make(map[string][]compiler.ModifierSource)
 			req.Out["pipeline_modifier_sources"] = sources
 		}
-		srcs := make([]core.ModifierSource, len(applied))
+		srcs := make([]compiler.ModifierSource, len(applied))
 		for i, am := range applied {
 			srcs[i] = am.Source
 		}
 		sources[name] = srcs
 	}
 
-	return core.DirectiveRes{Next: next}, nil
+	return compiler.DirectiveRes{Next: next}, nil
 }
 
 // expandProfiles replaces every `:profile=NAME` entry with the profile's
@@ -112,17 +112,17 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 //
 // A reference to an undeclared profile, an unresolved parent, or a
 // parent cycle is a compile error, not a silent no-op.
-func expandProfiles(mods []string, meta map[string]any, pos core.Position, pipelineName string) ([]AppliedModifier, error) {
+func expandProfiles(mods []string, meta map[string]any, pos compiler.Position, pipelineName string) ([]AppliedModifier, error) {
 	if len(mods) == 0 {
 		return nil, nil
 	}
 
-	localSource := core.ModifierSource{Kind: "pipeline", Label: pipelineName}
+	localSource := compiler.ModifierSource{Kind: "pipeline", Label: pipelineName}
 
 	var expanded []AppliedModifier
 	index := make(map[string]int)
-	add := func(raw string, src core.ModifierSource) {
-		n := core.ModifierName(raw)
+	add := func(raw string, src compiler.ModifierSource) {
+		n := compiler.ModifierName(raw)
 		if i, ok := index[n]; ok {
 			expanded[i] = AppliedModifier{Raw: raw, Source: src}
 			return
@@ -132,7 +132,7 @@ func expandProfiles(mods []string, meta map[string]any, pos core.Position, pipel
 	}
 
 	for _, raw := range mods {
-		if core.ModifierName(raw) != "profile" {
+		if compiler.ModifierName(raw) != "profile" {
 			add(raw, localSource)
 			continue
 		}
@@ -142,15 +142,15 @@ func expandProfiles(mods []string, meta map[string]any, pos core.Position, pipel
 			value = raw[i+1:]
 		}
 		if value == "" {
-			return nil, core.SourceError(pos,
+			return nil, compiler.SourceError(pos,
 				"@pipeline: :profile requires a name (use :profile=NAME)")
 		}
 
 		profileMods, err := scope.ExpandProfile(meta, value)
 		if err != nil {
-			return nil, core.SourceError(pos, "@pipeline: %v", err)
+			return nil, compiler.SourceError(pos, "@pipeline: %v", err)
 		}
-		profileSource := core.ModifierSource{Kind: "profile", Label: value}
+		profileSource := compiler.ModifierSource{Kind: "profile", Label: value}
 		for _, pm := range profileMods {
 			add(pm, profileSource)
 		}
@@ -251,14 +251,14 @@ func readQuotedValue(rest string) (value, remaining string) {
 // Registered in Bundle().Directives so every top-level `@end` in any
 // fixture is a registered directive; the native fixture contract test
 // enforces that invariant across every embedded .nflow file.
-var EndDirective = core.Directive{
+var EndDirective = compiler.Directive{
 	Name:    "end",
 	Example: "@pipeline p\n  ...\n@end",
 	Handler: handleEnd,
 }
 
-func handleEnd(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
-	return core.DirectiveRes{}, core.SourceError(
-		core.Position{File: req.File, Line: req.I + 1},
+func handleEnd(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
+	return compiler.DirectiveRes{}, compiler.SourceError(
+		compiler.Position{File: req.File, Line: req.I + 1},
 		"@end without a matching block directive")
 }

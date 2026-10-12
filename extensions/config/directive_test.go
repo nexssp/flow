@@ -6,7 +6,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // runConfig feeds a sequence of lines to handleConfig and returns the
@@ -15,7 +15,7 @@ func runConfig(tb testing.TB, lines ...string) map[string]string {
 	tb.Helper()
 	out := map[string]any{}
 	for next := 0; next < len(lines); {
-		res, err := handleConfig(context.Background(), core.DirectiveReq{
+		res, err := handleConfig(context.Background(), compiler.DirectiveReq{
 			Lines: lines,
 			I:     next,
 			Out:   out,

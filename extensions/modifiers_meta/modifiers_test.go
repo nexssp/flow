@@ -8,7 +8,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // TestModifiers_Translation verifies each modifier parses its DSL value
@@ -17,7 +17,7 @@ import (
 // this package's responsibility.
 func TestModifiers_Translation(t *testing.T) {
 	t.Parallel()
-	table := core.NewModifierTable(Modifiers()...)
+	table := compiler.NewModifierTable(Modifiers()...)
 
 	cases := []struct {
 		name     string
@@ -176,7 +176,7 @@ func TestModifiers_Translation(t *testing.T) {
 
 func TestModifiers_FlagRejectsValue(t *testing.T) {
 	t.Parallel()
-	table := core.NewModifierTable(Modifiers()...)
+	table := compiler.NewModifierTable(Modifiers()...)
 
 	// Flags take no value; passing one is a DSL authoring mistake the
 	// modifier must reject, not silently ignore.

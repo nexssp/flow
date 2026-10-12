@@ -48,9 +48,11 @@ var allNativeBundles = []nativeBundleInfo{
 		matcher: func(string) bool { return true },
 	},
 	{
-		id:      "symbols",
-		pkg:     "github.com/nexssp/flow/extensions/symbols",
-		matcher: func(s string) bool { return strings.Contains(s, "@symbols") },
+		id:  "symbols",
+		pkg: "github.com/nexssp/flow/extensions/symbols",
+		// Included flows can declare @symbols without the directive appearing
+		// in the root source scanned for a generated harness.
+		matcher: func(string) bool { return true },
 	},
 	{
 		id:      "pipeline",

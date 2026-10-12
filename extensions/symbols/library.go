@@ -25,8 +25,8 @@ func Bundle(_ map[string]string) compiler.Bundle {
 		Directives: []compiler.Directive{Directive},
 		Fixtures:   fixturesFS,
 		WrapPipeline: func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error) {
-			syms, ok := meta["symbols"].(map[string]compiler.SymbolNamespace)
-			if !ok || len(syms) == 0 {
+			syms := compiler.SymbolsFromMeta(meta)
+			if len(syms) == 0 {
 				return inner, nil
 			}
 			return action.New("symbols.wrap", func(ctx context.Context, req any) (any, error) {

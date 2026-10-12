@@ -12,9 +12,9 @@ import (
 
 // SymbolNamespace groups compile-time symbolic values that .nflow programs
 // reference as `<namespace>.<name>`. Bundles register namespaces from init
-// so that programs in any repo use them without local declarations. Symbols
-// resolve during parse/analyze (unknown names fail compilation) and bind
-// into the expression environment at build time.
+// so that programs in any repo use them without local declarations. Resolved
+// values bind during build; unresolved bare values remain ordinary literals in
+// data positions, while expression validity depends on the expression's env.
 type SymbolNamespace struct {
 	Name    string
 	Symbols map[string]any
@@ -40,8 +40,8 @@ func RegisterNamespace(ns SymbolNamespace) {
 	symbolRegistryMu.Unlock()
 }
 
-// LookupSymbol resolves `<namespace>.<name>`. Analysis uses it to reject
-// unknown symbols before a program runs.
+// LookupSymbol looks up `<namespace>.<name>` in the global registry. The bool
+// result lets callers distinguish a missing symbol from a registered nil value.
 func LookupSymbol(namespace, name string) (any, bool) {
 	symbolRegistryMu.RLock()
 	defer symbolRegistryMu.RUnlock()
@@ -103,6 +103,13 @@ func WithLocalSymbols(ctx context.Context, syms map[string]SymbolNamespace) cont
 // LocalSymbolsFrom returns the file-local namespaces installed on ctx.
 func LocalSymbolsFrom(ctx context.Context) map[string]SymbolNamespace {
 	syms, _ := localSymbolsKey.From(ctx)
+	return syms
+}
+
+// SymbolsFromMeta returns the file-local symbol namespaces carried by compile
+// metadata. A missing or malformed value is treated as no local symbols.
+func SymbolsFromMeta(meta map[string]any) map[string]SymbolNamespace {
+	syms, _ := meta["symbols"].(map[string]SymbolNamespace)
 	return syms
 }
 

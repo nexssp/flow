@@ -15,7 +15,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 //go:embed nflows
@@ -24,15 +24,15 @@ var fixturesFS embed.FS
 const ID = "runtime"
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{library()},
-		ArgSchemas: map[string][]core.ArgFieldSpec{
-			"runtime.call": {{Name: "name", Kind: core.ArgCapabilityRef, Optional: true}},
+		ArgSchemas: map[string][]compiler.ArgFieldSpec{
+			"runtime.call": {{Name: "name", Kind: compiler.ArgCapabilityRef, Optional: true}},
 		},
 		Fixtures: fixturesFS,
 	}

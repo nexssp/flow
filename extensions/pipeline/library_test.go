@@ -8,7 +8,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func TestBundle_WiresDirectiveMaterializeFixtures(t *testing.T) {
@@ -26,7 +26,7 @@ func TestDirective_SingleLineHeader(t *testing.T) {
 	t.Parallel()
 	out := map[string]any{}
 	body := []string{`@pipeline p`, `  runtime.noop`, `@end`}
-	_, err := handleDirective(context.Background(), core.DirectiveReq{
+	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: body, Body: body, I: 0, Out: out, File: "<test>",
 	})
 	ktest.RequireNoError(t, err)
@@ -40,7 +40,7 @@ func TestDirective_IgnoresInlineModifiers(t *testing.T) {
 	t.Parallel()
 	out := map[string]any{}
 	body := []string{`@pipeline p:tag="fast"`, `  runtime.noop`, `@end`}
-	_, err := handleDirective(context.Background(), core.DirectiveReq{
+	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: body, Body: body, I: 0, Out: out, File: "<test>",
 	})
 	ktest.RequireNoError(t, err)
@@ -55,7 +55,7 @@ func TestDirective_MissingName(t *testing.T) {
 	t.Parallel()
 	body := []string{`@pipeline`, `  runtime.noop`, `@end`}
 	out := map[string]any{}
-	_, err := handleDirective(context.Background(), core.DirectiveReq{
+	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: body, Body: body, I: 0, Out: out, File: "<test>",
 	})
 	ktest.RequireErrorContains(t, err, "requires a name")
@@ -74,7 +74,7 @@ func TestDirective_MultiplePipelines(t *testing.T) {
 	}
 	next := 0
 	for next < len(lines) {
-		res, err := handleDirective(context.Background(), core.DirectiveReq{
+		res, err := handleDirective(context.Background(), compiler.DirectiveReq{
 			Lines: lines, Body: lines, I: next, Out: out, File: "<test>",
 		})
 		ktest.RequireNoError(t, err)
@@ -110,7 +110,7 @@ func TestFixtures_Discoverable(t *testing.T) {
 
 func TestEndDirective_RejectsStrayEnd(t *testing.T) {
 	t.Parallel()
-	_, err := handleEnd(context.Background(), core.DirectiveReq{
+	_, err := handleEnd(context.Background(), compiler.DirectiveReq{
 		Lines: []string{"@end"},
 		I:     0,
 		File:  "stray.nflow",
@@ -129,7 +129,7 @@ func TestDirective_MultilineHeaderModifiers(t *testing.T) {
 		`  runtime.noop`,
 		`@end`,
 	}
-	_, err := handleDirective(context.Background(), core.DirectiveReq{
+	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: body, Body: body, I: 0, Out: out, File: "<test>",
 	})
 	ktest.RequireNoError(t, err)

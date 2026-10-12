@@ -8,7 +8,7 @@ import (
 
 	"github.com/nexssp/kernel/xctx"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const (
@@ -36,11 +36,11 @@ type macroPrimary struct {
 
 func (m *macroPrimary) Name() string { return "macros.expand" }
 
-func (m *macroPrimary) TokenType() core.TokenType { return core.TokAtPrompt }
+func (m *macroPrimary) TokenType() compiler.TokenType { return compiler.TokAtPrompt }
 
-func (m *macroPrimary) Parse(p *core.Parser) (core.Expr, error) {
+func (m *macroPrimary) Parse(p *compiler.Parser) (compiler.Expr, error) {
 	nameTok := p.Current()
-	if nameTok.Type != core.TokAtPrompt {
+	if nameTok.Type != compiler.TokAtPrompt {
 		return nil, p.Fail(nameTok.Line, "internal: macros.expand called on %s", nameTok.Type)
 	}
 	invokeLine := nameTok.Line
@@ -107,7 +107,7 @@ func (m *macroPrimary) Parse(p *core.Parser) (core.Expr, error) {
 
 // recordExpansion is a small helper so the two call sites in Parse do
 // not need to know the trace is optional.
-func recordExpansion(p *core.Parser, e Expansion) {
+func recordExpansion(p *compiler.Parser, e Expansion) {
 	if t := TraceFrom(p.Context()); t != nil {
 		t.Record(e)
 	}
@@ -144,15 +144,15 @@ func whereFromContext(ctx context.Context) string {
 // Outer wraps of the same error see "in macro @" in the message and
 // add their own macro context without re-remapping; each layer
 // contributes one definition line to the chain.
-func wrapMacroError(err error, p *core.Parser, name string, invokeLine int, decl Declaration) error {
+func wrapMacroError(err error, p *compiler.Parser, name string, invokeLine int, decl Declaration) error {
 	file := p.File()
 
 	// Already wrapped by an inner macro: the inner remap has already
 	// converted the position to file-relative. Prefix this macro's
 	// context at the invocation line.
 	if strings.Contains(err.Error(), "in macro @") {
-		return core.SourceError(
-			core.Position{File: file, Line: invokeLine},
+		return compiler.SourceError(
+			compiler.Position{File: file, Line: invokeLine},
 			"in macro @%s (defined at %s:%d): %s",
 			name, file, decl.DefLine, err.Error())
 	}
@@ -161,15 +161,15 @@ func wrapMacroError(err error, p *core.Parser, name string, invokeLine int, decl
 	// file-relative one so the error's outer position is clickable.
 	bodyLine := parseBodyLine(err, file)
 	if bodyLine <= 0 {
-		return core.SourceError(
-			core.Position{File: file, Line: invokeLine},
+		return compiler.SourceError(
+			compiler.Position{File: file, Line: invokeLine},
 			"in macro @%s (defined at %s:%d): %s",
 			name, file, decl.DefLine, err.Error())
 	}
 	actualLine := decl.BodyLine + bodyLine - 1
 	cleanMsg := stripFileLinePrefix(err, file)
-	return core.SourceError(
-		core.Position{File: file, Line: actualLine},
+	return compiler.SourceError(
+		compiler.Position{File: file, Line: actualLine},
 		"in macro @%s (defined at %s:%d): %s",
 		name, file, decl.DefLine, cleanMsg)
 }
@@ -215,8 +215,8 @@ func stripFileLinePrefix(err error, file string) string {
 // raw text between the outer parens and splitting it with the same
 // top-level splitter the directive parsers use. Commas inside quotes
 // or nested brackets are preserved.
-func readArgs(p *core.Parser) ([]string, error) {
-	if p.Current().Type != core.TokLParen {
+func readArgs(p *compiler.Parser) ([]string, error) {
+	if p.Current().Type != compiler.TokLParen {
 		return nil, nil
 	}
 
@@ -227,20 +227,20 @@ func readArgs(p *core.Parser) ([]string, error) {
 	depth := 1
 	endOffset := -1
 
-	for p.Current().Type != core.TokEOF {
+	for p.Current().Type != compiler.TokEOF {
 		switch p.Current().Type {
-		case core.TokLParen:
+		case compiler.TokLParen:
 			depth++
-		case core.TokRParen:
+		case compiler.TokRParen:
 			depth--
 			if depth == 0 {
 				endOffset = p.Current().Offset
 			}
-		case core.TokEOF, core.TokIdent, core.TokString, core.TokNumber,
-			core.TokArrow, core.TokPipe, core.TokAmpersand, core.TokOrOr,
-			core.TokLBrace, core.TokRBrace, core.TokColon, core.TokEquals,
-			core.TokComma, core.TokQuestion, core.TokHash, core.TokTilde,
-			core.TokAtBrace, core.TokAtPrompt:
+		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
+			compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr,
+			compiler.TokLBrace, compiler.TokRBrace, compiler.TokColon, compiler.TokEquals,
+			compiler.TokComma, compiler.TokQuestion, compiler.TokHash, compiler.TokTilde,
+			compiler.TokAtBrace, compiler.TokAtPrompt:
 		}
 		if endOffset >= 0 {
 			break
@@ -259,7 +259,7 @@ func readArgs(p *core.Parser) ([]string, error) {
 		return nil, nil
 	}
 
-	parts := core.SplitTopLevel(inner, ',')
+	parts := compiler.SplitTopLevel(inner, ',')
 	out := make([]string, 0, len(parts))
 	for _, a := range parts {
 		if a = strings.TrimSpace(a); a != "" {
@@ -285,7 +285,7 @@ func substituteParams(body string, params, args []string) string {
 	return out
 }
 
-// MergeWith implements core.MergeablePrimary. The argument is the
+// MergeWith implements compiler.MergeablePrimary. The argument is the
 // older (inherited) primary; this method returns a new primary whose
 // byName map is the union of both, with this (newer) primary's
 // declarations winning on name collision.
@@ -293,7 +293,7 @@ func substituteParams(body string, params, args []string) string {
 // depth is intentionally reset: merges happen at table construction
 // time, before any parse begins, so a merged primary always starts at
 // depth 0.
-func (m *macroPrimary) MergeWith(older core.PrimaryExtension) core.PrimaryExtension {
+func (m *macroPrimary) MergeWith(older compiler.PrimaryExtension) compiler.PrimaryExtension {
 	other, ok := older.(*macroPrimary)
 	if !ok {
 		return m

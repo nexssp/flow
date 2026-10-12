@@ -6,7 +6,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/runner"
 )
 
@@ -17,7 +17,7 @@ import (
 func TestPrintInfoJSON_NoHTMLEscaping(t *testing.T) {
 	var buf bytes.Buffer
 
-	ast := &core.Atom{Name: "runtime.noop"}
+	ast := &compiler.Atom{Name: "runtime.noop"}
 	err := runner.PrintInfoJSON(&buf, "<embedded>",
 		map[string]any{"description": "a<b>c"},
 		ast)

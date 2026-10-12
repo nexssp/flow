@@ -387,13 +387,15 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 	}
 
 	asserts := collectAsserts(ex.Meta, flagsToAsserts(flags))
-	return runner.RunAssertions(
+	return runner.RunAssertionsContext(
+		ctx,
 		os.Stderr,
 		ex.Output,
 		total.Milliseconds(),
 		observer.ActionNames(),
 		asserts,
 		verbosity,
+		compiler.SymbolsFromMeta(ex.Meta),
 	)
 }
 

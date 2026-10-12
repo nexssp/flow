@@ -6,15 +6,15 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // runDirective drives handleDirective with a single line, returning
 // the mutated Out map.
-func runDirective(tb testing.TB, lines ...string) (map[string]any, core.DirectiveRes, error) {
+func runDirective(tb testing.TB, lines ...string) (map[string]any, compiler.DirectiveRes, error) {
 	tb.Helper()
 	out := map[string]any{}
-	res, err := handleDirective(context.Background(), core.DirectiveReq{
+	res, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: lines,
 		I:     0,
 		Out:   out,
@@ -68,7 +68,7 @@ func TestDirective_DuplicateName(t *testing.T) {
 	out := map[string]any{
 		DeclarationKey: []Declaration{{Name: "dup"}},
 	}
-	_, err := handleDirective(context.Background(), core.DirectiveReq{
+	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: []string{`@macro dup() { noop }`},
 		I:     0,
 		Out:   out,

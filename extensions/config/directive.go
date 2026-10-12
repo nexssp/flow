@@ -4,26 +4,26 @@ import (
 	"context"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // ConfigDirective parses both the single-line form
 // `@config:key=value` and the block form `@config { key: value, ... }`.
 // Each pair is written to meta["config"] under its key.
-var ConfigDirective = core.Directive{
+var ConfigDirective = compiler.Directive{
 	Name:    "config",
 	Example: "@config:strict=true\n@config {\n  retries: 3 :cli=\"r\"\n}",
 	Handler: handleConfig,
 }
 
-func handleConfig(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
+func handleConfig(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 	cfg := metaConfig(req.Out)
 	line := strings.TrimSpace(req.Lines[req.I])
 
 	if openIndex := strings.IndexByte(line, '{'); openIndex >= 0 {
 		if closeIndex := strings.IndexByte(line[openIndex+1:], '}'); closeIndex >= 0 {
 			parseConfigPairs(line[openIndex+1:openIndex+1+closeIndex], cfg)
-			return core.DirectiveRes{Next: req.I + 1}, nil
+			return compiler.DirectiveRes{Next: req.I + 1}, nil
 		}
 		next := req.I + 1
 		for next < len(req.Lines) {
@@ -35,7 +35,7 @@ func handleConfig(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, 
 			parseConfigLine(current, cfg)
 			next++
 		}
-		return core.DirectiveRes{Next: next}, nil
+		return compiler.DirectiveRes{Next: next}, nil
 	}
 
 	rest := strings.TrimPrefix(line, "@config:")
@@ -46,11 +46,11 @@ func handleConfig(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, 
 			cfg[key] = value
 		}
 	}
-	return core.DirectiveRes{Next: req.I + 1}, nil
+	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }
 
 func parseConfigPairs(body string, cfg map[string]string) {
-	for _, pair := range core.SplitTopLevel(body, ',') {
+	for _, pair := range compiler.SplitTopLevel(body, ',') {
 		parseConfigLine(pair, cfg)
 	}
 }

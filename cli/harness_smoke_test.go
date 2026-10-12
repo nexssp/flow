@@ -148,7 +148,7 @@ import (
 	"encoding/json"
 	"os/exec"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 )

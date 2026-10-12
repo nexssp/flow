@@ -13,7 +13,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "syntax"
@@ -22,75 +22,75 @@ const ID = "syntax"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID}},
-		Operators: []core.Operator{pipe, pipeAlias, parallel, fallback},
-		Primaries: []core.PrimaryExtension{namedParallelKeyword{}},
+		Operators: []compiler.Operator{pipe, pipeAlias, parallel, fallback},
+		Primaries: []compiler.PrimaryExtension{namedParallelKeyword{}},
 		Fixtures:  fixturesFS,
 	}
 }
 
-var pipe = core.Operator{
-	Meta: core.OperatorMeta{
+var pipe = compiler.Operator{
+	Meta: compiler.OperatorMeta{
 		Name:          "pipe",
-		Token:         core.TokArrow,
+		Token:         compiler.TokArrow,
 		Precedence:    7,
-		Associativity: core.Left,
+		Associativity: compiler.Left,
 		Description:   "Pass left output to right input",
 		Example:       `runtime.const(value=hi) -> runtime.debug`,
 	},
 	Handler: pipeHandler,
 }
 
-var pipeAlias = core.Operator{
-	Meta: core.OperatorMeta{
+var pipeAlias = compiler.Operator{
+	Meta: compiler.OperatorMeta{
 		Name:          "pipe_alias",
-		Token:         core.TokPipe,
+		Token:         compiler.TokPipe,
 		Precedence:    7,
-		Associativity: core.Left,
+		Associativity: compiler.Left,
 		Description:   "Syntax sugar for ->; uses the same pipeline semantics",
 		Example:       `runtime.const(value=hi) | runtime.debug`,
 	},
 	Handler: pipeHandler,
 }
 
-func pipeHandler(_ context.Context, req core.OperatorReq) (core.OperatorRes, error) {
-	return core.OperatorRes{Node: &core.PipeExpr{L: req.Left, R: req.Right}}, nil
+func pipeHandler(_ context.Context, req compiler.OperatorReq) (compiler.OperatorRes, error) {
+	return compiler.OperatorRes{Node: &compiler.PipeExpr{L: req.Left, R: req.Right}}, nil
 }
 
-var parallel = core.Operator{
-	Meta: core.OperatorMeta{
+var parallel = compiler.Operator{
+	Meta: compiler.OperatorMeta{
 		Name:          parallelKeyword,
-		Token:         core.TokAmpersand,
+		Token:         compiler.TokAmpersand,
 		Precedence:    5,
-		Associativity: core.Left,
+		Associativity: compiler.Left,
 		Description:   "Run branches concurrently",
 		Example:       `( a & b & c )`,
 	},
-	Handler: func(_ context.Context, req core.OperatorReq) (core.OperatorRes, error) {
-		return core.OperatorRes{
-			Node: &core.ParallelExpr{Branches: []core.Expr{req.Left, req.Right}},
+	Handler: func(_ context.Context, req compiler.OperatorReq) (compiler.OperatorRes, error) {
+		return compiler.OperatorRes{
+			Node: &compiler.ParallelExpr{Branches: []compiler.Expr{req.Left, req.Right}},
 		}, nil
 	},
 }
 
-var fallback = core.Operator{
-	Meta: core.OperatorMeta{
+var fallback = compiler.Operator{
+	Meta: compiler.OperatorMeta{
 		Name:          "fallback",
-		Token:         core.TokOrOr,
+		Token:         compiler.TokOrOr,
 		Precedence:    3,
-		Associativity: core.Right,
+		Associativity: compiler.Right,
 		Description:   "Use right branch after left error",
 		Example:       `a || b`,
 	},
-	Handler: func(_ context.Context, req core.OperatorReq) (core.OperatorRes, error) {
-		return core.OperatorRes{
-			Node: &core.FallbackExpr{L: req.Left, R: req.Right},
+	Handler: func(_ context.Context, req compiler.OperatorReq) (compiler.OperatorRes, error) {
+		return compiler.OperatorRes{
+			Node: &compiler.FallbackExpr{L: req.Left, R: req.Right},
 		}, nil
 	},
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"gopkg.in/yaml.v3"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/config"
 )
 
@@ -22,12 +22,12 @@ const ID = "config_yaml"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 	config.RegisterYAMLLoader(unmarshal)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID}},
 		Fixtures:  fixturesFS,

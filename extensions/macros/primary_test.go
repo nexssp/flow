@@ -5,16 +5,16 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // newTestParser builds a parser with only the macroPrimary wired.
-func newTestParser(tb testing.TB, byName map[string]Declaration, source string) *core.Parser {
+func newTestParser(tb testing.TB, byName map[string]Declaration, source string) *compiler.Parser {
 	tb.Helper()
-	return core.NewParserWithFileOffset(
+	return compiler.NewParserWithFileOffset(
 		tb.Context(),
-		core.NewOperatorTable(),
-		core.NewPrimaryExtensionTable(&macroPrimary{byName: byName}),
+		compiler.NewOperatorTable(),
+		compiler.NewPrimaryExtensionTable(&macroPrimary{byName: byName}),
 		source,
 		"<test>",
 		0,
@@ -25,7 +25,7 @@ func TestPrimary_Identity(t *testing.T) {
 	t.Parallel()
 	m := &macroPrimary{}
 	ktest.RequireEqual(t, m.Name(), "macros.expand")
-	ktest.RequireEqual(t, m.TokenType(), core.TokAtPrompt)
+	ktest.RequireEqual(t, m.TokenType(), compiler.TokAtPrompt)
 }
 
 func TestPrimary_UnknownMacro(t *testing.T) {

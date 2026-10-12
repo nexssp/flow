@@ -15,7 +15,7 @@
 #   1. A third-party Go bundle registers a named hook in init():
 #
 #        func init() {
-#            core.Register("ai_assist", Bundle)
+#            compiler.Register("ai_assist", Bundle)
 #            action.MustRegisterHook("ai.error_analyzer", func() action.AnyHook {
 #                return action.AnyHook{
 #                    OnError: func(ctx context.Context, req any, err error, meta *action.Meta) {

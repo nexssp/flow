@@ -7,12 +7,12 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // materialize compiles every pipeline declared in meta and mounts it
 // on the resolver.
-func materialize(req core.MaterializeReq) error {
+func materialize(req compiler.MaterializeReq) error {
 	pipelines, _ := req.Meta["pipelines"].(map[string]string)
 	if len(pipelines) == 0 {
 		return nil

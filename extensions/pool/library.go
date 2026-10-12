@@ -13,7 +13,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "pool"
@@ -22,14 +22,14 @@ const ID = "pool"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:          ID,
 		Libraries:   []action.Library{{Name: ID}},
-		Directives:  []core.Directive{Directive},
+		Directives:  []compiler.Directive{Directive},
 		Materialize: materialize,
 		Fixtures:    fixturesFS,
 	}

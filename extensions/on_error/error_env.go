@@ -6,7 +6,7 @@ import (
 
 	"github.com/nexssp/kernel/xerr"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/match"
 )
 
@@ -21,7 +21,7 @@ func terminalRecoveryError(ctx context.Context, err error) error {
 }
 
 func recoveryEnvironment(ctx context.Context, input any, err error) map[string]any {
-	env := core.BuildEnv(input)
+	env := compiler.BuildEnv(input)
 	env["input"] = input
 	env["error"] = errorMetadata(err)
 	return match.WithSymbolEnvironment(ctx, env)

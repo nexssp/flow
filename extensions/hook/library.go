@@ -20,7 +20,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "hook"
@@ -29,7 +29,7 @@ const ID = "hook"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 
 	// hook.verify is a reserved name; a second registration is a
 	// programming error and MustRegisterHook panics on it.
@@ -42,11 +42,11 @@ func init() {
 	})
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:           ID,
 		Libraries:    []action.Library{{Name: ID, Actions: []action.AnyAction{ProbeAction()}}},
-		Directives:   []core.Directive{Directive},
+		Directives:   []compiler.Directive{Directive},
 		WrapPipeline: wrapFromMeta,
 		Fixtures:     fixturesFS,
 	}

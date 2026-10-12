@@ -6,21 +6,21 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // BuildConfig compiles bundles into execution configuration.
 // It has ZERO knowledge of @require, URLs or module paths.
-func BuildConfig(bundles []core.Bundle) (Config, error) {
-	unique := make([]core.Bundle, 0, len(bundles))
+func BuildConfig(bundles []compiler.Bundle) (Config, error) {
+	unique := make([]compiler.Bundle, 0, len(bundles))
 	seenBundles := make(map[string]struct{}, len(bundles))
 	seenLibraries := make(map[string]string)
 	seenAliases := make(map[string]string)
-	argSchemas := make(map[string][]core.ArgFieldSpec)
+	argSchemas := make(map[string][]compiler.ArgFieldSpec)
 
 	for i := range bundles {
 		b := bundles[i]
-		if err := core.ValidateBundle(b); err != nil {
+		if err := compiler.ValidateBundle(b); err != nil {
 			return Config{}, err
 		}
 		if _, ok := seenBundles[b.ID]; ok {
@@ -47,15 +47,15 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 	}
 
 	var (
-		extraDirectives []core.Directive
-		extraModifiers  []core.Modifier
-		extraOperators  []core.Operator
-		extraPrimaries  []core.PrimaryExtension
-		materializers   []core.Materializer
+		extraDirectives []compiler.Directive
+		extraModifiers  []compiler.Modifier
+		extraOperators  []compiler.Operator
+		extraPrimaries  []compiler.PrimaryExtension
+		materializers   []compiler.Materializer
 		bundleHooks     []action.AnyHook
 	)
 
-	resolver, err := core.NewDynamicResolver()
+	resolver, err := compiler.NewDynamicResolver()
 	if err != nil {
 		return Config{}, err
 	}
@@ -84,13 +84,13 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 
 	// Declaration materializers (schema, pool) must mount capabilities before
 	// pipeline materialization compiles sub-pipelines that invoke them.
-	var pipelineMaterializers []core.Materializer
+	var pipelineMaterializers []compiler.Materializer
 	for i := range unique {
 		u := &unique[i]
 		if u.Materialize != nil {
 			materializer := u.Materialize
 			alias := u.Alias
-			wrapped := func(req core.MaterializeReq) error {
+			wrapped := func(req compiler.MaterializeReq) error {
 				req.Alias = alias
 				return materializer(req)
 			}
@@ -103,7 +103,7 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 	}
 	materializers = append(materializers, pipelineMaterializers...)
 
-	for _, km := range core.KeywordMappings() {
+	for _, km := range compiler.KeywordMappings() {
 		if _, ok := resolver.Action(km.Target); !ok {
 			return Config{}, fmt.Errorf(
 				"core: native keyword %q targets missing action %q",
@@ -113,12 +113,12 @@ func BuildConfig(bundles []core.Bundle) (Config, error) {
 
 	return Config{
 		Resolver:      resolver,
-		Directives:    core.NewDirectiveTable(extraDirectives...),
-		Modifiers:     core.NewModifierTable(extraModifiers...),
-		Operators:     core.NewOperatorTable(extraOperators...),
-		Primaries:     core.NewPrimaryExtensionTable(extraPrimaries...),
+		Directives:    compiler.NewDirectiveTable(extraDirectives...),
+		Modifiers:     compiler.NewModifierTable(extraModifiers...),
+		Operators:     compiler.NewOperatorTable(extraOperators...),
+		Primaries:     compiler.NewPrimaryExtensionTable(extraPrimaries...),
 		Materializers: materializers,
-		CompileOpts:   core.BundleConfig(unique...),
+		CompileOpts:   compiler.BundleConfig(unique...),
 		ArgSchemas:    argSchemas,
 		Hooks:         bundleHooks,
 	}, nil

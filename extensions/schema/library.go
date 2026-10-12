@@ -19,7 +19,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xctx"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "schema"
@@ -28,7 +28,7 @@ const ID = "schema"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
 // rootInputKey carries the value the pipeline received at its outermost
@@ -37,12 +37,12 @@ func init() {
 // actually saw rather than against an empty map.
 var rootInputKey = xctx.NewKey[any]("flow.schema.root_input")
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:           ID,
 		Libraries:    []action.Library{Library()},
-		Directives:   []core.Directive{Directive},
-		Modifiers:    []core.Modifier{SchemaModifier},
+		Directives:   []compiler.Directive{Directive},
+		Modifiers:    []compiler.Modifier{SchemaModifier},
 		OnPreprocess: wireSchemaAdvisor,
 		Materialize:  materialize,
 		WrapPipeline: func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error) {
@@ -67,7 +67,7 @@ func Library() action.Library {
 }
 
 // SchemaModifier attaches a schema name to an atom as a tag.
-var SchemaModifier = core.String("schema",
+var SchemaModifier = compiler.String("schema",
 	func(b *action.Builder[any, any], name string) *action.Builder[any, any] {
 		return b.Tag("schema:" + name)
 	})

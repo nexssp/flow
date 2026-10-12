@@ -8,7 +8,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // TestModifiers_Translation verifies each modifier parses its DSL value
@@ -18,7 +18,7 @@ import (
 // rate_limit_test.go.
 func TestModifiers_Translation(t *testing.T) {
 	t.Parallel()
-	table := core.NewModifierTable(Modifiers()...)
+	table := compiler.NewModifierTable(Modifiers()...)
 
 	cases := []struct {
 		name     string
@@ -109,7 +109,7 @@ func TestModifiers_Translation(t *testing.T) {
 
 func TestModifiers_RejectInvalidValue(t *testing.T) {
 	t.Parallel()
-	table := core.NewModifierTable(Modifiers()...)
+	table := compiler.NewModifierTable(Modifiers()...)
 
 	cases := []struct {
 		name     string

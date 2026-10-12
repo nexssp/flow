@@ -4,32 +4,32 @@ import (
 	"context"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // Directive parses `@assert: EXPR` and appends EXPR to meta["asserts"].
 // The colon after "assert" is optional: `@assert: x == 1` and
 // `@assert x == 1` are equivalent.
-var Directive = core.Directive{
+var Directive = compiler.Directive{
 	Name:    "assert",
 	Example: `@assert: result != nil`,
 	Handler: handleDirective,
 }
 
-func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
+func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 	line := strings.TrimSpace(req.Lines[req.I])
 	expression := strings.TrimSpace(strings.TrimPrefix(line, "@assert"))
 	expression = strings.TrimPrefix(expression, ":")
-	expression = strings.TrimSpace(core.StripExprComments(expression))
+	expression = strings.TrimSpace(compiler.StripExprComments(expression))
 
 	if expression == "" {
-		return core.DirectiveRes{}, core.SourceError(
-			core.Position{File: req.File, Line: req.I + 1},
+		return compiler.DirectiveRes{}, compiler.SourceError(
+			compiler.Position{File: req.File, Line: req.I + 1},
 			"@assert: expression is required",
 		)
 	}
 
 	existing, _ := req.Out["asserts"].([]string)
 	req.Out["asserts"] = append(existing, expression)
-	return core.DirectiveRes{Next: req.I + 1}, nil
+	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }

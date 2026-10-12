@@ -8,7 +8,7 @@
 //
 //	@flow_version ">=0.7.0"
 //
-// A source build (core.Version == "dev") accepts every constraint —
+// A source build (compiler.Version == "dev") accepts every constraint —
 // there is no release identity to compare against, and failing the
 // build for a local `go run` would be counterproductive.
 package flow_version
@@ -23,7 +23,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "flow_version"
@@ -32,14 +32,14 @@ const ID = "flow_version"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:         ID,
 		Libraries:  []action.Library{{Name: ID}},
-		Directives: []core.Directive{Directive},
+		Directives: []compiler.Directive{Directive},
 		Fixtures:   fixturesFS,
 	}
 }
@@ -50,49 +50,49 @@ func Bundle(_ map[string]string) core.Bundle {
 // by a MAJOR.MINOR.PATCH version, optionally prefixed with `v` and
 // optionally carrying a pre-release or build-metadata suffix that is
 // ignored for comparison.
-var Directive = core.Directive{
+var Directive = compiler.Directive{
 	Name:    "flow_version",
 	Example: `@flow_version ">=0.7.0"`,
 	Handler: handleDirective,
 }
 
-func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
-	pos := core.Position{File: req.File, Line: req.I + 1}
+func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
+	pos := compiler.Position{File: req.File, Line: req.I + 1}
 
 	if _, exists := req.Out["flow_version"]; exists {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@flow_version: duplicate declaration")
 	}
 
 	raw := parseConstraintArg(req.Lines[req.I])
 	if raw == "" {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			`@flow_version requires a constraint, e.g. @flow_version ">=0.7.0"`)
 	}
 	req.Out["flow_version"] = raw
 
-	if core.Version == "" || core.Version == core.VersionUnknown {
-		return core.DirectiveRes{Next: req.I + 1}, nil
+	if compiler.Version == "" || compiler.Version == compiler.VersionUnknown {
+		return compiler.DirectiveRes{Next: req.I + 1}, nil
 	}
 
 	op, wantRaw := splitOperator(raw)
 	want, err := parseSemver(wantRaw)
 	if err != nil {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@flow_version: invalid constraint %q: %v", raw, err)
 	}
-	got, err := parseSemver(core.Version)
+	got, err := parseSemver(compiler.Version)
 	if err != nil {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@flow_version: running compiler version %q is not parseable: %v",
-			core.Version, err)
+			compiler.Version, err)
 	}
 	if !satisfies(op, got.compare(want)) {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@flow_version: constraint %q not satisfied by running compiler %q",
-			raw, core.Version)
+			raw, compiler.Version)
 	}
-	return core.DirectiveRes{Next: req.I + 1}, nil
+	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }
 
 // parseConstraintArg strips the directive name and any surrounding

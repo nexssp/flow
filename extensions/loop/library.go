@@ -7,7 +7,7 @@
 //	{ n: 0 } -> loop( { n: .n + 1 } ) until( .n >= 3 )
 //
 // DSL fixtures live under nflows/ and are discovered by
-// core.Bundle.AllSelfTests; there is no inline SelfTest.
+// compiler.Bundle.AllSelfTests; there is no inline SelfTest.
 package loop
 
 import (
@@ -15,7 +15,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "loop"
@@ -24,14 +24,14 @@ const ID = "loop"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID}},
-		Primaries: []core.PrimaryExtension{loopKeyword{}},
+		Primaries: []compiler.PrimaryExtension{loopKeyword{}},
 		Fixtures:  fixturesFS,
 	}
 }

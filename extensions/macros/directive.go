@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const (
@@ -24,14 +24,14 @@ const (
 // rejected before any invocation. Expansion depth is bounded at parse
 // time by macroPrimary, not here: it depends on invocation order, not
 // on the declaration order.
-var Directive = core.Directive{
+var Directive = compiler.Directive{
 	Name:    "macro",
 	Example: "@macro greet(name) {\n  runtime.const @{ value: $name }\n}",
 	Handler: handleDirective,
 }
 
-func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
-	pos := core.Position{File: req.File, Line: req.I + 1}
+func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
+	pos := compiler.Position{File: req.File, Line: req.I + 1}
 
 	// Header parsing uses the trimmed line; body reading uses the raw
 	// line so byte offsets into it stay valid.
@@ -40,7 +40,7 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 
 	openBrace := strings.IndexByte(raw, '{')
 	if openBrace < 0 {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@macro: expected `name(params) { body }`")
 	}
 
@@ -48,26 +48,26 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 	openParen := strings.IndexByte(rest, '(')
 	closeParen := strings.IndexByte(rest, ')')
 	if openParen < 0 || closeParen < 0 {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@macro: expected `name(params) { body }`")
 	}
 
 	name := strings.TrimSpace(rest[:openParen])
 	if name == "" {
-		return core.DirectiveRes{}, core.SourceError(pos, "@macro: name is required")
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@macro: name is required")
 	}
 
 	params := splitParams(rest[openParen+1 : closeParen])
 
 	body, bodyLine, next, err := readBody(req.Lines, req.I, openBrace)
 	if err != nil {
-		return core.DirectiveRes{}, core.SourceError(pos, "@macro %s: %v", name, err)
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@macro %s: %v", name, err)
 	}
 
 	existing, _ := req.Out[DeclarationKey].([]Declaration)
 	for _, prior := range existing {
 		if prior.Name == name {
-			return core.DirectiveRes{}, core.SourceError(pos,
+			return compiler.DirectiveRes{}, compiler.SourceError(pos,
 				"@macro %s: duplicate declaration", name)
 		}
 	}
@@ -80,11 +80,11 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 		BodyLine: bodyLine,
 	}
 	if err := validateMacroDeclaration(decl, existing, pos); err != nil {
-		return core.DirectiveRes{}, err
+		return compiler.DirectiveRes{}, err
 	}
 
 	req.Out[DeclarationKey] = append(existing, decl)
-	return core.DirectiveRes{Next: next}, nil
+	return compiler.DirectiveRes{Next: next}, nil
 }
 
 // validateMacroDeclaration rejects a new macro declaration that would
@@ -94,9 +94,9 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 //
 // Expansion depth is not checked here: it depends on invocation order,
 // not on declaration order. macroPrimary enforces it at parse time.
-func validateMacroDeclaration(decl Declaration, existing []Declaration, pos core.Position) error {
+func validateMacroDeclaration(decl Declaration, existing []Declaration, pos compiler.Position) error {
 	if len(decl.Body) > maxMacroBodyBytes {
-		return core.SourceError(pos,
+		return compiler.SourceError(pos,
 			"@macro %s: body is %d bytes (limit %d)",
 			decl.Name, len(decl.Body), maxMacroBodyBytes)
 	}
@@ -108,7 +108,7 @@ func validateMacroDeclaration(decl Declaration, existing []Declaration, pos core
 	graph[decl.Name] = extractMacroRefs(decl.Body)
 
 	if chain := detectCycle(graph, decl.Name); chain != nil {
-		return core.SourceError(pos,
+		return compiler.SourceError(pos,
 			"@macro %s: recursion cycle %s",
 			decl.Name, strings.Join(chain, " -> "))
 	}

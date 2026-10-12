@@ -4,12 +4,12 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // materialize mounts one `pool.<name>` action per declaration. The
 // action's shape depends on the declared strategy.
-func materialize(req core.MaterializeReq) error {
+func materialize(req compiler.MaterializeReq) error {
 	for _, declaration := range DeclarationsFromMeta(req.Meta) {
 		act, err := buildPoolAction(declaration, req.Resolver)
 		if err != nil {
@@ -28,7 +28,7 @@ func materialize(req core.MaterializeReq) error {
 	return nil
 }
 
-func poolComposition(declaration Declaration, resolver core.CapabilityResolver) action.IntrospectionComposition {
+func poolComposition(declaration Declaration, resolver compiler.CapabilityResolver) action.IntrospectionComposition {
 	kind, relation, role := "pool.round_robin", "route", "member"
 	notes := []string(nil)
 	switch declaration.Strategy {

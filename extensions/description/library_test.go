@@ -6,13 +6,13 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func TestDirective_StoresDescription(t *testing.T) {
 	t.Parallel()
 	out := map[string]any{}
-	_, err := handleDirective(context.Background(), core.DirectiveReq{
+	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: []string{`@description "coverage fixture"`},
 		I:     0,
 		Out:   out,
@@ -40,7 +40,7 @@ func TestDirective_QuoteStyles(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			out := map[string]any{}
-			_, err := handleDirective(context.Background(), core.DirectiveReq{
+			_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 				Lines: []string{c.input},
 				I:     0,
 				Out:   out,

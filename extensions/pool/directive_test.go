@@ -6,13 +6,13 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func runDirective(tb testing.TB, lines ...string) (map[string]any, error) {
 	tb.Helper()
 	out := map[string]any{}
-	_, err := handleDirective(context.Background(), core.DirectiveReq{
+	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: lines,
 		I:     0,
 		Out:   out,
@@ -24,7 +24,7 @@ func runDirective(tb testing.TB, lines ...string) (map[string]any, error) {
 // memberRaw extracts the source form of every capability reference so
 // tests can assert on what the directive parsed without depending on
 // keyword translation.
-func memberRaw(refs []core.CapabilityRef) []string {
+func memberRaw(refs []compiler.CapabilityRef) []string {
 	out := make([]string, len(refs))
 	for i, r := range refs {
 		out[i] = r.Raw
@@ -90,13 +90,13 @@ func TestDirective_EmptyMembers(t *testing.T) {
 func TestDirective_Duplicate(t *testing.T) {
 	t.Parallel()
 	out := map[string]any{}
-	first := core.DirectiveReq{
+	first := compiler.DirectiveReq{
 		Lines: []string{`@pool dup [a]`}, I: 0, Out: out, File: "<test>",
 	}
 	_, err := handleDirective(context.Background(), first)
 	ktest.RequireNoError(t, err)
 
-	second := core.DirectiveReq{
+	second := compiler.DirectiveReq{
 		Lines: []string{`@pool dup [b]`}, I: 0, Out: out, File: "<test>",
 	}
 	_, err = handleDirective(context.Background(), second)
@@ -107,11 +107,11 @@ func TestPoolsFromMeta(t *testing.T) {
 	t.Parallel()
 	meta := map[string]any{
 		"pools": []Declaration{
-			{Name: "a", Members: []core.CapabilityRef{
+			{Name: "a", Members: []compiler.CapabilityRef{
 				{Raw: "x", Canonical: "x"},
 				{Raw: "y", Canonical: "y"},
 			}},
-			{Name: "b", Members: []core.CapabilityRef{
+			{Name: "b", Members: []compiler.CapabilityRef{
 				{Raw: "z", Canonical: "z"},
 			}},
 		},

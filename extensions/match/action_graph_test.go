@@ -3,15 +3,15 @@ package match
 import (
 	"testing"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func TestActionGraph_DescribesMatchRoutes(t *testing.T) {
 	expr := &Expr{Cases: []Case{
-		{Condition: ".ok", Body: &core.Atom{Name: "accept"}},
-		{IsDefault: true, Body: &core.Atom{Name: "reject"}},
+		{Condition: ".ok", Body: &compiler.Atom{Name: "accept"}},
+		{IsDefault: true, Body: &compiler.Atom{Name: "reject"}},
 	}}
-	graph, err := core.BuildActionGraph(nil, expr)
+	graph, err := compiler.BuildActionGraph(nil, expr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +23,7 @@ func TestActionGraph_DescribesMatchRoutes(t *testing.T) {
 	}
 }
 
-func hasEdge(graph *core.ActionGraph, kind string) bool {
+func hasEdge(graph *compiler.ActionGraph, kind string) bool {
 	for _, edge := range graph.Edges {
 		if edge.Kind == kind {
 			return true

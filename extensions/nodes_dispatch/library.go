@@ -11,7 +11,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "nodes_dispatch"
@@ -20,16 +20,16 @@ const ID = "nodes_dispatch"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{Dispatch}}},
-		ArgSchemas: map[string][]core.ArgFieldSpec{
+		ArgSchemas: map[string][]compiler.ArgFieldSpec{
 			"dispatch.run": {
-				{Name: "members", Kind: core.ArgCapabilityRefList},
+				{Name: "members", Kind: compiler.ArgCapabilityRefList},
 			},
 		},
 		Fixtures: fixturesFS,

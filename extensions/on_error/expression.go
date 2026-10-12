@@ -8,25 +8,25 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/match"
 )
 
 type ErrorGuardCase struct {
 	Kind   xerr.Kind
 	IsElse bool
-	Body   core.Expr
+	Body   compiler.Expr
 }
 
 type ErrorGuardExpr struct {
-	Protected core.Expr
+	Protected compiler.Expr
 	Cases     []ErrorGuardCase
 }
 
 func (*ErrorGuardExpr) Node() {}
 
-func (g *ErrorGuardExpr) Children() []core.Expr {
-	children := make([]core.Expr, 0, len(g.Cases)+1)
+func (g *ErrorGuardExpr) Children() []compiler.Expr {
+	children := make([]compiler.Expr, 0, len(g.Cases)+1)
 	children = append(children, g.Protected)
 	for i := range g.Cases {
 		children = append(children, g.Cases[i].Body)
@@ -34,7 +34,7 @@ func (g *ErrorGuardExpr) Children() []core.Expr {
 	return children
 }
 
-func (g *ErrorGuardExpr) DescribeActionGraph() core.ActionGraphDescription {
+func (g *ErrorGuardExpr) DescribeActionGraph() compiler.ActionGraphDescription {
 	labels := make([]string, len(g.Cases)+1)
 	labels[0] = "protected"
 	for i, current := range g.Cases {
@@ -43,15 +43,15 @@ func (g *ErrorGuardExpr) DescribeActionGraph() core.ActionGraphDescription {
 			labels[i+1] = "else"
 		}
 	}
-	return core.ActionGraphDescription{
+	return compiler.ActionGraphDescription{
 		Kind:        "error.guard",
 		Name:        "on_error.guard",
-		Form:        core.ActionGraphCatch,
+		Form:        compiler.ActionGraphCatch,
 		ChildLabels: labels,
 	}
 }
 
-func (g *ErrorGuardExpr) Analyze(resolver core.CapabilityResolver) error {
+func (g *ErrorGuardExpr) Analyze(resolver compiler.CapabilityResolver) error {
 	if g.Protected == nil {
 		return xerr.Validation("on_error: missing protected expression")
 	}
@@ -69,7 +69,7 @@ func (g *ErrorGuardExpr) Analyze(resolver core.CapabilityResolver) error {
 	return nil
 }
 
-func (g *ErrorGuardExpr) Build(ctx context.Context, buildCtx *core.BuildContext) (action.AnyAction, error) {
+func (g *ErrorGuardExpr) Build(ctx context.Context, buildCtx *compiler.BuildContext) (action.AnyAction, error) {
 	if g.Protected == nil {
 		return nil, xerr.Validation("on_error: missing protected expression")
 	}
@@ -149,7 +149,7 @@ func (g *ErrorGuardExpr) Build(ctx context.Context, buildCtx *core.BuildContext)
 		composition.Opaque = true
 		composition.Notes = []string{"handler selection predicate is closure-captured and omitted"}
 	}
-	return core.TrackActionComposition(buildCtx, program, composition), nil
+	return compiler.TrackActionComposition(buildCtx, program, composition), nil
 }
 
 // primaryOnlyPrecedence is higher than every DSL binary operator
@@ -164,20 +164,20 @@ const primaryOnlyPrecedence = 100
 type errorGuardPrimary struct{}
 
 func (errorGuardPrimary) Name() string { return "on_error.guard" }
-func (errorGuardPrimary) Parse(p *core.Parser) (core.Expr, error) {
+func (errorGuardPrimary) Parse(p *compiler.Parser) (compiler.Expr, error) {
 	return nil, p.Fail(p.Current().Line, "on_error guard must follow an expression")
 }
-func (errorGuardPrimary) PostfixToken() core.TokenType { return core.TokQuestion }
+func (errorGuardPrimary) PostfixToken() compiler.TokenType { return compiler.TokQuestion }
 
 // CHANGED: previously required a `{` at Peek(2) so only the block
 // form matched. The short form `? on_error target` is now also
 // accepted; the short/long decision is made in ParsePostfix.
-func (errorGuardPrimary) MatchesPostfix(p *core.Parser) bool {
-	return p.Current().Type == core.TokQuestion &&
-		p.Peek(1).Type == core.TokIdent && p.Peek(1).Lit == "on_error"
+func (errorGuardPrimary) MatchesPostfix(p *compiler.Parser) bool {
+	return p.Current().Type == compiler.TokQuestion &&
+		p.Peek(1).Type == compiler.TokIdent && p.Peek(1).Lit == "on_error"
 }
 
-func (errorGuardPrimary) ParsePostfix(p *core.Parser, protected core.Expr) (core.Expr, error) {
+func (errorGuardPrimary) ParsePostfix(p *compiler.Parser, protected compiler.Expr) (compiler.Expr, error) {
 	p.Advance() // ?
 	p.Advance() // on_error
 
@@ -193,7 +193,7 @@ func (errorGuardPrimary) ParsePostfix(p *core.Parser, protected core.Expr) (core
 	// discrimination. The handler still receives the error environment,
 	// so `error.passthrough` is the recommended catch-all when the
 	// original input should be returned unchanged.
-	if p.Current().Type != core.TokLBrace {
+	if p.Current().Type != compiler.TokLBrace {
 		body, err := p.ParseExpr(primaryOnlyPrecedence)
 		if err != nil {
 			return nil, err
@@ -209,16 +209,16 @@ func (errorGuardPrimary) ParsePostfix(p *core.Parser, protected core.Expr) (core
 	var cases []ErrorGuardCase
 	seenKinds := make(map[xerr.Kind]bool)
 	seenElse := false
-	for p.Current().Type != core.TokRBrace && p.Current().Type != core.TokEOF {
+	for p.Current().Type != compiler.TokRBrace && p.Current().Type != compiler.TokEOF {
 		parsedCase, err := parseErrorGuardCase(p, seenKinds, &seenElse)
 		if err != nil {
 			return nil, err
 		}
 		cases = append(cases, parsedCase)
 
-		if p.Current().Type == core.TokComma {
+		if p.Current().Type == compiler.TokComma {
 			p.Advance()
-			if p.Current().Type == core.TokRBrace {
+			if p.Current().Type == compiler.TokRBrace {
 				break
 			}
 			if seenElse {
@@ -226,12 +226,12 @@ func (errorGuardPrimary) ParsePostfix(p *core.Parser, protected core.Expr) (core
 			}
 			continue
 		}
-		if p.Current().Type != core.TokRBrace {
+		if p.Current().Type != compiler.TokRBrace {
 			return nil, p.Fail(p.Current().Line, "expected ',' or '}' after on_error case")
 		}
 	}
 
-	if p.Current().Type != core.TokRBrace {
+	if p.Current().Type != compiler.TokRBrace {
 		return nil, p.Fail(p.Current().Line, "expected '}' closing on_error guard")
 	}
 	if len(cases) == 0 {
@@ -242,12 +242,12 @@ func (errorGuardPrimary) ParsePostfix(p *core.Parser, protected core.Expr) (core
 }
 
 func parseErrorGuardCase(
-	p *core.Parser,
+	p *compiler.Parser,
 	seenKinds map[xerr.Kind]bool,
 	seenElse *bool,
 ) (ErrorGuardCase, error) {
 	current := p.Current()
-	if current.Type != core.TokIdent {
+	if current.Type != compiler.TokIdent {
 		return ErrorGuardCase{}, p.Fail(current.Line, "expected xerr.Kind symbol or else in on_error case")
 	}
 
@@ -270,7 +270,7 @@ func parseErrorGuardCase(
 		parsedCase.Kind = kind
 	}
 	p.Advance()
-	if p.Current().Type != core.TokArrow {
+	if p.Current().Type != compiler.TokArrow {
 		return ErrorGuardCase{}, p.Fail(p.Current().Line, "expected '->' after on_error case")
 	}
 	p.Advance()

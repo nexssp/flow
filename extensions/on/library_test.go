@@ -6,13 +6,13 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func runDirective(tb testing.TB, line string) map[string]any {
 	tb.Helper()
 	out := map[string]any{}
-	_, err := handleDirective(context.Background(), core.DirectiveReq{
+	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: []string{line},
 		I:     0,
 		Out:   out,

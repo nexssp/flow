@@ -2,7 +2,7 @@
 
 Every extension is one self-contained Go package under
 `extensions/<name>/` that plugs into the compiler through the
-`core.Bundle` contract. Core knows only that contract; the feature
+`compiler.Bundle` contract. Core knows only that contract; the feature
 lives entirely in the extension.
 
 This document is the reference for building and shipping a bundle.
@@ -48,21 +48,21 @@ import (
 
     "github.com/nexssp/kernel/action"
 
-    core "github.com/nexssp/flow/compiler"
+    compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "hello"
 
 func init() {
-    core.Register(ID, Bundle)
+    compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
+func Bundle(_ map[string]string) compiler.Bundle {
     greeting := action.New("hello.greet", func(ctx context.Context, in any) (any, error) {
         return "hello", nil
     }).Description("Return a greeting").Build()
 
-    return core.Bundle{
+    return compiler.Bundle{
         ID:        ID,
         Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{greeting}}},
     }
@@ -79,19 +79,19 @@ type Bundle struct {
     ID           string
     Alias        string          // set by @require ... as NAME; do not set in code
     Libraries    []action.Library
-    Directives   []core.Directive
-    Modifiers    []core.Modifier
-    Operators    []core.Operator
-    Primaries    []core.PrimaryExtension
-    Materialize  core.Materializer
-    OnPreprocess func(meta map[string]any) core.PreprocessContributions
-    AtomAdvise   func(atom *core.Atom, builder *action.Builder[any, any]) error
+    Directives   []compiler.Directive
+    Modifiers    []compiler.Modifier
+    Operators    []compiler.Operator
+    Primaries    []compiler.PrimaryExtension
+    Materialize  compiler.Materializer
+    OnPreprocess func(meta map[string]any) compiler.PreprocessContributions
+    AtomAdvise   func(atom *compiler.Atom, builder *action.Builder[any, any]) error
     WrapPipeline func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error)
 
-    ArgSchemas      map[string][]core.ArgFieldSpec
+    ArgSchemas      map[string][]compiler.ArgFieldSpec
     AcceptedOptions []string
 
-    SelfTest func() []core.SelfTestSection
+    SelfTest func() []compiler.SelfTestSection
     Fixtures fs.FS
 }
 ```
@@ -233,14 +233,14 @@ A directive is a compile-time `@name` handler that runs during
 preprocessing.
 
 ```go
-var Directive = core.Directive{
+var Directive = compiler.Directive{
     Name:    "trace",
     Example: `@trace "starting fetch"`,
-    Handler: func(ctx context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
+    Handler: func(ctx context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
         line := strings.TrimSpace(req.Lines[req.I])
         msg := strings.Trim(strings.TrimPrefix(line, "@trace"), `"' `)
         req.Out["trace"] = append(req.Out["trace"].([]string), msg)
-        return core.DirectiveRes{Next: req.I + 1}, nil
+        return compiler.DirectiveRes{Next: req.I + 1}, nil
     },
 }
 ```
@@ -249,7 +249,7 @@ var Directive = core.Directive{
 `meta` map, the file path, and the base directory.
 
 `DirectiveRes.Next` is the line to continue from. For a multi-line block,
-read it with `core.ReadBlock`, which handles inline `{ ... }`, multi-line
+read it with `compiler.ReadBlock`, which handles inline `{ ... }`, multi-line
 `{ ... }`, and trailing-brace forms uniformly.
 
 A directive that owns a **block** (like `@scope`) also sets
@@ -263,9 +263,9 @@ even though the source line had content. See `extensions/scope/directive.go`.
 A modifier is a `:name` or `:name=value` annotation.
 
 ```go
-core.Modifier{
+compiler.Modifier{
     Name:    "budget_usd",
-    Owner:   core.OwnerBundle,   // default; required for bundle-owned names
+    Owner:   compiler.OwnerBundle,   // default; required for bundle-owned names
     Apply: func(b *action.Builder[any, any], raw string) error {
         limit, err := strconv.ParseFloat(raw, 64)
         if err != nil {
@@ -279,13 +279,13 @@ core.Modifier{
 ### 6.1 Use the typed constructors
 
 Every modifier should parse its payload through a constructor from
-`compiler/modifier.go`. `core.Duration`, `core.Int`, `core.Int32`,
-`core.Int64`, `core.Float64`, `core.String`, `core.StringList`,
-`core.Flag`. These set `ValueKind` automatically, so the linter can
+`compiler/modifier.go`. `compiler.Duration`, `compiler.Int`, `compiler.Int32`,
+`compiler.Int64`, `compiler.Float64`, `compiler.String`, `compiler.StringList`,
+`compiler.Flag`. These set `ValueKind` automatically, so the linter can
 catch `:budget=abc` statically.
 
 ```go
-core.Duration("budget", func(b *action.Builder[any, any], d time.Duration) *action.Builder[any, any] {
+compiler.Duration("budget", func(b *action.Builder[any, any], d time.Duration) *action.Builder[any, any] {
     return b.Timeout(d)
 })
 ```
@@ -296,7 +296,7 @@ A modifier that should propagate through `@scope` / `@profile` to nested
 atoms must be marked `WithInheritable`:
 
 ```go
-core.WithInheritable(core.Duration("timeout", (*action.Builder[any, any]).Timeout))
+compiler.WithInheritable(compiler.Duration("timeout", (*action.Builder[any, any]).Timeout))
 ```
 
 Metadata modifiers (`:tag`, `:status`, `:route`) are not inheritable.
@@ -308,7 +308,7 @@ A modifier that should appear at most once on an atom is marked
 `WithUnique`:
 
 ```go
-core.WithUnique(core.Duration("timeout", (*action.Builder[any, any]).Timeout))
+compiler.WithUnique(compiler.Duration("timeout", (*action.Builder[any, any]).Timeout))
 ```
 
 A second occurrence is a compile error:
@@ -329,13 +329,13 @@ the capability through runtime input instead. `Optional` does not change
 the behavior of `ArgAny`, `ArgString`, `ArgInt`, or `ArgBool`.
 
 ```go
-func Bundle(_ map[string]string) core.Bundle {
-    return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+    return compiler.Bundle{
         ID:        ID,
         Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{distribute}}},
-        ArgSchemas: map[string][]core.ArgFieldSpec{
+        ArgSchemas: map[string][]compiler.ArgFieldSpec{
             "distribute.map": {
-                {Name: "action", Kind: core.ArgCapabilityRef},
+                {Name: "action", Kind: compiler.ArgCapabilityRef},
             },
         },
     }
@@ -354,7 +354,7 @@ distribute.map @{ action: missing, items: [1] }      # compile error
 An `ArgCapabilityRefList` field accepts a list of bare identifiers:
 
 ```go
-{Name: "members", Kind: core.ArgCapabilityRefList},
+{Name: "members", Kind: compiler.ArgCapabilityRefList},
 ```
 
 ```nflow
@@ -386,8 +386,8 @@ If `AcceptedOptions` is `nil`, your bundle accepts any key. If it is a
 list, unknown keys are rejected:
 
 ```go
-func Bundle(opts map[string]string) core.Bundle {
-    return core.Bundle{
+func Bundle(opts map[string]string) compiler.Bundle {
+    return compiler.Bundle{
         ID:              ID,
         Libraries:       []action.Library{{Name: ID}},
         AcceptedOptions: []string{"endpoint", "retries"},
@@ -401,7 +401,7 @@ func Bundle(opts map[string]string) core.Bundle {
          (accepted: [endpoint, retries])
 ```
 
-For typed options, use `core.Decode[T]`:
+For typed options, use `compiler.Decode[T]`:
 
 ```go
 type Options struct {
@@ -410,8 +410,8 @@ type Options struct {
     Timeout  time.Duration `nflow:"timeout"`
 }
 
-func Bundle(raw map[string]string) core.Bundle {
-    opts, err := core.Decode[Options](raw)
+func Bundle(raw map[string]string) compiler.Bundle {
+    opts, err := compiler.Decode[Options](raw)
     if err != nil {
         panic(err)
     }
@@ -542,7 +542,7 @@ Three error classes, one rule each.
 
 | Class | Use |
 |---|---|
-| Compile-time with a source position | `core.SourceError(pos, ...)` |
+| Compile-time with a source position | `compiler.SourceError(pos, ...)` |
 | Runtime, reaches the user | `xerr.<Kind>(...)` |
 | Internal wiring bug | `xerr.Internal(...)` |
 
@@ -560,7 +560,7 @@ Every hit must be justified by the rule above.
 
 ### 11.1 Position formatting
 
-`core.Position{File: "flow.nflow", Line: 12}` renders as
+`compiler.Position{File: "flow.nflow", Line: 12}` renders as
 `flow.nflow:12`. The CLI, the linter, and modern terminals hyperlink
 the result. Always populate `File` and `Line` when you raise a
 compile-time error.
@@ -593,7 +593,7 @@ Any repository — any language — becomes a Flow extension by adding a
 my-repo/
 ├── go.mod                  # module github.com/example/my-repo
 └── nexssflow/
-    └── library.go            # exposes Bundle(opts) core.Bundle
+    └── library.go            # exposes Bundle(opts) compiler.Bundle
 ```
 
 Then `@require github.com/example/my-repo v1.2.3` selects the package
@@ -641,7 +641,7 @@ written to your workspace.
 
 ### 13.1 A directive that owns a block
 
-Read the block with `core.ReadBlock`, blank its delimiters, install a
+Read the block with `compiler.ReadBlock`, blank its delimiters, install a
 line-indexed lookup. See `extensions/scope/directive.go` for the
 canonical example.
 
@@ -667,7 +667,7 @@ func wrapFromMeta(meta map[string]any, inner action.AnyAction) (action.AnyAction
 ### 13.4 A materializer that mounts from meta
 
 ```go
-func materialize(req core.MaterializeReq) error {
+func materialize(req compiler.MaterializeReq) error {
     for _, d := range metaDeclarations(req.Meta) {
         act, err := buildAction(d, req.Resolver)
         if err != nil {

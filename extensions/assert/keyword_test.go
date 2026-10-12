@@ -5,15 +5,15 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
-func newTestParser(tb testing.TB, source string) *core.Parser {
+func newTestParser(tb testing.TB, source string) *compiler.Parser {
 	tb.Helper()
-	return core.NewParserWithFileOffset(
+	return compiler.NewParserWithFileOffset(
 		tb.Context(),
-		core.NewOperatorTable(),
-		core.NewPrimaryExtensionTable(assertKeyword{}),
+		compiler.NewOperatorTable(),
+		compiler.NewPrimaryExtensionTable(assertKeyword{}),
 		source,
 		"<test>",
 		0,
@@ -32,9 +32,9 @@ func TestParse_SingleArgument(t *testing.T) {
 	expr, err := newTestParser(t, `assert(.score >= 50)`).Parse()
 	ktest.RequireNoError(t, err)
 
-	a, ok := expr.(*core.AssertExpr)
+	a, ok := expr.(*compiler.AssertExpr)
 	if !ok {
-		t.Fatalf("got %T, want *core.AssertExpr", expr)
+		t.Fatalf("got %T, want *compiler.AssertExpr", expr)
 	}
 	ktest.RequireEqual(t, a.Condition, ".score >= 50")
 	ktest.RequireEqual(t, a.Message, "")
@@ -45,9 +45,9 @@ func TestParse_ConditionAndMessage(t *testing.T) {
 	expr, err := newTestParser(t, `assert(.score >= 50, "score too low")`).Parse()
 	ktest.RequireNoError(t, err)
 
-	a, ok := expr.(*core.AssertExpr)
+	a, ok := expr.(*compiler.AssertExpr)
 	if !ok {
-		t.Fatalf("got %T, want *core.AssertExpr", expr)
+		t.Fatalf("got %T, want *compiler.AssertExpr", expr)
 	}
 	ktest.RequireEqual(t, a.Condition, ".score >= 50")
 	ktest.RequireEqual(t, a.Message, "score too low")
@@ -58,9 +58,9 @@ func TestParse_CommaInsideFunctionCallPreserved(t *testing.T) {
 	expr, err := newTestParser(t, `assert(contains(["a","b"], .x), "missing")`).Parse()
 	ktest.RequireNoError(t, err)
 
-	a, ok := expr.(*core.AssertExpr)
+	a, ok := expr.(*compiler.AssertExpr)
 	if !ok {
-		t.Fatalf("got %T, want *core.AssertExpr", expr)
+		t.Fatalf("got %T, want *compiler.AssertExpr", expr)
 	}
 	ktest.RequireEqual(t, a.Condition, `contains(["a","b"], .x)`)
 	ktest.RequireEqual(t, a.Message, "missing")
@@ -82,9 +82,9 @@ func TestParse_MessageQuoteStyles(t *testing.T) {
 			t.Parallel()
 			expr, err := newTestParser(t, c.input).Parse()
 			ktest.RequireNoError(t, err)
-			a, ok := expr.(*core.AssertExpr)
+			a, ok := expr.(*compiler.AssertExpr)
 			if !ok {
-				t.Fatalf("got %T, want *core.AssertExpr", expr)
+				t.Fatalf("got %T, want *compiler.AssertExpr", expr)
 			}
 			ktest.RequireEqual(t, a.Message, c.want)
 		})

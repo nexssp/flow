@@ -15,7 +15,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "projection"
@@ -24,21 +24,21 @@ const ID = "projection"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{Library(NewExprEvaluator())},
-		Primaries: []core.PrimaryExtension{Primary()},
+		Primaries: []compiler.PrimaryExtension{Primary()},
 		Fixtures:  fixturesFS,
 	}
 }
 
 // Primary returns the parser extension. Exposed so tests can build a
 // parser without spinning up the whole bundle.
-func Primary() core.PrimaryExtension { return Extension{} }
+func Primary() compiler.PrimaryExtension { return Extension{} }
 
 // Library returns the runtime projection action bound to eval. A nil
 // eval falls back to DefaultEvaluator, which is a pass-through — used

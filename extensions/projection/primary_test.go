@@ -6,15 +6,15 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
-func newProjectionParser(tb testing.TB, source string) *core.Parser {
+func newProjectionParser(tb testing.TB, source string) *compiler.Parser {
 	tb.Helper()
-	return core.NewParserWithFileOffset(
+	return compiler.NewParserWithFileOffset(
 		tb.Context(),
-		core.NewOperatorTable(),
-		core.NewPrimaryExtensionTable(Extension{}),
+		compiler.NewOperatorTable(),
+		compiler.NewPrimaryExtensionTable(Extension{}),
 		source,
 		"<test>",
 		0,
@@ -24,15 +24,15 @@ func newProjectionParser(tb testing.TB, source string) *core.Parser {
 func TestPrimary_Identity(t *testing.T) {
 	p := Extension{}
 	ktest.RequireEqual(t, p.Name(), "projection")
-	ktest.RequireEqual(t, p.TokenType(), core.TokLBrace)
+	ktest.RequireEqual(t, p.TokenType(), compiler.TokLBrace)
 }
 
 func TestParse_SimpleProjection(t *testing.T) {
 	expr, err := newProjectionParser(t, `{ name: .name }`).Parse()
 	ktest.RequireNoError(t, err)
 
-	proj, ok := expr.(*core.ProjectionExpr)
-	ktest.RequireCondition(t, ok, "got %T, want *core.ProjectionExpr", expr)
+	proj, ok := expr.(*compiler.ProjectionExpr)
+	ktest.RequireCondition(t, ok, "got %T, want *compiler.ProjectionExpr", expr)
 	ktest.RequireEqual(t, strings.TrimSpace(proj.Raw), "name: .name")
 }
 
@@ -40,9 +40,9 @@ func TestParse_NestedBraces(t *testing.T) {
 	expr, err := newProjectionParser(t, `{ a: { b: 1 } }`).Parse()
 	ktest.RequireNoError(t, err)
 
-	proj, ok := expr.(*core.ProjectionExpr)
+	proj, ok := expr.(*compiler.ProjectionExpr)
 	if !ok {
-		t.Fatalf("expected *core.ProjectionExpr, got %T", expr)
+		t.Fatalf("expected *compiler.ProjectionExpr, got %T", expr)
 	}
 	ktest.RequireEqual(t, strings.TrimSpace(proj.Raw), "a: { b: 1 }")
 }
@@ -51,9 +51,9 @@ func TestParse_BracesInsideQuotes(t *testing.T) {
 	expr, err := newProjectionParser(t, `{ a: "}" }`).Parse()
 	ktest.RequireNoError(t, err)
 
-	proj, ok := expr.(*core.ProjectionExpr)
+	proj, ok := expr.(*compiler.ProjectionExpr)
 	if !ok {
-		t.Fatalf("expected *core.ProjectionExpr, got %T", expr)
+		t.Fatalf("expected *compiler.ProjectionExpr, got %T", expr)
 	}
 	ktest.RequireEqual(t, strings.TrimSpace(proj.Raw), `a: "}"`)
 }
@@ -72,8 +72,8 @@ func TestParse_StripsHashComments(t *testing.T) {
 	expr, err := newProjectionParser(t, src).Parse()
 	ktest.RequireNoError(t, err)
 
-	proj, ok := expr.(*core.ProjectionExpr)
-	ktest.RequireCondition(t, ok, "got %T, want *core.ProjectionExpr", expr)
+	proj, ok := expr.(*compiler.ProjectionExpr)
+	ktest.RequireCondition(t, ok, "got %T, want *compiler.ProjectionExpr", expr)
 
 	ktest.RequireStringNotContains(t, proj.Raw, "#")
 	ktest.RequireStringNotContains(t, proj.Raw, "comment")
@@ -86,7 +86,7 @@ func TestParse_HashInsideStringPreserved(t *testing.T) {
 	expr, err := newProjectionParser(t, src).Parse()
 	ktest.RequireNoError(t, err)
 
-	proj, ok := expr.(*core.ProjectionExpr)
+	proj, ok := expr.(*compiler.ProjectionExpr)
 	ktest.RequireCondition(t, ok, "got %T", expr)
 	ktest.RequireStringContains(t, proj.Raw, `"#not-a-comment"`)
 }
@@ -98,7 +98,7 @@ func TestParse_ClosingBraceInsideCommentIgnored(t *testing.T) {
 	expr, err := newProjectionParser(t, src).Parse()
 	ktest.RequireNoError(t, err)
 
-	proj, ok := expr.(*core.ProjectionExpr)
+	proj, ok := expr.(*compiler.ProjectionExpr)
 	ktest.RequireCondition(t, ok, "got %T", expr)
 	ktest.RequireStringContains(t, proj.Raw, "b: 2")
 }
@@ -108,8 +108,8 @@ func TestParse_HashIteratorInsideParensIsKept(t *testing.T) {
 	expr, err := newProjectionParser(t, src).Parse()
 	ktest.RequireNoError(t, err)
 
-	proj, ok := expr.(*core.ProjectionExpr)
-	ktest.RequireCondition(t, ok, "got %T, want *core.ProjectionExpr", expr)
+	proj, ok := expr.(*compiler.ProjectionExpr)
+	ktest.RequireCondition(t, ok, "got %T, want *compiler.ProjectionExpr", expr)
 	ktest.RequireStringContains(t, proj.Raw, `filter(#.severity == "high")`)
 	ktest.RequireStringContains(t, proj.Raw, `sortBy(#.line, "desc")`)
 	ktest.RequireStringContains(t, proj.Raw, `take(2)`)
@@ -127,7 +127,7 @@ func TestParse_HashIteratorAndCommentCoexist(t *testing.T) {
 	expr, err := newProjectionParser(t, src).Parse()
 	ktest.RequireNoError(t, err)
 
-	proj, ok := expr.(*core.ProjectionExpr)
+	proj, ok := expr.(*compiler.ProjectionExpr)
 	ktest.RequireCondition(t, ok, "got %T", expr)
 
 	ktest.RequireStringNotContains(t, proj.Raw, "comment on its own line")
@@ -140,7 +140,7 @@ func TestParse_CRLFLineEndingPreserved(t *testing.T) {
 	expr, err := newProjectionParser(t, src).Parse()
 	ktest.RequireNoError(t, err)
 
-	proj, ok := expr.(*core.ProjectionExpr)
+	proj, ok := expr.(*compiler.ProjectionExpr)
 	ktest.RequireCondition(t, ok, "got %T", expr)
 	ktest.RequireStringContains(t, proj.Raw, "\r\n")
 	ktest.RequireStringNotContains(t, proj.Raw, "# comment")
@@ -164,8 +164,8 @@ func TestParse_LineAlignmentPreserved(t *testing.T) {
 	expr, err := newProjectionParser(t, src).Parse()
 	ktest.RequireNoError(t, err)
 
-	proj, ok := expr.(*core.ProjectionExpr)
-	ktest.RequireCondition(t, ok, "got %T, want *core.ProjectionExpr", expr)
+	proj, ok := expr.(*compiler.ProjectionExpr)
+	ktest.RequireCondition(t, ok, "got %T, want *compiler.ProjectionExpr", expr)
 
 	// The raw must contain exactly the same number of newlines as the
 	// source it was cut from. Four newlines: after `{`, after each

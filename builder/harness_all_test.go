@@ -34,7 +34,7 @@ func TestHarness_LoosePackage_AutoBundling(t *testing.T) {
 
 import (
 	"context"
-compiler.
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 )
 

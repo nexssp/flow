@@ -18,7 +18,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "macros"
@@ -47,15 +47,15 @@ type Declaration struct {
 }
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:         ID,
 		Libraries:  []action.Library{{Name: ID}},
-		Directives: []core.Directive{Directive},
-		OnPreprocess: func(meta map[string]any) core.PreprocessContributions {
+		Directives: []compiler.Directive{Directive},
+		OnPreprocess: func(meta map[string]any) compiler.PreprocessContributions {
 			// Always install the macro primary, even when this source declares
 			// no macros. This is what makes `@unknown_name` produce
 			// "unknown macro @unknown_name" instead of the parser's generic
@@ -64,7 +64,7 @@ func Bundle(_ map[string]string) core.Bundle {
 			// Sub-pipelines inherit the parent's macro primary through
 			// CompileReq.InheritedPrimaries and also contribute their own here.
 			// NewPrimaryExtensionTable detects the duplicate TokAtPrompt handler
-			// and, because *macroPrimary implements core.MergeablePrimary,
+			// and, because *macroPrimary implements compiler.MergeablePrimary,
 			// calls MergeWith to fold the two declaration maps together. The
 			// parent's macros stay visible in the sub-source; the sub-source's
 			// own declarations shadow on name collision.
@@ -73,8 +73,8 @@ func Bundle(_ map[string]string) core.Bundle {
 			for _, declaration := range declarations {
 				byName[declaration.Name] = declaration
 			}
-			return core.PreprocessContributions{
-				Primaries: []core.PrimaryExtension{&macroPrimary{byName: byName}},
+			return compiler.PreprocessContributions{
+				Primaries: []compiler.PrimaryExtension{&macroPrimary{byName: byName}},
 			}
 		},
 		Fixtures: fixturesFS,

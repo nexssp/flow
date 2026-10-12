@@ -628,7 +628,7 @@ func (l *LoopExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAct
 		return nil, xerr.Validation("loop: invalid condition "+l.Until, err)
 	}
 	until := func(out any) bool {
-		val, runErr := expr.Run(prog, BuildEnv(out))
+		val, runErr := expr.Run(prog, MergeSymbolNamespaces(ctx, BuildEnv(out)))
 		if runErr != nil {
 			return false
 		}
@@ -650,14 +650,14 @@ func (l *LoopExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAct
 
 func (*AssertExpr) Analyze(CapabilityResolver) error { return nil }
 
-func (a *AssertExpr) Build(_ context.Context, bCtx *BuildContext) (action.AnyAction, error) {
+func (a *AssertExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction, error) {
 	cleanCondition := PreprocessDots(a.Condition)
 	prog, err := expr.Compile(cleanCondition, expr.AllowUndefinedVariables())
 	if err != nil {
 		return nil, xerr.Validation("assert: invalid expression "+a.Condition, err)
 	}
 	predicate := func(input any) bool {
-		val, runErr := expr.Run(prog, BuildEnv(input))
+		val, runErr := expr.Run(prog, MergeSymbolNamespaces(ctx, BuildEnv(input)))
 		if runErr != nil {
 			return false
 		}
@@ -940,9 +940,8 @@ func lookupSymbolValue(ctx context.Context, raw string) (any, bool) {
 	if ctx != nil {
 		if local := LocalSymbolsFrom(ctx); local != nil {
 			if localNS, exists := local[ns]; exists {
-				if val, found := localNS.Symbols[name]; found {
-					return val, true
-				}
+				val, found := localNS.Symbols[name]
+				return val, found
 			}
 		}
 	}

@@ -6,12 +6,12 @@ import (
 	"io"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // PrintInfo describes a .nflow file without executing it. It shows
 // directives from meta, the sequence of atoms from the AST, and expected input.
-func PrintInfo(w io.Writer, path, _ string, meta map[string]any, ast core.Expr) int {
+func PrintInfo(w io.Writer, path, _ string, meta map[string]any, ast compiler.Expr) int {
 	_, _ = fmt.Fprintf(w, "\n📋 FLOW INSPECTION: %s\n", path)
 	_, _ = fmt.Fprintln(w, strings.Repeat("═", 60))
 
@@ -29,7 +29,7 @@ func PrintInfo(w io.Writer, path, _ string, meta map[string]any, ast core.Expr) 
 	_, _ = fmt.Fprintln(w, "")
 	_, _ = fmt.Fprintln(w, "⚡ Pipeline:")
 
-	names := core.AtomNames(ast)
+	names := compiler.AtomNames(ast)
 	for i, n := range names {
 		_, _ = fmt.Fprintf(w, "  [%d] %s\n", i+1, n)
 	}
@@ -45,10 +45,10 @@ type InfoShape struct {
 	Atoms       []string `json:"atoms"`
 }
 
-func PrintInfoJSON(w io.Writer, path string, meta map[string]any, ast core.Expr) error {
+func PrintInfoJSON(w io.Writer, path string, meta map[string]any, ast compiler.Expr) error {
 	shape := InfoShape{
 		Path:  path,
-		Atoms: core.AtomNames(ast),
+		Atoms: compiler.AtomNames(ast),
 	}
 	if desc, ok := meta["description"].(string); ok {
 		shape.Description = desc

@@ -7,15 +7,15 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
-type resolverWithoutCatalog struct{ core.CapabilityResolver }
+type resolverWithoutCatalog struct{ compiler.CapabilityResolver }
 
 func TestExecutionResolver_MountRejectsCollisionsWithoutPartialCommit(t *testing.T) {
 	t.Parallel()
 	baseAction := action.New("base.shared", func(_ context.Context, in any) (any, error) { return in, nil }).Build()
-	base, err := core.NewDynamicResolver(action.Library{Name: "base", Actions: []action.AnyAction{baseAction}})
+	base, err := compiler.NewDynamicResolver(action.Library{Name: "base", Actions: []action.AnyAction{baseAction}})
 	if err != nil {
 		t.Fatal(err)
 	}

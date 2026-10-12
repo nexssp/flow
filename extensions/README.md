@@ -1,7 +1,7 @@
 # Flow extensions
 
 Every extension is one self-contained package under `extensions/<name>/`
-that plugs into the compiler through `core.Bundle`. Core knows only the
+that plugs into the compiler through `compiler.Bundle`. Core knows only the
 bundle contract; the feature lives entirely here.
 
 ## Anatomy
@@ -26,14 +26,14 @@ what they provide: `keyword.go`, `directive.go`, `modifiers.go`,
     const ID = "loop"
 
     func init() {
-        core.Register(ID, Bundle)
+        compiler.Register(ID, Bundle)
     }
 
-    func Bundle(_ map[string]string) core.Bundle {
-        return core.Bundle{
+    func Bundle(_ map[string]string) compiler.Bundle {
+        return compiler.Bundle{
             ID:        ID,
             Libraries: []action.Library{{Name: ID}},
-            Primaries: []core.PrimaryExtension{loopKeyword{}},
+            Primaries: []compiler.PrimaryExtension{loopKeyword{}},
             Fixtures:  fixturesFS,  // required for every extension
         }
     }
@@ -110,7 +110,7 @@ Three rules that prevent 90% of the flaky tests in this package:
 
 One rule, no exceptions:
 
-- **Compile-time with a position:** `core.SourceError(pos, ...)`.
+- **Compile-time with a position:** `compiler.SourceError(pos, ...)`.
 - **Runtime, reaches the user:** `xerr.<Kind>(...)`.
 - **Internal wiring (bug, not user input):** `xerr.Internal(...)`.
 - **`fmt.Errorf`** is allowed only inside helpers that are immediately
@@ -127,7 +127,7 @@ Any repo can become a Flow extension by adding a `nexssflow/` package:
     my-repo/
     ├── go.mod                  # module github.com/nexssp/my-repo
     └── nexssflow/
-        └── library.go      # exposes Bundle(opts) core.Bundle
+        └── library.go      # exposes Bundle(opts) compiler.Bundle
 
 Then `@require github.com/nexssp/my-repo v1.2.3` selects package
 `github.com/nexssp/my-repo/nexssflow`. Go determines whether the package

@@ -3,15 +3,15 @@ package syntax
 import (
 	"testing"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func TestActionGraph_DescribesNamedParallelBranches(t *testing.T) {
 	expr := &NamedParallelExpr{branches: []namedParallelBranch{
-		{label: "first", expr: &core.Atom{Name: "one"}},
-		{label: "second", expr: &core.Atom{Name: "two"}},
+		{label: "first", expr: &compiler.Atom{Name: "one"}},
+		{label: "second", expr: &compiler.Atom{Name: "two"}},
 	}}
-	graph, err := core.BuildActionGraph(nil, expr)
+	graph, err := compiler.BuildActionGraph(nil, expr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +23,7 @@ func TestActionGraph_DescribesNamedParallelBranches(t *testing.T) {
 	}
 }
 
-func hasEdge(graph *core.ActionGraph, kind string) bool {
+func hasEdge(graph *compiler.ActionGraph, kind string) bool {
 	for _, edge := range graph.Edges {
 		if edge.Kind == kind {
 			return true

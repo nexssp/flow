@@ -7,14 +7,14 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // advise scans the atom's modifiers for `:retry=N`, installs the retry
 // middleware, and returns the modifier list without the consumed
 // entries. Called by the AtomAdvise hook before the modifier table
 // runs, so consumed modifiers are never applied twice.
-func advise(cfg Config, atom *core.Atom, builder *action.Builder[any, any]) error {
+func advise(cfg Config, atom *compiler.Atom, builder *action.Builder[any, any]) error {
 	if atom == nil || builder == nil {
 		return nil
 	}

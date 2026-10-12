@@ -3,21 +3,21 @@ package assert
 import (
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // assertKeyword parses `assert(cond)` or `assert(cond, "msg")` and
-// returns a core.AssertExpr. The condition is preserved as raw text and
+// returns a compiler.AssertExpr. The condition is preserved as raw text and
 // compiled later by the runtime with expr-lang.
 type assertKeyword struct{}
 
 func (assertKeyword) Name() string    { return "assert" }
 func (assertKeyword) Keyword() string { return "assert" }
 
-func (assertKeyword) Parse(p *core.Parser) (core.Expr, error) {
+func (assertKeyword) Parse(p *compiler.Parser) (compiler.Expr, error) {
 	startPos := p.Position()
 	p.Advance() // consume 'assert'
-	if p.Current().Type != core.TokLParen {
+	if p.Current().Type != compiler.TokLParen {
 		return nil, p.Fail(p.Current().Line, "expected '(' after assert")
 	}
 	p.Advance()
@@ -28,25 +28,25 @@ func (assertKeyword) Parse(p *core.Parser) (core.Expr, error) {
 	depth := 1
 
 scan:
-	for p.Current().Type != core.TokEOF {
+	for p.Current().Type != compiler.TokEOF {
 		switch p.Current().Type {
-		case core.TokLParen:
+		case compiler.TokLParen:
 			depth++
-		case core.TokRParen:
+		case compiler.TokRParen:
 			depth--
 			if depth == 0 {
 				break scan
 			}
-		case core.TokEOF, core.TokIdent, core.TokString, core.TokNumber,
-			core.TokArrow, core.TokPipe, core.TokAmpersand, core.TokOrOr,
-			core.TokLBrace, core.TokRBrace, core.TokColon, core.TokEquals,
-			core.TokComma, core.TokQuestion, core.TokHash, core.TokTilde,
-			core.TokAtBrace, core.TokAtPrompt:
+		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
+			compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr,
+			compiler.TokLBrace, compiler.TokRBrace, compiler.TokColon, compiler.TokEquals,
+			compiler.TokComma, compiler.TokQuestion, compiler.TokHash, compiler.TokTilde,
+			compiler.TokAtBrace, compiler.TokAtPrompt:
 		}
 		p.Advance()
 	}
 
-	if p.Current().Type != core.TokRParen {
+	if p.Current().Type != compiler.TokRParen {
 		return nil, p.Fail(p.Current().Line, "unclosed 'assert(...)' condition")
 	}
 
@@ -54,7 +54,7 @@ scan:
 	p.Advance() // consume closing ')'
 
 	condition, message := splitConditionMessage(raw)
-	return &core.AssertExpr{
+	return &compiler.AssertExpr{
 		Condition: condition,
 		Message:   message,
 		Pos:       startPos,
@@ -67,7 +67,7 @@ scan:
 //	assert(contains([1,2], x), "msg")  →  "contains([1,2], x)", "msg"
 //	assert(.score >= 50)               →  ".score >= 50", ""
 func splitConditionMessage(raw string) (condition, message string) {
-	commaIndex := core.IndexTopLevel(raw, ',')
+	commaIndex := compiler.IndexTopLevel(raw, ',')
 	if commaIndex < 0 {
 		return strings.TrimSpace(raw), ""
 	}

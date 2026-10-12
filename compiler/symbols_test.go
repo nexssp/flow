@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"context"
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
@@ -59,6 +60,20 @@ func TestRegisterNamespace_ReplacesExisting(t *testing.T) {
 	ktest.RequireEqual(t, value, 2)
 }
 
+func TestLookupSymbolValue_LocalNamespaceFullyShadowsGlobal(t *testing.T) {
+	const namespace = "symtest_local_shadow"
+	RegisterNamespace(SymbolNamespace{Name: namespace, Symbols: map[string]any{"global": "global-value"}})
+	ctx := WithLocalSymbols(context.Background(), map[string]SymbolNamespace{
+		namespace: {Name: namespace, Symbols: map[string]any{"local": "local-value"}},
+	})
+
+	value, ok := lookupSymbolValue(ctx, namespace+".local")
+	ktest.RequireCondition(t, ok, "local symbol not found")
+	ktest.RequireEqual(t, value, "local-value")
+	_, ok = lookupSymbolValue(ctx, namespace+".global")
+	ktest.RequireCondition(t, !ok, "local namespace unexpectedly fell back to global symbol")
+}
+
 func TestWithSymbolNamespaces_BindsWithoutOverwriting(t *testing.T) {
 	t.Parallel()
 	RegisterNamespace(SymbolNamespace{
@@ -98,5 +113,5 @@ func TestNamespaces_ReturnsSortedSnapshot(t *testing.T) {
 		prev = ns.Name
 	}
 	ktest.RequireCondition(t, sawA && sawZ, "expected both symtest_aaa and symtest_zzz in %v", names)
-	ktest.RequireCondition(t, sorted, "namespaces not sorted: %v", names)
+	ktest.RequireCondition(t, sorted, "names not sorted: %v", names)
 }

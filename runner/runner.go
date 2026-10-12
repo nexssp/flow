@@ -10,20 +10,20 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/observe"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // Config bundles all compiler tables, capability resolvers, and
 // materializers for a run. It is passed explicitly to prevent mutable
 // package-level state.
 type Config struct {
-	Resolver      core.CapabilityResolver
-	Directives    *core.DirectiveTable
-	Modifiers     *core.ModifierTable
-	Operators     *core.OperatorTable
-	Primaries     *core.PrimaryExtensionTable
-	Materializers []core.Materializer
-	CompileOpts   []core.CompileOption
+	Resolver      compiler.CapabilityResolver
+	Directives    *compiler.DirectiveTable
+	Modifiers     *compiler.ModifierTable
+	Operators     *compiler.OperatorTable
+	Primaries     *compiler.PrimaryExtensionTable
+	Materializers []compiler.Materializer
+	CompileOpts   []compiler.CompileOption
 
 	// Hooks are applied to every resolver action and to the top-level
 	// program before execution. Callers that only want to see the
@@ -49,7 +49,7 @@ type Config struct {
 	// today) can validate @{...} capability references without building
 	// the action graph. Build-time advisors are the runtime counterpart;
 	// this field makes the same checks reachable from a pure parse.
-	ArgSchemas map[string][]core.ArgFieldSpec
+	ArgSchemas map[string][]compiler.ArgFieldSpec
 }
 
 // Opts controls execution options for a single runner invocation.
@@ -94,12 +94,12 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 	}
 
 	if opts.Info {
-		clean, meta, err := core.Preprocess(ctx, cfg.Directives, src, name)
+		clean, meta, err := compiler.Preprocess(ctx, cfg.Directives, src, name)
 		if err != nil {
 			fmt.Fprintf(stderr, "❌ preprocess: %v\n", err)
 			return 1
 		}
-		ast, parseErr := core.NewParserWithFileOffset(
+		ast, parseErr := compiler.NewParserWithFileOffset(
 			ctx, cfg.Operators, cfg.PrimariesFor(meta), clean, name, 0,
 		).Parse()
 		if parseErr != nil {
@@ -133,13 +133,15 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 	}
 
 	asserts := collectAsserts(ex.Meta, opts.Asserts)
-	return RunAssertions(
+	return RunAssertionsContext(
+		ctx,
 		stdout,
 		ex.Output,
 		total.Milliseconds(),
 		observer.ActionNames(),
 		asserts,
 		opts.Verbosity,
+		compiler.SymbolsFromMeta(ex.Meta),
 	)
 }
 

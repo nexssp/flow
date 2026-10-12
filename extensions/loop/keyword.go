@@ -3,20 +3,20 @@ package loop
 import (
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // loopKeyword is the compile-time parser extension. It has no runtime
-// state; every expansion produces a fresh core.LoopExpr.
+// state; every expansion produces a fresh compiler.LoopExpr.
 type loopKeyword struct{}
 
 func (loopKeyword) Name() string    { return "loop" }
 func (loopKeyword) Keyword() string { return "loop" }
 
-func (loopKeyword) Parse(p *core.Parser) (core.Expr, error) {
+func (loopKeyword) Parse(p *compiler.Parser) (compiler.Expr, error) {
 	startPos := p.Position()
 	p.Advance() // consume 'loop'
-	if p.Current().Type != core.TokLParen {
+	if p.Current().Type != compiler.TokLParen {
 		return nil, p.Fail(p.Current().Line, "expected '(' after loop")
 	}
 	p.Advance()
@@ -25,17 +25,17 @@ func (loopKeyword) Parse(p *core.Parser) (core.Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	if p.Current().Type != core.TokRParen {
+	if p.Current().Type != compiler.TokRParen {
 		return nil, p.Fail(p.Current().Line, "expected ')' after loop body")
 	}
 	p.Advance()
 
-	if p.Current().Type != core.TokIdent || p.Current().Lit != "until" {
+	if p.Current().Type != compiler.TokIdent || p.Current().Lit != "until" {
 		return nil, p.Fail(p.Current().Line, "expected 'until' after loop body")
 	}
 	p.Advance()
 
-	if p.Current().Type != core.TokLParen {
+	if p.Current().Type != compiler.TokLParen {
 		return nil, p.Fail(p.Current().Line, "expected '(' after until")
 	}
 	p.Advance()
@@ -47,30 +47,30 @@ func (loopKeyword) Parse(p *core.Parser) (core.Expr, error) {
 	untilDepth := 1
 
 scan:
-	for p.Current().Type != core.TokEOF {
+	for p.Current().Type != compiler.TokEOF {
 		switch p.Current().Type {
-		case core.TokLParen:
+		case compiler.TokLParen:
 			untilDepth++
-		case core.TokRParen:
+		case compiler.TokRParen:
 			untilDepth--
 			if untilDepth == 0 {
 				break scan
 			}
-		case core.TokEOF, core.TokIdent, core.TokString, core.TokNumber,
-			core.TokArrow, core.TokPipe, core.TokAmpersand, core.TokOrOr,
-			core.TokLBrace, core.TokRBrace, core.TokColon, core.TokEquals,
-			core.TokComma, core.TokQuestion, core.TokHash, core.TokTilde,
-			core.TokAtBrace, core.TokAtPrompt:
+		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
+			compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr,
+			compiler.TokLBrace, compiler.TokRBrace, compiler.TokColon, compiler.TokEquals,
+			compiler.TokComma, compiler.TokQuestion, compiler.TokHash, compiler.TokTilde,
+			compiler.TokAtBrace, compiler.TokAtPrompt:
 		}
 		p.Advance()
 	}
 
-	if p.Current().Type != core.TokRParen {
+	if p.Current().Type != compiler.TokRParen {
 		return nil, p.Fail(p.Current().Line, "unclosed 'until(...)' condition")
 	}
 
 	rawCondition := strings.TrimSpace(p.Src()[untilStart:p.Current().Offset])
 	p.Advance() // consume closing ')'
 
-	return &core.LoopExpr{Body: body, Until: rawCondition, Pos: startPos}, nil
+	return &compiler.LoopExpr{Body: body, Until: rawCondition, Pos: startPos}, nil
 }

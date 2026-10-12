@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // Extension is the compile-time parser extension. It
@@ -13,12 +13,12 @@ import (
 // ignored.
 type Extension struct{}
 
-func (Extension) Name() string              { return "projection" }
-func (Extension) TokenType() core.TokenType { return core.TokLBrace }
+func (Extension) Name() string                  { return "projection" }
+func (Extension) TokenType() compiler.TokenType { return compiler.TokLBrace }
 
-func (Extension) Parse(p *core.Parser) (core.Expr, error) {
+func (Extension) Parse(p *compiler.Parser) (compiler.Expr, error) {
 	open := p.Cur()
-	if open.Type != core.TokLBrace {
+	if open.Type != compiler.TokLBrace {
 		return nil, p.Fail(open.Line, "projection: expected '{'")
 	}
 	src := p.Src()
@@ -33,9 +33,9 @@ func (Extension) Parse(p *core.Parser) (core.Expr, error) {
 
 	raw := stripHashComments(src[open.Offset+1 : closeIndex])
 
-	for p.Cur().Type != core.TokEOF {
+	for p.Cur().Type != compiler.TokEOF {
 		if p.Cur().Offset >= closeIndex {
-			if p.Cur().Offset == closeIndex && p.Cur().Type == core.TokRBrace {
+			if p.Cur().Offset == closeIndex && p.Cur().Type == compiler.TokRBrace {
 				p.Next()
 			}
 			break
@@ -43,9 +43,9 @@ func (Extension) Parse(p *core.Parser) (core.Expr, error) {
 		p.Next()
 	}
 
-	return &core.ProjectionExpr{
+	return &compiler.ProjectionExpr{
 		Raw: raw,
-		Pos: core.Position{File: p.File(), Line: open.Line, Col: open.Offset - strings.LastIndexByte(p.Src()[:open.Offset], '\n')},
+		Pos: compiler.Position{File: p.File(), Line: open.Line, Col: open.Offset - strings.LastIndexByte(p.Src()[:open.Offset], '\n')},
 	}, nil
 }
 

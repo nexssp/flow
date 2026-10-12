@@ -14,7 +14,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "nodes_bench"
@@ -23,15 +23,15 @@ const ID = "nodes_bench"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{Library()},
-		ArgSchemas: map[string][]core.ArgFieldSpec{
-			"bench.run": {{Name: "action", Kind: core.ArgCapabilityRef}},
+		ArgSchemas: map[string][]compiler.ArgFieldSpec{
+			"bench.run": {{Name: "action", Kind: compiler.ArgCapabilityRef}},
 		},
 		Fixtures: fixturesFS,
 	}

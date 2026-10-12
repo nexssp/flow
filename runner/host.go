@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const defaultShutdownTimeout = 10 * time.Second
@@ -45,7 +45,7 @@ func WithShutdownTimeout(timeout time.Duration) HostOption {
 // can safely share a configuration and its resources.
 type Host struct {
 	mu              sync.Mutex
-	callbacks       []core.ShutdownFunc
+	callbacks       []compiler.ShutdownFunc
 	shuttingDown    bool
 	running         bool
 	shutdownTimeout time.Duration
@@ -70,14 +70,14 @@ func NewHost(opts ...HostOption) *Host {
 // Own transfers the bundle's cleanup callbacks to this host. Call it once for
 // each constructed bundle instance, immediately after construction; bundle IDs
 // are not identities and are deliberately not used for deduplication.
-func (h *Host) Own(bundle core.Bundle) error {
-	return h.OwnAll([]core.Bundle{bundle})
+func (h *Host) Own(bundle compiler.Bundle) error {
+	return h.OwnAll([]compiler.Bundle{bundle})
 }
 
 // OwnAll transfers every bundle's cleanup callbacks to this host in slice
 // order. Shutdown invokes all callbacks in reverse order, including callbacks
 // on bundles sharing the same ID.
-func (h *Host) OwnAll(bundles []core.Bundle) error {
+func (h *Host) OwnAll(bundles []compiler.Bundle) error {
 	if h == nil {
 		return errors.New("runner: cannot adopt bundles into a nil host")
 	}
@@ -170,7 +170,7 @@ func (h *Host) Shutdown(ctx context.Context) error {
 	h.mu.Unlock()
 	h.shutdownOnce.Do(func() {
 		h.mu.Lock()
-		callbacks := append([]core.ShutdownFunc(nil), h.callbacks...)
+		callbacks := append([]compiler.ShutdownFunc(nil), h.callbacks...)
 		timeout := h.shutdownTimeout
 		h.mu.Unlock()
 
@@ -189,7 +189,7 @@ func (h *Host) Shutdown(ctx context.Context) error {
 	return h.shutdownErr
 }
 
-func invokeShutdown(ctx context.Context, shutdown core.ShutdownFunc) (err error) {
+func invokeShutdown(ctx context.Context, shutdown compiler.ShutdownFunc) (err error) {
 	completed := false
 	defer func() {
 		if !completed {

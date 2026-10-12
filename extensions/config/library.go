@@ -18,7 +18,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "config"
@@ -27,14 +27,14 @@ const ID = "config"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:           ID,
 		Libraries:    []action.Library{{Name: ID}},
-		Directives:   []core.Directive{ConfigDirective, ConfigLoadDirective},
+		Directives:   []compiler.Directive{ConfigDirective, ConfigLoadDirective},
 		OnPreprocess: forwardConfigToCompiler,
 		Fixtures:     fixturesFS,
 	}
@@ -54,13 +54,13 @@ func RegisterYAMLLoader(fn func([]byte) (map[string]any, error)) {
 // forwardConfigToCompiler hands the accumulated meta["config"] to the
 // compile pipeline via WithConfigMap. The compiler resolves @config.x
 // references through it.
-func forwardConfigToCompiler(meta map[string]any) core.PreprocessContributions {
+func forwardConfigToCompiler(meta map[string]any) compiler.PreprocessContributions {
 	cfg, _ := meta["config"].(map[string]string)
 	if len(cfg) == 0 {
-		return core.PreprocessContributions{}
+		return compiler.PreprocessContributions{}
 	}
-	return core.PreprocessContributions{
-		CompileOpts: []core.CompileOption{core.WithConfigMap(cfg)},
+	return compiler.PreprocessContributions{
+		CompileOpts: []compiler.CompileOption{compiler.WithConfigMap(cfg)},
 	}
 }
 

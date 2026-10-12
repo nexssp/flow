@@ -16,7 +16,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "description"
@@ -24,28 +24,28 @@ const ID = "description"
 //go:embed nflows
 var fixturesFS embed.FS
 
-var directive = core.Directive{
+var directive = compiler.Directive{
 	Name:    "description",
 	Example: `@description "hello"`,
 	Handler: handleDirective,
 }
 
-func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
+func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 	line := strings.TrimSpace(req.Lines[req.I])
 	text := strings.TrimSpace(strings.TrimPrefix(line, "@description"))
 	req.Out["description"] = strings.Trim(text, `"'`)
-	return core.DirectiveRes{Next: req.I + 1}, nil
+	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:         ID,
 		Libraries:  []action.Library{{Name: ID}},
-		Directives: []core.Directive{directive},
+		Directives: []compiler.Directive{directive},
 		Fixtures:   fixturesFS,
 	}
 }

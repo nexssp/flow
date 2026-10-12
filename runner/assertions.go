@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +11,7 @@ import (
 
 	"github.com/expr-lang/expr"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const (
@@ -48,23 +49,19 @@ func paintAssert(s, color string, enabled bool) string {
 // the process exit code the CLI is about to return, so a caller
 // scanning the tail of the output sees the outcome without inferring
 // it from the individual ✗ marks.
-func RunAssertions(w io.Writer, result any, durationMS int64, actions, asserts []string, verbosity int) int {
+func RunAssertions(w io.Writer, result any, durationMS int64, actions, asserts []string, verbosity int, localSymbols ...map[string]compiler.SymbolNamespace) int {
+	return RunAssertionsContext(context.Background(), w, result, durationMS, actions, asserts, verbosity, localSymbols...)
+}
+
+// RunAssertionsContext evaluates every @assert expression using the caller's execution context.
+func RunAssertionsContext(ctx context.Context, w io.Writer, result any, durationMS int64, actions, asserts []string, verbosity int, localSymbols ...map[string]compiler.SymbolNamespace) int {
 	if len(asserts) == 0 {
 		return 0
 	}
 
 	color := assertColorEnabled(w)
 
-	normalized := JSONMapView(result)
-	env := map[string]any{
-		"result":      normalized,
-		"__root__":    normalized,
-		"duration_ms": durationMS,
-		"actions":     actions,
-	}
-	if normalizedMap, ok := normalized.(map[string]any); ok {
-		maps.Copy(env, normalizedMap)
-	}
+	env := assertionEnvironment(ctx, result, durationMS, actions, firstSymbolNamespace(localSymbols))
 
 	if verbosity >= 1 {
 		_, _ = fmt.Fprintf(w, "\n🧪 ASSERTIONS (%d)\n", len(asserts))
@@ -72,23 +69,15 @@ func RunAssertions(w io.Writer, result any, durationMS int64, actions, asserts [
 
 	failed := 0
 	for _, src := range asserts {
-		trimmed := strings.TrimSpace(core.StripExprComments(src))
-		cleanExpr := trimmed
-		if strings.HasPrefix(trimmed, ".") {
-			cleanExpr = core.PreprocessDots(trimmed)
-		}
-
-		prog, cerr := expr.Compile(cleanExpr, expr.Env(env))
-		if cerr != nil {
-			fmt.Fprintf(w, "  %s %s  (syntax: %v)\n",
-				paintAssert("✗", assertRed, color), src, cerr)
-			failed++
-			continue
-		}
-		out, rerr := expr.Run(prog, env)
-		if rerr != nil {
-			_, _ = fmt.Fprintf(w, "  %s %s  (runtime: %v)\n",
-				paintAssert("✗", assertRed, color), src, rerr)
+		out, phase, err := evaluateAssertion(src, env)
+		if err != nil {
+			if phase == "runtime" {
+				_, _ = fmt.Fprintf(w, "  %s %s  (runtime: %v)\n",
+					paintAssert("✗", assertRed, color), src, err)
+			} else {
+				_, _ = fmt.Fprintf(w, "  %s %s  (syntax: %v)\n",
+					paintAssert("✗", assertRed, color), src, err)
+			}
 			failed++
 			continue
 		}
@@ -115,6 +104,71 @@ func RunAssertions(w io.Writer, result any, durationMS int64, actions, asserts [
 			paintAssert("✓ all assertions passed", assertGreen, color))
 	}
 	return 0
+}
+
+// EvaluateAssertions evaluates assertions without rendering CLI output. It is
+// shared with self-test so both paths use the same expression and symbol rules.
+func EvaluateAssertions(result any, asserts []string, localSymbols ...map[string]compiler.SymbolNamespace) []error {
+	return EvaluateAssertionsContext(context.Background(), result, asserts, localSymbols...)
+}
+
+// EvaluateAssertionsContext evaluates assertions without rendering output and preserves the caller's context.
+func EvaluateAssertionsContext(ctx context.Context, result any, asserts []string, localSymbols ...map[string]compiler.SymbolNamespace) []error {
+	if len(asserts) == 0 {
+		return nil
+	}
+	env := assertionEnvironment(ctx, result, 0, nil, firstSymbolNamespace(localSymbols))
+	var failures []error
+	for _, src := range asserts {
+		out, phase, err := evaluateAssertion(src, env)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("assert %q %s: %w", src, phase, err))
+			continue
+		}
+		passed, ok := out.(bool)
+		if !ok || !passed {
+			failures = append(failures, fmt.Errorf("assert %q failed (got %v)", src, out))
+		}
+	}
+	return failures
+}
+
+func assertionEnvironment(ctx context.Context, result any, durationMS int64, actions []string, localSymbols map[string]compiler.SymbolNamespace) map[string]any {
+	normalized := JSONMapView(result)
+	env := map[string]any{
+		"result":      normalized,
+		"__root__":    normalized,
+		"duration_ms": durationMS,
+		"actions":     actions,
+	}
+	if normalizedMap, ok := normalized.(map[string]any); ok {
+		maps.Copy(env, normalizedMap)
+	}
+	return compiler.MergeSymbolNamespaces(compiler.WithLocalSymbols(ctx, localSymbols), env)
+}
+
+func firstSymbolNamespace(namespaces []map[string]compiler.SymbolNamespace) map[string]compiler.SymbolNamespace {
+	if len(namespaces) == 0 {
+		return nil
+	}
+	return namespaces[0]
+}
+
+func evaluateAssertion(src string, env map[string]any) (value any, phase string, err error) {
+	trimmed := strings.TrimSpace(compiler.StripExprComments(src))
+	cleanExpr := trimmed
+	if strings.HasPrefix(trimmed, ".") {
+		cleanExpr = compiler.PreprocessDots(trimmed)
+	}
+	program, err := expr.Compile(cleanExpr, expr.Env(env))
+	if err != nil {
+		return nil, "syntax", err
+	}
+	output, err := expr.Run(program, env)
+	if err != nil {
+		return nil, "runtime", err
+	}
+	return output, "", nil
 }
 
 // JSONMapView applies JSON tags to struct outputs before expr evaluation.

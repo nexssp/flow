@@ -108,7 +108,7 @@ func ExecutePrepared(
 		return result, fmt.Errorf("runner: entrypoint %q is not registered in the compiled source", entry.Name)
 	}
 
-	if syms, ok := compiled.Meta["symbols"].(map[string]compiler.SymbolNamespace); ok && len(syms) > 0 {
+	if syms := compiler.SymbolsFromMeta(compiled.Meta); len(syms) > 0 {
 		ctx = compiler.WithLocalSymbols(ctx, syms)
 	}
 
@@ -143,7 +143,7 @@ func compilePrepared(ctx context.Context, cfg Config, prepared *compiler.Prepare
 	}
 
 	meta := prepared.Metadata()
-	if syms, ok := meta["symbols"].(map[string]compiler.SymbolNamespace); ok && len(syms) > 0 {
+	if syms := compiler.SymbolsFromMeta(meta); len(syms) > 0 {
 		ctx = compiler.WithLocalSymbols(ctx, syms)
 	}
 	topContribs := prepared.Contributions()
@@ -258,7 +258,7 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 		return result, errors.New("compile: source is empty")
 	}
 
-	if syms, ok := compiled.Meta["symbols"].(map[string]compiler.SymbolNamespace); ok && len(syms) > 0 {
+	if syms := compiler.SymbolsFromMeta(compiled.Meta); len(syms) > 0 {
 		ctx = compiler.WithLocalSymbols(ctx, syms)
 	}
 

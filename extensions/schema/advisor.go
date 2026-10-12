@@ -6,7 +6,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // schemaRefAdvisor rejects atoms whose :schema= modifier names a schema
@@ -19,23 +19,23 @@ import (
 // all — the advisor no-ops so that a @pipeline body inheriting its
 // parent's advisor (see runner.compileSub) does not reject references
 // against its own empty local set.
-func schemaRefAdvisor(declared map[string]Schema) core.AtomAdviseFunc {
+func schemaRefAdvisor(declared map[string]Schema) compiler.AtomAdviseFunc {
 	if len(declared) == 0 {
 		return nil
 	}
 	known := declaredNames(declared)
-	return func(atom *core.Atom, _ *action.Builder[any, any]) error {
+	return func(atom *compiler.Atom, _ *action.Builder[any, any]) error {
 		for _, raw := range atom.Modifiers {
-			if core.ModifierName(raw) != "schema" {
+			if compiler.ModifierName(raw) != "schema" {
 				continue
 			}
 			_, name, _ := strings.Cut(raw, "=")
 			if name == "" {
-				return core.SourceError(atom.Pos,
+				return compiler.SourceError(atom.Pos,
 					":schema requires a name (use :schema=Name)")
 			}
 			if _, exists := declared[name]; !exists {
-				return core.SourceError(atom.Pos,
+				return compiler.SourceError(atom.Pos,
 					":schema=%s: unknown schema (declared: %s)", name, known)
 			}
 		}
@@ -56,10 +56,10 @@ func declaredNames(declared map[string]Schema) string {
 // current source declared and installs an advisor that validates every
 // :schema= reference in that source (and, via inherited compile options,
 // in every nested pipeline body).
-func wireSchemaAdvisor(meta map[string]any) core.PreprocessContributions {
+func wireSchemaAdvisor(meta map[string]any) compiler.PreprocessContributions {
 	schemas := SchemasFromMap(meta)
 	if len(schemas) == 0 {
-		return core.PreprocessContributions{}
+		return compiler.PreprocessContributions{}
 	}
 	declared := make(map[string]Schema, len(schemas))
 	for _, s := range schemas {
@@ -67,9 +67,9 @@ func wireSchemaAdvisor(meta map[string]any) core.PreprocessContributions {
 	}
 	advisor := schemaRefAdvisor(declared)
 	if advisor == nil {
-		return core.PreprocessContributions{}
+		return compiler.PreprocessContributions{}
 	}
-	return core.PreprocessContributions{
-		CompileOpts: []core.CompileOption{core.WithAtomAdvisors(advisor)},
+	return compiler.PreprocessContributions{
+		CompileOpts: []compiler.CompileOption{compiler.WithAtomAdvisors(advisor)},
 	}
 }

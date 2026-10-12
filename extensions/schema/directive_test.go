@@ -7,13 +7,13 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func runDirective(tb testing.TB, lines ...string) (map[string]any, error) {
 	tb.Helper()
 	out := map[string]any{}
-	_, err := handleDirective(context.Background(), core.DirectiveReq{
+	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: lines,
 		I:     0,
 		Out:   out,
@@ -110,13 +110,13 @@ func TestDirective_Errors(t *testing.T) {
 func TestDirective_DuplicateSchema(t *testing.T) {
 	t.Parallel()
 	out := map[string]any{}
-	_, err := handleDirective(context.Background(), core.DirectiveReq{
+	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: []string{`@schema X {`, `  A string`, `}`},
 		I:     0, Out: out, File: "<test>",
 	})
 	ktest.RequireNoError(t, err)
 
-	_, err = handleDirective(context.Background(), core.DirectiveReq{
+	_, err = handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: []string{`@schema X {`, `  B string`, `}`},
 		I:     0, Out: out, File: "<test>",
 	})
@@ -145,7 +145,7 @@ func runSchemaSequence(tb testing.TB, lines ...string) ([]Schema, error) {
 			i++
 			continue
 		}
-		res, err := handleDirective(context.Background(), core.DirectiveReq{
+		res, err := handleDirective(context.Background(), compiler.DirectiveReq{
 			Lines: lines,
 			I:     i,
 			Out:   out,

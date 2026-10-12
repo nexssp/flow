@@ -11,16 +11,16 @@
 //	}
 //
 // The directive stores its line spans under the private meta key
-// "scope.spans". core.Parser never sees these records; it consults a
+// "scope.spans". compiler.Parser never sees these records; it consults a
 // generic line-indexed modifier lookup that Bundle.OnPreprocess
-// installs via core.WithLineModifiers.
+// installs via compiler.WithLineModifiers.
 package scope
 
 import (
 	"context"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // metaKey is the private slot where this extension keeps its parsed
@@ -46,23 +46,23 @@ func spansFromMeta(meta map[string]any) []span {
 }
 
 // Directive parses `@scope :mods { ... }`.
-var Directive = core.Directive{
+var Directive = compiler.Directive{
 	Name:    "scope",
 	Example: "@scope :timeout=5s :retry=3 {\n  http.request\n}",
 	Handler: handleDirective,
 }
 
-func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
-	pos := core.Position{File: req.File, Line: req.I + 1}
+func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
+	pos := compiler.Position{File: req.File, Line: req.I + 1}
 	line := strings.TrimSpace(req.Lines[req.I])
 
 	header, after, ok := strings.Cut(line, "{")
 	if !ok {
-		return core.DirectiveRes{}, core.SourceError(pos, "@scope requires an opening '{'")
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@scope requires an opening '{'")
 	}
 
 	if strings.TrimSpace(after) != "" {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@scope: body must start on the line after the opening '{'")
 	}
 
@@ -78,7 +78,7 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 		}
 	}
 	if endLine < 0 {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@scope: unclosed block, expected '}'")
 	}
 
@@ -88,7 +88,7 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 		modifiers: mods,
 	})
 
-	return core.DirectiveRes{
+	return compiler.DirectiveRes{
 		Next:       req.I + 1,
 		BlankLines: []int{req.I, endLine},
 	}, nil

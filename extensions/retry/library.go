@@ -17,7 +17,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "retry"
@@ -26,27 +26,27 @@ const ID = "retry"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
 // Bundle satisfies the standard BundleFactory signature, so
 // native.Bundles() can mount it the same way as every other bundle.
 // Options come from the @require block, or from BundleWithConfig when
 // the caller wants to pin the policy in code.
-func Bundle(opts map[string]string) core.Bundle {
+func Bundle(opts map[string]string) compiler.Bundle {
 	cfg := BundleWithConfig(ConfigFromOptions(opts))
 	cfg.AcceptedOptions = []string{"default_max"}
 	return cfg
 }
 
 // BundleWithConfig returns the retry extension with an explicit policy.
-func BundleWithConfig(cfg Config) core.Bundle {
+func BundleWithConfig(cfg Config) compiler.Bundle {
 	cfg = cfg.normalized()
-	return core.Bundle{
+	return compiler.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID}},
 		Fixtures:  fixturesFS,
-		AtomAdvise: func(atom *core.Atom, builder *action.Builder[any, any]) error {
+		AtomAdvise: func(atom *compiler.Atom, builder *action.Builder[any, any]) error {
 			return advise(cfg, atom, builder)
 		},
 	}

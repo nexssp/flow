@@ -8,7 +8,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func newBuilder() *action.Builder[any, any] {
@@ -20,7 +20,7 @@ func newBuilder() *action.Builder[any, any] {
 func TestAdvise_ConsumesRetryModifier(t *testing.T) {
 	t.Parallel()
 	cfg := Config{DefaultMax: 5, MinBackoff: 5 * time.Millisecond, MaxBackoff: 50 * time.Millisecond}
-	atom := &core.Atom{Name: "probe", Modifiers: []string{"timeout=1s", "retry=3", "cache=1m"}}
+	atom := &compiler.Atom{Name: "probe", Modifiers: []string{"timeout=1s", "retry=3", "cache=1m"}}
 	builder := newBuilder()
 
 	ktest.RequireNoError(t, advise(cfg, atom, builder))
@@ -32,7 +32,7 @@ func TestAdvise_ConsumesRetryModifier(t *testing.T) {
 func TestAdvise_DefaultMaxWhenNoValue(t *testing.T) {
 	t.Parallel()
 	cfg := Config{DefaultMax: 7, MinBackoff: 5 * time.Millisecond, MaxBackoff: 50 * time.Millisecond}
-	atom := &core.Atom{Name: "probe", Modifiers: []string{"retry"}}
+	atom := &compiler.Atom{Name: "probe", Modifiers: []string{"retry"}}
 	builder := newBuilder()
 
 	ktest.RequireNoError(t, advise(cfg, atom, builder))
@@ -47,7 +47,7 @@ func TestAdvise_RejectsBadValue(t *testing.T) {
 	for _, raw := range cases {
 		t.Run(raw, func(t *testing.T) {
 			t.Parallel()
-			atom := &core.Atom{Name: "probe", Modifiers: []string{raw}}
+			atom := &compiler.Atom{Name: "probe", Modifiers: []string{raw}}
 			err := advise(cfg, atom, newBuilder())
 			ktest.RequireCondition(t, err != nil, "expected error for %q", raw)
 		})
@@ -57,7 +57,7 @@ func TestAdvise_RejectsBadValue(t *testing.T) {
 func TestAdvise_NoRetryModifier(t *testing.T) {
 	t.Parallel()
 	cfg := Config{DefaultMax: 3, MinBackoff: time.Millisecond, MaxBackoff: time.Second}
-	atom := &core.Atom{Name: "probe", Modifiers: []string{"timeout=1s"}}
+	atom := &compiler.Atom{Name: "probe", Modifiers: []string{"timeout=1s"}}
 	builder := newBuilder()
 
 	ktest.RequireNoError(t, advise(cfg, atom, builder))

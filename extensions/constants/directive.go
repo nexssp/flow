@@ -11,63 +11,63 @@ import (
 
 	"github.com/nexssp/kernel/xerr"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/schema"
 )
 
-var ConstDirective = core.Directive{
+var ConstDirective = compiler.Directive{
 	Name:    "const",
 	Example: `@const DLQ_SUBJECT = "orders.dlq"`,
 	Handler: handleConst,
 }
 
-var ConstLoadDirective = core.Directive{
+var ConstLoadDirective = compiler.Directive{
 	Name:    "const.load",
 	Example: `@const.load "./config.json" as env :schema=ConfigType`,
 	Handler: handleConstLoad,
 }
 
-func handleConst(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
+func handleConst(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 	line := strings.TrimSpace(strings.TrimPrefix(req.Lines[req.I], "@const"))
 	key, val, ok := strings.Cut(line, "=")
 	if !ok {
-		return core.DirectiveRes{}, core.SourceError(
-			core.Position{File: req.File, Line: req.I + 1},
+		return compiler.DirectiveRes{}, compiler.SourceError(
+			compiler.Position{File: req.File, Line: req.I + 1},
 			"@const requires KEY = VALUE format",
 		)
 	}
 
 	cleanKey := strings.TrimSpace(key)
-	cleanVal := core.TrimQuotes(strings.TrimSpace(val))
+	cleanVal := compiler.TrimQuotes(strings.TrimSpace(val))
 
 	storeAndApply(req, map[string]string{cleanKey: cleanVal})
-	return core.DirectiveRes{Next: req.I + 1}, nil
+	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }
 
-func handleConstLoad(ctx context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
-	pos := core.Position{File: req.File, Line: req.I + 1}
+func handleConstLoad(ctx context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
+	pos := compiler.Position{File: req.File, Line: req.I + 1}
 	line := strings.TrimSpace(strings.TrimPrefix(req.Lines[req.I], "@const.load"))
 
 	path, namespace, schemaName, err := parseConstLoadLine(line, req.BaseDir)
 	if err != nil {
-		return core.DirectiveRes{}, core.SourceError(pos, "@const.load: %v", err)
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@const.load: %v", err)
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@const.load read error: %v", err)
 	}
 
 	var parsed any
 	if err := json.Unmarshal(data, &parsed); err != nil {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@const.load json decode error: %v", err)
 	}
 
 	if schemaName != "" {
 		if err := validateConstLoadSchema(ctx, req.Out, schemaName, parsed, pos); err != nil {
-			return core.DirectiveRes{}, err
+			return compiler.DirectiveRes{}, err
 		}
 	}
 
@@ -75,7 +75,7 @@ func handleConstLoad(ctx context.Context, req core.DirectiveReq) (core.Directive
 	flattenJSON(namespace, parsed, flat)
 
 	storeAndApply(req, flat)
-	return core.DirectiveRes{Next: req.I + 1}, nil
+	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }
 
 func parseConstLoadLine(line, baseDir string) (path, namespace, schemaName string, err error) {
@@ -84,7 +84,7 @@ func parseConstLoadLine(line, baseDir string) (path, namespace, schemaName strin
 		return "", "", "", errors.New(`requires "path/to/file.json" as namespace [:schema=Name] format`)
 	}
 
-	path = core.TrimQuotes(fields[0])
+	path = compiler.TrimQuotes(fields[0])
 	namespace = fields[2]
 
 	if !filepath.IsAbs(path) {
@@ -103,20 +103,20 @@ func parseConstLoadLine(line, baseDir string) (path, namespace, schemaName strin
 	return path, namespace, schemaName, nil
 }
 
-func validateConstLoadSchema(ctx context.Context, out map[string]any, name string, parsed any, pos core.Position) error {
+func validateConstLoadSchema(ctx context.Context, out map[string]any, name string, parsed any, pos compiler.Position) error {
 	declared := schema.SchemasFromMap(out)
 	if len(declared) == 0 {
-		return core.SourceError(pos,
+		return compiler.SourceError(pos,
 			"@const.load :schema=%s: no @schema declared in this source", name)
 	}
 	decl, ok := schema.ByName(out, name)
 	if !ok {
-		return core.SourceError(pos,
+		return compiler.SourceError(pos,
 			"@const.load :schema=%s: unknown schema (declared: %s)",
 			name, declaredSchemaNames(declared))
 	}
 	if err := schema.Validate(ctx, decl, parsed); err != nil {
-		return core.SourceError(pos, "@const.load :schema=%s: %s",
+		return compiler.SourceError(pos, "@const.load :schema=%s: %s",
 			name, describeValidationError(err))
 	}
 	return nil
@@ -146,7 +146,7 @@ func declaredSchemaNames(declared []schema.Schema) string {
 	return strings.Join(names, ", ")
 }
 
-func storeAndApply(req core.DirectiveReq, newConsts map[string]string) {
+func storeAndApply(req compiler.DirectiveReq, newConsts map[string]string) {
 	existing, _ := req.Out["constants"].(map[string]string)
 	if existing == nil {
 		existing = make(map[string]string, len(newConsts))
@@ -158,5 +158,5 @@ func storeAndApply(req core.DirectiveReq, newConsts map[string]string) {
 }
 
 func Apply(lines []string, start int, constants map[string]string) {
-	core.ApplyConstants(lines, start, constants)
+	compiler.ApplyConstants(lines, start, constants)
 }

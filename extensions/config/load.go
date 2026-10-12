@@ -12,13 +12,13 @@ import (
 	"strconv"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // ConfigLoadDirective parses `@config.load:path="file.yml" [prefix="x"]`
 // and flattens the loaded document into meta["config"], joining nested
 // keys with dots.
-var ConfigLoadDirective = core.Directive{
+var ConfigLoadDirective = compiler.Directive{
 	Name:    "config.load",
 	Example: `@config.load:path="nexss.yml"`,
 	Handler: handleConfigLoad,
@@ -30,18 +30,18 @@ type configLoadSpec struct {
 	Required bool
 }
 
-func handleConfigLoad(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
-	pos := core.Position{File: req.File, Line: req.I + 1}
+func handleConfigLoad(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
+	pos := compiler.Position{File: req.File, Line: req.I + 1}
 	line := strings.TrimSpace(req.Lines[req.I])
 
 	rest, ok := stripDirectivePrefix(line, "@config.load")
 	if !ok {
-		return core.DirectiveRes{}, core.SourceError(pos, "@config.load: malformed directive")
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@config.load: malformed directive")
 	}
 
 	spec := parseConfigLoadSpec(rest)
 	if spec.Path == "" {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			`@config.load: path is required (use: @config.load:path="file.yml")`)
 	}
 
@@ -53,18 +53,18 @@ func handleConfigLoad(_ context.Context, req core.DirectiveReq) (core.DirectiveR
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) && !spec.Required {
-			return core.DirectiveRes{Next: req.I + 1}, nil
+			return compiler.DirectiveRes{Next: req.I + 1}, nil
 		}
-		return core.DirectiveRes{}, core.SourceError(pos, "@config.load: read %q: %v", spec.Path, err)
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@config.load: read %q: %v", spec.Path, err)
 	}
 
 	raw, err := decodeConfigFile(data, strings.ToLower(filepath.Ext(path)))
 	if err != nil {
-		return core.DirectiveRes{}, core.SourceError(pos, "@config.load: parse %q: %v", spec.Path, err)
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@config.load: parse %q: %v", spec.Path, err)
 	}
 
 	flattenConfig(spec.Prefix, raw, metaConfig(req.Out))
-	return core.DirectiveRes{Next: req.I + 1}, nil
+	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }
 
 // stripDirectivePrefix returns the text after `@name`, tolerating an
@@ -102,7 +102,7 @@ func parseConfigLoadSpec(spec string) configLoadSpec {
 			continue
 		}
 		key := strings.ToLower(strings.TrimSpace(before))
-		value := core.TrimQuotes(strings.TrimSpace(after))
+		value := compiler.TrimQuotes(strings.TrimSpace(after))
 		switch key {
 		case "path":
 			parsed.Path = value
@@ -196,7 +196,7 @@ func parseSimpleTOML(data []byte) (map[string]any, error) {
 			continue
 		}
 		key := strings.TrimSpace(line[:eq])
-		value := core.TrimQuotes(strings.TrimSpace(line[eq+1:]))
+		value := compiler.TrimQuotes(strings.TrimSpace(line[eq+1:]))
 		current[key] = value
 	}
 	return result, scanner.Err()

@@ -7,11 +7,11 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // buildPoolAction produces the runtime action for one declaration.
-func buildPoolAction(declaration Declaration, resolver core.CapabilityResolver) (action.AnyAction, error) {
+func buildPoolAction(declaration Declaration, resolver compiler.CapabilityResolver) (action.AnyAction, error) {
 	members := make([]action.AnyAction, 0, len(declaration.Members))
 	for _, ref := range declaration.Members {
 		member, ok := resolver.Action(ref.Canonical)

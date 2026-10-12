@@ -8,12 +8,12 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func runDirective(t *testing.T, line string) error {
 	t.Helper()
-	_, err := handleDirective(context.Background(), core.DirectiveReq{
+	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: []string{line},
 		I:     0,
 		Out:   map[string]any{},
@@ -24,9 +24,9 @@ func runDirective(t *testing.T, line string) error {
 
 func withCompilerVersion(t *testing.T, version string) {
 	t.Helper()
-	original := core.Version
-	core.Version = version
-	t.Cleanup(func() { core.Version = original })
+	original := compiler.Version
+	compiler.Version = version
+	t.Cleanup(func() { compiler.Version = original })
 }
 
 func TestFlowVersion_Satisfied(t *testing.T) {
@@ -68,7 +68,7 @@ func TestFlowVersion_Unsatisfied(t *testing.T) {
 }
 
 func TestFlowVersion_DevCompilerSkipsCheck(t *testing.T) {
-	withCompilerVersion(t, core.VersionUnknown)
+	withCompilerVersion(t, compiler.VersionUnknown)
 
 	ktest.RequireNoError(t, runDirective(t, `@flow_version ">=99.0.0"`))
 }
@@ -90,7 +90,7 @@ func TestFlowVersion_MalformedConstraintRejected(t *testing.T) {
 func TestFlowVersion_DuplicateRejected(t *testing.T) {
 	withCompilerVersion(t, "v0.7.0")
 
-	req := core.DirectiveReq{
+	req := compiler.DirectiveReq{
 		Lines: []string{`@flow_version ">=0.5.0"`},
 		I:     0,
 		Out:   map[string]any{},

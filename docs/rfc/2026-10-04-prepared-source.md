@@ -2,11 +2,11 @@
 
 ## Missing contract
 
-`runner.Compile` must expose root-source metadata to materializers before it compiles the top-level program. Today it calls `core.Preprocess`, then passes raw source to `core.CompileAction`, which preprocesses the same source again. Passing cleaned text instead would discard metadata and could change directive-derived strictness, config, macros, schemas, and extension contributions.
+`runner.Compile` must expose root-source metadata to materializers before it compiles the top-level program. Today it calls `compiler.Preprocess`, then passes raw source to `compiler.CompileAction`, which preprocesses the same source again. Passing cleaned text instead would discard metadata and could change directive-derived strictness, config, macros, schemas, and extension contributions.
 
 ## Proposed change
 
-Add an opaque `core.PreparedSource` produced by a small core preparation function that applies compile-option config and preprocesses once. Extend `CompileReq` to optionally carry that prepared value. `CompileAction` will route both raw requests and prepared requests through its existing shared parse/analyze/build implementation; raw requests prepare internally. The runner will prepare once, expose the prepared metadata to materializers, and pass that exact source result to `CompileAction`. Pipeline bodies remain independent raw sources and are compiled separately.
+Add an opaque `compiler.PreparedSource` produced by a small core preparation function that applies compile-option config and preprocesses once. Extend `CompileReq` to optionally carry that prepared value. `CompileAction` will route both raw requests and prepared requests through its existing shared parse/analyze/build implementation; raw requests prepare internally. The runner will prepare once, expose the prepared metadata to materializers, and pass that exact source result to `CompileAction`. Pipeline bodies remain independent raw sources and are compiled separately.
 
 ## Alternatives
 

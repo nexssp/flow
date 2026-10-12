@@ -3,7 +3,7 @@ package projection
 import (
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // buildProgramSource produces the expr-lang source string from the raw
@@ -15,12 +15,12 @@ import (
 func buildProgramSource(raw string) string {
 	state, rest, hasSpread := splitSpread(raw)
 	if !hasSpread {
-		return "{ " + core.PreprocessDots(raw) + " }"
+		return "{ " + compiler.PreprocessDots(raw) + " }"
 	}
 	if strings.TrimSpace(rest) == "" {
 		return state
 	}
-	return "__spread__(" + state + ", { " + core.PreprocessDots(rest) + " })"
+	return "__spread__(" + state + ", { " + compiler.PreprocessDots(rest) + " })"
 }
 
 // splitSpread splits `..., body` into a state reference and the rest.

@@ -24,7 +24,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xctx"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "progress"
@@ -39,15 +39,15 @@ var fixturesFS embed.FS
 var installedKey = xctx.NewKey[bool]("flow.progress.installed")
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{Library()},
-		ArgSchemas: map[string][]core.ArgFieldSpec{
-			"progress.wrap": {{Name: "action", Kind: core.ArgCapabilityRef}},
+		ArgSchemas: map[string][]compiler.ArgFieldSpec{
+			"progress.wrap": {{Name: "action", Kind: compiler.ArgCapabilityRef}},
 		},
 		WrapPipeline: wrapPipelineWithReporter,
 		Fixtures:     fixturesFS,

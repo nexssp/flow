@@ -5,17 +5,17 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // newTestParser wires a parser with only this extension's primary table,
 // so anything the keyword produces is attributable to this package.
-func newTestParser(tb testing.TB, source string) *core.Parser {
+func newTestParser(tb testing.TB, source string) *compiler.Parser {
 	tb.Helper()
-	return core.NewParserWithFileOffset(
+	return compiler.NewParserWithFileOffset(
 		tb.Context(),
-		core.NewOperatorTable(),
-		core.NewPrimaryExtensionTable(loopKeyword{}),
+		compiler.NewOperatorTable(),
+		compiler.NewPrimaryExtensionTable(loopKeyword{}),
 		source,
 		"<test>",
 		0,
@@ -34,9 +34,9 @@ func TestParse_ProducesLoopExpr(t *testing.T) {
 	expr, err := newTestParser(t, `loop(noop) until(.n >= 3)`).Parse()
 	ktest.RequireNoError(t, err)
 
-	loop, ok := expr.(*core.LoopExpr)
+	loop, ok := expr.(*compiler.LoopExpr)
 	if !ok {
-		t.Fatalf("got %T, want *core.LoopExpr", expr)
+		t.Fatalf("got %T, want *compiler.LoopExpr", expr)
 	}
 	ktest.RequireEqual(t, loop.Until, ".n >= 3")
 	ktest.RequireCondition(t, loop.Body != nil, "Body is nil")
@@ -51,9 +51,9 @@ func TestParse_UntilConditionPreserved(t *testing.T) {
 	expr, err := newTestParser(t, `loop(noop) until(`+cond+`)`).Parse()
 	ktest.RequireNoError(t, err)
 
-	loop, ok := expr.(*core.LoopExpr)
+	loop, ok := expr.(*compiler.LoopExpr)
 	if !ok {
-		t.Fatalf("got %T, want *core.LoopExpr", expr)
+		t.Fatalf("got %T, want *compiler.LoopExpr", expr)
 	}
 	ktest.RequireEqual(t, loop.Until, cond)
 }

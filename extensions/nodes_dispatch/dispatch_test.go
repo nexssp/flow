@@ -5,7 +5,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func TestBundle_DeclaresCapabilityReferenceListForMembers(t *testing.T) {
@@ -13,7 +13,7 @@ func TestBundle_DeclaresCapabilityReferenceListForMembers(t *testing.T) {
 	schema := Bundle(nil).ArgSchemas["dispatch.run"]
 	for _, field := range schema {
 		if field.Name == "members" {
-			ktest.RequireEqual(t, field.Kind, core.ArgCapabilityRefList)
+			ktest.RequireEqual(t, field.Kind, compiler.ArgCapabilityRefList)
 			ktest.RequireCondition(t, !field.Optional, "dispatch.run.members must be required")
 			return
 		}

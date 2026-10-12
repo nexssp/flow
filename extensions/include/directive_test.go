@@ -7,7 +7,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/macros"
 )
 
@@ -18,7 +18,7 @@ func runInclude(tb testing.TB, line, baseDir string, recurse func(string) (strin
 	tb.Helper()
 	out := map[string]any{}
 	body := []string{line}
-	_, err := handleDirective(context.Background(), core.DirectiveReq{
+	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines:   body,
 		Body:    body,
 		I:       0,
@@ -58,7 +58,7 @@ func TestDirective_ParentValueWins(t *testing.T) {
 	t.Parallel()
 	out := map[string]any{"description": "parent"}
 	body := []string{`@include "child.nflow"`}
-	_, err := handleDirective(context.Background(), core.DirectiveReq{
+	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: body, Body: body, I: 0, Out: out, File: "<test>",
 		Recurse: func(_ string) (string, map[string]any, error) {
 			return "", map[string]any{"description": "child"}, nil
@@ -113,7 +113,7 @@ func TestMergeIncludedMeta_ConcatenatesMacros(t *testing.T) {
 		"macros": []macros.Declaration{{Name: "included_macro"}},
 	}
 
-	mergeIncludedMeta(parent, included)
+	ktest.RequireNoError(t, mergeIncludedMeta(parent, included))
 
 	got, ok := parent["macros"].([]macros.Declaration)
 	ktest.RequireTrue(t, ok)
@@ -130,10 +130,43 @@ func TestMergeIncludedMeta_MacrosFromSecondIncludeSurvive(t *testing.T) {
 		"macros": []macros.Declaration{{Name: "second"}},
 	}
 
-	mergeIncludedMeta(parent, second)
+	ktest.RequireNoError(t, mergeIncludedMeta(parent, second))
 
 	got, ok := parent["macros"].([]macros.Declaration)
 	ktest.RequireTrue(t, ok)
 	ktest.RequireLen(t, got, 2)
 	ktest.RequireEqual(t, got[1].Name, "second")
+}
+
+func TestMergeIncludedMeta_MergesDistinctSymbolNamespaces(t *testing.T) {
+	parent := map[string]any{
+		"symbols": map[string]compiler.SymbolNamespace{
+			"first": {Name: "first", Symbols: map[string]any{"value": "one"}},
+		},
+	}
+	included := map[string]any{
+		"symbols": map[string]compiler.SymbolNamespace{
+			"second": {Name: "second", Symbols: map[string]any{"value": "two"}},
+		},
+	}
+	ktest.RequireNoError(t, mergeIncludedMeta(parent, included))
+	got, _ := parent["symbols"].(map[string]compiler.SymbolNamespace)
+	ktest.RequireEqual(t, got["first"].Symbols["value"], "one")
+	ktest.RequireEqual(t, got["second"].Symbols["value"], "two")
+}
+
+func TestMergeIncludedMeta_RejectsDuplicateSymbolNamespace(t *testing.T) {
+	parent := map[string]any{
+		"symbols": map[string]compiler.SymbolNamespace{
+			"route": {Name: "route", Symbols: map[string]any{"status": "parent"}},
+		},
+	}
+	included := map[string]any{
+		"symbols": map[string]compiler.SymbolNamespace{
+			"route": {Name: "route", Symbols: map[string]any{"status": "included"}},
+		},
+	}
+	ktest.RequireErrorContains(t, mergeIncludedMeta(parent, included), "duplicate @symbols namespace \"route\"")
+	got, _ := parent["symbols"].(map[string]compiler.SymbolNamespace)
+	ktest.RequireEqual(t, got["route"].Symbols["status"], "parent")
 }

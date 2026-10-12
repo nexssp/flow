@@ -767,7 +767,7 @@ func writeHarness(
 	mainBuilder.WriteString("import (\n")
 	mainBuilder.WriteString("\t\"os\"\n\n")
 	mainBuilder.WriteString("\t\"github.com/nexssp/flow/cli\"\n")
-	mainBuilder.WriteString("\tcore \"github.com/nexssp/flow/compiler\"\n")
+	mainBuilder.WriteString("\tcompiler \"github.com/nexssp/flow/compiler\"\n")
 
 	for i := range usedNative {
 		fmt.Fprintf(&mainBuilder, "\tnative%d %q\n", i, usedNative[i].pkg)
@@ -937,7 +937,7 @@ func explainBuildError(err error, requirements []require.Requirement) error {
 					"Every extension must provide its Bundle function:\n"+
 					"    package nexssflow\n\n"+
 					"    import (\n"+
-					"        core \"github.com/nexssp/flow/compiler\"\n"+
+					"        compiler \"github.com/nexssp/flow/compiler\"\n"+
 					"        \"github.com/nexssp/kernel/action\"\n"+
 					"    )\n\n"+
 					"    const ID = %q\n\n"+

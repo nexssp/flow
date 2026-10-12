@@ -1,5 +1,5 @@
 // Package assert provides the `assert(cond, msg)` keyword and the
-// `@assert: expr` directive. The keyword yields a core.AssertExpr
+// `@assert: expr` directive. The keyword yields a compiler.AssertExpr
 // (evaluated later by the runtime with expr-lang); the directive
 // appends its expression to meta["asserts"]. Core does not know what
 // an assertion is: the parser dispatches the keyword through the
@@ -17,7 +17,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "assert"
@@ -26,15 +26,15 @@ const ID = "assert"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:         ID,
 		Libraries:  []action.Library{{Name: ID}},
-		Directives: []core.Directive{Directive},
-		Primaries:  []core.PrimaryExtension{assertKeyword{}},
+		Directives: []compiler.Directive{Directive},
+		Primaries:  []compiler.PrimaryExtension{assertKeyword{}},
 		Fixtures:   fixturesFS,
 	}
 }

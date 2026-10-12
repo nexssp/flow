@@ -4,7 +4,7 @@
 // Every CLI subcommand that touches a .nflow file — run, lint, expand,
 // build, catalog, list, show, and selftest — must build its runner
 // config from Bundles() or SelftestBundles(). No command constructs its
-// own list. No command calls core.RegisteredBundles().
+// own list. No command calls compiler.RegisteredBundles().
 //
 // The two functions exist because exactly one bundle, selftestkit,
 // must be visible to `nflow self test` and invisible to every other
@@ -19,7 +19,7 @@
 package native
 
 import (
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/assert"
 	"github.com/nexssp/flow/extensions/config"
 	"github.com/nexssp/flow/extensions/config_yaml"
@@ -69,8 +69,8 @@ import (
 // is already in this list. A caller that needs an additional bundle
 // either uses @require in the source or builds its own config from
 // scratch — never both, because BuildConfig rejects a duplicate ID.
-func Bundles() []core.Bundle {
-	return []core.Bundle{
+func Bundles() []compiler.Bundle {
+	return []compiler.Bundle{
 		syntax.Bundle(nil),
 		runtime.Bundle(nil),
 		symbols.Bundle(nil),
@@ -125,15 +125,15 @@ func Bundles() []core.Bundle {
 // These test-only bundles are not available to ordinary CLI flows unless
 // explicitly required. Keep the set aligned with extension packages so
 // the self-test environment can compile and execute every extension fixture.
-func SelftestBundles() []core.Bundle {
+func SelftestBundles() []compiler.Bundle {
 	return SelftestBundlesFrom(Bundles())
 }
 
 // SelftestBundlesFrom adds the self-test-only bundle to an existing native
 // bundle set. Callers that own bundle lifetimes can reuse their cached set
 // instead of invoking every native factory a second time.
-func SelftestBundlesFrom(bundles []core.Bundle) []core.Bundle {
-	out := append([]core.Bundle(nil), bundles...)
+func SelftestBundlesFrom(bundles []compiler.Bundle) []compiler.Bundle {
+	out := append([]compiler.Bundle(nil), bundles...)
 	return append(out,
 		selftestkit.Bundle(nil),
 		config_yaml.Bundle(nil),
@@ -146,8 +146,8 @@ func SelftestBundlesFrom(bundles []core.Bundle) []core.Bundle {
 // set. It is the table a caller reaches for when it needs to parse a
 // source fragment without going through CompileAction — for example, a
 // diagnostic tool that wants the parser surface but not the runner.
-func Primaries() []core.PrimaryExtension {
-	var out []core.PrimaryExtension
+func Primaries() []compiler.PrimaryExtension {
+	var out []compiler.PrimaryExtension
 	bundles := Bundles()
 	for i := range bundles {
 		out = append(out, bundles[i].Primaries...)
@@ -158,11 +158,11 @@ func Primaries() []core.PrimaryExtension {
 // Directives returns the standard directive table. It includes @macro,
 // @scope, @pipeline, @include, @require, and every other directive the
 // shipped CLI understands.
-func Directives() *core.DirectiveTable {
-	var out []core.Directive
+func Directives() *compiler.DirectiveTable {
+	var out []compiler.Directive
 	bundles := Bundles()
 	for i := range bundles {
 		out = append(out, bundles[i].Directives...)
 	}
-	return core.NewDirectiveTable(out...)
+	return compiler.NewDirectiveTable(out...)
 }

@@ -7,13 +7,13 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func runDirective(tb testing.TB, lines ...string) (map[string]any, error) {
 	tb.Helper()
 	out := map[string]any{}
-	_, err := handleDirective(context.Background(), core.DirectiveReq{
+	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 		Lines: lines,
 		I:     0,
 		Out:   out,
@@ -71,7 +71,7 @@ func TestDirective_DuplicateCollapsed(t *testing.T) {
 	out := map[string]any{}
 	lines := []string{`@require example.com/foo v1.0.0`, `@require example.com/foo v1.0.0`}
 	for _, line := range lines {
-		_, err := handleDirective(context.Background(), core.DirectiveReq{
+		_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 			Lines: []string{line}, I: 0, Out: out, File: "<test>",
 		})
 		ktest.RequireNoError(t, err)
@@ -138,7 +138,7 @@ func TestDirective_RejectsDuplicateNamespaceQualifier(t *testing.T) {
 		`@require example.com/first as shared`,
 		`@require example.com/second as shared`,
 	} {
-		_, err := handleDirective(context.Background(), core.DirectiveReq{
+		_, err := handleDirective(context.Background(), compiler.DirectiveReq{
 			Lines: []string{line}, I: 0, Out: out, File: "<test>",
 		})
 		if strings.Contains(line, "second") {

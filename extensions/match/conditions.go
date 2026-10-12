@@ -7,7 +7,7 @@ import (
 	"github.com/expr-lang/expr/vm"
 	"github.com/nexssp/kernel/xerr"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func init() {
@@ -15,7 +15,7 @@ func init() {
 	for _, kind := range xerr.AllKinds() {
 		symbols["Kind"+string(kind)] = kind
 	}
-	core.RegisterNamespace(core.SymbolNamespace{
+	compiler.RegisterNamespace(compiler.SymbolNamespace{
 		Name:    "xerr",
 		Symbols: symbols,
 	})
@@ -30,7 +30,7 @@ type ConditionCase struct {
 
 // CompileCondition compiles an expression using Flow's input-dot syntax.
 func CompileCondition(source string) (*vm.Program, error) {
-	return expr.Compile(core.PreprocessDots(source), expr.AllowUndefinedVariables())
+	return expr.Compile(compiler.PreprocessDots(source), expr.AllowUndefinedVariables())
 }
 
 // EvaluateProgram runs a compiled condition or subject expression.
@@ -102,10 +102,10 @@ func KindEnvironmentFor(kindValue any) map[string]any {
 // string-or-typed form the current error source expects. Caller-supplied
 // keys win on collision.
 func WithSymbolEnvironment(ctx context.Context, env map[string]any) map[string]any {
-	out := core.MergeSymbolNamespaces(ctx, env)
+	out := compiler.MergeSymbolNamespaces(ctx, env)
 
 	// Respect file-local shadow namespaces (prevent clobbering test overrides)
-	localSyms := core.LocalSymbolsFrom(ctx)
+	localSyms := compiler.LocalSymbolsFrom(ctx)
 	if _, hasLocal := localSyms["xerr"]; hasLocal {
 		return out
 	}

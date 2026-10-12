@@ -8,7 +8,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/assert"
 	"github.com/nexssp/flow/extensions/config"
 	"github.com/nexssp/flow/extensions/runtime"
@@ -22,7 +22,7 @@ func TestConfigLoad_YAML(t *testing.T) {
 	ktest.RequireNoError(t, os.WriteFile(ymlPath,
 		[]byte("host: api.example.test\nport: 8443\n"), 0o600))
 
-	cfg, err := runner.BuildConfig([]core.Bundle{
+	cfg, err := runner.BuildConfig([]compiler.Bundle{
 		syntax.Bundle(nil),
 		runtime.Bundle(nil),
 		assert.Bundle(nil),

@@ -63,6 +63,7 @@ The similarly named build commands do different jobs:
 ## Documentation
 
 - [Language syntax and directives](docs/language.md)
+- [Symbol namespaces and single-source values](docs/symbols.md)
 - [CLI and runtime](docs/cli.md)
 - [Extension bundles](extensions/README.md)
 - [Integrated specifications](spec/README.md)

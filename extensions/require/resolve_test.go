@@ -5,17 +5,17 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func TestResolveBundles_RejectsUnknownOption(t *testing.T) {
-	factory := func(_ map[string]string) core.Bundle {
-		return core.Bundle{
+	factory := func(_ map[string]string) compiler.Bundle {
+		return compiler.Bundle{
 			ID:              "testbundle",
 			AcceptedOptions: []string{"known"},
 		}
 	}
-	core.Register("testbundle_opt_validation", factory)
+	compiler.Register("testbundle_opt_validation", factory)
 
 	_, err := ResolveBundles([]Requirement{
 		{
@@ -29,8 +29,8 @@ func TestResolveBundles_RejectsUnknownOption(t *testing.T) {
 
 func TestResolveBundlesWith_AdoptsBeforeOptionValidation(t *testing.T) {
 	var adopted []string
-	core.Register("testbundle_immediate_adoption", func(_ map[string]string) core.Bundle {
-		return core.Bundle{
+	compiler.Register("testbundle_immediate_adoption", func(_ map[string]string) compiler.Bundle {
+		return compiler.Bundle{
 			ID:              "testbundle_immediate_adoption",
 			AcceptedOptions: []string{},
 		}
@@ -38,7 +38,7 @@ func TestResolveBundlesWith_AdoptsBeforeOptionValidation(t *testing.T) {
 	_, err := ResolveBundlesWith([]Requirement{{
 		Import:  "testbundle_immediate_adoption",
 		Options: map[string]string{"unknown": "x"},
-	}}, func(bundle core.Bundle) {
+	}}, func(bundle compiler.Bundle) {
 		adopted = append(adopted, bundle.ID)
 	})
 	ktest.RequireCondition(t, err != nil, "expected option validation error")
@@ -49,13 +49,13 @@ func TestResolveBundlesWith_AdoptsBeforeOptionValidation(t *testing.T) {
 
 func TestResolveBundlesWith_RetainsEarlierBundlesWhenLaterRequirementIsMissing(t *testing.T) {
 	var adopted []string
-	core.Register("testbundle_partial_resolution", func(_ map[string]string) core.Bundle {
-		return core.Bundle{ID: "testbundle_partial_resolution"}
+	compiler.Register("testbundle_partial_resolution", func(_ map[string]string) compiler.Bundle {
+		return compiler.Bundle{ID: "testbundle_partial_resolution"}
 	})
 	_, err := ResolveBundlesWith([]Requirement{
 		{Import: "testbundle_partial_resolution"},
 		{Import: "testbundle_not_registered"},
-	}, func(bundle core.Bundle) {
+	}, func(bundle compiler.Bundle) {
 		adopted = append(adopted, bundle.ID)
 	})
 	ktest.RequireCondition(t, err != nil, "expected missing requirement error")

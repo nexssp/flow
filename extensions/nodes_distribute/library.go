@@ -13,7 +13,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "nodes_distribute"
@@ -22,16 +22,16 @@ const ID = "nodes_distribute"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{Library()},
-		ArgSchemas: map[string][]core.ArgFieldSpec{
+		ArgSchemas: map[string][]compiler.ArgFieldSpec{
 			"distribute.map": {
-				{Name: "action", Kind: core.ArgCapabilityRef},
+				{Name: "action", Kind: compiler.ArgCapabilityRef},
 			},
 		},
 		Fixtures: fixturesFS,

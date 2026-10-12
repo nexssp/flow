@@ -6,7 +6,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "scope"
@@ -15,21 +15,21 @@ const ID = "scope"
 var fixturesFS embed.FS
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:         ID,
 		Libraries:  []action.Library{{Name: ID}},
-		Directives: []core.Directive{Directive, ProfileDirective},
-		OnPreprocess: func(meta map[string]any) core.PreprocessContributions {
+		Directives: []compiler.Directive{Directive, ProfileDirective},
+		OnPreprocess: func(meta map[string]any) compiler.PreprocessContributions {
 			spans := spansFromMeta(meta)
 			if len(spans) == 0 {
-				return core.PreprocessContributions{}
+				return compiler.PreprocessContributions{}
 			}
-			return core.PreprocessContributions{
-				CompileOpts: []core.CompileOption{core.WithLineModifiers(makeLookups(spans)...)},
+			return compiler.PreprocessContributions{
+				CompileOpts: []compiler.CompileOption{compiler.WithLineModifiers(makeLookups(spans)...)},
 			}
 		},
 		Fixtures: fixturesFS,
@@ -41,11 +41,11 @@ func Bundle(_ map[string]string) core.Bundle {
 // collision inside prependInherited. Each lookup carries its own
 // source so `nflow explain` can attribute a modifier to the specific
 // @scope block that produced it.
-func makeLookups(spans []span) []core.LineLookup {
-	out := make([]core.LineLookup, 0, len(spans))
+func makeLookups(spans []span) []compiler.LineLookup {
+	out := make([]compiler.LineLookup, 0, len(spans))
 	for _, s := range spans {
-		out = append(out, core.LineLookup{
-			Source: core.ModifierSource{
+		out = append(out, compiler.LineLookup{
+			Source: compiler.ModifierSource{
 				Kind:  "scope",
 				Label: "line " + strconv.Itoa(s.start),
 			},

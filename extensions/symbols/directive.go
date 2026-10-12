@@ -56,6 +56,14 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 			return compiler.DirectiveRes{}, compiler.SourceError(pos,
 				"@symbols %s: expected `name: value`, got %q", name, entry)
 		}
+		if !validNamespaceName(key) {
+			return compiler.DirectiveRes{}, compiler.SourceError(pos,
+				"@symbols %s: invalid symbol name %q", name, key)
+		}
+		if _, dup := symbols[key]; dup {
+			return compiler.DirectiveRes{}, compiler.SourceError(pos,
+				"@symbols %s: duplicate symbol %q", name, key)
+		}
 		symbols[key] = value
 	}
 

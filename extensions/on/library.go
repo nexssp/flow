@@ -16,7 +16,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const ID = "on"
@@ -32,13 +32,13 @@ type EventTrigger struct {
 	Target   string
 }
 
-var directive = core.Directive{
+var directive = compiler.Directive{
 	Name:    "on",
 	Example: `@on event "http::8080"`,
 	Handler: handleDirective,
 }
 
-func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
+func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 	line := strings.TrimSpace(req.Lines[req.I])
 	rest := strings.TrimSpace(strings.TrimPrefix(line, "@on"))
 
@@ -49,18 +49,18 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 			req.Out["on_event"] = EventTrigger{Protocol: proto, Target: addr}
 		}
 	}
-	return core.DirectiveRes{Next: req.I + 1}, nil
+	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }
 
 func init() {
-	core.Register(ID, Bundle)
+	compiler.Register(ID, Bundle)
 }
 
-func Bundle(_ map[string]string) core.Bundle {
-	return core.Bundle{
+func Bundle(_ map[string]string) compiler.Bundle {
+	return compiler.Bundle{
 		ID:         ID,
 		Libraries:  []action.Library{{Name: ID}},
-		Directives: []core.Directive{directive},
+		Directives: []compiler.Directive{directive},
 		Fixtures:   fixturesFS,
 	}
 }

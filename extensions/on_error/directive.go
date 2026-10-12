@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 type Rule struct {
@@ -17,7 +17,7 @@ type Config struct {
 	ElseTarget string
 }
 
-var Directive = core.Directive{
+var Directive = compiler.Directive{
 	Name: "on_error",
 	Example: `@on_error {
   when error.kind == "Timeout" -> cov.recoverable
@@ -26,8 +26,8 @@ var Directive = core.Directive{
 	Handler: handleDirective,
 }
 
-func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
-	pos := core.Position{File: req.File, Line: req.I + 1}
+func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
+	pos := compiler.Position{File: req.File, Line: req.I + 1}
 	line := strings.TrimSpace(req.Lines[req.I])
 
 	// NEW: short form — `@on_error target` or `@on_error:target`.
@@ -48,19 +48,19 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 	rest = strings.TrimSpace(rest)
 
 	if !strings.HasPrefix(rest, "{") {
-		target := strings.TrimSpace(core.StripExprComments(rest))
+		target := strings.TrimSpace(compiler.StripExprComments(rest))
 		if target == "" {
-			return core.DirectiveRes{}, core.SourceError(pos,
+			return compiler.DirectiveRes{}, compiler.SourceError(pos,
 				"@on_error: expected `{ ... }` block or a target action name")
 		}
 		req.Out["on_error"] = Config{ElseTarget: target}
-		return core.DirectiveRes{Next: req.I + 1}, nil
+		return compiler.DirectiveRes{Next: req.I + 1}, nil
 	}
 
 	// Long form: unchanged.
-	lines, next, err := core.ReadBlock(req.Lines, req.I)
+	lines, next, err := compiler.ReadBlock(req.Lines, req.I)
 	if err != nil {
-		return core.DirectiveRes{}, core.SourceError(pos, "@on_error: %v", err)
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@on_error: %v", err)
 	}
 
 	cfg := Config{}
@@ -73,9 +73,9 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 		if strings.HasPrefix(line, "else") {
 			_, target, ok := strings.Cut(line, "->")
 			if !ok {
-				return core.DirectiveRes{}, core.SourceError(pos, "invalid else clause: %q", line)
+				return compiler.DirectiveRes{}, compiler.SourceError(pos, "invalid else clause: %q", line)
 			}
-			cfg.ElseTarget = strings.TrimSpace(core.StripExprComments(target))
+			cfg.ElseTarget = strings.TrimSpace(compiler.StripExprComments(target))
 			continue
 		}
 
@@ -83,18 +83,18 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 			rest := strings.TrimSpace(after)
 			condition, target, ok := strings.Cut(rest, "->")
 			if !ok {
-				return core.DirectiveRes{}, core.SourceError(pos, "invalid when clause: %q", line)
+				return compiler.DirectiveRes{}, compiler.SourceError(pos, "invalid when clause: %q", line)
 			}
-			condition = strings.TrimSpace(core.StripExprComments(condition))
-			target = strings.TrimSpace(core.StripExprComments(target))
+			condition = strings.TrimSpace(compiler.StripExprComments(condition))
+			target = strings.TrimSpace(compiler.StripExprComments(target))
 			cfg.Rules = append(cfg.Rules, Rule{Condition: condition, Target: target})
 			continue
 		}
 
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"expected 'when <cond> -> <target>' or 'else -> <target>', got %q", line)
 	}
 
 	req.Out["on_error"] = cfg
-	return core.DirectiveRes{Next: next}, nil
+	return compiler.DirectiveRes{Next: next}, nil
 }

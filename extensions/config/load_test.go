@@ -8,13 +8,13 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func runLoad(tb testing.TB, baseDir, line string) (map[string]string, error) {
 	tb.Helper()
 	out := map[string]any{}
-	_, err := handleConfigLoad(context.Background(), core.DirectiveReq{
+	_, err := handleConfigLoad(context.Background(), compiler.DirectiveReq{
 		Lines:   []string{line},
 		I:       0,
 		Out:     out,

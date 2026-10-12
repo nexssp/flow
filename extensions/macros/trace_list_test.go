@@ -6,7 +6,7 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/macros"
 )
 
@@ -72,19 +72,19 @@ func parseWithTrace(tb testing.TB, src string) []macros.Expansion {
 	ctx := macros.WithTrace(context.Background(), trace)
 	ctx = macros.WithWhere(ctx, "top-level")
 
-	dt := core.NewDirectiveTable(macros.Directive)
-	clean, meta, err := core.Preprocess(ctx, dt, src, "test.nflow")
+	dt := compiler.NewDirectiveTable(macros.Directive)
+	clean, meta, err := compiler.Preprocess(ctx, dt, src, "test.nflow")
 	ktest.RequireNoError(tb, err)
 
 	contribs := macros.Bundle(nil).OnPreprocess(meta)
-	primaries := core.NewPrimaryExtensionTable(contribs.Primaries...)
+	primaries := compiler.NewPrimaryExtensionTable(contribs.Primaries...)
 
 	// Parse the preprocessed source, not the raw source. @macro
 	// declarations are directives and have been stripped into meta;
 	// only the cleaned body contains the @name invocations the primary
 	// is meant to dispatch.
-	_, _ = core.NewParserWithFileOffset(
-		ctx, core.NewOperatorTable(), primaries, clean, "test.nflow", 0,
+	_, _ = compiler.NewParserWithFileOffset(
+		ctx, compiler.NewOperatorTable(), primaries, clean, "test.nflow", 0,
 	).Parse()
 
 	return trace.Expansions()

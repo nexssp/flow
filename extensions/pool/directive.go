@@ -4,45 +4,45 @@ import (
 	"context"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // Directive parses `@pool NAME [members] { options }` and appends a
 // Declaration to meta["pools"].
-var Directive = core.Directive{
+var Directive = compiler.Directive{
 	Name:    "pool",
 	Example: `@pool fast [cheap, mid] { strategy: "round_robin" }`,
 	Handler: handleDirective,
 }
 
-func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
+func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 	line := strings.TrimSpace(req.Lines[req.I])
 	rest := strings.TrimSpace(strings.TrimPrefix(line, "@pool"))
-	pos := core.Position{File: req.File, Line: req.I + 1}
+	pos := compiler.Position{File: req.File, Line: req.I + 1}
 
 	openBracket := strings.IndexByte(rest, '[')
 	switch {
 	case openBracket < 0:
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@pool: expected `NAME [member1, member2]`")
 	case openBracket == 0:
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@pool: name is required before '['")
 	}
 
 	name := strings.TrimSpace(rest[:openBracket])
 
-	members, err := core.ParseCapabilityRefList(rest)
+	members, err := compiler.ParseCapabilityRefList(rest)
 	if err != nil {
-		return core.DirectiveRes{}, core.SourceError(pos, "@pool %s: %v", name, err)
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@pool %s: %v", name, err)
 	}
 
 	var options map[string]string
 	next := req.I + 1
 	if strings.Contains(rest, "{") {
-		parsed, after, err := core.ParseBlockOptions(req.Lines, req.I)
+		parsed, after, err := compiler.ParseBlockOptions(req.Lines, req.I)
 		if err != nil {
-			return core.DirectiveRes{}, core.SourceError(pos, "@pool %s: %v", name, err)
+			return compiler.DirectiveRes{}, compiler.SourceError(pos, "@pool %s: %v", name, err)
 		}
 		options = parsed
 		next = after
@@ -50,7 +50,7 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 
 	for _, existing := range DeclarationsFromMeta(req.Out) {
 		if existing.Name == name {
-			return core.DirectiveRes{}, core.SourceError(pos, "@pool %s: duplicate declaration", name)
+			return compiler.DirectiveRes{}, compiler.SourceError(pos, "@pool %s: duplicate declaration", name)
 		}
 	}
 
@@ -61,5 +61,5 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 		Options:  options,
 		Position: pos,
 	})
-	return core.DirectiveRes{Next: next}, nil
+	return compiler.DirectiveRes{Next: next}, nil
 }

@@ -6,11 +6,11 @@ import (
 
 	"github.com/nexssp/kernel/xerr"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
-// ResolveBundles resolves in-process requirements to core.Bundle instances.
-func ResolveBundles(reqs []Requirement) ([]core.Bundle, error) {
+// ResolveBundles resolves in-process requirements to compiler.Bundle instances.
+func ResolveBundles(reqs []Requirement) ([]compiler.Bundle, error) {
 	return ResolveBundlesWith(reqs, nil)
 }
 
@@ -18,15 +18,15 @@ func ResolveBundles(reqs []Requirement) ([]core.Bundle, error) {
 // immediately after each factory returns, before option validation or alias
 // wiring. Owners can therefore retain cleanup callbacks when a later bundle
 // fails validation or construction.
-func ResolveBundlesWith(reqs []Requirement, onBundle func(core.Bundle)) ([]core.Bundle, error) {
-	out := make([]core.Bundle, 0, len(reqs))
+func ResolveBundlesWith(reqs []Requirement, onBundle func(compiler.Bundle)) ([]compiler.Bundle, error) {
+	out := make([]compiler.Bundle, 0, len(reqs))
 	for i := range reqs {
 		r := &reqs[i]
 		targetID := NormalizeID(r.Import)
 
-		factory, ok := core.Lookup(targetID)
+		factory, ok := compiler.Lookup(targetID)
 		if !ok {
-			factory, ok = core.Lookup(r.Import)
+			factory, ok = compiler.Lookup(r.Import)
 		}
 		if !ok {
 			return nil, xerr.NotFound(fmt.Sprintf(
@@ -49,7 +49,7 @@ func ResolveBundlesWith(reqs []Requirement, onBundle func(core.Bundle)) ([]core.
 	return out, nil
 }
 
-func validateOptions(r *Requirement, bundle core.Bundle) error {
+func validateOptions(r *Requirement, bundle compiler.Bundle) error {
 	if bundle.AcceptedOptions == nil {
 		return nil
 	}

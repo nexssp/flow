@@ -5,11 +5,11 @@ import (
 	"reflect"
 	"testing"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func TestExprEvaluatorBindsFileLocalSymbols(t *testing.T) {
-	ctx := core.WithLocalSymbols(context.Background(), map[string]core.SymbolNamespace{
+	ctx := compiler.WithLocalSymbols(context.Background(), map[string]compiler.SymbolNamespace{
 		"ap": {
 			Name: "ap",
 			Symbols: map[string]any{

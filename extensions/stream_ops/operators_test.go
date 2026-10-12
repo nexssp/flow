@@ -8,7 +8,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/stream_ops"
 )
 
@@ -30,7 +30,7 @@ func TestStreamOps_BatchAndWindow(t *testing.T) {
 	bundle := stream_ops.Bundle(nil)
 	ktest.RequireEqual(t, bundle.ID, "stream_ops")
 
-	resolver, err := core.NewDynamicResolver(bundle.Libraries...)
+	resolver, err := compiler.NewDynamicResolver(bundle.Libraries...)
 	ktest.RequireNoError(t, err)
 
 	batchOp, ok := resolver.Operator("stream.batch")
@@ -68,7 +68,7 @@ func TestStreamOps_ThrottleAndTake(t *testing.T) {
 	t.Parallel()
 
 	bundle := stream_ops.Bundle(nil)
-	resolver, _ := core.NewDynamicResolver(bundle.Libraries...)
+	resolver, _ := compiler.NewDynamicResolver(bundle.Libraries...)
 
 	takeOp, _ := resolver.Operator("stream.take")
 	built, err := takeOp.Build(map[string]any{"count": 2})

@@ -8,11 +8,11 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 type executionResolver struct {
-	base  core.CapabilityResolver
+	base  compiler.CapabilityResolver
 	hooks []action.AnyHook
 
 	mu sync.Mutex
@@ -48,7 +48,7 @@ func (r *executionResolver) baseOwner(name string) (executionOwner, bool) {
 	return executionOwner{}, false
 }
 
-func newExecutionResolver(base core.CapabilityResolver, hooks []action.AnyHook) (core.CapabilityResolver, error) {
+func newExecutionResolver(base compiler.CapabilityResolver, hooks []action.AnyHook) (compiler.CapabilityResolver, error) {
 	if base == nil {
 		return nil, errors.New("executionResolver: base resolver is nil")
 	}
@@ -253,7 +253,7 @@ func (r *executionResolver) MountWithAlias(lib action.Library, alias string) err
 }
 
 func (r *executionResolver) mountLocked(lib action.Library, alias string) error {
-	stage, err := core.NewDynamicResolver()
+	stage, err := compiler.NewDynamicResolver()
 	if err != nil {
 		return err
 	}
@@ -334,4 +334,4 @@ func (r *executionResolver) invalidateAllSnapshotsLocked() {
 	r.operatorsSnapshot = nil
 }
 
-var _ core.CapabilityResolver = (*executionResolver)(nil)
+var _ compiler.CapabilityResolver = (*executionResolver)(nil)

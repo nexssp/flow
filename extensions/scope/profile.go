@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // profilesKey is the meta slot where @profile declarations live.
@@ -34,19 +34,19 @@ func profilesFromMeta(meta map[string]any) map[string]profileDef {
 // A profile must be declared before the @pipeline or @scope that
 // references it. The parent may be declared either before or after the
 // child; only the use site requires the parent to exist by then.
-var ProfileDirective = core.Directive{
+var ProfileDirective = compiler.Directive{
 	Name:    "profile",
 	Example: "@profile reliable :timeout=2s :retry=4",
 	Handler: handleProfile,
 }
 
-func handleProfile(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
-	pos := core.Position{File: req.File, Line: req.I + 1}
+func handleProfile(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
+	pos := compiler.Position{File: req.File, Line: req.I + 1}
 	line := strings.TrimSpace(req.Lines[req.I])
 
 	rest := strings.TrimSpace(strings.TrimPrefix(line, "@profile"))
 	if rest == "" {
-		return core.DirectiveRes{}, core.SourceError(pos, "@profile requires a name")
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@profile requires a name")
 	}
 
 	nameEnd := strings.IndexAny(rest, ": \t")
@@ -58,17 +58,17 @@ func handleProfile(_ context.Context, req core.DirectiveReq) (core.DirectiveRes,
 		tail = rest[nameEnd:]
 	}
 	if name == "" {
-		return core.DirectiveRes{}, core.SourceError(pos, "@profile: missing name")
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@profile: missing name")
 	}
 	if !isValidProfileName(name) {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@profile: invalid name %q", name)
 	}
 
 	mods := parseScopeHeader(tail)
 	parent, mods, err := extractParent(mods)
 	if err != nil {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@profile %s: %v", name, err)
 	}
 
@@ -78,12 +78,12 @@ func handleProfile(_ context.Context, req core.DirectiveReq) (core.DirectiveRes,
 		req.Out[profilesKey] = profiles
 	}
 	if _, dup := profiles[name]; dup {
-		return core.DirectiveRes{}, core.SourceError(pos,
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@profile %s: duplicate declaration", name)
 	}
 	profiles[name] = profileDef{parent: parent, mods: mods}
 
-	return core.DirectiveRes{Next: req.I + 1}, nil
+	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }
 
 // extractParent pulls a single :parent=NAME entry out of mods.
@@ -92,7 +92,7 @@ func handleProfile(_ context.Context, req core.DirectiveReq) (core.DirectiveRes,
 // A duplicate, a bare :parent, or an empty value is an error.
 func extractParent(mods []string) (parent string, rest []string, err error) {
 	for _, m := range mods {
-		if core.ModifierName(m) != "parent" {
+		if compiler.ModifierName(m) != "parent" {
 			rest = append(rest, m)
 			continue
 		}
@@ -166,11 +166,11 @@ func mergeMods(parent, child []string) []string {
 	out := make([]string, 0, len(parent)+len(child))
 	index := make(map[string]int, len(parent))
 	for _, m := range parent {
-		index[core.ModifierName(m)] = len(out)
+		index[compiler.ModifierName(m)] = len(out)
 		out = append(out, m)
 	}
 	for _, m := range child {
-		n := core.ModifierName(m)
+		n := compiler.ModifierName(m)
 		if i, ok := index[n]; ok {
 			out[i] = m
 			continue

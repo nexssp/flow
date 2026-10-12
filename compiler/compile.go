@@ -208,7 +208,7 @@ func runCompile(
 }
 
 func applySymbolsToCtx(ctx context.Context, meta map[string]any) context.Context {
-	syms, _ := meta["symbols"].(map[string]SymbolNamespace)
+	syms := SymbolsFromMeta(meta)
 	if len(syms) == 0 {
 		return ctx
 	}

@@ -26,7 +26,7 @@ func TestBuild_LooseBundleEmbedded(t *testing.T) {
 import (
 	"context"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 )
 
@@ -144,7 +144,7 @@ func TestBuild_LocalNestedPackage(t *testing.T) {
 import (
 	"context"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/kernel/action"
 )
 

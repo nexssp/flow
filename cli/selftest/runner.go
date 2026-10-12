@@ -5,14 +5,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"maps"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/expr-lang/expr"
 	"github.com/nexssp/kernel/xctx"
 
 	"github.com/nexssp/flow/compiler"
@@ -159,7 +156,7 @@ func runFeature(ctx context.Context, cfg flowrunner.Config, feature compiler.Sel
 	}
 
 	asserts, _ := ex.Meta["asserts"].([]string)
-	assertErrors := evalAsserts(ex.Output, asserts)
+	assertErrors := evalAsserts(execCtx, ex.Output, asserts, compiler.SymbolsFromMeta(ex.Meta))
 	if len(assertErrors) > 0 {
 		return Result{
 			SelfTestFeature:   feature,
@@ -232,44 +229,6 @@ func prepareFeatureDir(feature compiler.SelfTestFeature) (cleanup func(), err er
 	}, nil
 }
 
-func evalAsserts(result any, assertions []string) []error {
-	if len(assertions) == 0 {
-		return nil
-	}
-
-	normalized := flowrunner.JSONMapView(result)
-	environment := map[string]any{
-		"result":   normalized,
-		"__root__": normalized,
-	}
-	if resultMap, ok := normalized.(map[string]any); ok {
-		maps.Copy(environment, resultMap)
-	}
-
-	var errorsList []error
-	for _, assertionExpr := range assertions {
-		trimmed := strings.TrimSpace(compiler.StripExprComments(assertionExpr))
-		cleanExpr := trimmed
-		if strings.HasPrefix(trimmed, ".") {
-			cleanExpr = compiler.PreprocessDots(trimmed)
-		}
-
-		program, err := expr.Compile(cleanExpr, expr.Env(environment))
-		if err != nil {
-			errorsList = append(errorsList, fmt.Errorf("assert %q syntax: %w", assertionExpr, err))
-			continue
-		}
-
-		output, err := expr.Run(program, environment)
-		if err != nil {
-			errorsList = append(errorsList, fmt.Errorf("assert %q runtime: %w", assertionExpr, err))
-			continue
-		}
-
-		if passed, ok := output.(bool); !ok || !passed {
-			errorsList = append(errorsList, fmt.Errorf("assert %q failed (got %v)", assertionExpr, output))
-		}
-	}
-
-	return errorsList
+func evalAsserts(ctx context.Context, result any, assertions []string, localSymbols map[string]compiler.SymbolNamespace) []error {
+	return flowrunner.EvaluateAssertionsContext(ctx, result, assertions, localSymbols)
 }

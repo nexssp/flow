@@ -2,12 +2,13 @@ package include
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"path/filepath"
 	"reflect"
 	"strings"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // Directive parses `@include "path"` and merges the referenced file's
@@ -20,19 +21,19 @@ import (
 // constants live in meta but never reach the parent's text, so a
 // `@require { url: "${env.X}" }` after the @include would ship the
 // literal `${env.X}` to the bundle resolver.
-var Directive = core.Directive{
+var Directive = compiler.Directive{
 	Name:    "include",
 	Example: `@include "shared/child.nflow"`,
 	Handler: handleDirective,
 }
 
-func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRes, error) {
+func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 	line := strings.TrimSpace(req.Lines[req.I])
 	target := strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "@include")), `"'`)
 
 	if target == "" {
-		return core.DirectiveRes{}, core.SourceError(
-			core.Position{File: req.File, Line: req.I + 1},
+		return compiler.DirectiveRes{}, compiler.SourceError(
+			compiler.Position{File: req.File, Line: req.I + 1},
 			"@include requires a file path",
 		)
 	}
@@ -42,26 +43,31 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 	}
 	absTarget, absErr := filepath.Abs(target)
 	if absErr != nil {
-		return core.DirectiveRes{}, core.SourceError(
-			core.Position{File: req.File, Line: req.I + 1},
+		return compiler.DirectiveRes{}, compiler.SourceError(
+			compiler.Position{File: req.File, Line: req.I + 1},
 			"@include: %v", absErr,
 		)
 	}
 	target = absTarget
 
 	if req.Recurse == nil {
-		return core.DirectiveRes{}, core.SourceError(
-			core.Position{File: req.File, Line: req.I + 1},
+		return compiler.DirectiveRes{}, compiler.SourceError(
+			compiler.Position{File: req.File, Line: req.I + 1},
 			"@include: recurse is not available in this preprocessing context",
 		)
 	}
 
 	clean, includedMeta, err := req.Recurse(target)
 	if err != nil {
-		return core.DirectiveRes{}, err
+		return compiler.DirectiveRes{}, err
 	}
 
-	mergeIncludedMeta(req.Out, includedMeta)
+	if err := mergeIncludedMeta(req.Out, includedMeta); err != nil {
+		return compiler.DirectiveRes{}, compiler.SourceError(
+			compiler.Position{File: req.File, Line: req.I + 1},
+			"@include: %v", err,
+		)
+	}
 
 	// Apply the merged constants to the parent's lines below the
 	// @include. The included file's own @const / @const.load handlers
@@ -69,11 +75,11 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 	// touched, so a `${ns.key}` written after the @include would remain
 	// literal text through compile. Applying here closes that gap.
 	if consts, ok := req.Out["constants"].(map[string]string); ok {
-		core.ApplyConstants(req.Lines, req.I+1, consts)
+		compiler.ApplyConstants(req.Lines, req.I+1, consts)
 	}
 
 	req.Body[req.I] = strings.Join(strings.Fields(clean), " ")
-	return core.DirectiveRes{Next: req.I + 1}, nil
+	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }
 
 // mergeIncludedMeta folds meta from an included file into the parent
@@ -85,9 +91,22 @@ func handleDirective(_ context.Context, req core.DirectiveReq) (core.DirectiveRe
 // declare constants must produce the union, and the parent must win
 // on key collision. Silent loss on the second @include was the
 // original bug.
-func mergeIncludedMeta(parent, included map[string]any) {
+func mergeIncludedMeta(parent, included map[string]any) error {
 	for key, value := range included {
 		switch key {
+		case "symbols":
+			parentSymbols, _ := parent["symbols"].(map[string]compiler.SymbolNamespace)
+			incoming, _ := value.(map[string]compiler.SymbolNamespace)
+			existing := make(map[string]compiler.SymbolNamespace, len(parentSymbols)+len(incoming))
+			maps.Copy(existing, parentSymbols)
+			for name, namespace := range incoming {
+				if _, dup := existing[name]; dup {
+					return fmt.Errorf("duplicate @symbols namespace %q", name)
+				}
+				existing[name] = namespace
+			}
+			parent["symbols"] = existing
+
 		case "pipelines":
 			existing, _ := parent["pipelines"].(map[string]string)
 			if existing == nil {
@@ -121,6 +140,7 @@ func mergeIncludedMeta(parent, included map[string]any) {
 			}
 		}
 	}
+	return nil
 }
 
 // concatSlices appends b onto a when both are slices of the same type.

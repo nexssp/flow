@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 type Requirement struct {
@@ -54,8 +54,8 @@ type ResolvedModule struct {
 func Parse(spec, baseDir string, opts map[string]string, file string, line int) (Requirement, error) {
 	parts := strings.Fields(spec)
 	if len(parts) == 0 {
-		return Requirement{}, core.SourceError(
-			core.Position{File: file, Line: line},
+		return Requirement{}, compiler.SourceError(
+			compiler.Position{File: file, Line: line},
 			"@require: missing module target")
 	}
 
@@ -67,33 +67,33 @@ func Parse(spec, baseDir string, opts map[string]string, file string, line int) 
 	for len(parts) > 0 {
 		if parts[0] == "as" {
 			if alias != "" {
-				return Requirement{}, core.SourceError(
-					core.Position{File: file, Line: line},
+				return Requirement{}, compiler.SourceError(
+					compiler.Position{File: file, Line: line},
 					"@require: only one local namespace qualifier is allowed")
 			}
 			if len(parts) < 2 {
-				return Requirement{}, core.SourceError(
-					core.Position{File: file, Line: line},
+				return Requirement{}, compiler.SourceError(
+					compiler.Position{File: file, Line: line},
 					"@require: missing local namespace qualifier after `as`")
 			}
 			alias = strings.Trim(parts[1], `"'`)
 			if !validNamespaceQualifier(alias) {
-				return Requirement{}, core.SourceError(
-					core.Position{File: file, Line: line},
+				return Requirement{}, compiler.SourceError(
+					compiler.Position{File: file, Line: line},
 					"@require: invalid local namespace qualifier %q", alias)
 			}
 			parts = parts[2:]
 			continue
 		}
 		if version != "" {
-			return Requirement{}, core.SourceError(
-				core.Position{File: file, Line: line},
+			return Requirement{}, compiler.SourceError(
+				compiler.Position{File: file, Line: line},
 				"@require: extraneous tokens after declaration: %v", parts)
 		}
 		version = strings.Trim(parts[0], `"'`)
 		if !strings.HasPrefix(version, "v") && !isLocal(importPath) {
-			return Requirement{}, core.SourceError(
-				core.Position{File: file, Line: line},
+			return Requirement{}, compiler.SourceError(
+				compiler.Position{File: file, Line: line},
 				"@require: remote @require needs a version: `@require %s v1.2.3`", importPath)
 		}
 		parts = parts[1:]
@@ -101,8 +101,8 @@ func Parse(spec, baseDir string, opts map[string]string, file string, line int) 
 
 	if isLocal(importPath) {
 		if version != "" {
-			return Requirement{}, core.SourceError(
-				core.Position{File: file, Line: line},
+			return Requirement{}, compiler.SourceError(
+				compiler.Position{File: file, Line: line},
 				"@require: local path must not carry a version: %q", importPath)
 		}
 		req, err := resolveLocal(importPath, baseDir, opts, file, line)
@@ -149,8 +149,8 @@ func validNamespaceQualifier(alias string) bool {
 
 func resolveLocal(name, baseDir string, opts map[string]string, file string, line int) (Requirement, error) {
 	if baseDir == "" {
-		return Requirement{}, core.SourceError(
-			core.Position{File: file, Line: line},
+		return Requirement{}, compiler.SourceError(
+			compiler.Position{File: file, Line: line},
 			"@require %s: local path requires a source file context", name)
 	}
 
@@ -160,20 +160,20 @@ func resolveLocal(name, baseDir string, opts map[string]string, file string, lin
 	}
 	abs, err := filepath.Abs(target)
 	if err != nil {
-		return Requirement{}, core.SourceError(
-			core.Position{File: file, Line: line},
+		return Requirement{}, compiler.SourceError(
+			compiler.Position{File: file, Line: line},
 			"@require %s: %v", name, err)
 	}
 
 	info, err := os.Stat(abs)
 	if err != nil {
-		return Requirement{}, core.SourceError(
-			core.Position{File: file, Line: line},
+		return Requirement{}, compiler.SourceError(
+			compiler.Position{File: file, Line: line},
 			"@require %s: directory %q does not exist", name, abs)
 	}
 	if !info.IsDir() {
-		return Requirement{}, core.SourceError(
-			core.Position{File: file, Line: line},
+		return Requirement{}, compiler.SourceError(
+			compiler.Position{File: file, Line: line},
 			"@require %s: path %q is a file, directory required", name, abs)
 	}
 
@@ -186,8 +186,8 @@ func resolveLocal(name, baseDir string, opts map[string]string, file string, lin
 		if adapterInfo, statErr := os.Stat(adapterGoMod); statErr == nil && !adapterInfo.IsDir() {
 			modulePath, readErr := ReadModuleLine(adapterGoMod)
 			if readErr != nil {
-				return Requirement{}, core.SourceError(
-					core.Position{File: file, Line: line},
+				return Requirement{}, compiler.SourceError(
+					compiler.Position{File: file, Line: line},
 					"@require %s: read nested adapter module: %v", name, readErr)
 			}
 			return Requirement{
@@ -215,8 +215,8 @@ func resolveLocal(name, baseDir string, opts map[string]string, file string, lin
 		}
 
 		wsRoot := findWorkspaceBoundary(abs)
-		return Requirement{}, core.SourceError(
-			core.Position{File: file, Line: line},
+		return Requirement{}, compiler.SourceError(
+			compiler.Position{File: file, Line: line},
 			"@require %s: no go.mod found above %q and directory contains no .go files\n\n"+
 				"  💡 Quick fix:\n"+
 				"     1. Place your extension .go files directly inside %q\n"+
@@ -226,8 +226,8 @@ func resolveLocal(name, baseDir string, opts map[string]string, file string, lin
 
 	rel, err := filepath.Rel(moduleRoot, abs)
 	if err != nil {
-		return Requirement{}, core.SourceError(
-			core.Position{File: file, Line: line},
+		return Requirement{}, compiler.SourceError(
+			compiler.Position{File: file, Line: line},
 			"@require %s: %v", name, err)
 	}
 

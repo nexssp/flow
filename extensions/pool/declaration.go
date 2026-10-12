@@ -1,16 +1,16 @@
 package pool
 
-import core "github.com/nexssp/flow/compiler"
+import compiler "github.com/nexssp/flow/compiler"
 
 // Declaration is the parsed form of a single `@pool NAME [...] { ... }`
 // directive. Members are statically resolved capability references;
 // canonical names are checked when the pool is materialized.
 type Declaration struct {
 	Name     string
-	Members  []core.CapabilityRef
+	Members  []compiler.CapabilityRef
 	Strategy string
 	Options  map[string]string
-	Position core.Position
+	Position compiler.Position
 }
 
 // DeclarationsFromMeta returns the list of @pool declarations in the

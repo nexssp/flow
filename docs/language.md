@@ -228,11 +228,13 @@ the pipeline is compiled.
 | `@config { ... }` / `@config:key=value` | Compile-time key/value pairs |
 | `@config.load:path="..."` | Load config from a JSON/TOML/YAML file |
 | `@include "path.nflow"` | Inline another file |
+| `@symbols NAME { ... }` | Declare file-local symbolic values |
 | `@on_error { when ... -> target }` | Route a runtime error to a recovery target |
 | `@hook:name` | Attach a Kernel hook to the compiled program |
 | `@schema NAME { Field Type `tags` }` | Runtime payload validation for strict mode |
-
 ---
+
+For symbol declaration syntax, include behavior, namespace precedence, and supported expression contexts, see [Symbols](symbols.md).
 
 ## 7. `@pipeline` — reusable fragments
 

@@ -7,7 +7,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 
-	core "github.com/nexssp/flow/compiler"
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 func TestBundle_WiresTemplateAction(t *testing.T) {
@@ -17,7 +17,7 @@ func TestBundle_WiresTemplateAction(t *testing.T) {
 	if bundle.ID != ID {
 		t.Fatalf("Bundle().ID = %q, want %q", bundle.ID, ID)
 	}
-	if err := core.ValidateBundle(bundle); err != nil {
+	if err := compiler.ValidateBundle(bundle); err != nil {
 		t.Fatalf("ValidateBundle() error = %v", err)
 	}
 	if len(bundle.Libraries) != 1 || bundle.Libraries[0].Name != ID {
