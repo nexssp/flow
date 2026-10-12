@@ -50,16 +50,22 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 		return "", errors.New("harness: no external modules to link")
 	}
 
-	flowFile := ""
-	if len(flowPath) > 0 {
-		flowFile = flowPath[0]
+	if len(flowPath) == 0 {
+		return "", errors.New("harness: missing flow path")
 	}
+	flowFile := flowPath[0]
 	flowDir := flowDirectory(flowFile)
 
-	source, err := os.ReadFile(flowFile)
-	if err != nil {
-		return "", fmt.Errorf("harness: %w", err)
+	var combinedSource strings.Builder
+	for _, p := range flowPath {
+		src, err := os.ReadFile(p)
+		if err != nil {
+			return "", fmt.Errorf("harness: read %s: %w", p, err)
+		}
+		combinedSource.Write(src)
+		combinedSource.WriteByte('\n')
 	}
+	source := combinedSource.String()
 
 	driverRoot, driverVersion := resolveDriverInfo()
 	goworkPath := findGoWork(flowDir)
@@ -70,7 +76,7 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 	}
 	external = resolved
 
-	usedNative := detectUsedNativeBundles(string(source), false)
+	usedNative := detectUsedNativeBundles(source, false)
 	key := harnessKey(external, goworkPath, usedNative...)
 
 	dir, err := harnessCacheDir(key)
@@ -95,20 +101,7 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 		return bin, nil
 	}
 
-	fmt.Fprintf(os.Stderr, "📦 nflow: preparing harness for %d external module(s)\n", len(external))
-	for i := range external {
-		r := &external[i]
-		switch {
-		case r.IsLoose:
-			fmt.Fprintf(os.Stderr, "   • loose package: %s (auto-bundling as %s)\n", r.LocalPath, r.LooseID)
-		case r.IsLocal():
-			fmt.Fprintf(os.Stderr, "   • local module: %s (root: %s)\n", r.Import, r.ModuleRoot)
-		case r.Version == "" && r.ModulePath != "":
-			fmt.Fprintf(os.Stderr, "   • same-module package: %s (module: %s)\n", r.PackagePath, r.ModulePath)
-		default:
-			fmt.Fprintf(os.Stderr, "   • remote module: %s@%s\n", r.Import, r.Version)
-		}
-	}
+	logHarnessPreparation(external)
 
 	buildDir, err := os.MkdirTemp("", "nflow-harness-")
 	if err != nil {
@@ -116,7 +109,7 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 	}
 	defer func() { _ = os.RemoveAll(buildDir) }()
 
-	if err := writeHarness(buildDir, driverRoot, driverVersion, goworkPath, string(source), external, flowDir); err != nil {
+	if err := writeHarness(buildDir, driverRoot, driverVersion, goworkPath, source, external, flowDir); err != nil {
 		return "", err
 	}
 
@@ -146,6 +139,23 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 	}
 	fmt.Fprintf(os.Stderr, "✓ nflow: runner ready\n")
 	return bin, nil
+}
+
+func logHarnessPreparation(external []require.Requirement) {
+	fmt.Fprintf(os.Stderr, "📦 nflow: preparing harness for %d external module(s)\n", len(external))
+	for i := range external {
+		r := &external[i]
+		switch {
+		case r.IsLoose:
+			fmt.Fprintf(os.Stderr, "   • loose package: %s (auto-bundling as %s)\n", r.LocalPath, r.LooseID)
+		case r.IsLocal():
+			fmt.Fprintf(os.Stderr, "   • local module: %s (root: %s)\n", r.Import, r.ModuleRoot)
+		case r.Version == "" && r.ModulePath != "":
+			fmt.Fprintf(os.Stderr, "   • same-module package: %s (module: %s)\n", r.PackagePath, r.ModulePath)
+		default:
+			fmt.Fprintf(os.Stderr, "   • remote module: %s@%s\n", r.Import, r.Version)
+		}
+	}
 }
 
 func retainDriverRequirements(ctx context.Context, buildDir, driverRoot string) error {
