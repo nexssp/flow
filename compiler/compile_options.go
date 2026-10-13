@@ -12,6 +12,10 @@ type AtomAdviseFunc func(atom *Atom, builder *action.Builder[any, any]) error
 
 type PipelineWrapFunc func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error)
 
+// ASTValidateFunc validates the parsed tree using the source's compile metadata.
+// It runs during compilation, before the AST is lowered into runtime actions.
+type ASTValidateFunc func(ast Expr, meta map[string]any) error
+
 // OnPreprocessFunc is the compile-time hook fired between Preprocess
 // and Parse. BundleConfig wires it from Bundle.OnPreprocess.
 type OnPreprocessFunc func(meta map[string]any) PreprocessContributions
@@ -19,6 +23,7 @@ type OnPreprocessFunc func(meta map[string]any) PreprocessContributions
 type compileConfig struct {
 	advisors            []AtomAdviseFunc
 	wrappers            []PipelineWrapFunc
+	validators          []ASTValidateFunc
 	onPreprocess        []OnPreprocessFunc
 	config              map[string]string
 	cliArgs             []string
@@ -29,6 +34,13 @@ type compileConfig struct {
 }
 
 type CompileOption func(*compileConfig)
+
+// WithASTValidators installs compile-time validators contributed by extensions.
+func WithASTValidators(fns ...ASTValidateFunc) CompileOption {
+	return func(c *compileConfig) {
+		c.validators = append(c.validators, fns...)
+	}
+}
 
 // WithActionGraph asks CompileAction to return an AST-derived Flow lowering
 // plan in CompileRes.ActionGraph; it does not inspect the built Kernel action.

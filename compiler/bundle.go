@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xfile"
 )
 
 type PreprocessContributions struct {
@@ -35,20 +37,27 @@ type SelfTestSection struct {
 // Implementations must honor ctx so host shutdown remains bounded.
 type ShutdownFunc func(context.Context) error
 
+// FileResolverBinding routes references from one provider to its resolver.
+type FileResolverBinding struct {
+	Provider xfile.Provider
+	Resolver xfile.Resolver
+}
+
 // Bundle is one extension distribution.
 type Bundle struct {
-	ID           string
-	Alias        string // Local @require qualifier replacing library namespaces for this compilation.
-	Libraries    []action.Library
-	Directives   []Directive
-	Modifiers    []Modifier
-	Operators    []Operator
-	Primaries    []PrimaryExtension
-	Materialize  Materializer
-	OnPreprocess func(meta map[string]any) PreprocessContributions
-	AtomAdvise   func(atom *Atom, builder *action.Builder[any, any]) error
-	WrapPipeline func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error)
-	Hooks        []action.AnyHook
+	ID            string
+	Alias         string // Local @require qualifier replacing library namespaces for this compilation.
+	Libraries     []action.Library
+	Directives    []Directive
+	Modifiers     []Modifier
+	Operators     []Operator
+	Primaries     []PrimaryExtension
+	Materialize   Materializer
+	OnPreprocess  func(meta map[string]any) PreprocessContributions
+	AtomAdvise    func(atom *Atom, builder *action.Builder[any, any]) error
+	WrapPipeline  func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error)
+	Hooks         []action.AnyHook
+	FileResolvers []FileResolverBinding
 
 	ArgSchemas map[string][]ArgFieldSpec
 
@@ -61,6 +70,14 @@ type Bundle struct {
 	// Shutdowns are invoked by the runner host after the outer invocation
 	// completes. Compile and Execute do not close bundle resources.
 	Shutdowns []ShutdownFunc
+}
+
+// BundleWithFileResolver returns a copy of bundle with one additional typed
+// file-resolver binding. runner.BuildConfig composes bindings across bundles.
+func BundleWithFileResolver(bundle Bundle, provider xfile.Provider, resolver xfile.Resolver) Bundle {
+	bundle.FileResolvers = slices.Clone(bundle.FileResolvers)
+	bundle.FileResolvers = append(bundle.FileResolvers, FileResolverBinding{Provider: provider, Resolver: resolver})
+	return bundle
 }
 
 func ValidateBundle(b Bundle) error {
@@ -81,6 +98,15 @@ func ValidateBundle(b Bundle) error {
 			return fmt.Errorf("bundle %q: duplicate library %q", b.ID, name)
 		}
 		seen[name] = struct{}{}
+	}
+	for i, binding := range b.FileResolvers {
+		provider := string(binding.Provider)
+		if provider == "" || strings.TrimSpace(provider) != provider {
+			return fmt.Errorf("bundle %q: file resolver %d has an invalid provider", b.ID, i)
+		}
+		if binding.Resolver == nil {
+			return fmt.Errorf("bundle %q: file resolver %q is nil", b.ID, provider)
+		}
 	}
 
 	seenNamespaces := make(map[string]struct{}, len(b.Symbols))

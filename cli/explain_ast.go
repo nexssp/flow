@@ -228,6 +228,8 @@ func formatASTValue(v *compiler.Value) string {
 		return "{...}"
 	case compiler.ValueSlice:
 		return "[...]"
+	case compiler.ValueTyped:
+		return fmt.Sprintf("<typed %T>", v.Typed)
 	}
 	return "?"
 }
@@ -467,6 +469,8 @@ func valueToAny(v *compiler.Value) any {
 			s[i] = valueToAny(e)
 		}
 		return s
+	case compiler.ValueTyped:
+		return fmt.Sprintf("<typed %T>", v.Typed)
 	}
 	return nil
 }

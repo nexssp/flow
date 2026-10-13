@@ -125,7 +125,7 @@ func resolveCapabilityValue(resolver CapabilityResolver, v *Value, atomName, fie
 		return "", xerr.Validation(fmt.Sprintf(
 			"%s.%s: dynamic capability references are not supported; use a static identifier",
 			atomName, fieldName))
-	case ValueNumber, ValueBool, ValueNull, ValueMap, ValueSlice:
+	case ValueNumber, ValueBool, ValueNull, ValueMap, ValueSlice, ValueTyped:
 		return "", xerr.Validation(fmt.Sprintf(
 			"%s.%s: expected capability reference, got %s",
 			atomName, fieldName, kindName(v.Kind)))
@@ -168,6 +168,8 @@ func kindName(k ValueKind) string {
 		return "object"
 	case ValueSlice:
 		return "array"
+	case ValueTyped:
+		return "typed value"
 	default:
 		return "unknown"
 	}

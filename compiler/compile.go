@@ -184,6 +184,14 @@ func runCompile(
 	if err != nil {
 		return CompileRes{}, err
 	}
+	for _, validate := range effectiveCfg.validators {
+		if validate == nil {
+			continue
+		}
+		if validationErr := validate(ast, prepared.meta); validationErr != nil {
+			return CompileRes{}, validationErr
+		}
+	}
 	if refErr := validateConfigRefs(ast, effectiveCfg.config, effectiveCfg.cliArgs); refErr != nil {
 		return CompileRes{}, refErr
 	}

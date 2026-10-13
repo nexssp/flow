@@ -46,7 +46,8 @@ var defaultRunAction = compiler.RunAction()
 func withExecutionContext(ctx context.Context, cfg Config, resolver compiler.CapabilityResolver) context.Context {
 	cfg.Resolver = resolver
 	ctx = contracts.WithCompiler(ctx, compilerAdapter{cfg: cfg})
-	return contracts.WithActionResolver(ctx, resolver)
+	ctx = contracts.WithActionResolver(ctx, resolver)
+	return contracts.WithFileResolver(ctx, cfg.FileResolver)
 }
 
 func Compile(ctx context.Context, cfg Config, src, name string) (Compilation, error) {

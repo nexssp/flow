@@ -87,6 +87,7 @@ type Bundle struct {
     OnPreprocess func(meta map[string]any) compiler.PreprocessContributions
     AtomAdvise   func(atom *compiler.Atom, builder *action.Builder[any, any]) error
     WrapPipeline func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error)
+    FileResolvers []compiler.FileResolverBinding
 
     ArgSchemas      map[string][]compiler.ArgFieldSpec
     AcceptedOptions []string
@@ -109,6 +110,7 @@ type Bundle struct {
 | `OnPreprocess` | Contribute additional primaries or compile options after preprocessing. |
 | `AtomAdvise` | Mutate an atom's builder before it runs. |
 | `WrapPipeline` | Wrap the compiled program (catch errors, install hooks, publish context). |
+| `FileResolvers` | Provider-scoped `xfile.Resolver` bindings. `runner.BuildConfig` composes them automatically and exposes the resolver through the runtime context. |
 | `ArgSchemas` | Declare which action arguments are capability references. |
 | `AcceptedOptions` | Whitelist keys accepted in `@require ... { ... }`. `nil` accepts anything. |
 | `SelfTest` | Inline features run by `nflow self test`. |

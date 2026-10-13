@@ -5,6 +5,7 @@ import (
 	"maps"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xfile"
 
 	compiler "github.com/nexssp/flow/compiler"
 )
@@ -16,6 +17,7 @@ func BuildConfig(bundles []compiler.Bundle) (Config, error) {
 	seenBundles := make(map[string]struct{}, len(bundles))
 	seenLibraries := make(map[string]string)
 	seenAliases := make(map[string]string)
+	fileResolvers := make(map[xfile.Provider][]xfile.Resolver)
 	argSchemas := make(map[string][]compiler.ArgFieldSpec)
 
 	for i := range bundles {
@@ -42,6 +44,9 @@ func BuildConfig(bundles []compiler.Bundle) (Config, error) {
 		}
 		if len(b.ArgSchemas) > 0 {
 			maps.Copy(argSchemas, b.ArgSchemas)
+		}
+		for _, binding := range b.FileResolvers {
+			fileResolvers[binding.Provider] = append(fileResolvers[binding.Provider], binding.Resolver)
 		}
 		unique = append(unique, b)
 	}
@@ -113,6 +118,7 @@ func BuildConfig(bundles []compiler.Bundle) (Config, error) {
 
 	return Config{
 		Resolver:      resolver,
+		FileResolver:  newFileResolver(fileResolvers),
 		Directives:    compiler.NewDirectiveTable(extraDirectives...),
 		Modifiers:     compiler.NewModifierTable(extraModifiers...),
 		Operators:     compiler.NewOperatorTable(extraOperators...),

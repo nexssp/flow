@@ -9,6 +9,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/observe"
+	"github.com/nexssp/kernel/xfile"
 
 	compiler "github.com/nexssp/flow/compiler"
 )
@@ -17,7 +18,10 @@ import (
 // materializers for a run. It is passed explicitly to prevent mutable
 // package-level state.
 type Config struct {
-	Resolver      compiler.CapabilityResolver
+	Resolver compiler.CapabilityResolver
+	// FileResolver routes typed file references registered by bundles. BuildConfig
+	// composes provider bindings and Execute exposes the resolver to actions.
+	FileResolver  xfile.Resolver
 	Directives    *compiler.DirectiveTable
 	Modifiers     *compiler.ModifierTable
 	Operators     *compiler.OperatorTable

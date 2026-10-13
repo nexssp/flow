@@ -219,7 +219,7 @@ func walkValueStrings(v *Value, where string, visit func(raw, where string) erro
 				return err
 			}
 		}
-	case ValueBare, ValueNumber, ValueBool, ValueNull:
+	case ValueBare, ValueNumber, ValueBool, ValueNull, ValueTyped:
 	}
 	return nil
 }

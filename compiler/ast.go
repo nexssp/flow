@@ -150,6 +150,7 @@ const (
 	ValueRef
 	ValueMap
 	ValueSlice
+	ValueTyped
 )
 
 type Value struct {
@@ -160,6 +161,7 @@ type Value struct {
 	Ref   string
 	Map   []MapEntry
 	Slice []*Value
+	Typed any
 }
 
 type MapEntry struct {

@@ -12,6 +12,7 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
+	"github.com/nexssp/kernel/xfile"
 )
 
 func (*Atom) Analyze(CapabilityResolver) error { return nil }
@@ -798,7 +799,7 @@ func resolveConfigRefsInValue(cfg map[string]string, cliArgs []string, value *Va
 		for _, item := range value.Slice {
 			resolveConfigRefsInValue(cfg, cliArgs, item)
 		}
-	case ValueNumber, ValueBool, ValueNull, ValueBare:
+	case ValueNumber, ValueBool, ValueNull, ValueBare, ValueTyped:
 	}
 }
 
@@ -848,6 +849,8 @@ func resolveValue(ctx context.Context, v *Value, state map[string]any) any {
 	switch v.Kind {
 	case ValueString:
 		return v.Str
+	case ValueTyped:
+		return v.Typed
 	case ValueBare:
 		if val, ok := lookupSymbolValue(ctx, v.Str); ok {
 			return val
@@ -915,6 +918,9 @@ func resolveSymbolsInValue(ctx context.Context, value *Value) {
 			case bool:
 				value.Kind = ValueBool
 				value.Bool = v
+			case xfile.Ref:
+				value.Kind = ValueTyped
+				value.Typed = v
 			default:
 				value.Kind = ValueString
 				value.Str = fmt.Sprint(val)
@@ -928,7 +934,7 @@ func resolveSymbolsInValue(ctx context.Context, value *Value) {
 		for _, item := range value.Slice {
 			resolveSymbolsInValue(ctx, item)
 		}
-	case ValueString, ValueNumber, ValueBool, ValueNull, ValueRef:
+	case ValueString, ValueNumber, ValueBool, ValueNull, ValueRef, ValueTyped:
 	}
 }
 
