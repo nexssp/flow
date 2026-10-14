@@ -369,10 +369,11 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 			a.Excludes = p.appendList(a.Excludes)
 
 		case TokAtPrompt:
-			if p.Cur().Lit == "config" {
+			prompt := strings.TrimSpace(p.Cur().Lit)
+			if prompt == "config" {
 				a.ConfigInject = true
 			} else {
-				a.Prompt = p.Cur().Lit
+				a.Prompt = prompt
 			}
 			p.Next()
 

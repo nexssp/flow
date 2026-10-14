@@ -1,7 +1,9 @@
 package compiler
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"reflect"
@@ -30,6 +32,10 @@ func (a *Atom) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction,
 	act, ok := bCtx.Resolver.Action(a.Name)
 	if !ok {
 		return nil, xerr.NotFound("capability " + a.Name + " not registered")
+	}
+	if a.ConfigInject {
+		return nil, xerr.Validation(
+			"@config injection marker is supported only for stream sources and operators; use explicit @config.KEY values for unary actions")
 	}
 
 	act, err := runAtomAdvisers(a, act, bCtx, bCtx.Advisers)
@@ -413,10 +419,31 @@ func (c *configuredSource) CloneWithHooks(h ...action.AnyHook) action.AnyStreamA
 func (c *configuredSource) DoStreamAny(ctx context.Context, req any) (action.AnyStream, error) {
 	merged := make(map[string]any, len(c.cfg)+8)
 	maps.Copy(merged, c.cfg)
-	if reqMap, ok := req.(map[string]any); ok {
-		maps.Copy(merged, reqMap)
+	if req != nil {
+		requestFields, err := configuredSourceRequestFields(req)
+		if err != nil {
+			return nil, xerr.Validation("configured stream source request: "+err.Error(), err)
+		}
+		maps.Copy(merged, requestFields)
 	}
 	return c.inner.DoStreamAny(ctx, merged)
+}
+
+func configuredSourceRequestFields(req any) (map[string]any, error) {
+	if fields, ok := req.(map[string]any); ok {
+		return fields, nil
+	}
+	data, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request %T: %w", req, err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	var fields map[string]any
+	if err := decoder.Decode(&fields); err != nil {
+		return nil, fmt.Errorf("request type %T must encode as a JSON object: %w", req, err)
+	}
+	return fields, nil
 }
 
 func (p *ParallelExpr) Analyze(r CapabilityResolver) error {
@@ -780,8 +807,12 @@ func resolveConfigRefsInValue(cfg map[string]string, cliArgs []string, value *Va
 		// Explicit string stays string (preserves quotes in "@config.retries" -> "3")
 		value.Str = resolveConfigString(cfg, cliArgs, value.Str)
 	case ValueRef:
-		// Unquoted positional argument (@arg.1) auto-coerces to number if numeric
-		if strings.HasPrefix(value.Ref, "arg.") {
+		if strings.HasPrefix(value.Ref, "config.") || strings.HasPrefix(value.Ref, "flag.") {
+			value.Kind = ValueString
+			value.Str = resolveConfigString(cfg, cliArgs, "@"+value.Ref)
+			value.Ref = ""
+		} else if strings.HasPrefix(value.Ref, "arg.") {
+			// Unquoted positional arguments (@arg.1) auto-coerce to number if numeric.
 			resolved := resolveConfigString(cfg, cliArgs, "@"+value.Ref)
 			if n, err := strconv.ParseInt(resolved, 10, 64); err == nil {
 				value.Kind = ValueNumber
@@ -1056,7 +1087,13 @@ func injectConfigIntoParams(params map[string]any, target any, cfg map[string]st
 	if len(cfg) == 0 || target == nil {
 		return params, nil
 	}
-	typ := reflect.TypeOf(target)
+	typ, ok := target.(reflect.Type)
+	if !ok {
+		typ = reflect.TypeOf(target)
+	}
+	if typ == nil {
+		return params, nil
+	}
 	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}

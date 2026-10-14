@@ -42,9 +42,8 @@ type Atom struct {
 	Targets         []string
 	Excludes        []string
 	// ConfigInject marks an atom written as `op @config`. For stream
-	// operators, every field of the operator's config struct that has
-	// a matching @config.<json_name> value is injected into its
-	// parameters at build time.
+	// sources and operators, fields matching @config.<json_name> values
+	// are injected into their parameters at build time.
 	ConfigInject bool
 	Pos          Position // source position of the atom, for compile-time diagnostics
 }

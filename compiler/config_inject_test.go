@@ -62,6 +62,21 @@ func TestInjectConfigIntoParams_HappyPath(t *testing.T) {
 	ktest.RequireEqual(t, tags, []string{"go", "ts", "rust"})
 }
 
+func TestInjectConfigIntoParams_ReflectTypeTarget(t *testing.T) {
+	t.Parallel()
+
+	cfg := map[string]string{"name": "Maksymilian", "active": "true"}
+	params, err := injectConfigIntoParams(nil, reflect.TypeFor[testConfig](), cfg)
+	ktest.RequireNoError(t, err)
+
+	name, ok := params["name"].(string)
+	ktest.RequireCondition(t, ok, "name is %T, want string", params["name"])
+	ktest.RequireEqual(t, name, "Maksymilian")
+	active, ok := params["active"].(bool)
+	ktest.RequireCondition(t, ok, "active is %T, want bool", params["active"])
+	ktest.RequireEqual(t, active, true)
+}
+
 func TestInjectConfigIntoParams_ExplicitParamsWin(t *testing.T) {
 	t.Parallel()
 
@@ -178,6 +193,57 @@ func TestResolveConfigRefsInModifier(t *testing.T) {
 	}
 }
 
+func TestResolveConfigRefsInUnquotedValues(t *testing.T) {
+	t.Parallel()
+
+	p := NewParser(context.Background(), NewOperatorTable(), `noop @{ config: @config.retries, flag: @flag.editor }`)
+	ast, err := p.Parse()
+	ktest.RequireNoError(t, err)
+	atom, ok := ast.(*Atom)
+	ktest.RequireCondition(t, ok, "expected *Atom, got %T", ast)
+
+	ctx := WithCompileConfig(context.Background(), map[string]string{"retries": "3"}, []string{"--editor=zed"})
+	resolveConfigRefsInAtom(ctx, atom)
+	for key, want := range map[string]string{"config": "3", "flag": "zed"} {
+		value := atom.Args[key]
+		ktest.RequireCondition(t, value != nil && value.Kind == ValueString, "%s = %+v, want string", key, value)
+		ktest.RequireEqual(t, value.Str, want)
+	}
+}
+
+func TestValidateConfigRefsInUnquotedValues(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		src  string
+		cfg  map[string]string
+		args []string
+		want string
+	}{
+		{
+			name: "unknown config reference",
+			src:  `noop @{ value: @config.missing }`,
+			cfg:  map[string]string{"known": "value"},
+			want: "unknown @config.missing",
+		},
+		{
+			name: "unknown flag reference",
+			src:  `noop @{ value: @flag.missing }`,
+			args: []string{"--known=value"},
+			want: "unknown @flag.missing",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			ast, err := NewParser(context.Background(), NewOperatorTable(), test.src).Parse()
+			ktest.RequireNoError(t, err)
+			ktest.RequireErrorContains(t, validateConfigRefs(ast, test.cfg, test.args), test.want)
+		})
+	}
+}
+
 func TestParser_ConfigMarker(t *testing.T) {
 	t.Parallel()
 
@@ -189,6 +255,36 @@ func TestParser_ConfigMarker(t *testing.T) {
 	ktest.RequireCondition(t, ok, "expected *Atom, got %T", ast)
 	ktest.RequireCondition(t, atom.ConfigInject, "@config must set ConfigInject")
 	ktest.RequireEqual(t, atom.Prompt, "")
+}
+
+func TestParser_ConfigMarkerBeforePipelineOperator(t *testing.T) {
+	t.Parallel()
+
+	ast, err := NewParserWithFileOffset(
+		context.Background(), testTable(), DefaultPrimaryExtensions(),
+		"test.source @config -> test.operator", "", 0,
+	).Parse()
+	ktest.RequireNoError(t, err)
+	pipe, ok := ast.(*PipeExpr)
+	ktest.RequireCondition(t, ok, "expected *PipeExpr, got %T", ast)
+	source, ok := pipe.L.(*Atom)
+	ktest.RequireCondition(t, ok, "expected source *Atom, got %T", pipe.L)
+	ktest.RequireCondition(t, source.ConfigInject, "source @config marker must be recognized before ->")
+	ktest.RequireEqual(t, source.Prompt, "")
+}
+
+func TestBuild_ConfigMarkerOnUnaryActionIsRejected(t *testing.T) {
+	t.Parallel()
+
+	noop := action.New("test.noop", func(context.Context, any) (any, error) { return nil, nil }).Build()
+	resolver, err := NewDynamicResolver(action.Library{Name: "test", Actions: []action.AnyAction{noop}})
+	ktest.RequireNoError(t, err)
+
+	ctx := WithCompileConfig(context.Background(), map[string]string{"value": "configured"}, nil)
+	ast, err := NewParser(ctx, NewOperatorTable(), "test.noop @config").Parse()
+	ktest.RequireNoError(t, err)
+	_, err = Build(ctx, resolver, nil, ast)
+	ktest.RequireErrorContains(t, err, "supported only for stream sources and operators")
 }
 
 func TestParser_PromptIsNotConfigMarker(t *testing.T) {

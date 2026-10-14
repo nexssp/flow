@@ -204,7 +204,9 @@ func walkValueStrings(v *Value, where string, visit func(raw, where string) erro
 	case ValueString:
 		return visit(v.Str, where)
 	case ValueRef:
-		if strings.HasPrefix(v.Ref, "arg.") {
+		if strings.HasPrefix(v.Ref, "config.") ||
+			strings.HasPrefix(v.Ref, "flag.") ||
+			strings.HasPrefix(v.Ref, "arg.") {
 			return visit("@"+v.Ref, where)
 		}
 	case ValueMap:
