@@ -30,10 +30,15 @@ var helpRegistry = map[string]helpText{
 		Usage:   "nflow run <file.nflow> [json_payload] [flags]",
 		Flags: `  -v | -vv | -vvv     verbosity
   --assert=EXPR       assertion evaluated after the run
-  --info              describe the pipeline instead of executing`,
+  --info              describe the pipeline instead of executing
+  --journal-dir DIR   persist durable step results in DIR
+  --execution-id ID   replay/resume the same run (requires --journal-dir)
+  --approval TOKEN    approve named @approval gates (or all)`,
 		Examples: []string{
 			`nflow run flows/client.nflow '{"user_id": 42}'`,
 			`nflow run flows/client.nflow --assert='result.ok == true'`,
+			`nflow run flows/client.nflow --journal-dir .flow-state`,
+			`nflow run flows/client.nflow --journal-dir .flow-state --execution-id invoice-2026-0042`,
 			`nflow run -vv flows/client.nflow`,
 			`nflow run --info flows/client.nflow`,
 		},

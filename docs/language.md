@@ -15,7 +15,7 @@ nflow run my-flow.nflow
 
 ## 1. Pipeline syntax
 
-The pipeline is the flow. There are five operators and one literal:
+The pipeline is the flow. These forms cover its operators and structured expressions:
 
 | Form | Meaning |
 |---|---|
@@ -24,6 +24,7 @@ The pipeline is the flow. There are five operators and one literal:
 | `a \|\| b` | Run `b` if `a` fails |
 | `(a & b)` | Run `a` and `b` concurrently, gather both |
 | `parallel { label: expr, ... }` | Run branches concurrently and gather results under explicit labels |
+| `race { expr, ... }` | Run candidates concurrently and return the first successful result |
 | `{ key: expr, ... }` | Project a new object from the current input |
 | `a ? b : c` | Conditional: `b` when `a` is truthy, else `c` |
 
@@ -82,6 +83,22 @@ fail @{ kind: "Unavailable", message: "boom" } || const @{ value: "recovered" }
 ```
 
 `fail` raises; `||` catches and runs the right arm.
+
+Use `race` when equivalent alternatives can run at the same time and any
+successful result is acceptable:
+
+```nflow
+race {
+  service.primary @{ region: "east" },
+  service.replica @{ region: "west" },
+}
+```
+
+The first successful candidate supplies the result; a failed candidate does
+not win. Kernel cancels remaining candidates after a success and waits for all
+launched candidates to finish before returning. If every candidate fails, the
+race returns an error. A candidate that ignores cancellation can therefore
+delay the result. Unlike `||`, all race candidates are started concurrently.
 
 ---
 
@@ -232,6 +249,7 @@ the pipeline is compiled.
 | `@on_error { when ... -> target }` | Route a runtime error to a recovery target |
 | `@hook:name` | Attach a Kernel hook to the compiled program |
 | `@schema NAME { Field Type `tags` }` | Runtime payload validation for strict mode |
+| `@approval NAME { ... }` | Declare a named human-approval gate; see [pause and resume](approval-resume.md) |
 ---
 
 For symbol declaration syntax, include behavior, namespace precedence, and supported expression contexts, see [Symbols](symbols.md).

@@ -20,6 +20,7 @@ package native
 
 import (
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/extensions/approval"
 	"github.com/nexssp/flow/extensions/assert"
 	"github.com/nexssp/flow/extensions/config"
 	"github.com/nexssp/flow/extensions/config_yaml"
@@ -70,6 +71,16 @@ import (
 // either uses @require in the source or builds its own config from
 // scratch — never both, because BuildConfig rejects a duplicate ID.
 func Bundles() []compiler.Bundle {
+	return bundles(retry.Bundle(nil))
+}
+
+// BundlesWithRetryConfig returns the standard native set with a caller-selected
+// retry policy. All other bundles and defaults are identical to Bundles.
+func BundlesWithRetryConfig(cfg retry.Config) []compiler.Bundle {
+	return bundles(retry.BundleWithConfig(cfg))
+}
+
+func bundles(retryBundle compiler.Bundle) []compiler.Bundle {
 	return []compiler.Bundle{
 		syntax.Bundle(nil),
 		runtime.Bundle(nil),
@@ -94,12 +105,13 @@ func Bundles() []compiler.Bundle {
 		require.Bundle(nil),
 		loop.Bundle(nil),
 		assert.Bundle(nil),
+		approval.Bundle(nil),
 		external.Bundle(nil),
 		fs.Bundle(nil),
 		io.Bundle(nil),
 		render.Bundle(nil),
 		on_error.Bundle(nil),
-		retry.Bundle(nil),
+		retryBundle,
 		nodes_log.Bundle(nil),
 		nodes_bench.Bundle(nil),
 		nodes_distribute.Bundle(nil),

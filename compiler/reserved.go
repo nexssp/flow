@@ -60,7 +60,7 @@ func TranslateKeyword(name string) (string, bool) {
 var reservedActionNames = map[string]bool{
 	"const": true, "with": true, "pick": true, "wrap": true,
 	"fail": true, "noop": true, "sleep": true,
-	"env": true, "uuid": true, "json": true, "parallel": true,
+	"env": true, "uuid": true, "json": true, "parallel": true, "race": true,
 	"print": true, "debug": true, "flatten": true,
 }
 

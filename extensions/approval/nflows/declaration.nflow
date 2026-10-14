@@ -1,0 +1,7 @@
+@description "Declare an approval gate without invoking it"
+@approval finance_review {
+  role: reviewer
+  reason: confirm the transfer
+  expires: 30m
+}
+const @{ value: "declaration loaded" }

@@ -3,10 +3,14 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+
+	"github.com/nexssp/kernel/ai/dag"
+	"github.com/nexssp/kernel/xctx"
 
 	"github.com/nexssp/flow/builder"
 	"github.com/nexssp/flow/compiler"
@@ -255,6 +259,9 @@ func printEmbeddedHelp(w io.Writer, source string) {
 	fmt.Fprintln(w, "  --json           Emit clean JSON to stdout")
 	fmt.Fprintln(w, "  --info           Describe the pipeline instead of running it")
 	fmt.Fprintln(w, "  --assert=EXPR    Evaluate EXPR after the run; non-zero exit on failure")
+	fmt.Fprintln(w, "  --journal-dir DIR   Persist durable step results in DIR")
+	fmt.Fprintln(w, "  --execution-id ID   Resume the same run (requires --journal-dir)")
+	fmt.Fprintln(w, "  --approval TOKEN    Approve named @approval gates (or all)")
 	fmt.Fprintln(w, "  -v | -vv | -vvv  Increase verbosity")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Examples:")
@@ -306,6 +313,17 @@ func runSourceInProcess(ctx context.Context, src, name string, args []string) in
 
 func runSourceInInvocation(ctx context.Context, inv *invocation, src, name string, args []string) int {
 	payload, flags := splitPayloadAndFlags(args)
+	durability, flags, err := runner.ParseDurabilityOptions(flags)
+	if err != nil {
+		return fatalf("run options: %v", err)
+	}
+	approvalToken, flags, err := runner.ParseApprovalOption(flags)
+	if err != nil {
+		return fatalf("run options: %v", err)
+	}
+	if approvalToken != "" {
+		ctx = xctx.WithApprovalToken(ctx, approvalToken)
+	}
 
 	directives, err := inv.directiveTable()
 	if err != nil {
@@ -330,28 +348,59 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 	}
 	cfg.CompileOpts = append(cfg.CompileOpts, compiler.WithCLIArgs(flags))
 
+	if hasFlag(flags, "-info") || hasFlag(flags, "--info") {
+		return printSourceInfo(ctx, cfg, src, name, clean, meta, hasFlag(flags, "--json"))
+	}
+	return runPreparedSource(ctx, cfg, src, name, payload, flags, durability)
+}
+
+func printSourceInfo(ctx context.Context, cfg runner.Config, src, name, clean string, meta map[string]any, wantJSON bool) int {
+	ast, err := compiler.NewParserWithFileOffset(
+		ctx, cfg.Operators, cfg.PrimariesFor(meta), clean, name, 0,
+	).Parse()
+	if err != nil {
+		return fatalf("parse: %v", err)
+	}
+	if wantJSON {
+		if printErr := runner.PrintInfoJSON(os.Stdout, name, meta, ast); printErr != nil {
+			return fatalf("encode: %v", printErr)
+		}
+		return 0
+	}
+	return runner.PrintInfo(os.Stderr, name, src, meta, ast)
+}
+
+func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string, payload map[string]any, flags []string, durability runner.DurabilityOptions) int {
 	useColorErr := colorEnabled(os.Stderr)
 	useColorOut := colorEnabled(os.Stdout)
-	isInfo := hasFlag(flags, "-info") || hasFlag(flags, "--info")
 	wantJSON := hasFlag(flags, "--json")
 	isTerm := isTerminal(os.Stdout)
 
-	if isInfo {
-		primaries := cfg.PrimariesFor(meta)
-		ast, parseErr := compiler.NewParserWithFileOffset(
-			ctx, cfg.Operators, primaries, clean, name, 0,
-		).Parse()
-		if parseErr != nil {
-			return fatalf("parse: %v", parseErr)
+	var journal *runner.FileJournal
+	if durability.JournalDir != "" {
+		if cfg.Journal != nil {
+			return fatalf("run options: --journal-dir cannot be combined with a journal already set in runner.Config")
 		}
-
-		if wantJSON {
-			if err := runner.PrintInfoJSON(os.Stdout, name, meta, ast); err != nil {
-				return fatalf("encode: %v", err)
+		var err error
+		journal, err = runner.NewFileJournal(durability.JournalDir)
+		if err != nil {
+			return fatalf("journal: %v", err)
+		}
+		cfg.Journal = journal
+		if cfg.IdempotencyStore == nil {
+			cfg.IdempotencyStore = journal
+		}
+		defer func() {
+			if err := journal.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "journal close: %v\n", err)
 			}
-			return 0
-		}
-		return runner.PrintInfo(os.Stderr, name, src, meta, ast)
+		}()
+	}
+	if durability.ExecutionID != "" && cfg.Journal == nil {
+		return fatalf("run options: --execution-id requires --journal-dir")
+	}
+	if durability.ExecutionID != "" {
+		ctx = xctx.WithExecutionID(ctx, durability.ExecutionID)
 	}
 
 	verbosity := countVerbosity(flags)
@@ -360,8 +409,18 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 
 	ex, execErr := runner.Execute(ctx, cfg, src, name, payload)
 	total := ex.CompileDuration + ex.RunDuration
+	if cfg.Journal != nil && ex.ExecutionID != "" {
+		fmt.Fprintf(os.Stderr, "Execution ID: %s\n", ex.ExecutionID)
+	}
 
 	if execErr != nil {
+		if ex.Suspension != nil {
+			printApprovalSuspension(os.Stderr, name, durability, ex.Suspension)
+			if !errors.Is(execErr, dag.ErrSuspended) {
+				fmt.Fprintf(os.Stderr, "  Suspension persistence error: %s\n", formatCleanError(execErr, useColorErr))
+			}
+			return 3
+		}
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", paint("✗ Pipeline Execution Failed", ansiRed, useColorErr))
 		fmt.Fprintf(os.Stderr, "  %s\n\n", formatCleanError(execErr, useColorErr))
 		if verbosity >= 1 {
@@ -544,8 +603,16 @@ func collectAsserts(meta map[string]any, extra []string) []string {
 func splitArgs(args []string) (target string, payload map[string]any, flags []string) {
 	payload = map[string]any{}
 	flags = make([]string, 0, len(args))
-	for _, a := range args {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		switch {
+		case a == "--journal-dir" || a == "--execution-id" || a == "--approval":
+			if i+1 < len(args) {
+				flags = append(flags, a+"="+args[i+1])
+				i++
+			} else {
+				flags = append(flags, a)
+			}
 		case strings.HasPrefix(a, "{"):
 			if err := json.Unmarshal([]byte(a), &payload); err != nil {
 				fmt.Fprintf(os.Stderr, "invalid JSON payload ignored: %v\n", err)

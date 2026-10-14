@@ -2,10 +2,13 @@ package retry
 
 import (
 	"context"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xtest/ktest"
 
 	compiler "github.com/nexssp/flow/compiler"
@@ -22,9 +25,7 @@ func TestAdvise_ConsumesRetryModifier(t *testing.T) {
 	cfg := Config{DefaultMax: 5, MinBackoff: 5 * time.Millisecond, MaxBackoff: 50 * time.Millisecond}
 	atom := &compiler.Atom{Name: "probe", Modifiers: []string{"timeout=1s", "retry=3", "cache=1m"}}
 	builder := newBuilder()
-
 	ktest.RequireNoError(t, advise(cfg, atom, builder))
-
 	ktest.RequireEqual(t, atom.Modifiers, []string{"timeout=1s", "cache=1m"})
 	ktest.RequireEqual(t, builder.Describe().RetryMax, 3)
 }
@@ -34,7 +35,6 @@ func TestAdvise_DefaultMaxWhenNoValue(t *testing.T) {
 	cfg := Config{DefaultMax: 7, MinBackoff: 5 * time.Millisecond, MaxBackoff: 50 * time.Millisecond}
 	atom := &compiler.Atom{Name: "probe", Modifiers: []string{"retry"}}
 	builder := newBuilder()
-
 	ktest.RequireNoError(t, advise(cfg, atom, builder))
 	ktest.RequireEqual(t, builder.Describe().RetryMax, 7)
 }
@@ -42,9 +42,7 @@ func TestAdvise_DefaultMaxWhenNoValue(t *testing.T) {
 func TestAdvise_RejectsBadValue(t *testing.T) {
 	t.Parallel()
 	cfg := Config{DefaultMax: 3, MinBackoff: 5 * time.Millisecond, MaxBackoff: 50 * time.Millisecond}
-
-	cases := []string{"retry=abc", "retry=0", "retry=-1"}
-	for _, raw := range cases {
+	for _, raw := range []string{"retry=abc", "retry=0", "retry=-1"} {
 		t.Run(raw, func(t *testing.T) {
 			t.Parallel()
 			atom := &compiler.Atom{Name: "probe", Modifiers: []string{raw}}
@@ -59,7 +57,6 @@ func TestAdvise_NoRetryModifier(t *testing.T) {
 	cfg := Config{DefaultMax: 3, MinBackoff: time.Millisecond, MaxBackoff: time.Second}
 	atom := &compiler.Atom{Name: "probe", Modifiers: []string{"timeout=1s"}}
 	builder := newBuilder()
-
 	ktest.RequireNoError(t, advise(cfg, atom, builder))
 	ktest.RequireEqual(t, atom.Modifiers, []string{"timeout=1s"})
 	ktest.RequireEqual(t, builder.Describe().RetryMax, 0)
@@ -67,38 +64,112 @@ func TestAdvise_NoRetryModifier(t *testing.T) {
 
 func TestConfigFromOptions(t *testing.T) {
 	t.Parallel()
+	cfg, err := ConfigFromOptions(map[string]string{
+		"default_max": "5",
+		"backoff":     BackoffExponential,
+		"min_backoff": "25ms",
+		"max_backoff": "750ms",
+		"retry_all":   "true",
+	})
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, cfg.DefaultMax, 5)
+	ktest.RequireEqual(t, cfg.Backoff, BackoffExponential)
+	ktest.RequireEqual(t, cfg.MinBackoff, 25*time.Millisecond)
+	ktest.RequireEqual(t, cfg.MaxBackoff, 750*time.Millisecond)
+	ktest.RequireEqual(t, cfg.RetryAll, true)
+}
+
+func TestConfigFromOptions_Defaults(t *testing.T) {
+	t.Parallel()
+	cfg, err := ConfigFromOptions(nil)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, cfg.DefaultMax, 3)
+	ktest.RequireEqual(t, cfg.Backoff, BackoffExponentialJitter)
+	ktest.RequireEqual(t, cfg.MinBackoff, 10*time.Millisecond)
+	ktest.RequireEqual(t, cfg.MaxBackoff, 2*time.Second)
+	ktest.RequireEqual(t, cfg.RetryAll, false)
+}
+
+func TestConfigFromOptions_RejectsInvalidOptions(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		opts map[string]string
-		want int
 	}{
-		{"empty", nil, 0},
-		{"valid", map[string]string{"default_max": "5"}, 5},
-		{"invalid number ignored", map[string]string{"default_max": "abc"}, 0},
-		{"zero ignored", map[string]string{"default_max": "0"}, 0},
-		{"unknown key ignored", map[string]string{"nope": "1"}, 0},
+		{name: "bad count", opts: map[string]string{"default_max": "abc"}},
+		{name: "zero count", opts: map[string]string{"default_max": "0"}},
+		{name: "negative count", opts: map[string]string{"default_max": "-1"}},
+		{name: "unknown backoff", opts: map[string]string{"backoff": "magic"}},
+		{name: "bad duration", opts: map[string]string{"min_backoff": "soon"}},
+		{name: "zero duration", opts: map[string]string{"max_backoff": "0s"}},
+		{name: "invalid bool", opts: map[string]string{"retry_all": "yes"}},
+		{name: "max below min", opts: map[string]string{"min_backoff": "2s", "max_backoff": "1s"}},
+		{name: "unknown option", opts: map[string]string{"nope": "1"}},
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			ktest.RequireEqual(t, ConfigFromOptions(c.opts).DefaultMax, c.want)
+			_, err := ConfigFromOptions(tc.opts)
+			ktest.RequireCondition(t, err != nil, "expected invalid retry configuration to fail")
 		})
 	}
 }
 
-func TestConfig_Normalized(t *testing.T) {
+func TestConfigBackoffStrategies(t *testing.T) {
 	t.Parallel()
-	var cfg Config
-	got := cfg.normalized()
-	ktest.RequireCondition(t, got.DefaultMax > 0, "DefaultMax not set")
-	ktest.RequireCondition(t, got.MinBackoff > 0, "MinBackoff not set")
-	ktest.RequireCondition(t, got.MaxBackoff >= got.MinBackoff, "MaxBackoff < MinBackoff")
+	const base = 100 * time.Millisecond
+	constant := Config{Backoff: BackoffConstant, MinBackoff: base}.backoffFunc()
+	ktest.RequireEqual(t, constant(3), base)
+
+	exponential := Config{Backoff: BackoffExponential, MinBackoff: base, MaxBackoff: time.Second}.backoffFunc()
+	ktest.RequireEqual(t, exponential(2), 2*base)
+
+	jitter := Config{Backoff: BackoffExponentialJitter, MinBackoff: base, MaxBackoff: time.Second}.backoffFunc()
+	got := jitter(1)
+	ktest.RequireCondition(t, got >= 70*time.Millisecond && got <= 130*time.Millisecond, "jitter delay %s outside expected range", got)
+}
+
+func TestAdvise_RetryAllRetriesPermanentErrors(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	builder := action.New[any, any]("probe", func(_ context.Context, _ any) (any, error) {
+		calls.Add(1)
+		return nil, xerr.BadRequest("permanent failure")
+	})
+	cfg := Config{
+		DefaultMax: 2,
+		Backoff:    BackoffConstant,
+		MinBackoff: time.Nanosecond,
+		MaxBackoff: time.Nanosecond,
+		RetryAll:   true,
+	}
+	atom := &compiler.Atom{Name: "probe", Modifiers: []string{"retry=2"}}
+	ktest.RequireNoError(t, advise(cfg, atom, builder))
+	_, err := builder.Build().Do(context.Background(), nil)
+	ktest.RequireCondition(t, err != nil, "expected the permanent action error")
+	ktest.RequireEqual(t, calls.Load(), int32(3))
+}
+
+func TestBundle_RejectsInvalidOptionDuringAdvice(t *testing.T) {
+	t.Parallel()
+	bundle := Bundle(map[string]string{"retry_all": "sometimes"})
+	err := bundle.AtomAdvise(&compiler.Atom{Name: "probe"}, newBuilder())
+	ktest.RequireCondition(t, err != nil, "expected invalid bundle option error")
+	ktest.RequireCondition(t, strings.Contains(err.Error(), "retry_all"), "error %q should name retry_all", err)
+}
+
+func TestBundleWithConfig_RejectsInvalidDirectConfig(t *testing.T) {
+	t.Parallel()
+	bundle := BundleWithConfig(Config{Backoff: "unknown"})
+	err := bundle.AtomAdvise(&compiler.Atom{Name: "probe"}, newBuilder())
+	ktest.RequireCondition(t, err != nil, "expected invalid direct config error")
 }
 
 func TestBundle_WiresAdvise(t *testing.T) {
 	t.Parallel()
-	b := BundleWithConfig(Config{})
-	ktest.RequireEqual(t, b.ID, ID)
-	ktest.RequireEqual(t, len(b.Libraries), 1)
-	ktest.RequireCondition(t, b.AtomAdvise != nil, "AtomAdvise is nil")
+	bundle := BundleWithConfig(Config{})
+	ktest.RequireEqual(t, bundle.ID, ID)
+	ktest.RequireEqual(t, len(bundle.Libraries), 1)
+	ktest.RequireCondition(t, bundle.AtomAdvise != nil, "AtomAdvise is nil")
+	ktest.RequireEqual(t, bundle.AcceptedOptions, acceptedOptions)
 }

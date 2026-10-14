@@ -33,6 +33,7 @@ func TestIsReservedActionName(t *testing.T) {
 	ktest.RequireCondition(t, compiler.IsReservedActionName("const"), "const should be reserved")
 	ktest.RequireCondition(t, compiler.IsReservedActionName("noop"), "noop should be reserved")
 	ktest.RequireCondition(t, compiler.IsReservedActionName("parallel"), "parallel should be reserved")
+	ktest.RequireCondition(t, compiler.IsReservedActionName("race"), "race should be reserved")
 	ktest.RequireCondition(t, !compiler.IsReservedActionName("runtime.const"), "runtime.const should not be reserved")
 	ktest.RequireCondition(t, !compiler.IsReservedActionName("http.request"), "http.request should not be reserved")
 }

@@ -14,7 +14,9 @@ import (
 )
 
 type Execution struct {
+	ExecutionID     string
 	Output          any
+	Suspension      *ApprovalSuspension
 	Meta            map[string]any
 	Resolver        compiler.CapabilityResolver
 	CompileDuration time.Duration
@@ -76,6 +78,10 @@ func ExecutePrepared(
 	entry EntryPoint,
 	extraOpts ...compiler.CompileOption,
 ) (Execution, error) {
+	ctx, executionID, identityErr := ensureExecutionIdentity(ctx)
+	if identityErr != nil {
+		return Execution{}, identityErr
+	}
 	if len(extraOpts) > 0 {
 		cfg.CompileOpts = append(append([]compiler.CompileOption{}, cfg.CompileOpts...), extraOpts...)
 	}
@@ -92,19 +98,19 @@ func ExecutePrepared(
 		readMemStats(&compileStats)
 	}
 	if err != nil {
-		result := Execution{Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
+		result := Execution{ExecutionID: executionID, Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
 		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
 		return result, err
 	}
 	if entry.Name == "" {
-		result := Execution{Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
+		result := Execution{ExecutionID: executionID, Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
 		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
 		return result, errors.New("runner: entrypoint name is required")
 	}
 
 	entryAction, ok := compiled.Resolver.Action(entry.Name)
 	if !ok {
-		result := Execution{Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
+		result := Execution{ExecutionID: executionID, Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
 		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
 		return result, fmt.Errorf("runner: entrypoint %q is not registered in the compiled source", entry.Name)
 	}
@@ -116,14 +122,26 @@ func ExecutePrepared(
 	ctx = withExecutionContext(ctx, cfg, compiled.Resolver)
 
 	runStart := time.Now()
-	output, runErr := action.InvokeAny(ctx, entryAction, entry.Payload)
+	preparedName, preparedSourceHash := prepared.SourceIdentity()
+	output, suspension, runErr := runApprovalAware(
+		ctx,
+		cfg.Journal,
+		executionID,
+		preparedSourceHash,
+		preparedName,
+		entry.Payload,
+		prepared.Metadata(),
+		func() (any, error) { return action.InvokeAny(ctx, entryAction, entry.Payload) },
+	)
 	runDuration := time.Since(runStart)
 	if cfg.MeasureAllocs {
 		readMemStats(&runStats)
 	}
 
 	result := Execution{
+		ExecutionID:     executionID,
 		Output:          output,
+		Suspension:      suspension,
 		Meta:            compiled.Meta,
 		Resolver:        compiled.Resolver,
 		CompileDuration: compileDuration,
@@ -138,6 +156,7 @@ func ExecutePrepared(
 }
 
 func compilePrepared(ctx context.Context, cfg Config, prepared *compiler.PreparedSource) (Compilation, error) {
+	cfg.CompileOpts = compileOptsWithRunnerPolicies(cfg)
 	resolver, err := newExecutionResolver(cfg.Resolver, cfg.Hooks)
 	if err != nil {
 		return Compilation{}, err
@@ -236,6 +255,10 @@ func compilePrepared(ctx context.Context, cfg Config, prepared *compiler.Prepare
 }
 
 func Execute(ctx context.Context, cfg Config, src, name string, payload map[string]any) (Execution, error) {
+	ctx, executionID, identityErr := ensureExecutionIdentity(ctx)
+	if identityErr != nil {
+		return Execution{}, identityErr
+	}
 	compileStart := time.Now()
 
 	var startStats, compileStats, runStats runtime.MemStats
@@ -249,12 +272,12 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 		readMemStats(&compileStats)
 	}
 	if err != nil {
-		result := Execution{Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
+		result := Execution{ExecutionID: executionID, Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
 		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
 		return result, err
 	}
 	if compiled.Program == nil {
-		result := Execution{Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
+		result := Execution{ExecutionID: executionID, Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
 		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
 		return result, errors.New("compile: source is empty")
 	}
@@ -265,10 +288,22 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 
 	ctx = withExecutionContext(ctx, cfg, compiled.Resolver)
 	runStart := time.Now()
-	runRes, err := defaultRunAction.Do(ctx, compiler.RunReq{
-		Program: compiled.Program,
-		Payload: payload,
-	})
+	output, suspension, err := runApprovalAware(
+		ctx,
+		cfg.Journal,
+		executionID,
+		sourceDigest(src),
+		name,
+		payload,
+		compiled.Meta,
+		func() (any, error) {
+			runRes, runErr := defaultRunAction.Do(ctx, compiler.RunReq{
+				Program: compiled.Program,
+				Payload: payload,
+			})
+			return runRes.Output, runErr
+		},
+	)
 	runDuration := time.Since(runStart)
 
 	if cfg.MeasureAllocs {
@@ -276,7 +311,9 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 	}
 
 	result := Execution{
-		Output:          runRes.Output,
+		ExecutionID:     executionID,
+		Output:          output,
+		Suspension:      suspension,
 		Meta:            compiled.Meta,
 		Resolver:        compiled.Resolver,
 		CompileDuration: compileDuration,
@@ -313,7 +350,7 @@ type compilerAdapter struct {
 func (a compilerAdapter) CompilePipeline(expr string) (action.Executable, error) {
 	res, err := compiler.CompileAction(
 		a.cfg.Resolver, a.cfg.Directives, a.cfg.Modifiers,
-		a.cfg.Operators, a.cfg.Primaries,
+		a.cfg.Operators, a.cfg.Primaries, a.cfg.CompileOpts...,
 	).Do(context.Background(), compiler.CompileReq{Source: expr, Name: "<child>"})
 	if err != nil {
 		return nil, err

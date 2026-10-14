@@ -229,13 +229,18 @@ wrapper.
 | `runner.BuildConfig(bundles)` | Build a `Config` from bundles |
 | `runner.Config` | The execution configuration passed to `Execute` |
 | `runner.Execute(ctx, cfg, src, name, payload)` | Compile and run |
-| `runner.Execution` | Result: `Output`, `Meta`, `Resolver`, timings, allocs |
+| `runner.Execution` | Result: `ExecutionID`, `Output`, `Meta`, `Resolver`, timings, allocs |
+| `runner.NewFileJournal(dir)` | Rooted file-backed Kernel Journal and idempotency coordinator/store |
+| `runner.Config.Journal` / `IdempotencyStore` | Opt into durable action calls and custom `:idempotent` storage |
 | `runner.RunSource(ctx, cfg, src, name, payload, opts)` | CLI-oriented wrapper with `--info` and observer |
 | `runner.SplitPipelineModifiers(table, mods)` | Split wrapper vs. body modifiers |
 | `runner.SplitPipelineModifiersWithSources(table, mods, srcs)` | Same, sources preserved |
 | `runner.NewObserver(w, verbosity)` | Live per-action observer |
 | `runner.PrintInfo` | Render a pipeline shape |
 | `runner.RunAssertions` | Evaluate `@assert:` directives |
+
+See [`docs/runner-durability.md`](runner-durability.md) for stable execution IDs,
+step identity, replay, and FileJournal operational limits.
 
 ### `flow/native` — built-in bundles
 
@@ -284,7 +289,7 @@ CLI has available. Add a new standard bundle there.
 | `schema` | `@schema NAME { ... }` + `schema.validate` |
 | `scope` | `@scope` and `@profile` directives |
 | `selftestkit` | Coverage actions (`cov.echo`, `cov.flaky`, ...) |
-| `syntax` | `->`, `|`, `&`, `||` operators |
+| `syntax` | `->`, `|`, `&`, `||` operators; `parallel { ... }` and `race { ... }` blocks |
 | `template` | `template.render` |
 
 Look here first when adding a DSL feature.

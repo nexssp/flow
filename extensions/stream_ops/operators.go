@@ -19,6 +19,7 @@ func Operators() []action.NamedOperator {
 				return stream.Batch[any](cfg.Size)
 			},
 		),
+		action.NewOperator("stream.fold", Fold),
 		action.NewOperator(
 			"stream.throttle",
 			func(cfg struct {

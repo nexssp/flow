@@ -3,9 +3,9 @@
 // consumes the modifier and installs the retry middleware before the
 // modifier table sees the atom.
 //
-// The `@require` options block can override the policy defaults:
+// The `@require` options block can configure the default retry policy:
 //
-//	@require retry { default_max: "5" }
+//	@require retry { default_max: "5", backoff: "exponential", retry_all: "false" }
 //
 // Typical use:
 //
@@ -14,6 +14,7 @@ package retry
 
 import (
 	"embed"
+	"fmt"
 
 	"github.com/nexssp/kernel/action"
 
@@ -21,6 +22,8 @@ import (
 )
 
 const ID = "retry"
+
+var acceptedOptions = []string{"default_max", "backoff", "min_backoff", "max_backoff", "retry_all"}
 
 //go:embed nflows
 var fixturesFS embed.FS
@@ -34,19 +37,33 @@ func init() {
 // Options come from the @require block, or from BundleWithConfig when
 // the caller wants to pin the policy in code.
 func Bundle(opts map[string]string) compiler.Bundle {
-	cfg := BundleWithConfig(ConfigFromOptions(opts))
-	cfg.AcceptedOptions = []string{"default_max"}
-	return cfg
+	cfg, configErr := ConfigFromOptions(opts)
+	if configErr != nil {
+		cfg = Config{}.normalized()
+	}
+	bundle := BundleWithConfig(cfg)
+	bundle.AcceptedOptions = append([]string(nil), acceptedOptions...)
+	if configErr != nil {
+		bundle.AtomAdvise = func(_ *compiler.Atom, _ *action.Builder[any, any]) error {
+			return fmt.Errorf("retry @require options: %w", configErr)
+		}
+	}
+	return bundle
 }
 
 // BundleWithConfig returns the retry extension with an explicit policy.
 func BundleWithConfig(cfg Config) compiler.Bundle {
 	cfg = cfg.normalized()
+	configErr := cfg.validate()
 	return compiler.Bundle{
-		ID:        ID,
-		Libraries: []action.Library{{Name: ID}},
-		Fixtures:  fixturesFS,
+		ID:              ID,
+		Libraries:       []action.Library{{Name: ID}},
+		Fixtures:        fixturesFS,
+		AcceptedOptions: append([]string(nil), acceptedOptions...),
 		AtomAdvise: func(atom *compiler.Atom, builder *action.Builder[any, any]) error {
+			if configErr != nil {
+				return fmt.Errorf("retry configuration: %w", configErr)
+			}
 			return advise(cfg, atom, builder)
 		},
 	}

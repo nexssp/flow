@@ -1155,20 +1155,33 @@ func runAtomAdvisers(a *Atom, act action.AnyAction, bCtx *BuildContext, advisers
 	if len(advisers) == 0 {
 		return act, nil
 	}
+	original := act
 	builder := action.Dynamic(act)
 	modifiersBefore := slices.Clone(a.Modifiers)
+	var ranAdvisor bool
 	for _, advise := range advisers {
 		if advise == nil {
 			continue
 		}
+		ranAdvisor = true
 		if err := advise(a, builder); err != nil {
 			return nil, xerr.Validation("atom "+a.Name+" advisor: "+err.Error(), err)
 		}
 	}
-	// Wrap the advised action with introspection metadata when the adviser modifies the atom.
+	if !ranAdvisor {
+		return act, nil
+	}
+	// Advisers may mutate the AST and/or add Kernel builder middleware. Always
+	// materialize the builder when an adviser runs; otherwise middleware-only
+	// policies are silently discarded. Preserve the existing introspection
+	// shape unless an adviser actually consumed or changed source modifiers.
+	act = builder.Build()
+	if composition, ok := original.(action.IntrospectionProvider); ok {
+		act = action.WithComposition(act, composition.Introspection())
+	}
 	if !slices.Equal(modifiersBefore, a.Modifiers) {
-		act = inspectBuiltChild(bCtx, builder.Build(), "advisor", action.IntrospectionChild{
-			Node: act, Relation: "wraps", Role: IntrospectionKindAction,
+		act = inspectBuiltChild(bCtx, act, "advisor", action.IntrospectionChild{
+			Node: original, Relation: "wraps", Role: IntrospectionKindAction,
 		})
 	}
 	return act, nil

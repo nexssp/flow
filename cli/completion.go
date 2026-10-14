@@ -55,10 +55,10 @@ _nexssflow() {
 
     case "$sub" in
         run)
-            flags="-v -vv -vvv --assert= --approval= --budget= --max-tokens="
+            flags="-v -vv -vvv --assert= --approval= --budget= --max-tokens= --journal-dir= --execution-id="
             ;;
-	        build)
-	            flags="-o --output="
+        build)
+            flags="-o --output="
             ;;
         completion)
             flags="bash zsh pwsh powershell"
@@ -111,11 +111,12 @@ _nexssflow() {
         run)
             _arguments '1:flow file:_files -g "*.nflow"' \
                 '-v' '-vv' '-vvv' \
-                '--assert=' '--approval=' '--budget=' '--max-tokens='
+                '--assert=' '--approval=' '--budget=' '--max-tokens=' \
+                '--journal-dir=' '--execution-id='
             ;;
-	        build)
-	            _arguments '1:flow file:_files -g "*.nflow"' \
-	                '-o:output file:_files' '--output=:output file:_files'
+        build)
+            _arguments '1:flow file:_files -g "*.nflow"' \
+                '-o:output file:_files' '--output=:output file:_files'
             ;;
         info|test)
             _arguments '1:flow file:_files -g "*.nflow"'
@@ -164,8 +165,8 @@ Register-ArgumentCompleter -Native -CommandName nexssflow -ScriptBlock {
     }
 
     $flags = switch ($sub) {
-        'run'   { @('-v', '-vv', '-vvv', '--assert=', '--approval=', '--budget=', '--max-tokens=') }
-		'build' { @('-o', '--output=') }
+        'run'   { @('-v', '-vv', '-vvv', '--assert=', '--approval=', '--budget=', '--max-tokens=', '--journal-dir=', '--execution-id=') }
+        'build' { @('-o', '--output=') }
         default { @() }
     }
 

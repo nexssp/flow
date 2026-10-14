@@ -26,20 +26,20 @@ func advise(cfg Config, atom *compiler.Atom, builder *action.Builder[any, any]) 
 			continue
 		}
 
-		maxAttempts := cfg.DefaultMax
+		maxRetries := cfg.DefaultMax
 		if value != "" {
 			parsed, err := strconv.Atoi(value)
 			if err != nil || parsed <= 0 {
 				return fmt.Errorf("retry expects a positive attempt count, got %q", value)
 			}
-			maxAttempts = parsed
+			maxRetries = parsed
 		}
 
-		backoff := action.ExponentialJitter(cfg.MinBackoff, cfg.MaxBackoff)
+		backoff := cfg.backoffFunc()
 		if cfg.RetryAll {
-			builder.RetryAll(maxAttempts, backoff)
+			builder.RetryAll(maxRetries, backoff)
 		} else {
-			builder.Retry(maxAttempts, backoff)
+			builder.Retry(maxRetries, backoff)
 		}
 	}
 	atom.Modifiers = remaining

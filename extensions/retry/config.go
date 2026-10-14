@@ -1,45 +1,90 @@
 package retry
 
 import (
-	"strconv"
+	"errors"
+	"fmt"
 	"time"
+
+	"github.com/nexssp/kernel/action"
+
+	compiler "github.com/nexssp/flow/compiler"
+)
+
+const (
+	BackoffConstant          = "constant"
+	BackoffExponential       = "exponential"
+	BackoffExponentialJitter = "exponential_jitter"
 )
 
 // Config controls the retry policy installed by the adviser.
 type Config struct {
-	DefaultMax int
-	MinBackoff time.Duration
-	MaxBackoff time.Duration
-	RetryAll   bool
+	DefaultMax int           `nflow:"default_max" default:"3"`
+	Backoff    string        `nflow:"backoff" default:"exponential_jitter"`
+	MinBackoff time.Duration `nflow:"min_backoff" default:"10ms"`
+	MaxBackoff time.Duration `nflow:"max_backoff" default:"2s"`
+	RetryAll   bool          `nflow:"retry_all" default:"false"`
 }
 
-// normalized fills every zero field with a working default. The
-// returned Config is safe to use as-is.
+// normalized fills omitted fields with the existing retry defaults. It does
+// not repair invalid non-zero values; those are reported by validate.
 func (c Config) normalized() Config {
-	if c.DefaultMax <= 0 {
+	if c.DefaultMax == 0 {
 		c.DefaultMax = 3
 	}
-	if c.MinBackoff <= 0 {
+	if c.Backoff == "" {
+		c.Backoff = BackoffExponentialJitter
+	}
+	if c.MinBackoff == 0 {
 		c.MinBackoff = 10 * time.Millisecond
 	}
-	if c.MaxBackoff <= 0 {
+	if c.MaxBackoff == 0 {
 		c.MaxBackoff = 2 * time.Second
-	}
-	if c.MaxBackoff < c.MinBackoff {
-		c.MaxBackoff = c.MinBackoff
 	}
 	return c
 }
 
-// ConfigFromOptions reads a `@require retry { ... }` options map. Only
-// default_max is recognized today; unknown keys are ignored so future
-// options do not break existing .nflow files.
-func ConfigFromOptions(opts map[string]string) Config {
-	var cfg Config
-	if raw, ok := opts["default_max"]; ok {
-		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
-			cfg.DefaultMax = parsed
-		}
+func (c Config) validate() error {
+	if c.DefaultMax <= 0 {
+		return errors.New("retry: default_max must be positive")
 	}
-	return cfg
+	if c.MinBackoff <= 0 {
+		return errors.New("retry: min_backoff must be positive")
+	}
+	if c.MaxBackoff <= 0 {
+		return errors.New("retry: max_backoff must be positive")
+	}
+	if c.MaxBackoff < c.MinBackoff {
+		return errors.New("retry: max_backoff must be at least min_backoff")
+	}
+	switch c.Backoff {
+	case BackoffConstant, BackoffExponential, BackoffExponentialJitter:
+		return nil
+	default:
+		return fmt.Errorf("retry: backoff must be %q, %q, or %q", BackoffConstant, BackoffExponential, BackoffExponentialJitter)
+	}
+}
+
+func (c Config) backoffFunc() func(attempt int) time.Duration {
+	switch c.Backoff {
+	case BackoffConstant:
+		return action.ConstantBackoff(c.MinBackoff)
+	case BackoffExponential:
+		return action.ExponentialBackoff(c.MinBackoff, c.MaxBackoff)
+	default:
+		return action.ExponentialJitter(c.MinBackoff, c.MaxBackoff)
+	}
+}
+
+// ConfigFromOptions strictly decodes a `@require retry { ... }` options map.
+// Missing values use the same defaults as Config.normalized; malformed,
+// unknown, or out-of-range values are returned as errors.
+func ConfigFromOptions(opts map[string]string) (Config, error) {
+	cfg, err := compiler.Decode[Config](opts)
+	if err != nil {
+		return Config{}, fmt.Errorf("retry options: %w", err)
+	}
+	if err := cfg.validate(); err != nil {
+		return Config{}, err
+	}
+	return cfg.normalized(), nil
 }

@@ -1,0 +1,6 @@
+@description "Race returns the first successful candidate"
+@assert: result == "winner"
+race {
+  fail @{ kind: "Unavailable", message: "this candidate fails" },
+  const @{ value: "winner" },
+}

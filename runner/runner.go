@@ -9,6 +9,7 @@ import (
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/observe"
+	"github.com/nexssp/kernel/xctx"
 	"github.com/nexssp/kernel/xfile"
 
 	compiler "github.com/nexssp/flow/compiler"
@@ -28,6 +29,13 @@ type Config struct {
 	Primaries     *compiler.PrimaryExtensionTable
 	Materializers []compiler.Materializer
 	CompileOpts   []compiler.CompileOption
+	// Journal, when non-nil, makes each source-positioned capability call
+	// durable through Kernel's action.Durable middleware.
+	Journal action.Journal
+	// IdempotencyStore replaces Kernel's default in-memory store for actions
+	// carrying :idempotent. It may be the same object as Journal when the
+	// backend implements both contracts.
+	IdempotencyStore action.IdempotencyStore
 
 	// Hooks are applied to every resolver action and to the top-level
 	// program before execution. Callers that only want to see the
@@ -61,8 +69,17 @@ type Opts struct {
 	Verbosity int
 	Info      bool
 	Asserts   []string
-	Stdout    io.Writer
-	Stderr    io.Writer
+	// ApprovalToken grants the named @approval gates, or all gates when set to
+	// "all". The caller is responsible for authenticating the approver.
+	ApprovalToken string
+	// ExecutionID can be set when a run must resume or replay against the same
+	// durable journal. An empty value lets the runner generate a new ID.
+	ExecutionID string
+	// JournalDir opens a FileJournal for this invocation. When omitted, the
+	// caller may still provide a journal directly in Config.
+	JournalDir string
+	Stdout     io.Writer
+	Stderr     io.Writer
 }
 
 // Run executes a .nflow file from disk.
@@ -96,21 +113,41 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 	if stderr == nil {
 		stderr = os.Stderr
 	}
+	if opts.ApprovalToken != "" {
+		ctx = xctx.WithApprovalToken(ctx, opts.ApprovalToken)
+	}
 
 	if opts.Info {
-		clean, meta, err := compiler.Preprocess(ctx, cfg.Directives, src, name)
+		return printSourceInfo(ctx, cfg, src, name, stdout, stderr)
+	}
+	var journal *FileJournal
+	if opts.JournalDir != "" {
+		if cfg.Journal != nil {
+			fmt.Fprintln(stderr, "❌ run: --journal-dir cannot be combined with a journal already set in runner.Config")
+			return 2
+		}
+		var err error
+		journal, err = NewFileJournal(opts.JournalDir)
 		if err != nil {
-			fmt.Fprintf(stderr, "❌ preprocess: %v\n", err)
-			return 1
+			fmt.Fprintf(stderr, "❌ journal: %v\n", err)
+			return 2
 		}
-		ast, parseErr := compiler.NewParserWithFileOffset(
-			ctx, cfg.Operators, cfg.PrimariesFor(meta), clean, name, 0,
-		).Parse()
-		if parseErr != nil {
-			fmt.Fprintf(stderr, "❌ parse: %v\n", parseErr)
-			return 1
+		cfg.Journal = journal
+		if cfg.IdempotencyStore == nil {
+			cfg.IdempotencyStore = journal
 		}
-		return PrintInfo(stdout, name, src, meta, ast)
+		defer func() {
+			if err := journal.Close(); err != nil {
+				fmt.Fprintf(stderr, "❌ journal close: %v\n", err)
+			}
+		}()
+	}
+	if opts.ExecutionID != "" && cfg.Journal == nil {
+		fmt.Fprintln(stderr, "❌ run: --execution-id requires a durable journal; set --journal-dir or runner.Config.Journal")
+		return 2
+	}
+	if opts.ExecutionID != "" {
+		ctx = xctx.WithExecutionID(ctx, opts.ExecutionID)
 	}
 
 	observer := NewObserver(stdout, opts.Verbosity)
@@ -118,8 +155,18 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 
 	ex, err := Execute(ctx, cfg, src, name, payload)
 	total := ex.CompileDuration + ex.RunDuration
+	if cfg.Journal != nil && ex.ExecutionID != "" {
+		fmt.Fprintf(stderr, "Execution ID: %s\n", ex.ExecutionID)
+	}
 
 	if err != nil {
+		if ex.Suspension != nil {
+			fmt.Fprintf(stderr, "Approval required: gate %s (role %s): %s\n", ex.Suspension.Gate, ex.Suspension.Role, ex.Suspension.Reason)
+			if !ex.Suspension.Persisted {
+				fmt.Fprintln(stderr, "Approval pause was not persisted; configure a suspension-capable journal to resume safely.")
+			}
+			return 3
+		}
 		fmt.Fprintf(stdout, "✗ %v\n", err)
 		if opts.Verbosity >= 1 {
 			observer.PrintSummary(stdout)
@@ -147,6 +194,22 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 		opts.Verbosity,
 		compiler.SymbolsFromMeta(ex.Meta),
 	)
+}
+
+func printSourceInfo(ctx context.Context, cfg Config, src, name string, stdout, stderr io.Writer) int {
+	clean, meta, err := compiler.Preprocess(ctx, cfg.Directives, src, name)
+	if err != nil {
+		fmt.Fprintf(stderr, "❌ preprocess: %v\n", err)
+		return 1
+	}
+	ast, parseErr := compiler.NewParserWithFileOffset(
+		ctx, cfg.Operators, cfg.PrimariesFor(meta), clean, name, 0,
+	).Parse()
+	if parseErr != nil {
+		fmt.Fprintf(stderr, "❌ parse: %v\n", parseErr)
+		return 1
+	}
+	return PrintInfo(stdout, name, src, meta, ast)
 }
 
 func collectAsserts(meta map[string]any, extra []string) []string {

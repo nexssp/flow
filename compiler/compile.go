@@ -2,6 +2,8 @@ package compiler
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 
 	"github.com/nexssp/kernel/action"
@@ -34,6 +36,17 @@ func (p *PreparedSource) Metadata() map[string]any {
 		return nil
 	}
 	return p.meta
+}
+
+// SourceIdentity returns the original source name and its SHA-256 digest.
+// It lets callers bind durable state to a prepared source without exposing
+// the source text stored inside this opaque value.
+func (p *PreparedSource) SourceIdentity() (name, sha256Hex string) {
+	if p == nil {
+		return "", ""
+	}
+	sum := sha256.Sum256([]byte(p.source))
+	return p.name, hex.EncodeToString(sum[:])
 }
 
 // ActionIntrospectionEnabled reports whether this source was prepared with

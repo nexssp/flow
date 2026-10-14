@@ -22,14 +22,32 @@ nflow run -vv flow.nflow
 ```
 
 `run` accepts a `.nflow` file or an inline pipeline expression, an
-optional JSON payload as a second argument (or on stdin), and two
-flags:
+optional JSON payload as a second argument (or on stdin), and the
+following flags:
 
 | Flag | Effect |
 |---|---|
 | `-v`, `-vv`, `-vvv` | Increasing verbosity. `-vv` prints live action names; `-vvv` prints payloads. |
 | `--assert=EXPR` | Evaluated after the run; exits 1 on failure. |
 | `--info` | Describe the pipeline instead of executing it. |
+| `--journal-dir DIR` | Persist completed capability results (and idempotency responses) below `DIR`. Prints the execution ID to stderr for later replay. |
+| `--execution-id ID` | Replay/resume using an existing journal identity; requires `--journal-dir`. |
+| `--approval TOKEN` | Approve named `@approval` gates (comma-separated names or `all`). See [approval pause and resume](approval-resume.md). |
+
+For example, run once and save the reported execution ID, then supply that
+same ID with the same source name and journal directory to replay completed
+steps:
+
+```sh
+nflow run flow.nflow --journal-dir .flow-state
+# Replace this example ID with the exact value printed above.
+nflow run flow.nflow --journal-dir .flow-state --execution-id flow-0123456789abcdef0123456789abcdef
+```
+
+Use a new execution ID when the workflow changes. Keep the source name and
+callsite layout stable when resuming; a matching ID can replay a result
+recorded for the same source position. A FileJournal is local to one process
+for idempotency claim coordination and is not a distributed lock service.
 
 If the file declares `@require`, the CLI builds or reuses a harness
 binary that links the requested modules and runs the flow through it.

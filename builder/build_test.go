@@ -90,6 +90,29 @@ func Bundle(opts map[string]string) compiler.Bundle {
 		t.Fatalf("built executable omitted its run banner; stderr:\n%s", stderr)
 	}
 
+	journalDir := filepath.Join(workDir, "journal")
+	stdout, stderr, err = run("--journal-dir", journalDir)
+	if err != nil {
+		t.Fatalf("built executable journal run failed: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+	const executionMarker = "Execution ID: "
+	markerAt := strings.Index(stderr, executionMarker)
+	if markerAt < 0 {
+		t.Fatalf("built executable did not report its execution ID:\n%s", stderr)
+	}
+	reportedIDs := strings.Fields(stderr[markerAt+len(executionMarker):])
+	if len(reportedIDs) == 0 {
+		t.Fatalf("built executable reported an empty execution ID:\n%s", stderr)
+	}
+	executionID := reportedIDs[0]
+	stdout, stderr, err = run("--journal-dir="+journalDir, "--execution-id", executionID)
+	if err != nil {
+		t.Fatalf("built executable replay failed: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, executionMarker+executionID) || !strings.Contains(stdout, `"value":"option:ok"`) {
+		t.Fatalf("built executable replay output/identity mismatch:\nstdout:\n%s\nstderr:\n%s", stdout, stderr)
+	}
+
 	stdout, stderr, err = run("--json")
 	if err != nil {
 		t.Fatalf("built executable --json failed: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
@@ -102,7 +125,10 @@ func Bundle(opts map[string]string) compiler.Bundle {
 	if err != nil {
 		t.Fatalf("built executable help failed: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "Usage:") || strings.Contains(stderr, "(built ") {
+	if !strings.Contains(stdout, "Usage:") ||
+		!strings.Contains(stdout, "--journal-dir DIR") ||
+		!strings.Contains(stdout, "--execution-id ID") ||
+		strings.Contains(stderr, "(built ") {
 		t.Fatalf("embedded help output changed; stdout:\n%s\nstderr:\n%s", stdout, stderr)
 	}
 

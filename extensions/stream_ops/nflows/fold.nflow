@@ -1,0 +1,5 @@
+@description "Count stream records and total their character lengths with stream.fold"
+@assert: len(result) == 1
+@assert: result[0].count == 3
+@assert: result[0].characters == 18
+cov.items -> stream.fold @{ initial: { count: 0, characters: 0 }, expression: "{ count: acc.count + 1, characters: acc.characters + len(item) }" } -> collect

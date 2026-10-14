@@ -1,5 +1,7 @@
 # Modifiers
 
+For configurable retry strategies and the opt-in retry-all policy, see [Retry configuration](retry.md).
+
 A modifier is one `:name` or `:name=value` annotation on an atom. Modifiers
 mutate the atom's `*action.Builder[any, any]` in source order before the
 action is built. They are the DSL's only mechanism for per-atom

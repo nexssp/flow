@@ -725,32 +725,37 @@ func main() {
 			os.Exit(0)
 		case "help", "--help", "-h":
 			fmt.Println("Nexss Flow standalone executable.")
-			fmt.Println("Usage:\n  <binary> [json_payload] [flags]")
+			fmt.Println("Usage:\n  <binary> [json_payload] [flags]\n\nFlags:\n  --journal-dir DIR   persist durable step results\n  --execution-id ID   resume a run (requires --journal-dir)")
 			os.Exit(0)
 		}
 	}
 
+	durability, runArgs, err := runner.ParseDurabilityOptions(os.Args[1:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "run options: %v\n", err)
+		os.Exit(2)
+	}
 	payload := map[string]any{}
 	var flags []string
-		for _, arg := range os.Args[1:] {
-			if strings.HasPrefix(arg, "{") {
-				_ = json.Unmarshal([]byte(arg), &payload)
-			} else if strings.HasPrefix(arg, "-") {
-				flags = append(flags, arg)
-			}
+	for _, arg := range runArgs {
+		if strings.HasPrefix(arg, "{") {
+			_ = json.Unmarshal([]byte(arg), &payload)
+		} else if strings.HasPrefix(arg, "-") {
+			flags = append(flags, arg)
 		}
-		showBanner := true
-		for _, arg := range os.Args[1:] {
-			if arg == "--json" || arg == "info" {
-				showBanner = false
-				break
-			}
+	}
+	showBanner := true
+	for _, arg := range runArgs {
+		if arg == "--json" || arg == "info" {
+			showBanner = false
+			break
 		}
-		if showBanner {
-			fmt.Fprintf(os.Stderr, "nexssflow %s (built %s)\n", Version, BuiltAt)
-		}
+	}
+	if showBanner {
+		fmt.Fprintf(os.Stderr, "nexssflow %s (built %s)\n", Version, BuiltAt)
+	}
 
-		bundles := []compiler.Bundle{
+	bundles := []compiler.Bundle{
 `)
 	for i := range usedBundles {
 		fmt.Fprintf(&b, "\t\tnative%d.Bundle(nil),\n", i)
@@ -795,7 +800,9 @@ func main() {
 	}
 
 	opts := runner.Opts{
-		Verbosity: countVerbosity(flags),
+		Verbosity:   countVerbosity(flags),
+		JournalDir:  durability.JournalDir,
+		ExecutionID: durability.ExecutionID,
 	}
 	os.Exit(runner.RunSource(context.Background(), cfg, embedded, "<embedded>", payload, opts))
 }
