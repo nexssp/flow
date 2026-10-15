@@ -2,14 +2,35 @@ package include
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xtest/ktest"
 
 	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/macros"
+	pipelineext "github.com/nexssp/flow/extensions/pipeline"
+	runtimeext "github.com/nexssp/flow/extensions/runtime"
+	"github.com/nexssp/flow/runner"
 )
+
+type testRouteBinding struct {
+	Method string
+	Path   string
+}
+
+func testRouteBundle() compiler.Bundle {
+	routes := map[string]testRouteBinding{
+		"GET /users":   {Method: "GET", Path: "/users"},
+		"POST /orders": {Method: "POST", Path: "/orders"},
+	}
+	modifier := compiler.String("route", func(b *action.Builder[any, any], raw string) *action.Builder[any, any] {
+		return b.Route(routes[raw])
+	})
+	return compiler.Bundle{ID: "test_route_binding", Modifiers: []compiler.Modifier{modifier}}
+}
 
 // runInclude simulates the Recurse callback with a canned result. The
 // real recursion is exercised through the runner; here we test only
@@ -41,6 +62,85 @@ func TestDirective_MergesPipelines(t *testing.T) {
 
 	pipelines, _ := out["pipelines"].(map[string]string)
 	ktest.RequireEqual(t, pipelines["p"], `runtime.const @{ value: "x" }`)
+}
+
+func TestInclude_MergesRoutePipelinesAndKeepsKernelBindings(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	usersFile := filepath.Join(dir, "users.nflow")
+	ordersFile := filepath.Join(dir, "orders.nflow")
+	rootFile := filepath.Join(dir, "root.nflow")
+	ktest.RequireNoError(t, os.WriteFile(usersFile, []byte("@pipeline users:route=\"GET /users\"\n  runtime.noop\n@end\n"), 0o600))
+	ktest.RequireNoError(t, os.WriteFile(ordersFile, []byte("@pipeline orders:route=\"POST /orders\"\n  runtime.noop\n@end\n"), 0o600))
+
+	cfg, err := runner.BuildConfig([]compiler.Bundle{
+		Bundle(nil),
+		pipelineext.Bundle(nil),
+		runtimeext.Bundle(nil),
+		testRouteBundle(),
+	})
+	ktest.RequireNoError(t, err)
+
+	compiled, err := runner.Compile(t.Context(), cfg, "@include ./users.nflow\n@include ./orders.nflow\nruntime.noop", rootFile)
+	ktest.RequireNoError(t, err)
+
+	modifiers, ok := compiled.Meta["pipeline_modifiers"].(map[string][]string)
+	ktest.RequireTrue(t, ok)
+	sources, ok := compiled.Meta["pipeline_modifier_sources"].(map[string][]compiler.ModifierSource)
+	ktest.RequireTrue(t, ok)
+	for _, tc := range []struct {
+		name   string
+		mod    string
+		method string
+		path   string
+	}{
+		{name: "users", mod: "route=GET /users", method: "GET", path: "/users"},
+		{name: "orders", mod: "route=POST /orders", method: "POST", path: "/orders"},
+	} {
+		ktest.RequireEqual(t, modifiers[tc.name], []string{tc.mod})
+		ktest.RequireEqual(t, sources[tc.name], []compiler.ModifierSource{{Kind: "pipeline", Label: tc.name}})
+
+		mounted, ok := compiled.Resolver.Action("pipeline." + tc.name)
+		ktest.RequireTrue(t, ok)
+		bindings := mounted.GetBindings()
+		ktest.RequireLen(t, bindings, 1)
+		binding, ok := bindings[0].(testRouteBinding)
+		ktest.RequireTrue(t, ok)
+		ktest.RequireEqual(t, binding, testRouteBinding{Method: tc.method, Path: tc.path})
+	}
+}
+
+func TestMergeIncludedMeta_ClearsModifiersWhenPipelineIsReplacedWithoutThem(t *testing.T) {
+	t.Parallel()
+	parent := map[string]any{
+		"pipelines":          map[string]string{"users": "old body"},
+		"pipeline_modifiers": map[string][]string{"users": {"route=GET /users"}},
+		"pipeline_modifier_sources": map[string][]compiler.ModifierSource{
+			"users": {{Kind: "pipeline", Label: "users"}},
+		},
+	}
+	included := map[string]any{
+		"pipelines": map[string]string{"users": "replacement body"},
+	}
+
+	ktest.RequireNoError(t, mergeIncludedMeta(parent, included))
+	pipelines, _ := parent["pipelines"].(map[string]string)
+	ktest.RequireEqual(t, pipelines["users"], "replacement body")
+	modifiers, _ := parent["pipeline_modifiers"].(map[string][]string)
+	sources, _ := parent["pipeline_modifier_sources"].(map[string][]compiler.ModifierSource)
+	ktest.RequireEqual(t, len(modifiers), 0)
+	ktest.RequireEqual(t, len(sources), 0)
+}
+
+func TestMergeIncludedMeta_RejectsUnalignedPipelineModifierSources(t *testing.T) {
+	included := map[string]any{
+		"pipelines":          map[string]string{"users": "body"},
+		"pipeline_modifiers": map[string][]string{"users": {"tag=fast", "status=201"}},
+		"pipeline_modifier_sources": map[string][]compiler.ModifierSource{
+			"users": {{Kind: "pipeline", Label: "users"}},
+		},
+	}
+	ktest.RequireErrorContains(t, mergeIncludedMeta(map[string]any{}, included), "2 modifiers but 1 modifier sources")
 }
 
 func TestDirective_ConcatenatesRequire(t *testing.T) {

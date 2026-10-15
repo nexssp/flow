@@ -83,17 +83,27 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 }
 
 // mergeIncludedMeta folds meta from an included file into the parent
-// out map. Pipelines and constants are merged key-by-key; slice-valued
-// declarations (require, llms, pools, ...) are concatenated;
-// everything else is copied only when the parent has not set it.
+// out map. Pipelines and their modifier/source metadata are merged together by
+// pipeline name; constants are merged key-by-key; slice-valued declarations
+// (require, llms, pools, ...) are concatenated; everything else is copied only
+// when the parent has not set it.
 //
 // The constants case is not a default-case copy: two files that both
 // declare constants must produce the union, and the parent must win
 // on key collision. Silent loss on the second @include was the
 // original bug.
 func mergeIncludedMeta(parent, included map[string]any) error {
+	if err := mergeIncludedPipelines(parent, included); err != nil {
+		return err
+	}
+
 	for key, value := range included {
 		switch key {
+		case "pipelines", "pipeline_modifiers", "pipeline_modifier_sources":
+			// These are merged as one name-keyed record above so that a
+			// replacement pipeline cannot retain stale modifier metadata.
+			continue
+
 		case "symbols":
 			parentSymbols, _ := parent["symbols"].(map[string]compiler.SymbolNamespace)
 			incoming, _ := value.(map[string]compiler.SymbolNamespace)
@@ -106,15 +116,6 @@ func mergeIncludedMeta(parent, included map[string]any) error {
 				existing[name] = namespace
 			}
 			parent["symbols"] = existing
-
-		case "pipelines":
-			existing, _ := parent["pipelines"].(map[string]string)
-			if existing == nil {
-				existing = map[string]string{}
-			}
-			incoming, _ := value.(map[string]string)
-			maps.Copy(existing, incoming)
-			parent["pipelines"] = existing
 
 		case "constants":
 			existing, _ := parent["constants"].(map[string]string)
@@ -139,6 +140,68 @@ func mergeIncludedMeta(parent, included map[string]any) error {
 				parent[key] = value
 			}
 		}
+	}
+	return nil
+}
+
+// mergeIncludedPipelines treats each pipeline and its parallel modifier/source
+// slices as a single record. Incoming same-name pipelines replace the prior
+// declaration; if the replacement has no modifiers, any prior modifier data is
+// removed instead of being attached to the new body.
+func mergeIncludedPipelines(parent, included map[string]any) error {
+	incomingPipelines, _ := included["pipelines"].(map[string]string)
+	if len(incomingPipelines) == 0 {
+		return nil
+	}
+	incomingModifiers, _ := included["pipeline_modifiers"].(map[string][]string)
+	incomingSources, _ := included["pipeline_modifier_sources"].(map[string][]compiler.ModifierSource)
+
+	for name := range incomingPipelines {
+		modifiers, hasModifiers := incomingModifiers[name]
+		sources, hasSources := incomingSources[name]
+		if hasModifiers != hasSources {
+			return fmt.Errorf("pipeline %q has incomplete modifier/source metadata", name)
+		}
+		if hasModifiers && len(modifiers) != len(sources) {
+			return fmt.Errorf("pipeline %q has %d modifiers but %d modifier sources", name, len(modifiers), len(sources))
+		}
+	}
+
+	pipelines, _ := parent["pipelines"].(map[string]string)
+	if pipelines == nil {
+		pipelines = make(map[string]string, len(incomingPipelines))
+	}
+	maps.Copy(pipelines, incomingPipelines)
+	parent["pipelines"] = pipelines
+
+	modifiers, _ := parent["pipeline_modifiers"].(map[string][]string)
+	sources, _ := parent["pipeline_modifier_sources"].(map[string][]compiler.ModifierSource)
+	for name := range incomingPipelines {
+		incomingPipelineModifiers, hasModifiers := incomingModifiers[name]
+		incomingPipelineSources, hasSources := incomingSources[name]
+		if !hasModifiers || !hasSources {
+			delete(modifiers, name)
+			delete(sources, name)
+			continue
+		}
+		if modifiers == nil {
+			modifiers = make(map[string][]string, len(incomingModifiers))
+		}
+		if sources == nil {
+			sources = make(map[string][]compiler.ModifierSource, len(incomingSources))
+		}
+		modifiers[name] = incomingPipelineModifiers
+		sources[name] = incomingPipelineSources
+	}
+	if len(modifiers) == 0 {
+		delete(parent, "pipeline_modifiers")
+	} else {
+		parent["pipeline_modifiers"] = modifiers
+	}
+	if len(sources) == 0 {
+		delete(parent, "pipeline_modifier_sources")
+	} else {
+		parent["pipeline_modifier_sources"] = sources
 	}
 	return nil
 }
