@@ -7,6 +7,10 @@
 //
 //	@require retry { default_max: "5", backoff: "exponential", retry_all: "false" }
 //
+// A Go host may set Config.RetryPredicate to supply a typed Kernel retry
+// classifier. Predicates are host configuration only; no predicate expression
+// is available in NFlow syntax.
+//
 // Typical use:
 //
 //	flaky.service:retry=3

@@ -40,9 +40,12 @@ func advise(cfg Config, atom *compiler.Atom, builder *action.Builder[any, any]) 
 		}
 
 		backoff := cfg.backoffFunc()
-		if cfg.RetryAll {
+		switch {
+		case cfg.RetryAll:
 			builder.RetryAll(maxRetries, backoff)
-		} else {
+		case cfg.RetryPredicate != nil:
+			builder.RetryIf(maxRetries, backoff, cfg.RetryPredicate)
+		default:
 			builder.Retry(maxRetries, backoff)
 		}
 	}

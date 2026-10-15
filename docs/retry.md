@@ -46,6 +46,23 @@ bundles := native.BundlesWithRetryConfig(retry.Config{
 
 `retry.ConfigFromOptions` is also available to strictly decode an options map, and `retry.BundleWithConfig` builds a retry bundle for custom bundle sets. The standard native defaults remain unchanged.
 
+## Host-only retry predicates
+
+A Go host can set `retry.Config.RetryPredicate` to use Kernel's `Builder.RetryIf` for atoms with `:retry` or `:retry=N`:
+
+```go
+var temporaryFailure = errors.New("temporary failure")
+
+bundles := native.BundlesWithRetryConfig(retry.Config{
+    DefaultMax: 2,
+    RetryPredicate: func(err error) bool {
+        return errors.Is(err, temporaryFailure)
+    },
+})
+```
+
+Import `errors`, `github.com/nexssp/flow/extensions/retry`, and `github.com/nexssp/flow/native` in the host. `RetryPredicate` is typed Go configuration only; it is not an `@require` option, and NFlow has no predicate-expression syntax. The predicate decides whether each returned error is retried and may be called concurrently by actions built from the bundle, so captured mutable state must be synchronized by the host. Setting both `RetryPredicate` and `RetryAll: true` is invalid; `BundleWithConfig` rejects that conflict.
+
 ## Retry-all caution
 
 `retry_all: true` uses Kernel's `Builder.RetryAll` and retries permanent as well as transient errors. A repeated operation can have side effects, so enable this only for idempotent actions or otherwise safe operations. It remains off by default.

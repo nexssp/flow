@@ -23,6 +23,11 @@ type Config struct {
 	MinBackoff time.Duration `nflow:"min_backoff" default:"10ms"`
 	MaxBackoff time.Duration `nflow:"max_backoff" default:"2s"`
 	RetryAll   bool          `nflow:"retry_all" default:"false"`
+	// RetryPredicate is a host-supplied error classifier used by Kernel's
+	// Builder.RetryIf. It is deliberately not an @require option and cannot be
+	// combined with RetryAll. It may be called concurrently by action runs, so
+	// captured mutable state must be synchronized by the host.
+	RetryPredicate action.RetryPredicate
 }
 
 // normalized fills omitted fields with the existing retry defaults. It does
@@ -55,6 +60,9 @@ func (c Config) validate() error {
 	}
 	if c.MaxBackoff < c.MinBackoff {
 		return errors.New("retry: max_backoff must be at least min_backoff")
+	}
+	if c.RetryAll && c.RetryPredicate != nil {
+		return errors.New("retry: retry_predicate cannot be combined with retry_all")
 	}
 	switch c.Backoff {
 	case BackoffConstant, BackoffExponential, BackoffExponentialJitter:

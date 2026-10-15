@@ -2,6 +2,8 @@ package retry
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -186,6 +188,7 @@ func TestConfigFromOptions_RejectsInvalidOptions(t *testing.T) {
 		{name: "invalid bool", opts: map[string]string{"retry_all": "yes"}},
 		{name: "max below min", opts: map[string]string{"min_backoff": "2s", "max_backoff": "1s"}},
 		{name: "unknown option", opts: map[string]string{"nope": "1"}},
+		{name: "predicate is host-only", opts: map[string]string{"retry_predicate": "true"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -231,6 +234,145 @@ func TestAdvise_RetryAllRetriesPermanentErrors(t *testing.T) {
 	ktest.RequireEqual(t, calls.Load(), int32(3))
 }
 
+func TestRetryPredicate_ClassifiesErrorsAndBoundsAttempts(t *testing.T) {
+	t.Parallel()
+	retryableErr := errors.New("retryable failure")
+	permanentErr := errors.New("permanent failure")
+	cases := []struct {
+		name         string
+		actionErr    error
+		wantAttempts int32
+	}{
+		{name: "retryable", actionErr: retryableErr, wantAttempts: 3},
+		{name: "permanent", actionErr: permanentErr, wantAttempts: 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var calls, predicateCalls atomic.Int32
+			cfg := Config{
+				DefaultMax: 2,
+				Backoff:    BackoffConstant,
+				MinBackoff: time.Nanosecond,
+				MaxBackoff: time.Nanosecond,
+				RetryPredicate: func(err error) bool {
+					predicateCalls.Add(1)
+					return errors.Is(err, retryableErr)
+				},
+			}
+			var finalAttemptErr error
+			builder := action.New[any, any]("probe", func(_ context.Context, _ any) (any, error) {
+				attempt := calls.Add(1)
+				attemptErr := fmt.Errorf("attempt %d: %w", attempt, tc.actionErr)
+				if attempt == tc.wantAttempts {
+					finalAttemptErr = attemptErr
+				}
+				return nil, attemptErr
+			})
+			atom := &compiler.Atom{Name: "probe", Modifiers: []string{"retry=2"}}
+			ktest.RequireNoError(t, advise(cfg, atom, builder))
+
+			_, err := builder.Build().Do(context.Background(), nil)
+			ktest.RequireCondition(t, errors.Is(err, finalAttemptErr), "final error = %v, want last attempt error %v", err, finalAttemptErr)
+			ktest.RequireEqual(t, calls.Load(), tc.wantAttempts)
+			ktest.RequireEqual(t, predicateCalls.Load(), tc.wantAttempts)
+		})
+	}
+}
+
+func TestRetryPredicate_CancellationDuringBackoffStopsNextInvocation(t *testing.T) {
+	t.Parallel()
+	var calls, retryHooks atomic.Int32
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	retryableErr := errors.New("retryable failure")
+	builder := action.New[any, any]("probe", func(_ context.Context, _ any) (any, error) {
+		calls.Add(1)
+		return nil, retryableErr
+	})
+	builder.HookRetryEvent(func(attempt int, err error) {
+		ktest.RequireEqual(t, attempt, 1)
+		ktest.RequireCondition(t, errors.Is(err, retryableErr), "OnRetry error = %v, want original error", err)
+		retryHooks.Add(1)
+		// Kernel fires OnRetry before starting its backoff wait. Delaying
+		// cancellation lets the retry middleware enter that wait first.
+		time.AfterFunc(25*time.Millisecond, cancel)
+	})
+	cfg := Config{
+		DefaultMax: 3,
+		Backoff:    BackoffConstant,
+		MinBackoff: time.Second,
+		MaxBackoff: time.Second,
+		RetryPredicate: func(error) bool {
+			return true
+		},
+	}
+	atom := &compiler.Atom{Name: "probe", Modifiers: []string{"retry=3"}}
+	ktest.RequireNoError(t, advise(cfg, atom, builder))
+
+	_, err := builder.Build().Do(ctx, nil)
+	ktest.RequireCondition(t, errors.Is(err, context.Canceled), "final error = %v, want context.Canceled", err)
+	ktest.RequireEqual(t, calls.Load(), int32(1))
+	ktest.RequireEqual(t, retryHooks.Load(), int32(1))
+}
+
+func TestRetryPredicate_RespectsScopeAndActionBoundaries(t *testing.T) {
+	t.Parallel()
+	var retryableCalls, permanentCalls, unconfiguredCalls atomic.Int32
+	retryableErr := errors.New("retryable failure")
+	permanentErr := errors.New("permanent failure")
+	failingAction := func(name string, calls *atomic.Int32, err error) action.AnyAction {
+		return action.New[any, any](name, func(_ context.Context, _ any) (any, error) {
+			calls.Add(1)
+			return nil, err
+		}).Build()
+	}
+	resolver, err := compiler.NewDynamicResolver(action.Library{
+		Name: "probe",
+		Actions: []action.AnyAction{
+			failingAction("probe.retryable", &retryableCalls, retryableErr),
+			failingAction("probe.permanent", &permanentCalls, permanentErr),
+			failingAction("probe.unconfigured", &unconfiguredCalls, retryableErr),
+		},
+	})
+	ktest.RequireNoError(t, err)
+
+	scopeBundle := scope.Bundle(nil)
+	syntaxBundle := syntax.Bundle(nil)
+	retryBundle := BundleWithConfig(Config{
+		DefaultMax: 2,
+		Backoff:    BackoffConstant,
+		MinBackoff: time.Nanosecond,
+		MaxBackoff: time.Nanosecond,
+		RetryPredicate: func(err error) bool {
+			return errors.Is(err, retryableErr)
+		},
+	})
+	compileOptions := compiler.BundleConfig(scopeBundle, retryBundle)
+	compiled, err := compiler.CompileAction(
+		resolver,
+		compiler.NewDirectiveTable(scopeBundle.Directives...),
+		compiler.NewModifierTable(modifiers_core.Modifiers()...),
+		compiler.NewOperatorTable(syntaxBundle.Operators...),
+		compiler.DefaultPrimaryExtensions(),
+		compileOptions...,
+	).Do(t.Context(), compiler.CompileReq{
+		Source: `@scope :retry=2 {
+			probe.retryable & probe.permanent
+		}
+		&
+		probe.unconfigured`,
+		Name: "retry-predicate-scope.nflow",
+	})
+	ktest.RequireNoError(t, err)
+
+	_, err = compiled.Program.DoAny(t.Context(), nil)
+	ktest.RequireCondition(t, err != nil, "expected the failing actions to return an error")
+	ktest.RequireEqual(t, retryableCalls.Load(), int32(3))
+	ktest.RequireEqual(t, permanentCalls.Load(), int32(1))
+	ktest.RequireEqual(t, unconfiguredCalls.Load(), int32(1))
+}
+
 func TestBundle_RejectsInvalidOptionDuringAdvice(t *testing.T) {
 	t.Parallel()
 	bundle := Bundle(map[string]string{"retry_all": "sometimes"})
@@ -244,6 +386,17 @@ func TestBundleWithConfig_RejectsInvalidDirectConfig(t *testing.T) {
 	bundle := BundleWithConfig(Config{Backoff: "unknown"})
 	err := bundle.AtomAdvise(&compiler.Atom{Name: "probe"}, newBuilder())
 	ktest.RequireCondition(t, err != nil, "expected invalid direct config error")
+}
+
+func TestBundleWithConfig_RejectsRetryAllAndPredicateConflict(t *testing.T) {
+	t.Parallel()
+	bundle := BundleWithConfig(Config{
+		RetryAll:       true,
+		RetryPredicate: func(error) bool { return true },
+	})
+	err := bundle.AtomAdvise(&compiler.Atom{Name: "probe", Modifiers: []string{"retry=1"}}, newBuilder())
+	ktest.RequireCondition(t, err != nil, "expected retry_all and predicate conflict to fail")
+	ktest.RequireErrorContains(t, err, "retry_predicate cannot be combined with retry_all")
 }
 
 func TestBundle_WiresAdvise(t *testing.T) {
