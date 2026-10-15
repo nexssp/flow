@@ -1,5 +1,5 @@
 {
-  "kernel_version": "v0.32.0",
+  "kernel_version": "v0.33.0",
   "scope": "Curated action API anchors; production Flow Go call sites only. This is a drift guard, not a generated API wrapper inventory.",
   "capabilities": [
     {
