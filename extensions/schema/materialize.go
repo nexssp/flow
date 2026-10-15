@@ -24,10 +24,14 @@ func materialize(req compiler.MaterializeReq) error {
 			if in == nil {
 				return nil, xerr.BadRequest("schema: payload is nil")
 			}
-			if err := Validate(ctx, targetSchema, in); err != nil {
+			effective, err := ApplyDefaults(targetSchema, in)
+			if err != nil {
 				return nil, err
 			}
-			return in, nil
+			if err := validateValues(ctx, targetSchema, effective); err != nil {
+				return nil, err
+			}
+			return effective, nil
 		}).Description("Validate payload against " + targetSchema.Name).Build()
 
 		err := req.Resolver.Mount(action.Library{

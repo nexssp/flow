@@ -248,7 +248,7 @@ the pipeline is compiled.
 | `@symbols NAME { ... }` | Declare file-local symbolic values |
 | `@on_error { when ... -> target }` | Route a runtime error to a recovery target |
 | `@hook:name` | Attach a Kernel hook to the compiled program |
-| `@schema NAME { Field Type `tags` }` | Runtime payload validation for strict mode |
+| `@schema NAME { Field Type `tags` }` | Runtime payload validation and defaults; see [schema documentation](schema.md) |
 | `@approval NAME { ... }` | Declare a named human-approval gate; see [pause and resume](approval-resume.md) |
 ---
 

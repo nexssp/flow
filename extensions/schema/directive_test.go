@@ -68,6 +68,59 @@ func TestDirective_WithTags(t *testing.T) {
 	ktest.RequireEqual(t, fields[1].JSONName, "email")
 }
 
+func TestDirective_DefaultTags(t *testing.T) {
+	t.Parallel()
+
+	out, err := runDirective(t,
+		`@schema Settings {`,
+		"  Depth int `default:\"2\"`",
+		`}`,
+	)
+	ktest.RequireNoError(t, err)
+	s := SchemasFromMap(out)[0]
+	values, err := ApplyDefaults(s, map[string]any{})
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, values["depth"], 2)
+}
+
+func TestDirective_RejectsInvalidDefaults(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		line string
+	}{
+		{name: "integer", line: `  Depth int ` + "`default:\"many\"`"},
+		{name: "boolean", line: `  Enabled bool ` + "`default:\"perhaps\"`"},
+		{name: "array JSON", line: `  Tags []string ` + "`default:\"not-json\"`"},
+		{name: "array shape", line: `  Tags []string ` + "`default:\"{}\"`"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := runDirective(t, `@schema Settings {`, tc.line, `}`)
+			ktest.RequireErrorContains(t, err, `field "`)
+			ktest.RequireErrorContains(t, err, "default")
+		})
+	}
+}
+
+func TestDirective_DecodesEscapedCompositeDefault(t *testing.T) {
+	t.Parallel()
+
+	out, err := runDirective(t,
+		`@schema Settings {`,
+		"  Options map[string]any `json:\"options\" default:\"{\\\"enabled\\\":true}\"`",
+		`}`,
+	)
+	ktest.RequireNoError(t, err)
+	values, err := ApplyDefaults(SchemasFromMap(out)[0], map[string]any{})
+	ktest.RequireNoError(t, err)
+	options, ok := values["options"].(map[string]any)
+	ktest.RequireCondition(t, ok, "options default has type %T", values["options"])
+	ktest.RequireEqual(t, options["enabled"], true)
+}
+
 func TestDirective_SliceAndMapAndPointer(t *testing.T) {
 	t.Parallel()
 	out, err := runDirective(t,

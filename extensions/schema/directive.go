@@ -169,6 +169,11 @@ func parseSchemaField(line string) (*Field, error) {
 		if field.JSONName == "" {
 			field.JSONName = lowerFirst(name)
 		}
+		if _, ok := tags["default"]; ok {
+			if _, err := parseDefaultValue(*field, tags["default"]); err != nil {
+				return nil, fmt.Errorf("field %q default: %w", name, err)
+			}
+		}
 		return field, nil
 	default:
 		return nil, fmt.Errorf("expected `Name Type` or `Embed`, got %q", line)

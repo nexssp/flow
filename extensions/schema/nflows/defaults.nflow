@@ -1,0 +1,11 @@
+@description "spec: schema defaults are applied to missing fields before validation"
+
+@schema Settings {
+  Name  string `json:"name"  default:"standard" validate:"required"`
+  Depth int    `json:"depth" default:"2"        validate:"gte=1"`
+}
+
+{} -> Settings.validate
+
+@assert: result.name == "standard"
+@assert: result.depth == 2

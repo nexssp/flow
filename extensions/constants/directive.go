@@ -66,9 +66,11 @@ func handleConstLoad(ctx context.Context, req compiler.DirectiveReq) (compiler.D
 	}
 
 	if schemaName != "" {
-		if err := validateConstLoadSchema(ctx, req.Out, schemaName, parsed, pos); err != nil {
+		effective, err := validateConstLoadSchema(ctx, req.Out, schemaName, parsed, pos)
+		if err != nil {
 			return compiler.DirectiveRes{}, err
 		}
+		parsed = effective
 	}
 
 	flat := make(map[string]string)
@@ -103,23 +105,28 @@ func parseConstLoadLine(line, baseDir string) (path, namespace, schemaName strin
 	return path, namespace, schemaName, nil
 }
 
-func validateConstLoadSchema(ctx context.Context, out map[string]any, name string, parsed any, pos compiler.Position) error {
+func validateConstLoadSchema(ctx context.Context, out map[string]any, name string, parsed any, pos compiler.Position) (any, error) {
 	declared := schema.SchemasFromMap(out)
 	if len(declared) == 0 {
-		return compiler.SourceError(pos,
+		return nil, compiler.SourceError(pos,
 			"@const.load :schema=%s: no @schema declared in this source", name)
 	}
 	decl, ok := schema.ByName(out, name)
 	if !ok {
-		return compiler.SourceError(pos,
+		return nil, compiler.SourceError(pos,
 			"@const.load :schema=%s: unknown schema (declared: %s)",
 			name, declaredSchemaNames(declared))
 	}
-	if err := schema.Validate(ctx, decl, parsed); err != nil {
-		return compiler.SourceError(pos, "@const.load :schema=%s: %s",
+	effective, err := schema.ApplyDefaults(decl, parsed)
+	if err != nil {
+		return nil, compiler.SourceError(pos, "@const.load :schema=%s: %s",
 			name, describeValidationError(err))
 	}
-	return nil
+	if err := schema.Validate(ctx, decl, effective); err != nil {
+		return nil, compiler.SourceError(pos, "@const.load :schema=%s: %s",
+			name, describeValidationError(err))
+	}
+	return effective, nil
 }
 
 func describeValidationError(err error) string {

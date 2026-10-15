@@ -16,6 +16,7 @@ func TestParseStructTags(t *testing.T) {
 	}{
 		{"single", `json:"name"`, map[string]string{"json": "name"}, false},
 		{"two tags", `json:"a" validate:"required"`, map[string]string{"json": "a", "validate": "required"}, false},
+		{"escaped quote", `default:"{\"enabled\":true}"`, map[string]string{"default": `{"enabled":true}`}, false},
 		{"empty", ``, map[string]string{}, false},
 		{"unclosed value", `json:"name`, nil, true},
 		{"missing colon", `json"name"`, nil, true},

@@ -1,6 +1,9 @@
 package schema
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+)
 
 // parseStructTags parses the tag literal between backticks:
 //
@@ -44,7 +47,10 @@ func parseStructTags(raw string) (map[string]string, error) {
 		if i >= len(raw) {
 			return nil, fmt.Errorf("unclosed value for tag %q", key)
 		}
-		value := raw[valueStart:i]
+		value, err := strconv.Unquote(raw[valueStart-1 : i+1])
+		if err != nil {
+			return nil, fmt.Errorf("invalid quoted value for tag %q: %w", key, err)
+		}
 		i++
 
 		if _, dup := out[key]; dup {

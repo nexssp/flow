@@ -1,5 +1,5 @@
 // Package schema provides the `@schema NAME { Field Type `json:"..."
-// validate:"..."` ... }` directive. The declaration lands in
+// default:"..." validate:"..."` ... }` directive. The declaration lands in
 // meta["schemas"]; the `:schema=NAME` modifier attaches the name to an
 // atom so the strict-mode validation hook can find it.
 //
@@ -10,6 +10,9 @@
 //	  Email string `json:"email" validate:"email"`
 //	}
 //	{ name: "Maksymilian" } -> runtime.noop:schema=TestUser
+//
+// Missing fields can receive type-aware defaults. ApplyDefaults returns a new
+// effective payload map, and Schema.validate passes that map downstream.
 package schema
 
 import (

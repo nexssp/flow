@@ -77,7 +77,7 @@ func ByName(meta map[string]any, name string) (Schema, bool) {
 	return Schema{}, false
 }
 
-// Validate checks payload against the declared schema.
+// Validate applies missing defaults and checks payload against the declared schema.
 //
 // For every field that is present, the check proceeds in two stages:
 //
@@ -97,11 +97,14 @@ func ByName(meta map[string]any, name string) (Schema, bool) {
 // registered via validation.RegisterCustom see the live context, and
 // so a canceled invocation aborts validation promptly.
 func Validate(ctx context.Context, schema Schema, payload any) error {
-	m, ok := payload.(map[string]any)
-	if !ok {
-		return xerr.Validation(fmt.Sprintf("schema %s: expected object, got %T", schema.Name, payload))
+	m, err := ApplyDefaults(schema, payload)
+	if err != nil {
+		return err
 	}
+	return validateValues(ctx, schema, m)
+}
 
+func validateValues(ctx context.Context, schema Schema, m map[string]any) error {
 	var details xerr.ValidationDetails
 	for _, field := range schema.Fields {
 		value, present := m[field.JSONName]
@@ -316,6 +319,10 @@ func ToJSONSchema(s Schema) map[string]any {
 			prop["description"] = desc
 		} else if desc := f.Tags["description"]; desc != "" {
 			prop["description"] = desc
+		}
+
+		if defaultValue, hasDefault, err := fieldDefaultValue(f); hasDefault && err == nil {
+			prop["default"] = defaultValue
 		}
 
 		if enum := f.Tags["enum"]; enum != "" {
