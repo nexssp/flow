@@ -10,10 +10,11 @@ import (
 	compiler "github.com/nexssp/flow/compiler"
 )
 
-// advise scans the atom's modifiers for `:retry=N`, installs the retry
-// middleware, and returns the modifier list without the consumed
-// entries. Called by the AtomAdvise hook before the modifier table
-// runs, so consumed modifiers are never applied twice.
+// advise scans the atom's modifiers for `:retry=N`, installs retry
+// middleware for positive values, and consumes zero as an explicit
+// disable. It returns the modifier list without consumed entries. Called
+// by the AtomAdvise hook before the modifier table runs, so consumed
+// modifiers are never applied twice.
 func advise(cfg Config, atom *compiler.Atom, builder *action.Builder[any, any]) error {
 	if atom == nil || builder == nil {
 		return nil
@@ -29,8 +30,11 @@ func advise(cfg Config, atom *compiler.Atom, builder *action.Builder[any, any]) 
 		maxRetries := cfg.DefaultMax
 		if value != "" {
 			parsed, err := strconv.Atoi(value)
-			if err != nil || parsed <= 0 {
+			if err != nil || parsed < 0 {
 				return fmt.Errorf("retry expects a positive attempt count, got %q", value)
+			}
+			if parsed == 0 {
+				continue
 			}
 			maxRetries = parsed
 		}

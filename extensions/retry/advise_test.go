@@ -12,6 +12,9 @@ import (
 	"github.com/nexssp/kernel/xtest/ktest"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/extensions/modifiers_core"
+	"github.com/nexssp/flow/extensions/scope"
+	"github.com/nexssp/flow/extensions/syntax"
 )
 
 func newBuilder() *action.Builder[any, any] {
@@ -39,15 +42,93 @@ func TestAdvise_DefaultMaxWhenNoValue(t *testing.T) {
 	ktest.RequireEqual(t, builder.Describe().RetryMax, 7)
 }
 
+func TestAdvise_ZeroDisablesRetryWithoutInheritedPolicy(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	cfg := Config{
+		DefaultMax: 3,
+		Backoff:    BackoffConstant,
+		MinBackoff: time.Nanosecond,
+		MaxBackoff: time.Nanosecond,
+	}
+	atom := &compiler.Atom{Name: "probe", Modifiers: []string{"retry=0"}}
+	builder := action.New[any, any]("probe", func(_ context.Context, _ any) (any, error) {
+		calls.Add(1)
+		return nil, xerr.Unavailable("temporary failure")
+	})
+
+	ktest.RequireNoError(t, advise(cfg, atom, builder))
+	ktest.RequireEqual(t, len(atom.Modifiers), 0)
+	ktest.RequireEqual(t, builder.Describe().RetryMax, 0)
+	_, err := builder.Build().Do(t.Context(), nil)
+	ktest.RequireCondition(t, err != nil, "expected the transient action error")
+	ktest.RequireEqual(t, calls.Load(), int32(1))
+}
+
+func TestScopedZeroRetryDisablesOnlyLocalAction(t *testing.T) {
+	t.Parallel()
+	var disabledCalls, siblingCalls, otherScopeCalls atomic.Int32
+	failingAction := func(name string, calls *atomic.Int32) action.AnyAction {
+		return action.New[any, any](name, func(_ context.Context, _ any) (any, error) {
+			calls.Add(1)
+			return nil, xerr.Unavailable("temporary failure")
+		}).Build()
+	}
+	resolver, err := compiler.NewDynamicResolver(action.Library{
+		Name: "probe",
+		Actions: []action.AnyAction{
+			failingAction("probe.disabled", &disabledCalls),
+			failingAction("probe.sibling", &siblingCalls),
+			failingAction("probe.other_scope", &otherScopeCalls),
+		},
+	})
+	ktest.RequireNoError(t, err)
+
+	scopeBundle := scope.Bundle(nil)
+	syntaxBundle := syntax.Bundle(nil)
+	retryBundle := BundleWithConfig(Config{
+		DefaultMax: 2,
+		Backoff:    BackoffConstant,
+		MinBackoff: time.Nanosecond,
+		MaxBackoff: time.Nanosecond,
+	})
+	compileOptions := compiler.BundleConfig(scopeBundle, retryBundle)
+	compiled, err := compiler.CompileAction(
+		resolver,
+		compiler.NewDirectiveTable(scopeBundle.Directives...),
+		compiler.NewModifierTable(modifiers_core.Modifiers()...),
+		compiler.NewOperatorTable(syntaxBundle.Operators...),
+		compiler.DefaultPrimaryExtensions(),
+		compileOptions...,
+	).Do(t.Context(), compiler.CompileReq{
+		Source: `@scope :retry=2 {
+			probe.disabled:retry=0 & probe.sibling
+		}
+		&
+		@scope :retry=1 {
+			probe.other_scope
+		}`,
+		Name: "retry-zero-scope.nflow",
+	})
+	ktest.RequireNoError(t, err)
+
+	_, err = compiled.Program.DoAny(t.Context(), nil)
+	ktest.RequireCondition(t, err != nil, "expected the parallel actions to fail")
+	ktest.RequireEqual(t, disabledCalls.Load(), int32(1))
+	ktest.RequireEqual(t, siblingCalls.Load(), int32(3))
+	ktest.RequireEqual(t, otherScopeCalls.Load(), int32(2))
+}
+
 func TestAdvise_RejectsBadValue(t *testing.T) {
 	t.Parallel()
 	cfg := Config{DefaultMax: 3, MinBackoff: 5 * time.Millisecond, MaxBackoff: 50 * time.Millisecond}
-	for _, raw := range []string{"retry=abc", "retry=0", "retry=-1"} {
+	for _, raw := range []string{"retry=abc", "retry=-1"} {
 		t.Run(raw, func(t *testing.T) {
 			t.Parallel()
 			atom := &compiler.Atom{Name: "probe", Modifiers: []string{raw}}
 			err := advise(cfg, atom, newBuilder())
 			ktest.RequireCondition(t, err != nil, "expected error for %q", raw)
+			ktest.RequireErrorContains(t, err, "retry expects a positive attempt count")
 		})
 	}
 }
