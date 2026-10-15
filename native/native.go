@@ -53,6 +53,7 @@ import (
 	"github.com/nexssp/flow/extensions/realtime"
 	"github.com/nexssp/flow/extensions/render"
 	"github.com/nexssp/flow/extensions/require"
+	"github.com/nexssp/flow/extensions/resilience"
 	"github.com/nexssp/flow/extensions/retry"
 	"github.com/nexssp/flow/extensions/runtime"
 	"github.com/nexssp/flow/extensions/schema"
@@ -150,6 +151,7 @@ func SelftestBundlesFrom(bundles []compiler.Bundle) []compiler.Bundle {
 		selftestkit.Bundle(nil),
 		config_yaml.Bundle(nil),
 		decide.Bundle(nil),
+		resilience.Bundle(nil),
 		template.Bundle(nil),
 	)
 }

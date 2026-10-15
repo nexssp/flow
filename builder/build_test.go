@@ -152,6 +152,44 @@ func Bundle(opts map[string]string) compiler.Bundle {
 	}
 }
 
+func TestStageBuildDir_ResilienceWithRetryMountsOnePolicyBundle(t *testing.T) {
+	workDir := t.TempDir()
+	flowPath := filepath.Join(workDir, "resilience.nflow")
+	source := "@require resilience\npayment.charge :retry\n"
+	if err := os.WriteFile(flowPath, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	buildDir, err := stageBuildDir(t.Context(), flowPath, []byte(source), nil, buildOptions{})
+	if err != nil {
+		t.Fatalf("stage generated binary: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(buildDir) }()
+
+	generated, err := os.ReadFile(filepath.Join(buildDir, "main.go"))
+	if err != nil {
+		t.Fatalf("read generated main: %v", err)
+	}
+	mainSource := string(generated)
+	if strings.Contains(mainSource, `"github.com/nexssp/flow/extensions/retry"`) {
+		t.Fatalf("generated binary imported the legacy retry adviser:\n%s", mainSource)
+	}
+
+	var resilienceAlias string
+	for line := range strings.SplitSeq(mainSource, "\n") {
+		if strings.Contains(line, `"github.com/nexssp/flow/extensions/resilience"`) {
+			resilienceAlias = strings.Fields(line)[0]
+			break
+		}
+	}
+	if resilienceAlias == "" {
+		t.Fatalf("generated binary did not import the resilience bundle:\n%s", mainSource)
+	}
+	if got := strings.Count(mainSource, resilienceAlias+".Bundle(nil)"); got != 1 {
+		t.Fatalf("generated binary mounts resilience %d times, want exactly one policy path", got)
+	}
+}
+
 func TestBuild_LocalNestedPackage(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping standalone local-package build integration test in short mode")

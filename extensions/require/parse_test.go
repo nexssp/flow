@@ -3,6 +3,7 @@ package require
 import (
 	"testing"
 
+	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xtest/ktest"
 )
 
@@ -16,6 +17,8 @@ func TestSplitOptions(t *testing.T) {
 	}{
 		{"single", `id: "custom"`, map[string]string{"id": "custom"}, false},
 		{"two", `id: "x", cmd: "y"`, map[string]string{"id": "x", "cmd": "y"}, false},
+		{"newline separated", "id: \"x\"\ncmd: \"y\"", map[string]string{"id": "x", "cmd": "y"}, false},
+		{"quoted newline", "text: \"first\nsecond\"\nid: \"x\"", map[string]string{"text": "first\nsecond", "id": "x"}, false},
 		{"empty", ``, map[string]string{}, false},
 		{"missing colon", `nope`, nil, true},
 		{"empty key", `: "x"`, nil, true},
@@ -29,6 +32,9 @@ func TestSplitOptions(t *testing.T) {
 			got, err := splitOptions(c.raw)
 			if c.wantErr {
 				ktest.RequireCondition(t, err != nil, "expected error for %q", c.raw)
+				if xerr.KindFrom(err) != xerr.KindValidation {
+					t.Fatalf("error for %q = %v, want Validation", c.raw, err)
+				}
 				return
 			}
 			ktest.RequireNoError(t, err)
@@ -63,6 +69,9 @@ func TestParseInlineOptions_Unclosed(t *testing.T) {
 	lines := []string{`@require foo {`, `  id: "x"`}
 	_, _, err := parseInlineOptions(`{`, lines, 0)
 	ktest.RequireErrorContains(t, err, "unclosed")
+	if xerr.KindFrom(err) != xerr.KindValidation {
+		t.Fatalf("unclosed inline options error = %v, want Validation", err)
+	}
 }
 
 func TestParseBlockOptions(t *testing.T) {
@@ -79,4 +88,7 @@ func TestParseBlockOptions_Unclosed(t *testing.T) {
 	lines := []string{`{`, `  id: "x"`}
 	_, _, err := parseBlockOptions(lines, 0)
 	ktest.RequireErrorContains(t, err, "unclosed")
+	if xerr.KindFrom(err) != xerr.KindValidation {
+		t.Fatalf("unclosed block options error = %v, want Validation", err)
+	}
 }

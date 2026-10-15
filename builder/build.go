@@ -156,7 +156,14 @@ var allNativeBundles = []nativeBundleInfo{
 	{
 		id:      "retry",
 		pkg:     "github.com/nexssp/flow/extensions/retry",
-		matcher: func(s string) bool { return strings.Contains(s, ":retry") },
+		matcher: func(s string) bool { return strings.Contains(s, ":retry") || strings.Contains(s, "@require retry") },
+	},
+	{
+		id:  "resilience",
+		pkg: "github.com/nexssp/flow/extensions/resilience",
+		matcher: func(s string) bool {
+			return strings.Contains(s, "@require resilience") || strings.Contains(s, ":circuit_breaker")
+		},
 	},
 	{
 		id:      "hook",
@@ -230,17 +237,44 @@ var allNativeBundles = []nativeBundleInfo{
 }
 
 func detectUsedNativeBundles(src string, forceAll bool) []nativeBundleInfo {
-	if forceAll {
-		return append([]nativeBundleInfo(nil), allNativeBundles...)
-	}
-
 	used := make([]nativeBundleInfo, 0, len(allNativeBundles))
+	var hasRetry, hasResilience bool
 	for _, b := range allNativeBundles {
 		if b.matcher(src) {
-			used = append(used, b)
+			switch b.id {
+			case "retry":
+				hasRetry = true
+			case "resilience":
+				hasResilience = true
+			}
+			if !forceAll {
+				used = append(used, b)
+			}
 		}
 	}
-	return used
+	if forceAll {
+		used = append(used, allNativeBundles...)
+	}
+
+	// Both bundles advise :retry. Resilience owns that policy when explicitly
+	// requested; in --all-bundles mode, keep legacy-only sources on retry.
+	excludeID := ""
+	switch {
+	case hasResilience:
+		excludeID = "retry"
+	case forceAll && hasRetry:
+		excludeID = "resilience"
+	}
+	if excludeID == "" {
+		return used
+	}
+	selected := make([]nativeBundleInfo, 0, len(used)-1)
+	for _, b := range used {
+		if b.id != excludeID {
+			selected = append(selected, b)
+		}
+	}
+	return selected
 }
 
 func runBuild(args []string) int {

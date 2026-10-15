@@ -1,0 +1,3 @@
+@description "Return a healthy quote response through a named breaker"
+@assert: result == "ACME/USD 42.10"
+const:circuit_breaker=quote-selftest-healthy @{ value: "ACME/USD 42.10" }

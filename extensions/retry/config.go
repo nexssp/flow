@@ -1,11 +1,11 @@
 package retry
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
 
 	compiler "github.com/nexssp/flow/compiler"
 )
@@ -18,11 +18,11 @@ const (
 
 // Config controls the retry policy installed by the adviser.
 type Config struct {
-	DefaultMax int           `nflow:"default_max" default:"3"`
-	Backoff    string        `nflow:"backoff" default:"exponential_jitter"`
-	MinBackoff time.Duration `nflow:"min_backoff" default:"10ms"`
-	MaxBackoff time.Duration `nflow:"max_backoff" default:"2s"`
-	RetryAll   bool          `nflow:"retry_all" default:"false"`
+	DefaultMax int           `nflow:"default_max"`
+	Backoff    string        `nflow:"backoff"`
+	MinBackoff time.Duration `nflow:"min_backoff"`
+	MaxBackoff time.Duration `nflow:"max_backoff"`
+	RetryAll   bool          `nflow:"retry_all"`
 	// RetryPredicate is a host-supplied error classifier used by Kernel's
 	// Builder.RetryIf. It is deliberately not an @require option and cannot be
 	// combined with RetryAll. It may be called concurrently by action runs, so
@@ -48,27 +48,39 @@ func (c Config) normalized() Config {
 	return c
 }
 
+// Normalized returns the existing retry defaults for omitted settings.
+func (c Config) Normalized() Config { return c.normalized() }
+
+// Validate checks a fully populated retry configuration.
+func (c Config) Validate() error { return c.validate() }
+
+// BackoffFunc creates the configured Kernel retry delay function.
+func (c Config) BackoffFunc() func(attempt int) time.Duration { return c.backoffFunc() }
+
+// OptionNames returns the recognized @require option keys.
+func OptionNames() []string { return append([]string(nil), acceptedOptions...) }
+
 func (c Config) validate() error {
 	if c.DefaultMax <= 0 {
-		return errors.New("retry: default_max must be positive")
+		return xerr.Validation("retry: default_max must be positive")
 	}
 	if c.MinBackoff <= 0 {
-		return errors.New("retry: min_backoff must be positive")
+		return xerr.Validation("retry: min_backoff must be positive")
 	}
 	if c.MaxBackoff <= 0 {
-		return errors.New("retry: max_backoff must be positive")
+		return xerr.Validation("retry: max_backoff must be positive")
 	}
 	if c.MaxBackoff < c.MinBackoff {
-		return errors.New("retry: max_backoff must be at least min_backoff")
+		return xerr.Validation("retry: max_backoff must be at least min_backoff")
 	}
 	if c.RetryAll && c.RetryPredicate != nil {
-		return errors.New("retry: retry_predicate cannot be combined with retry_all")
+		return xerr.Validation("retry: retry_predicate cannot be combined with retry_all")
 	}
 	switch c.Backoff {
 	case BackoffConstant, BackoffExponential, BackoffExponentialJitter:
 		return nil
 	default:
-		return fmt.Errorf("retry: backoff must be %q, %q, or %q", BackoffConstant, BackoffExponential, BackoffExponentialJitter)
+		return xerr.Validation(fmt.Sprintf("retry: backoff must be %q, %q, or %q", BackoffConstant, BackoffExponential, BackoffExponentialJitter))
 	}
 }
 
@@ -89,10 +101,20 @@ func (c Config) backoffFunc() func(attempt int) time.Duration {
 func ConfigFromOptions(opts map[string]string) (Config, error) {
 	cfg, err := compiler.Decode[Config](opts)
 	if err != nil {
-		return Config{}, fmt.Errorf("retry options: %w", err)
+		return Config{}, xerr.Validation("retry options are invalid", err)
 	}
+	if raw, ok := opts["default_max"]; ok && raw != "" && cfg.DefaultMax <= 0 {
+		return Config{}, xerr.Validation("retry: default_max must be positive")
+	}
+	if raw, ok := opts["min_backoff"]; ok && raw != "" && cfg.MinBackoff <= 0 {
+		return Config{}, xerr.Validation("retry: min_backoff must be positive")
+	}
+	if raw, ok := opts["max_backoff"]; ok && raw != "" && cfg.MaxBackoff <= 0 {
+		return Config{}, xerr.Validation("retry: max_backoff must be positive")
+	}
+	cfg = cfg.normalized()
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
 	}
-	return cfg.normalized(), nil
+	return cfg, nil
 }

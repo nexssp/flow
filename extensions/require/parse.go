@@ -1,9 +1,10 @@
 package require
 
 import (
-	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/nexssp/kernel/xerr"
 
 	compiler "github.com/nexssp/flow/compiler"
 )
@@ -27,9 +28,9 @@ func parseInlineOptions(inline string, lines []string, startLine int) (opts map[
 			return options, i + 1, err
 		}
 		buffer.WriteString(lines[i])
-		buffer.WriteByte(' ')
+		buffer.WriteByte('\n')
 	}
-	return nil, 0, errors.New("unclosed `{`")
+	return nil, 0, xerr.Validation("unclosed `{`")
 }
 
 // parseBlockOptions reads a `{ ... }` block that starts on its own line.
@@ -48,28 +49,30 @@ func parseBlockOptions(lines []string, start int) (opts map[string]string, next 
 			return options, i + 1, err
 		}
 		buffer.WriteString(line)
-		buffer.WriteByte(' ')
+		buffer.WriteByte('\n')
 	}
-	return nil, 0, errors.New("unclosed `{`")
+	return nil, 0, xerr.Validation("unclosed `{`")
 }
 
 // splitOptions parses `key: value, key: value` pairs.
 func splitOptions(raw string) (map[string]string, error) {
 	out := make(map[string]string)
-	for _, pair := range compiler.SplitTopLevel(raw, ',') {
-		pair = strings.TrimSpace(pair)
-		if pair == "" {
-			continue
+	for _, commaPart := range compiler.SplitTopLevel(raw, ',') {
+		for _, pair := range compiler.SplitTopLevel(commaPart, '\n') {
+			pair = strings.TrimSpace(pair)
+			if pair == "" {
+				continue
+			}
+			colon := compiler.IndexTopLevel(pair, ':')
+			if colon < 0 {
+				return nil, xerr.Validation(fmt.Sprintf("expected `key: value`, got %q", pair))
+			}
+			key := strings.TrimSpace(pair[:colon])
+			if key == "" {
+				return nil, xerr.Validation(fmt.Sprintf("empty key in %q", pair))
+			}
+			out[key] = compiler.TrimQuotes(strings.TrimSpace(pair[colon+1:]))
 		}
-		colon := compiler.IndexTopLevel(pair, ':')
-		if colon < 0 {
-			return nil, fmt.Errorf("expected `key: value`, got %q", pair)
-		}
-		key := strings.TrimSpace(pair[:colon])
-		if key == "" {
-			return nil, fmt.Errorf("empty key in %q", pair)
-		}
-		out[key] = compiler.TrimQuotes(strings.TrimSpace(pair[colon+1:]))
 	}
 	return out, nil
 }

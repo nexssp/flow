@@ -1,0 +1,3 @@
+@description "Retry a transient quote failure and then use the cached quote"
+@assert: result == "ACME/USD 41.90 (cached)"
+fail @{ kind: "Unavailable", message: "quote endpoint returned HTTP 503" } :retry=1 || const @{ value: "ACME/USD 41.90 (cached)" }

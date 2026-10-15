@@ -2,11 +2,12 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/nexssp/kernel/xerr"
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
@@ -100,7 +101,7 @@ func (inv *invocation) nativeBundles() ([]compiler.Bundle, error) {
 	}
 	inv.nativeMade = true
 	if inv.nativeFactory == nil {
-		inv.nativeErr = errors.New("flow host: native bundle factory is not configured")
+		inv.nativeErr = xerr.Internal("flow host: native bundle factory is not configured")
 		return nil, inv.nativeErr
 	}
 	inv.native = inv.nativeFactory()
@@ -138,7 +139,7 @@ func (inv *invocation) selftestBundles() ([]compiler.Bundle, error) {
 		return nil, err
 	}
 	if inv.selftestFactory == nil {
-		inv.selfErr = errors.New("flow host: selftest bundles are not available")
+		inv.selfErr = xerr.Internal("flow host: selftest bundles are not available")
 		return nil, inv.selfErr
 	}
 	inv.selftest = inv.selftestFactory(base)
@@ -177,10 +178,38 @@ func (inv *invocation) buildConfig(reqs []require.Requirement) (runner.Config, e
 		return runner.Config{}, ownershipErr
 	}
 
-	bundles := append([]compiler.Bundle(nil), nativeBundles...)
+	usesResilience := hasBundleID(required, "resilience") || hasBundleID(inv.injected, "resilience")
+	usesLegacyRetry := hasBundleID(required, "retry") || hasBundleID(inv.injected, "retry")
+	if usesResilience && usesLegacyRetry {
+		return runner.Config{}, xerr.Conflict("@require resilience and @require retry cannot be used together; resilience includes retry policy options")
+	}
+	baseBundles := nativeBundles
+	if usesResilience {
+		baseBundles = withoutBundleID(nativeBundles, "retry")
+	}
+	bundles := append([]compiler.Bundle(nil), baseBundles...)
 	bundles = append(bundles, inv.injected...)
 	bundles = append(bundles, required...)
 	return runner.BuildConfig(dedupeBundleIDs(bundles))
+}
+
+func hasBundleID(bundles []compiler.Bundle, id string) bool {
+	for i := range bundles {
+		if bundles[i].ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func withoutBundleID(bundles []compiler.Bundle, id string) []compiler.Bundle {
+	out := make([]compiler.Bundle, 0, len(bundles))
+	for i := range bundles {
+		if bundles[i].ID != id {
+			out = append(out, bundles[i])
+		}
+	}
+	return out
 }
 
 func (inv *invocation) isAlreadyInjected(r require.Requirement) bool {

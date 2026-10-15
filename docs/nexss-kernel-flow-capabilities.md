@@ -1,9 +1,9 @@
 # Kernel ↔ Flow Capability Map and Reuse Guide
 
-**Source audit verified:** 2026-10-15  
-**Kernel source basis:** published `v0.32.0`, commit `cf2ade7fec38df727fc44fe943b34a00121b393a`  
-**Flow source basis:** published `v0.30.3`, commit `d7b1487d8fbe5273ad8c91b85282f040c8df229b`  
-**Candidate context:** cumulative Flow `v0.31.0` candidate based on the Flow `v0.30.3` tag; candidate status is described separately below and is not a published release.
+**Source audit verified:** 2026-10-15
+**Kernel source basis:** published `v0.33.0`, commit `8d35ba629b181e260337948acb4a4e07f7505275`
+**Flow source basis:** published `v0.31.3`, commit `a9156b2c0194b0edafdc6899f786ed22a32f5e3b`
+**Candidate context:** Flow changes are compared with published `v0.31.3`; the Kernel follow-up is compared with published `v0.33.0`. Historical release-specific inventory statements below retain their explicitly cited earlier baselines.
 
 This document inventories the Kernel and Flow framework modules only. It distinguishes framework-owned semantics from Flow’s DSL/adapters and from capabilities that must be supplied by an embedding host. Examples and specification bundles are identified as examples, not as public framework API. It does not document application products.
 
@@ -115,6 +115,7 @@ Kernel also ships 13 executable example packages under `examples/`: `01_ai_dag_p
 | `extensions/realtime` | Realtime/event-oriented Flow integration. |
 | `extensions/render` | Rendering actions for Flow values. |
 | `extensions/require` | `@require` resolution and composition of extension bundles. |
+| `extensions/resilience` | Optional `@require resilience` bundle that composes Kernel retry, per-attempt timeout, concurrency, and circuit-breaker policies; see [resilience usage](resilience.md). |
 | `extensions/retry` | Flow atom advice that parses retry declarations and configures Kernel retry middleware; retry execution remains Kernel-owned. |
 | `extensions/runtime` | Standard runtime actions and facilities available to bundled Flow programs. |
 | `extensions/schema` | `@schema`/`:schema` declaration translation, defaults and validation at the declared pipeline invocation boundary. |
@@ -213,21 +214,25 @@ The following names and semantics are verified specifically in the Flow `Taskfil
 - `task lint:nflow` lints `./examples` and `./spec` with the NFlow CLI.
 - `task fmt` runs `golangci-lint fmt`.
 
-## 7. Approved candidate status and roadmap
+## 7. Candidate status and roadmap
 
-### Approved cumulative candidate
+### Current private resilience candidate
 
-The approved candidate is **one cumulative Flow `v0.31.0` candidate based on published Flow `v0.30.3`**, not a released version. Its authorized scope is:
+The current private candidate is based on published Flow `v0.31.3` commit `f120e46da4844d4a35b197494de362ddf91da69f` and published Kernel `v0.33.0`. It adds an optional `@require resilience` bundle for retry, per-attempt timeout, concurrency, and circuit-breaker policies. Generated-binary selection loads resilience for `@require resilience` or `:circuit_breaker`, avoids mounting the legacy retry adviser when resilience owns `:retry`, and leaves retry-only sources on the legacy retry bundle. The candidate is not merged or released; the post-rebase candidate has not been validated.
+
+### Earlier cumulative candidate (historical)
+
+The following scope describes an earlier cumulative Flow `v0.31.0` candidate based on published Flow `v0.30.3`; it is not the current resilience patch:
 
 1. Replace the bounded scheduler inside `extensions/nodes_distribute/map.go` with delegation to Kernel `action.FanOut`, preserving ordered results, per-item errors, fail-fast behavior, and pre-invocation cancellation.
 2. Add `stream.map`, `stream.filter`, and `stream.flatMap` as thin delegations to Kernel `stream.Map`, `stream.Filter`, and `stream.FlatMap`, with NFlow fixtures/tests proving the DSL reaches those canonical APIs.
 3. Include this Flow-only capability-map document in the same cumulative candidate.
 
-The candidate code validation record reports that scoped lint, Flow `task lint`, affected-package focused/no-cache and race/no-cache tests, full `task test:nocache`, and `task ci` passed on Go 1.26.9. Those results describe the code candidate’s recorded validation; this documentation-only task did not rerun tests or alter the validated code tree. The candidate remains **not merged and not released** until the owner’s release process completes.
+The earlier candidate's validation record reports that scoped lint, Flow `task lint`, affected-package focused/no-cache and race/no-cache tests, full `task test:nocache`, and `task ci` passed on Go 1.26.9. Those results apply only to that earlier code candidate.
 
 ### Later-stage ideas — not implemented or approved by this document
 
-- Expose `RetryIf`, circuit-breaker/adaptive admission/load-shedding, and any additional concurrency policy only after specifying NFlow semantics and a real use case.
+- Expose `RetryIf`, Adaptive admission/load-shedding, and any additional concurrency policy only after specifying NFlow semantics and a real use case; circuit-breaker exposure is implemented in the current private resilience candidate.
 - Clarify idempotency/journal/resume configuration around stable execution IDs and host-supplied stores/fencing; do not promise a generic durable job lifecycle.
 - Consider `saga`, `hedge`, `TxRunner`, or fencing syntax only for concrete scenarios with explicit side-effect, compensation, host-capability, and provider-lifecycle contracts.
 - Defer `stream.distinct`/`stream.debounce` until ordering, backpressure, cancellation, and error semantics are explicit.
@@ -236,7 +241,7 @@ Every later exposure should include a real `.nflow` example and a test that prov
 
 ## 8. Source references
 
-- [Kernel `v0.32.0` source at `cf2ade7fec38df727fc44fe943b34a00121b393a`](https://github.com/nexssp/kernel/tree/cf2ade7fec38df727fc44fe943b34a00121b393a) — especially `action/`, `stream/`, `ai/dag/`, `observe/`, `xctx/`, `xerr/`, `xfile/`, and `xfs/`.
+- [Kernel `v0.33.0` source at `8d35ba629b181e260337948acb4a4e07f7505275`](https://github.com/nexssp/kernel/tree/8d35ba629b181e260337948acb4a4e07f7505275) — especially `action/`, `stream/`, `ai/dag/`, `observe/`, `xctx/`, `xerr/`, `xfile/`, and `xfs/`.
 - [Flow `v0.30.3` source at `d7b1487d8fbe5273ad8c91b85282f040c8df229b`](https://github.com/nexssp/flow/tree/d7b1487d8fbe5273ad8c91b85282f040c8df229b).
 - [Flow `native/native.go`](https://github.com/nexssp/flow/blob/d7b1487d8fbe5273ad8c91b85282f040c8df229b/native/native.go) — standard vs self-test bundle sets.
 - [Flow `compiler/build.go`](https://github.com/nexssp/flow/blob/d7b1487d8fbe5273ad8c91b85282f040c8df229b/compiler/build.go) and [`compiler/resolver_mount.go`](https://github.com/nexssp/flow/blob/d7b1487d8fbe5273ad8c91b85282f040c8df229b/compiler/resolver_mount.go) — compile/lowering and explicit resolver mounting.
