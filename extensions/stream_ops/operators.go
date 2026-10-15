@@ -10,6 +10,9 @@ import (
 // Operators exposes the stateless stream manipulators into the DSL.
 func Operators() []action.NamedOperator {
 	return []action.NamedOperator{
+		action.NewOperator("stream.map", Map),
+		action.NewOperator("stream.filter", Filter),
+		action.NewOperator("stream.flatMap", FlatMap),
 		action.NewOperator(
 			"stream.batch",
 			func(cfg struct {

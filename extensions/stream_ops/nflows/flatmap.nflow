@@ -1,0 +1,9 @@
+@description "Expand each item in place with stream.flatMap"
+@assert: len(result) == 6
+@assert: result[0] == "item_1"
+@assert: result[1] == "item_1"
+@assert: result[2] == "item_2"
+@assert: result[3] == "item_2"
+@assert: result[4] == "item_3"
+@assert: result[5] == "item_3"
+cov.items -> stream.flatMap @{ expression: "[item, item]" } -> collect

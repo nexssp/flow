@@ -1,0 +1,6 @@
+@description "Map each item with stream.map and preserve its order"
+@assert: len(result) == 3
+@assert: result[0] == "item_1item_1"
+@assert: result[1] == "item_2item_2"
+@assert: result[2] == "item_3item_3"
+cov.items -> stream.map @{ expression: "item + item" } -> collect

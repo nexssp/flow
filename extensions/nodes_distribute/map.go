@@ -2,11 +2,12 @@ package nodes_distribute
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"time"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/nexssp/flow/compiler/contracts"
 )
@@ -16,6 +17,20 @@ const (
 	maxConcurrency     = 256
 	maxItems           = 100_000
 )
+
+type fanoutNotStartedError struct {
+	cause error
+}
+
+func (e *fanoutNotStartedError) Error() string { return e.cause.Error() }
+func (e *fanoutNotStartedError) Unwrap() error { return e.cause }
+
+func normalizeFanoutError(err error) error {
+	if notStarted, ok := errors.AsType[*fanoutNotStartedError](err); ok {
+		return notStarted.cause
+	}
+	return err
+}
 
 type DistributeMapReq struct {
 	Action      string `json:"action"                 validate:"required"`
@@ -62,9 +77,20 @@ var DistributeMap = action.New("distribute.map", func(ctx context.Context, req D
 		concurrency = maxConcurrency
 	}
 
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var firstErr error
+	var firstErrOnce sync.Once
+
 	// Compose target once with Kernel's native middleware. All goroutines
 	// share the rate limiter, and each execution gets its own retry/timeout.
 	builder := action.Dynamic(target)
+	builder = builder.HookBefore(func(itemCtx context.Context, _ any, _ *action.Meta) (context.Context, error) {
+		if err := itemCtx.Err(); err != nil {
+			return itemCtx, &fanoutNotStartedError{cause: err}
+		}
+		return itemCtx, nil
+	})
 	if req.TimeoutMs > 0 {
 		builder = builder.Timeout(time.Duration(req.TimeoutMs) * time.Millisecond)
 	}
@@ -74,37 +100,40 @@ var DistributeMap = action.New("distribute.map", func(ctx context.Context, req D
 	if req.RateLimit > 0 {
 		builder = builder.RateLimit(float64(req.RateLimit), max(req.RateLimit/10, 1))
 	}
-	execTarget := builder.Build()
-
-	items := make([]Item, len(req.Items))
-	group, groupCtx := errgroup.WithContext(ctx)
-	group.SetLimit(concurrency)
-
-	for i, value := range req.Items {
-		index, val := i, value
-		group.Go(func() error {
-			if err := groupCtx.Err(); err != nil {
-				items[index] = Item{Error: err.Error()}
-				return err
-			}
-
-			output, err := action.InvokeAny(groupCtx, execTarget, val)
+	if req.FailFast {
+		builder = builder.HookAfter(func(_ context.Context, _, _ any, err error, _ *action.Meta) {
 			if err != nil {
-				items[index] = Item{Error: err.Error()}
-				if req.FailFast {
-					return err
+				if notStarted, ok := errors.AsType[*fanoutNotStartedError](err); ok && notStarted != nil {
+					return
 				}
-				return nil
+				firstErrOnce.Do(func() {
+					firstErr = err
+					cancel()
+				})
 			}
-
-			items[index] = Item{OK: true, Result: output}
-			return nil
 		})
 	}
+	execTarget := builder.Build()
 
-	err := group.Wait()
-	if err != nil && req.FailFast {
-		return DistributeMapRes{}, err
+	results := action.FanOut(runCtx, execTarget, req.Items, concurrency)
+	if req.FailFast {
+		if firstErr != nil {
+			return DistributeMapRes{}, firstErr
+		}
+		for _, result := range results {
+			if result.Err != nil {
+				return DistributeMapRes{}, normalizeFanoutError(result.Err)
+			}
+		}
+	}
+
+	items := make([]Item, len(results))
+	for i, result := range results {
+		if result.Err != nil {
+			items[i] = Item{Error: normalizeFanoutError(result.Err).Error()}
+			continue
+		}
+		items[i] = Item{OK: true, Result: result.Value}
 	}
 
 	result := DistributeMapRes{Items: items}

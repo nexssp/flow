@@ -1,0 +1,5 @@
+@description "Filter selected items and preserve the order of accepted items"
+@assert: len(result) == 2
+@assert: result[0] == "item_2"
+@assert: result[1] == "item_3"
+cov.items -> stream.filter @{ expression: "item[5] > 49" } -> collect

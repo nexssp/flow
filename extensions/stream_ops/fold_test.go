@@ -11,7 +11,7 @@ import (
 	"github.com/nexssp/flow/extensions/stream_ops"
 )
 
-func TestStreamFold_NFlowFixture(t *testing.T) {
+func TestStreamOps_NFlowFixtures(t *testing.T) {
 	t.Parallel()
 
 	var output bytes.Buffer
