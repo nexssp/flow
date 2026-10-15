@@ -1,18 +1,19 @@
 // Package schema provides the `@schema NAME { Field Type `json:"..."
 // default:"..." validate:"..."` ... }` directive. The declaration lands in
-// meta["schemas"]; the `:schema=NAME` modifier attaches the name to an
-// atom so the strict-mode validation hook can find it.
+// meta["schemas"]. A `:schema=NAME` modifier on a declared `@pipeline` applies
+// defaults and validates its input at every invocation boundary.
 //
 // Typical use:
 //
 //	@schema TestUser {
-//	  Name  string `json:"name"  validate:"required"`
-//	  Email string `json:"email" validate:"email"`
+//	  Name string `json:"name" default:"guest" validate:"required"`
 //	}
-//	{ name: "Maksymilian" } -> runtime.noop:schema=TestUser
+//	@pipeline greet:schema=TestUser
+//	  runtime.noop
+//	@end
 //
-// Missing fields can receive type-aware defaults. ApplyDefaults returns a new
-// effective payload map, and Schema.validate passes that map downstream.
+// ApplyDefaults returns a new effective payload map, and schema validation
+// passes that map to the pipeline's first action.
 package schema
 
 import (
@@ -69,7 +70,9 @@ func Library() action.Library {
 	}
 }
 
-// SchemaModifier attaches a schema name to an atom as a tag.
+// SchemaModifier attaches a schema name to an atom as metadata. Declared
+// pipeline input validation is applied by the pipeline materializer using
+// the pipeline header's :schema=NAME modifier.
 var SchemaModifier = compiler.String("schema",
 	func(b *action.Builder[any, any], name string) *action.Builder[any, any] {
 		return b.Tag("schema:" + name)

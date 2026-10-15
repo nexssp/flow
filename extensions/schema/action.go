@@ -50,11 +50,8 @@ var ValidateAction = action.New("schema.validate", func(ctx context.Context, req
 	// from schema.Validate) can honor context cancellation and pass
 	// ctx to any context-aware custom rules registered via
 	// validation.RegisterCustom.
-	effective, err := ApplyDefaults(targetSchema, targetPayload)
+	effective, err := ApplyDefaultsAndValidate(ctx, targetSchema, targetPayload)
 	if err != nil {
-		return nil, err
-	}
-	if err := validateValues(ctx, targetSchema, effective); err != nil {
 		return nil, err
 	}
 

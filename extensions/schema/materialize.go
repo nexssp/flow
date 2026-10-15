@@ -2,6 +2,8 @@ package schema
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
@@ -11,6 +13,9 @@ import (
 
 func materialize(req compiler.MaterializeReq) error {
 	schemas := SchemasFromMap(req.Meta)
+	if err := validatePipelineSchemaModifiers(req.Meta, schemas); err != nil {
+		return err
+	}
 	if len(schemas) == 0 {
 		return nil
 	}
@@ -24,11 +29,8 @@ func materialize(req compiler.MaterializeReq) error {
 			if in == nil {
 				return nil, xerr.BadRequest("schema: payload is nil")
 			}
-			effective, err := ApplyDefaults(targetSchema, in)
+			effective, err := ApplyDefaultsAndValidate(ctx, targetSchema, in)
 			if err != nil {
-				return nil, err
-			}
-			if err := validateValues(ctx, targetSchema, effective); err != nil {
 				return nil, err
 			}
 			return effective, nil
@@ -40,6 +42,34 @@ func materialize(req compiler.MaterializeReq) error {
 		})
 		if err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func validatePipelineSchemaModifiers(meta map[string]any, schemas []Schema) error {
+	pipelineMods, _ := meta["pipeline_modifiers"].(map[string][]string)
+	if len(pipelineMods) == 0 {
+		return nil
+	}
+
+	declared := make(map[string]struct{}, len(schemas))
+	for _, targetSchema := range schemas {
+		declared[targetSchema.Name] = struct{}{}
+	}
+
+	for pipelineName, modifiers := range pipelineMods {
+		for _, raw := range modifiers {
+			if compiler.ModifierName(raw) != "schema" {
+				continue
+			}
+			_, schemaName, hasValue := strings.Cut(raw, "=")
+			if !hasValue || schemaName == "" {
+				return fmt.Errorf("@pipeline %q: :schema requires a name (use :schema=Name)", pipelineName)
+			}
+			if _, ok := declared[schemaName]; !ok {
+				return fmt.Errorf("@pipeline %q: :schema=%s: unknown schema", pipelineName, schemaName)
+			}
 		}
 	}
 	return nil

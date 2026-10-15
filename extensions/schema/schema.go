@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/nexssp/kernel/xerr"
@@ -97,11 +98,22 @@ func ByName(meta map[string]any, name string) (Schema, bool) {
 // registered via validation.RegisterCustom see the live context, and
 // so a canceled invocation aborts validation promptly.
 func Validate(ctx context.Context, schema Schema, payload any) error {
+	_, err := ApplyDefaultsAndValidate(ctx, schema, payload)
+	return err
+}
+
+// ApplyDefaultsAndValidate returns the effective payload after applying
+// missing defaults and validating the declared fields. Explicit input values,
+// including typed slice values, are preserved.
+func ApplyDefaultsAndValidate(ctx context.Context, schema Schema, payload any) (map[string]any, error) {
 	m, err := ApplyDefaults(schema, payload)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return validateValues(ctx, schema, m)
+	if err := validateValues(ctx, schema, m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func validateValues(ctx context.Context, schema Schema, m map[string]any) error {
@@ -198,7 +210,9 @@ func checkFieldKind(field Field, value any) (xerr.ValidationDetail, bool) {
 
 	switch {
 	case field.Slice:
-		if _, ok := value.([]any); !ok {
+		// Preserve the caller's concrete slice type. Element constraints are
+		// handled by validation tags such as `dive,required` below.
+		if reflect.ValueOf(value).Kind() != reflect.Slice {
 			detail.Validation = "slice"
 			detail.Value = fmt.Sprintf("must be an array (got %s)", friendlyType(value))
 			return detail, true
@@ -255,6 +269,9 @@ func friendlyType(v any) string {
 	if v == nil {
 		return "null"
 	}
+	if reflect.ValueOf(v).Kind() == reflect.Slice {
+		return "array"
+	}
 	switch v.(type) {
 	case string:
 		return "string"
@@ -264,8 +281,6 @@ func friendlyType(v any) string {
 		uint, uint8, uint16, uint32, uint64,
 		float32, float64:
 		return typeNumber
-	case []any:
-		return "array"
 	case map[string]any:
 		return typeObject
 	default:

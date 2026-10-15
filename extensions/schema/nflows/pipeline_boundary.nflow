@@ -1,0 +1,15 @@
+@description "spec: declared pipeline :schema applies defaults and validation at entry"
+
+@schema Request {
+  Name  string `json:"name"  default:"standard" validate:"required"`
+  Depth int    `json:"depth" default:"1"        validate:"gte=1"`
+}
+
+@pipeline handle:schema=Request
+  noop
+@end
+
+{} -> pipeline.handle
+
+@assert: result.name == "standard"
+@assert: result.depth == 1

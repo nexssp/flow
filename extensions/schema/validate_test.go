@@ -2,6 +2,7 @@ package schema
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/nexssp/kernel/xerr"
@@ -49,6 +50,37 @@ func TestValidate_Success(t *testing.T) {
 		"active": nil,
 	}
 	ktest.RequireNoError(t, Validate(t.Context(), sampleSchema(), payload))
+}
+
+func TestApplyDefaultsAndValidate_PreservesTypedSlices(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		value any
+	}{
+		{name: "typed slice", value: []string{"one", "two"}},
+		{name: "generic slice", value: []any{"one", "two"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			payload := map[string]any{"name": "Maksymilian", "tags": tc.value}
+			effective, err := ApplyDefaultsAndValidate(t.Context(), sampleSchema(), payload)
+			if err != nil {
+				t.Fatalf("ApplyDefaultsAndValidate: %v", err)
+			}
+			if got := effective["tags"]; reflect.TypeOf(got) != reflect.TypeOf(tc.value) {
+				t.Fatalf("slice type = %T, want %T", got, tc.value)
+			}
+			if got := effective["tags"]; !reflect.DeepEqual(got, tc.value) {
+				t.Fatalf("slice value = %#v, want %#v", got, tc.value)
+			}
+			if got := payload["tags"]; reflect.TypeOf(got) != reflect.TypeOf(tc.value) {
+				t.Fatalf("input slice type changed to %T, want %T", got, tc.value)
+			}
+		})
+	}
 }
 
 func TestValidate_MissingRequired(t *testing.T) {
