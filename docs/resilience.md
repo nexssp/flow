@@ -4,7 +4,7 @@ Flow’s optional `resilience` extension translates NFlow policy declarations in
 
 ## Practical quote-provider example
 
-These examples model an application that calls an HTTP quote provider, keeps a last-known quote, and uses one breaker key for its primary and backup actions. The application host supplies `quote.primary` and `quote.backup`; each action performs the HTTP request and classifies HTTP 5xx responses as `xerr.Unavailable` and transport timeouts as `xerr.Timeout`. The example sources are in [`examples/03_resilience_quotes`](../examples/03_resilience_quotes/).
+These examples model an application that calls an HTTP quote provider, keeps a last-known quote, and uses one breaker key for its primary and backup actions. The application host supplies `quote.primary` and `quote.backup`; each action performs the HTTP request and classifies HTTP 5xx responses as `xerr.Unavailable` and transport timeouts as `xerr.Timeout`. The example sources are in [`examples/03_resilience_quotes`](https://github.com/nexssp/examples/tree/main/flow/03_resilience_quotes/).
 
 ```nflow
 @require resilience {

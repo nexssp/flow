@@ -4,7 +4,7 @@ The `nflow` CLI compiles, runs, inspects, and packages `.nflow` files.
 Install it with:
 
 ```sh
-go install github.com/nexssp/flow/cmd/nflow@main
+go install github.com/nexssp/flow/cmd/nflow@latest
 ```
 
 The examples below use `nflow` directly. From a source checkout, use
@@ -76,9 +76,10 @@ error and, at verbosity ≥ 1, an execution trace:
 
 ```sh
 nflow lint flow.nflow
-nflow lint ./examples/...
-nflow lint ./...
+nflow lint ./flow/...
 ```
+
+From the central examples checkout, run the same command against its `flow/` tree.
 
 `lint` preprocesses each file, parses the pipeline, and validates every
 atom and modifier against the active registry. It does not execute the

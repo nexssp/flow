@@ -348,7 +348,7 @@ This file is **curated, not generated**. When a public API changes:
 
 1. Update the implementation and tests.
 2. Update this file in the same change.
-3. Run `go test ./...` and `nflow self test`.
+3. Run `task test` and `nflow self test`.
 4. Remove an entry only after verifying no supported code uses it.
 
 If a section here disagrees with the source, the source wins and this

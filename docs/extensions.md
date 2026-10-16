@@ -468,7 +468,7 @@ value is in a practical, multi-extension workflow. An integrated spec
 may own a local `bundle/library.go` and require it with `@require ./bundle`;
 keep these scenarios deterministic and assert their observable contract.
 The root `examples/` tree remains the place for smaller tutorial-first
-walkthroughs. `task self` runs all extension fixtures, while `task specs`
+walkthroughs. `task self` runs all extension fixtures, while `task lint:nflow`
 runs integrated scenarios; both gates are included in `task test` and
 `task ci`.
 

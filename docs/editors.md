@@ -1,6 +1,6 @@
 # Editor setup: VS Code and Zed
 
-The supported editor integration is a manually invoked task that runs the real CLI command, `nflow lint <file.nflow>`. First install `nflow` (for example, with `go install github.com/nexssp/flow/cmd/nflow@main`) and make sure it is available on the editor's task `PATH`. Run the task from the repository workspace so relative `@include` and `@require` paths resolve as expected.
+The supported editor integration is a manually invoked task that runs the real CLI command, `nflow lint <file.nflow>`. First install `nflow` (for example, with `go install github.com/nexssp/flow/cmd/nflow@latest`) and make sure it is available on the editor's task `PATH`. Run the task from the workflow workspace so relative `@include` and `@require` paths resolve as expected.
 
 ## VS Code
 
@@ -47,4 +47,4 @@ Open a `.nflow` file, invoke **task: spawn**, and choose **nflow: lint current f
 
 ## What this provides—and what it does not
 
-These configurations run lint only when you explicitly invoke the task. The current CLI does not expose an LSP or an on-save diagnostic service, so neither snippet runs automatically on save or publishes diagnostics into the editor's Problems panel. Lint output is shown in the task terminal; it checks preprocessing, parsing, and known atom/modifier names, not runtime input values or security properties. To check the user-facing examples, run `nflow lint ./examples/...`. `nflow lint ./...` also discovers internal developer sources and extension fixtures, some of which currently produce context-specific diagnostics (see the [CLI guide](cli.md)); `task examples` separately executes the curated runnable flows.
+These configurations run lint only when you explicitly invoke the task. The current CLI does not expose an LSP or an on-save diagnostic service, so neither snippet runs automatically on save or publishes diagnostics into the editor's Problems panel. Lint output is shown in the task terminal; it checks preprocessing, parsing, and known atom/modifier names, not runtime input values or security properties. To check the user-facing examples, run `nflow lint ./flow/...` from the central examples repository; its `task ci` target also executes the curated runnable flows.
