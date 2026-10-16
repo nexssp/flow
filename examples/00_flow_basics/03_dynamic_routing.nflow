@@ -1,9 +1,0 @@
-@description "Local fallback routing with dispatch.run"
-
-# Dispatch tries configured member actions in order until one succeeds.
-# The first action fails; const is the local fallback candidate.
-# This exercises fallback routing only, not recovery of an external service.
-
-@assert: result == "I am the fallback!"
-
-dispatch.run @{ members: [fail, const], payload: { value: "I am the fallback!" } }

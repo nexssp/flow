@@ -1,3 +1,0 @@
-@description "Recover from a failed action with the fallback operator"
-@assert: result == "Recovered"
-fail @{ kind: "Validation", message: "User email is invalid" } || const @{ value: "Recovered" }

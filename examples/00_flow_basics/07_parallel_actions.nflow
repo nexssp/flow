@@ -1,6 +1,0 @@
-@description "Run independent actions concurrently"
-@assert: result["runtime.const#1"] == "Data A"
-@assert: result["runtime.const#2"] == "Data B"
-@assert: result["runtime.noop"].request == "local input"
-{ request: "local input" }
--> ( const @{ value: "Data A" } & noop & const @{ value: "Data B" } )
