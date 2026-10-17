@@ -31,22 +31,7 @@ func (Extension) Parse(p *compiler.Parser) (compiler.Expr, error) {
 		return nil, p.Fail(open.Line, "%v", err)
 	}
 
-	raw := stripHashComments(src[open.Offset+1 : closeIndex])
-
-	for p.Cur().Type != compiler.TokEOF {
-		if p.Cur().Offset >= closeIndex {
-			if p.Cur().Offset == closeIndex && p.Cur().Type == compiler.TokRBrace {
-				p.Next()
-			}
-			break
-		}
-		p.Next()
-	}
-
-	return &compiler.ProjectionExpr{
-		Raw: raw,
-		Pos: compiler.Position{File: p.File(), Line: open.Line, Col: open.Offset - strings.LastIndexByte(p.Src()[:open.Offset], '\n')},
-	}, nil
+	return parseProjectionBody(p, closeIndex, p.Position())
 }
 
 // stripHashComments removes `#`-to-EOL comments from a projection body.

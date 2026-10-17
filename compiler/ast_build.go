@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/expr-lang/expr"
+	"github.com/expr-lang/expr/builtin"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xfile"
@@ -651,7 +652,7 @@ func (l *LoopExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAct
 		return nil, err
 	}
 	compiledCondition := PreprocessDots(l.Until)
-	prog, err := expr.Compile(compiledCondition, expr.AllowUndefinedVariables())
+	prog, err := CompileExpression(compiledCondition, expr.AllowUndefinedVariables())
 	if err != nil {
 		return nil, xerr.Validation("loop: invalid condition "+l.Until, err)
 	}
@@ -680,7 +681,7 @@ func (*AssertExpr) Analyze(CapabilityResolver) error { return nil }
 
 func (a *AssertExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction, error) {
 	cleanCondition := PreprocessDots(a.Condition)
-	prog, err := expr.Compile(cleanCondition, expr.AllowUndefinedVariables())
+	prog, err := CompileExpression(cleanCondition, expr.AllowUndefinedVariables())
 	if err != nil {
 		return nil, xerr.Validation("assert: invalid expression "+a.Condition, err)
 	}
@@ -1048,13 +1049,22 @@ func PreprocessDots(src string) string {
 			out.WriteByte(c)
 			i++
 		case '.':
-			if i > 0 && isDotMemberAccess(src[i-1]) {
+			if i > 0 && (isDotMemberAccess(src[i-1]) || src[i-1] == '?') {
 				out.WriteByte(c)
 				i++
 				continue
 			}
 			if i+1 < n && isDotIdentStart(src[i+1]) {
-				i++ // member access: skip the dot prefix so identifier is recognized
+				end := i + 2
+				for end < n && (isDotIdentStart(src[end]) || src[end] >= '0' && src[end] <= '9') {
+					end++
+				}
+				// Use the installed expr version's registry, not a drifting hand-written list.
+				// Ordinary fields retain the established .name -> name rewrite.
+				if dotFieldNeedsRoot(src[i+1 : end]) {
+					out.WriteString("__root__.")
+				}
+				i++
 				continue
 			}
 			out.WriteString("__root__")
@@ -1065,6 +1075,20 @@ func PreprocessDots(src string) string {
 		}
 	}
 	return out.String()
+}
+
+func dotFieldNeedsRoot(name string) bool {
+	if _, collides := builtin.Index[name]; collides {
+		return true
+	}
+	// expr's literal/operator keywords cannot safely become bare identifiers.
+	// __root__ is Flow's own environment binding, not the user's field.
+	switch name {
+	case "true", "false", "nil", "not", "in", "or", "and", "matches", "contains",
+		"startsWith", "endsWith", "let", "if", "else", "__root__":
+		return true
+	}
+	return false
 }
 
 func isDotMemberAccess(prev byte) bool {

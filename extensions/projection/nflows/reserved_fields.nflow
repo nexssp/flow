@@ -1,0 +1,22 @@
+@description "Projection fields may share names with expression builtins and keywords"
+@assert: result.checks.count == true
+@assert: result.checks.type == true
+@assert: result.checks.len == true
+@assert: result.checks.min == true
+@assert: result.nested.count == 5
+@assert: result.nested.name == "Ada"
+@assert: result.keyword == 7
+@assert: result.builtin == 3
+{ count: 5, type: "invoice", len: 2, min: 3, user: { name: "Ada", count: 5 }, "true": 7 }
+-> assert(.count > 4 && .type == "invoice" && .len > 0 && .min < 10, "reserved fields")
+-> {
+  checks: {
+    count: .count > 4,
+    type: .type == "invoice",
+    len: .len > 0,
+    min: .min < 10
+  },
+  nested: { count: .user.count, name: .user.name },
+  keyword: .true,
+  builtin: len("abc")
+}

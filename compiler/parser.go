@@ -539,9 +539,9 @@ func (p *Parser) valueTokenContinues() bool {
 		if p.isTernaryColon() {
 			return false
 		}
-		if p.pos+2 < len(p.toks) &&
-			p.toks[p.pos+1].Type == TokIdent &&
-			p.toks[p.pos+2].Type == TokEquals {
+		// Both :flag and :name=value begin a new modifier. Quoted
+		// colons remain inside a TokString; ternary separators stop above.
+		if p.pos+1 < len(p.toks) && p.toks[p.pos+1].Type == TokIdent {
 			return false
 		}
 	}

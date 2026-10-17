@@ -1,11 +1,7 @@
 @description "Support triage: route a duplicate-charge ticket and prepare a safe reply draft"
+
 @require ./bundle
-@schema SupportTicket {
-  TicketID   string `json:"ticket_id" validate:"required"`
-  CustomerID string `json:"customer_id" validate:"required"`
-  Subject    string `json:"subject" validate:"required"`
-  Message    string `json:"message" validate:"required"`
-}
+
 @include ./common/triage.nflow
 
 @assert: result.ticket_id == "SUP-5821"

@@ -1,0 +1,12 @@
+@description "Expression error guard branches on classified xerr.Kind"
+
+# Test 1: Catches Unavailable and recovers
+runtime.fail @{ kind: "Unavailable", message: "upstream database offline" }
+? on_error {
+  xerr.KindUnavailable -> runtime.const @{ value: { recovered: true, code: 503 } },
+  xerr.KindTimeout     -> runtime.const @{ value: { recovered: true, code: 504 } },
+  else                 -> error.reraise
+}
+
+@assert: result.recovered == true
+@assert: result.code == 503

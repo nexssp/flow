@@ -53,8 +53,8 @@ tasks:
   pre-commit: { desc: "[self, lint, test]", deps: [self, lint, test] }
   pre-push:   { desc: "[self, lint, test:race]", deps: [self, lint, test:race] }
   ci:
-    desc: "[lint, test:race:nocache] (parallel + failfast)"
-    deps: [lint, test:race:nocache]
+    desc: "[self, lint, test:race:nocache] (parallel + failfast)"
+    deps: [self, lint, test:race:nocache]
     output: prefixed
 
   tools:     { desc: "go install -> gotest.tools/gotestsum@latest golang.org/x/vuln/cmd/govulncheck@latest",  cmds: ["go install gotest.tools/gotestsum@latest", "go install golang.org/x/vuln/cmd/govulncheck@latest"] }

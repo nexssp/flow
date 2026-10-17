@@ -1,0 +1,21 @@
+@description "Symbol namespaces resolve cleanly inside projection expressions"
+
+@symbols queues {
+  inbound:  "in.orders"
+  dlq:      "dlq.orders"
+  priority: "high"
+}
+
+{
+  order_id: "ORD-99",
+  tier:     "vip"
+}
+-> {
+  id:     .order_id,
+  target: queues.inbound + "." + queues.priority,
+  backup: queues.dlq
+}
+
+@assert: result.id == "ORD-99"
+@assert: result.target == "in.orders.high"
+@assert: result.backup == "dlq.orders"

@@ -1,0 +1,11 @@
+@description "Named parallel gathers independent branches under explicit keys"
+
+parallel {
+  alpha: runtime.const @{ value: 100 },
+  beta:  runtime.const @{ value: 200 },
+  gamma: { x: 5 } -> { result: .x * 2 }
+}
+
+@assert: result.alpha == 100
+@assert: result.beta == 200
+@assert: result.gamma.result == 10

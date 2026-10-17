@@ -33,6 +33,19 @@ func Bundle(_ map[string]string) compiler.Bundle {
 		Libraries: []action.Library{Library(NewExprEvaluator())},
 		Primaries: []compiler.PrimaryExtension{Primary()},
 		Fixtures:  fixturesFS,
+		AtomAdvise: func(atom *compiler.Atom, _ *action.Builder[any, any]) error {
+			if atom.Name != "projection.project" {
+				return nil
+			}
+			raw, known := atom.Params["raw"]
+			if !known {
+				return nil // Dynamic action arguments are validated by the evaluator.
+			}
+			if _, err := newProgramCache().compile(raw); err != nil {
+				return compiler.SourceError(atom.Pos, "%w", err)
+			}
+			return nil
+		},
 	}
 }
 

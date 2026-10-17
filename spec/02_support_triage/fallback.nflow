@@ -1,11 +1,6 @@
 @description "Support triage: preserve a ticket for manual review when customer lookup is unavailable"
 @require ./bundle
-@schema SupportTicket {
-  TicketID   string `json:"ticket_id" validate:"required"`
-  CustomerID string `json:"customer_id" validate:"required"`
-  Subject    string `json:"subject" validate:"required"`
-  Message    string `json:"message" validate:"required"`
-}
+
 @include ./common/triage.nflow
 
 @pipeline manual_review

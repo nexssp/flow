@@ -1,0 +1,108 @@
+@description "Native runner conformance: supported master constructs"
+@flow_version ">=0.0.0"
+@const DEFAULT_RETRY_COUNT = "2"
+@config:strict=false
+@config {
+  app_env: "production"
+  default_timeout: "5s"
+}
+@symbols app_symbols {
+  primary_queue: "telemetry.primary"
+  status_ok: "ACCEPTED"
+}
+@schema TelemetryBatch {
+  BatchID string `json:"batch_id" validate:"required"`
+  SensorID string `json:"sensor_id" default:"sensor-01" validate:"required"`
+  Readings []int `json:"readings" validate:"required,dive,gte=0"`
+  Priority string `json:"priority" default:"normal" validate:"oneof=low normal high"`
+}
+# Header modifiers may continue on indented colon-only lines; trivia may intervene.
+@profile base_resilience
+  :timeout=4s
+  # Settings stay visible and preserve their line boundaries.
+  :retry=${DEFAULT_RETRY_COUNT}
+@profile hardened_resilience
+  :parent=base_resilience
+  :timeout=2s
+@macro assert_valid_batch() {
+  assert(.batch_id != nil && len(.readings) > 0, "batch needs an ID and readings")
+}
+@pipeline validate_and_stage
+  :schema=TelemetryBatch
+  :profile=hardened_resilience
+  @assert_valid_batch()
+  -> {
+    ...,
+    target_queue: app_symbols.primary_queue,
+    reading_count: len(.readings),
+    peak_reading: max(.readings)
+  }
+@end
+# Compiled here; invoked separately by the Go test with an explicit host store.
+@pipeline resilient_ingest
+  :profile=base_resilience
+  runtime.const
+    :timeout=2s
+    :retry=3
+    :cache=10s
+    :concurrency=4
+    :rate_limit=50
+    :idempotent
+    :dedup
+    :coalesce
+    :tag="resilience,core"
+    :desc="Maks: ingest, Julia: verify"
+    @{ value: { ingest_status: "SUCCESS", storage_code: 201 } }
+@end
+@pipeline auth_fallback
+  runtime.const :auth :role="admin" @{ value: "unauthorized_data" }
+  ? on_error {
+    xerr.KindUnauthorized -> { recovery: "intercepted_unauthorized", handled: true },
+    xerr.KindForbidden -> { recovery: "intercepted_forbidden", handled: true },
+    xerr.KindUnavailable -> { recovery: "intercepted_unavailable", handled: true },
+    else -> error.reraise
+  }
+@end
+@pipeline drain_buffer
+  { pending: 3, drained: 0 }
+  -> loop({ pending: .pending - 1, drained: .drained + 1 }) until(.pending <= 0)
+@end
+@pipeline sample_ticks
+  realtime.ticks @{ hz: 100, max_catchup_ms: 20 }
+  -> stream.take @{ count: 3 }
+  -> stream.map @{ expression: "item" }
+  -> collect
+@end
+# Flow primaries are composed as branches, never nested inside projections.
+parallel {
+  batch: (
+    { batch_id: "BATCH-8901", readings: [12, 45, 98, 23, 67] }
+    -> pipeline.validate_and_stage
+    -> { batch_id: .batch_id, sensor_id: .sensor_id, priority: .priority, queue: .target_queue, peak: .peak_reading }
+  ),
+  auth: pipeline.auth_fallback,
+  drain: pipeline.drain_buffer,
+  ticks: pipeline.sample_ticks,
+  winner: race {
+    runtime.fail @{ kind: "Unavailable", message: "primary endpoint degraded" },
+    runtime.const @{ value: "replica_b_won" }
+  },
+  category: (
+    { peak: 98 }
+    -> match {
+      .peak > 90 -> "CRITICAL_SPIKE",
+      .peak > 50 -> "ELEVATED",
+      _ -> "NORMAL"
+    }
+  )
+}
+@assert: result.batch.batch_id == "BATCH-8901"
+@assert: result.batch.sensor_id == "sensor-01"
+@assert: result.batch.priority == "normal"
+@assert: result.batch.queue == "telemetry.primary"
+@assert: result.batch.peak == 98
+@assert: result.auth.recovery == "intercepted_unauthorized"
+@assert: result.drain.pending == 0 && result.drain.drained == 3
+@assert: len(result.ticks) == 3
+@assert: result.winner == "replica_b_won"
+@assert: result.category == "CRITICAL_SPIKE"

@@ -9,8 +9,8 @@ import (
 )
 
 // Directive parses `@pipeline NAME ... @end` and stores the block body in
-// meta["pipelines"][NAME]. Inline modifiers after the name — `:key` or
-// `:key=value`, with optional single/double-quoted values — are collected
+// meta["pipelines"][NAME]. Inline or indented header modifiers — `:key` or
+// `:key=value`, with optional quoted values — are collected
 // into meta["pipeline_modifiers"][NAME] and applied to the compiled
 // sub-pipeline during materialization.
 //
@@ -36,23 +36,9 @@ type AppliedModifier struct {
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 	pos := compiler.Position{File: req.File, Line: req.I + 1}
-	header := strings.TrimSpace(req.Lines[req.I])
-
-	name, mods := parsePipelineHeader(header)
-	if name == "" {
-		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@pipeline requires a name")
-	}
-
-	next := req.I + 1
-	for next < len(req.Lines) {
-		trimmed := strings.TrimSpace(req.Lines[next])
-		if strings.HasPrefix(trimmed, ":") {
-			_, extraMods := parsePipelineHeader("@pipeline dummy " + trimmed)
-			mods = append(mods, extraMods...)
-			next++
-			continue
-		}
-		break
+	name, mods, next, err := compiler.ParseDeclarationHeader(req, "pipeline")
+	if err != nil {
+		return compiler.DirectiveRes{}, err
 	}
 
 	applied, err := expandProfiles(mods, req.Out, pos, name)
@@ -156,88 +142,6 @@ func expandProfiles(mods []string, meta map[string]any, pos compiler.Position, p
 		}
 	}
 	return expanded, nil
-}
-
-func parsePipelineHeader(line string) (name string, mods []string) {
-	line = strings.TrimSpace(strings.TrimPrefix(line, "@pipeline"))
-	if line == "" {
-		return "", nil
-	}
-
-	nameEnd := strings.IndexAny(line, ": \t")
-	if nameEnd < 0 {
-		return line, nil
-	}
-
-	name = strings.TrimSpace(line[:nameEnd])
-	rest := strings.TrimSpace(line[nameEnd:])
-
-	for rest != "" {
-		colonIdx := strings.IndexByte(rest, ':')
-		if colonIdx < 0 {
-			break
-		}
-		rest = rest[colonIdx+1:]
-
-		key, remaining := readModifierKey(rest)
-		rest = remaining
-		if key == "" {
-			continue
-		}
-
-		if rest == "" || rest[0] != '=' {
-			mods = append(mods, key)
-			rest = strings.TrimSpace(rest)
-			continue
-		}
-
-		value, remaining := readModifierValue(rest[1:])
-		rest = strings.TrimSpace(remaining)
-		mods = append(mods, key+"="+value)
-	}
-
-	return name, mods
-}
-
-func readModifierKey(rest string) (key, remaining string) {
-	keyEnd := strings.IndexAny(rest, "=: \t")
-	if keyEnd < 0 {
-		return strings.TrimSpace(rest), ""
-	}
-	return strings.TrimSpace(rest[:keyEnd]), rest[keyEnd:]
-}
-
-func readModifierValue(rest string) (value, remaining string) {
-	if rest == "" {
-		return "", ""
-	}
-	if rest[0] == '"' || rest[0] == '\'' {
-		return readQuotedValue(rest)
-	}
-	valueEnd := strings.IndexAny(rest, ": \t")
-	if valueEnd < 0 {
-		return rest, ""
-	}
-	return rest[:valueEnd], rest[valueEnd:]
-}
-
-func readQuotedValue(rest string) (value, remaining string) {
-	quote := rest[0]
-	rest = rest[1:]
-	var sb strings.Builder
-	for i := 0; i < len(rest); i++ {
-		c := rest[i]
-		if c == '\\' && i+1 < len(rest) {
-			sb.WriteByte(rest[i+1])
-			i++
-			continue
-		}
-		if c == quote {
-			return sb.String(), rest[i+1:]
-		}
-		sb.WriteByte(c)
-	}
-	return sb.String(), ""
 }
 
 // EndDirective rejects a stray `@end`. It only fires when `@end` appears

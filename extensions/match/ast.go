@@ -3,6 +3,7 @@ package match
 import (
 	"context"
 	"strconv"
+	"strings"
 
 	"github.com/expr-lang/expr/vm"
 	"github.com/nexssp/kernel/action"
@@ -92,10 +93,7 @@ func (m *Expr) Build(ctx context.Context, bCtx *compiler.BuildContext) (action.A
 		conditionCases[i].IsDefault = c.IsDefault
 
 		if !c.IsDefault {
-			condText := c.Condition
-			if m.Subject != "" {
-				condText = "__match_subject__ == (" + condText + ")"
-			}
+			condText := matchConditionExpression(m.Subject, c.Condition)
 
 			prog, err := CompileCondition(condText)
 			if err != nil {
@@ -141,4 +139,20 @@ func (m *Expr) Build(ctx context.Context, bCtx *compiler.BuildContext) (action.A
 		composition.Notes = []string{"case predicates and subject are closure-captured and omitted"}
 	}
 	return compiler.TrackActionComposition(bCtx, program, composition), nil
+}
+
+// matchConditionExpression preserves equality-style match(subject) behavior,
+// while allowing arms beginning with a relational operator to compare against
+// the evaluated subject directly (for example, > 90).
+func matchConditionExpression(subject, condition string) string {
+	if subject == "" {
+		return condition
+	}
+	trimmed := strings.TrimSpace(condition)
+	for _, operator := range []string{">=", "<=", ">", "<"} {
+		if rest, ok := strings.CutPrefix(trimmed, operator); ok {
+			return "__match_subject__ " + operator + " (" + strings.TrimSpace(rest) + ")"
+		}
+	}
+	return "__match_subject__ == (" + condition + ")"
 }

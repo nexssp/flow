@@ -30,7 +30,7 @@ type ConditionCase struct {
 
 // CompileCondition compiles an expression using Flow's input-dot syntax.
 func CompileCondition(source string) (*vm.Program, error) {
-	return expr.Compile(compiler.PreprocessDots(source), expr.AllowUndefinedVariables())
+	return compiler.CompileExpression(compiler.PreprocessDots(source), expr.AllowUndefinedVariables())
 }
 
 // EvaluateProgram runs a compiled condition or subject expression.

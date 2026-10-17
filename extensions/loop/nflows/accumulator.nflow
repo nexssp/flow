@@ -1,0 +1,8 @@
+@description "Loop mutates counter until predicate boundary is satisfied"
+
+{ count: 1, total: 0 }
+-> loop( { count: .count + 1, total: .total + .count } ) until( .count > 4 )
+
+# 1 + 2 + 3 + 4 = 10; loop stops when count reaches 5
+@assert: result.count == 5
+@assert: result.total == 10

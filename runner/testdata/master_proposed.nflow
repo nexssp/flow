@@ -1,0 +1,182 @@
+@description "Comprehensive Master Specification: Exercises all native syntax and resilience policies"
+
+# ── 1. Compile-Time Flow Version Guard ────────────────────────────────────────
+@flow_version ">=0.0.0"
+
+# ── 2. Global Compile-Time Constants & Configuration ──────────────────────────
+@const DEFAULT_RETRY_COUNT = "2"
+@config:strict=false
+@config {
+  app_env: "production"
+  default_timeout: "5s"
+}
+
+# ── 3. File-Local Symbolic Namespaces ─────────────────────────────────────────
+# Eliminates magic strings across pipelines, routing, and assertions
+@symbols app_symbols {
+  primary_queue: "telemetry.primary"
+  backup_queue:  "telemetry.backup"
+  max_capacity:  "100"
+  status_ok:     "ACCEPTED"
+}
+
+# ── 4. Schemas (Standard Go Struct Tags) ──────────────────────────────────────
+# Full support for defaults, boundary checks, nested fields, and tags
+@schema TelemetryBatch {
+  BatchID   string   `json:"batch_id"   validate:"required"`
+  SensorID  string   `json:"sensor_id"  default:"sensor-01" validate:"required"`
+  Readings  []int    `json:"readings"   validate:"required,dive,gte=0"`
+  Priority  string   `json:"priority"   default:"normal"    validate:"oneof=low normal high"`
+  IsTest    bool     `json:"is_test"`
+}
+
+# ── 5. Reusable Policies (@profile) ───────────────────────────────────────────
+# Defines production resilience policies (Kernel middleware stacks)
+@profile base_resilience
+  :timeout=4s
+  :retry=2
+  :concurrency=8
+
+# Profile inheritance: extends base_resilience and overrides the timeout
+@profile hardened_resilience
+  :parent=base_resilience
+  :timeout=2s
+  :rate_limit=100
+  :cache=30s
+  :idempotent
+  :dedup
+  :coalesce
+
+# ── 6. Compile-Time Macros (@macro) ───────────────────────────────────────────
+# Reusable AST assertion template expanded at compile time
+@macro assert_valid_batch() {
+  assert(.batch_id != nil && len(.readings) > 0, "batch must contain an ID and non-empty readings")
+}
+
+# ── 7. Reusable Sub-Pipelines (@pipeline) ─────────────────────────────────────
+
+# Pipeline 1: Validates incoming telemetry against @schema and runs projection
+@pipeline validate_and_stage :schema=TelemetryBatch :profile=base_resilience
+  @assert_valid_batch()
+  -> {
+    ...,
+    processed_at: "2026-10-17T16:00:00Z",
+    target_queue: app_symbols.primary_queue,
+    reading_count: len(.readings),
+    peak_reading: max(.readings)
+  }
+@end
+
+# Pipeline 2: Full Resilience Suite on an individual action
+# Demonstrates :timeout, :retry, :cache, :concurrency, :rate_limit, :idempotent, :dedup, :coalesce
+@pipeline resilient_ingest
+  runtime.const
+    :timeout=2s
+    :retry=3
+    :cache=10s
+    :concurrency=4
+    :rate_limit=50
+    :idempotent
+    :dedup
+    :coalesce
+    :tag="resilience,core"
+    :desc="Hardened ingest endpoint"
+    @{ value: { ingest_status: "SUCCESS", storage_code: 201 } }
+@end
+
+# Pipeline 3: Typed Error-Kind Discrimination (? on_error)
+# Proves authorization enforcement (:auth, :role) and catch discrimination
+@pipeline auth_and_fallback
+  # Intentionally trigger an authorization failure to exercise the error recovery path
+  runtime.const :auth :role="admin" @{ value: "unauthorized_data" }
+  ? on_error {
+    xerr.KindUnauthorized -> { recovery: "intercepted_unauthorized", handled: true },
+    xerr.KindForbidden    -> { recovery: "intercepted_forbidden", handled: true },
+    xerr.KindUnavailable  -> { recovery: "intercepted_unavailable", handled: true },
+    else                  -> error.reraise
+  }
+@end
+
+# Pipeline 4: Dynamic Iteration via loop(...) until(...)
+@pipeline drain_buffer
+  { pending: 3, drained: 0 }
+  -> loop( { pending: .pending - 1, drained: .drained + 1 } ) until( .pending <= 0 )
+@end
+
+# Pipeline 5: Stateful Realtime Stream Processing
+# Generates 100Hz ticks, bounds them, maps them, and collects into an array
+@pipeline sample_ticks
+  realtime.ticks @{ hz: 100, max_catchup_ms: 20 }
+  -> stream.take @{ count: 3 }
+  -> stream.map @{ expression: "item" }
+  -> collect
+@end
+
+# ── 8. Master Pipeline Assembly ───────────────────────────────────────────────
+
+# Step 1: Input injection (missing default fields are filled by TelemetryBatch schema)
+{
+  batch_id: "BATCH-8901",
+  readings: [12, 45, 98, 23, 67],
+  is_test:  true
+}
+
+# Step 2: Schema validation, default resolution & macro invariant guard
+-> pipeline.validate_and_stage
+
+# Step 3: Structured Concurrency
+# - parallel { ... } runs isolated sub-pipelines simultaneously with named outputs
+# - race { ... } returns the first successful candidate among concurrent tasks
+-> {
+  batch_metadata: .,
+  parallel_results: parallel {
+    ingest:    pipeline.resilient_ingest,
+    auth_test: pipeline.auth_and_fallback,
+    drain:     pipeline.drain_buffer,
+    ticks:     pipeline.sample_ticks
+  },
+  fastest_source: race {
+    runtime.fail @{ kind: "Unavailable", message: "primary endpoint degraded" },
+    runtime.const @{ value: "replica_b_won" }
+  }
+}
+
+# Step 4: Pattern Matching (match)
+# Evaluates expressions and dispatches to specific transformation branches
+-> {
+  ...,
+  batch_category: match(.batch_metadata.peak_reading) {
+    > 90 -> "CRITICAL_SPIKE",
+    > 50 -> "ELEVATED",
+    _    -> "NORMAL"
+  }
+}
+
+# Step 5: Final Projection & State Assembly (expr-lang transforms)
+-> {
+  batch:          .batch_metadata.batch_id,
+  sensor:         .batch_metadata.sensor_id,
+  priority:       .batch_metadata.priority,
+  queue:          .batch_metadata.target_queue,
+  peak:           .batch_metadata.peak_reading,
+  category:       .batch_category,
+  ingest_status:  .parallel_results.ingest.ingest_status,
+  auth_recovery:  .parallel_results.auth_test.recovery,
+  items_drained:  .parallel_results.drain.drained,
+  tick_count:     len(.parallel_results.ticks),
+  winner:         .fastest_source,
+  env:            .app_env ?? "production"
+}
+
+# ── 9. Verification Assertions (Checked by Runner) ────────────────────────────
+@assert: result.batch == "BATCH-8901"
+@assert: result.sensor == "sensor-01"
+@assert: result.priority == "normal"
+@assert: result.queue == "telemetry.primary"
+@assert: result.peak == 98
+@assert: result.category == "CRITICAL_SPIKE"
+@assert: result.ingest_status == "SUCCESS"
+@assert: result.auth_recovery == "intercepted_unauthorized"
+@assert: result.items_drained == 3
+@assert: result.tick_count == 3
+@assert: result.winner == "replica_b_won"

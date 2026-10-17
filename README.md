@@ -85,7 +85,8 @@ task ci
 
 ## Documentation
 
-- [Language syntax and directives](docs/language.md)
+- [Flow language and runtime reference](docs/language-reference.md) — implementation-backed syntax, validation, runtime, extensions, and CLI boundaries
+- [Language syntax walkthrough](docs/language.md)
 - [Symbol namespaces and single-source values](docs/symbols.md)
 - [CLI and runtime](docs/cli.md)
 - [Extension bundles](extensions/README.md)

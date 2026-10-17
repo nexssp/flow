@@ -1,0 +1,26 @@
+@description "Pipeline header accepts clean indented multi-line modifiers"
+
+@schema JobPayload {
+  JobID    string `json:"job_id"    validate:"required"`
+  Priority int    `json:"priority"  default:"5" validate:"gte=1"`
+}
+
+@pipeline process_job
+  :schema=JobPayload
+  :timeout=3s
+  :tag="worker,batch"
+  :status=201
+
+  {
+    processed_id: .job_id,
+    prio:         .priority,
+    ack:          true
+  }
+@end
+
+{ job_id: "JOB-404" }
+-> pipeline.process_job
+
+@assert: result.processed_id == "JOB-404"
+@assert: result.prio == 5
+@assert: result.ack == true

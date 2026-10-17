@@ -1,0 +1,12 @@
+@description "Mixed flag and key-value modifiers parse independently without token bleeding"
+
+# Flags placed first, followed by value modifiers with space delimiters
+runtime.const :idempotent :dedup :coalesce :concurrency=4 :rate_limit=50 :timeout=2s @{
+  value: {
+    status: "ok",
+    capacity: 50
+  }
+}
+
+@assert: result.status == "ok"
+@assert: result.capacity == 50

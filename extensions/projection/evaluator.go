@@ -73,7 +73,7 @@ func (c *programCache) compile(raw string) (*vm.Program, error) {
 		c.entries.Delete(raw)
 	}
 
-	program, err := expr.Compile(buildProgramSource(raw),
+	program, err := compiler.CompileExpression(buildProgramSource(raw),
 		expr.AllowUndefinedVariables(),
 		spreadMergeOption,
 	)

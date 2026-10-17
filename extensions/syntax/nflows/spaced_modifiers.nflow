@@ -1,0 +1,7 @@
+@description "Spaced inline modifiers do not collide with ternary colon parsing"
+
+# Space before colon should parse as atom modifiers, not ternary conditional
+runtime.const :timeout=2s :retry=1 @{ value: "spaced_modifier_ok" }
+-> noop
+
+@assert: result == "spaced_modifier_ok"

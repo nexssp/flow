@@ -1,8 +1,9 @@
 # The `.nflow` language
 
 A `.nflow` file is a graph of actions with typed policies and reusable
-patterns. This document is the language reference; for the CLI that runs
-these files, see [cli.md](cli.md).
+patterns. This page is a syntax walkthrough. For the authoritative,
+implementation-backed language and runtime reference, see
+[language-reference.md](language-reference.md); for the CLI, see [cli.md](cli.md).
 
 Every snippet on this page is a real, working flow. Copy any of them
 into a file and run it:
@@ -226,6 +227,38 @@ Projections run through `expr-lang`, so array functions like `filter`,
 `{ ... }` is data. `noop` inside a projection is a variable lookup, not
 a capability. Use `@{ }` for capability references.
 
+Flow controls can also be values in projection fields. Each nested control is
+an analyzed/built Flow AST child and receives the same incoming projection root;
+sibling properties do not run as sequential field dependencies. The enclosing
+object remains an expr-lang expression, so ternary branches retain short-circuit
+laziness. `parallel` and `race` retain their control-level Kernel
+cancellation/join behavior; ordinary object properties do not become
+concurrent. Typed errors and cancellation propagate. Values such as `#item`
+in an expr-lang iterator are not implicitly rebound as the input to a nested
+Flow control—the control receives the projection root.
+
+```nflow
+{ peak: 98, keep: "same" }
+-> {
+  snapshot: .,
+  branches: parallel {
+    first: { peak: .peak, keep: .keep },
+    second: race {
+      runtime.fail @{ kind: "Unavailable", message: "try next" },
+      runtime.const @{ value: { peak: .peak, keep: .keep } }
+    }
+  },
+  category: match(.peak) {
+    > 90 -> "HIGH",
+    _ -> "NORMAL"
+  }
+}
+```
+
+This example demonstrates nested controls and subject-relative relational match
+arms; it does not imply that arbitrary `@{ ... }` argument blocks support
+expression interpolation.
+
 ---
 
 ## 6. Directives
@@ -265,6 +298,14 @@ For symbol declaration syntax, include behavior, namespace precedence, and suppo
 {} -> pipeline.fetch_user
 ```
 
+Header modifiers may be written on the declaration line or on continuation lines indented farther than the directive, containing only modifiers. Blank lines and whole-line `#` or `//` comments may separate header modifiers. The first other significant line permanently begins the body (even a macro invocation); trivia after the last modifier belongs to the body. Same-line syntax remains valid, and line breaks are not rewritten. For example:
+```nflow
+@pipeline fetch_user
+  :tag="api"
+  :profile=reliable
+  http.request @{ url: "https://api.example/users/1" }
+@end
+```
 Every `@pipeline NAME` mounts as `pipeline.NAME`. Use that name to call
 it. Modifiers on the pipeline header land on the wrapper:
 
@@ -322,7 +363,14 @@ That call gets `timeout=1s`.
 
 ## 9. `@profile` — named policy
 
-A profile is a named, reusable `@scope`. Declare once, use anywhere.
+A profile is a named, reusable `@scope`. Declare once, use anywhere. Its modifiers can likewise continue on indented colon-only lines; whole-line comments and blank lines may intervene. The first other significant line ends the header, and later trivia is body content. Example:
+```nflow
+@profile reliable
+  :timeout=10s
+  // another header setting
+  :retry=4
+```
+
 
 ```nflow
 @profile reliable :timeout=10s :retry=4

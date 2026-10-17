@@ -42,30 +42,15 @@ var ProfileDirective = compiler.Directive{
 
 func handleProfile(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 	pos := compiler.Position{File: req.File, Line: req.I + 1}
-	line := strings.TrimSpace(req.Lines[req.I])
-
-	rest := strings.TrimSpace(strings.TrimPrefix(line, "@profile"))
-	if rest == "" {
-		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@profile requires a name")
-	}
-
-	nameEnd := strings.IndexAny(rest, ": \t")
-	var name, tail string
-	if nameEnd < 0 {
-		name = rest
-	} else {
-		name = strings.TrimSpace(rest[:nameEnd])
-		tail = rest[nameEnd:]
-	}
-	if name == "" {
-		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@profile: missing name")
+	name, mods, next, err := compiler.ParseDeclarationHeader(req, "profile")
+	if err != nil {
+		return compiler.DirectiveRes{}, err
 	}
 	if !isValidProfileName(name) {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@profile: invalid name %q", name)
 	}
 
-	mods := parseScopeHeader(tail)
 	parent, mods, err := extractParent(mods)
 	if err != nil {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
@@ -83,7 +68,7 @@ func handleProfile(_ context.Context, req compiler.DirectiveReq) (compiler.Direc
 	}
 	profiles[name] = profileDef{parent: parent, mods: mods}
 
-	return compiler.DirectiveRes{Next: req.I + 1}, nil
+	return compiler.DirectiveRes{Next: next}, nil
 }
 
 // extractParent pulls a single :parent=NAME entry out of mods.

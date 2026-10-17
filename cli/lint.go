@@ -72,6 +72,7 @@ var lintDiscoveryExcludedDirs = map[string]struct{}{
 	".svn":         {},
 	"vendor":       {},
 	"node_modules": {},
+	"testdata":     {},
 }
 
 func isRecursiveLintPattern(target string) bool {
@@ -154,13 +155,20 @@ func walkLintSources(root string, add func(string)) (int, error) {
 		}
 		if entry.IsDir() {
 			if path != root {
-				if _, skip := lintDiscoveryExcludedDirs[entry.Name()]; skip {
+				name := entry.Name()
+				// Skip hidden dirs, vendor/git, and dirs starting with underscore (partials)
+				if _, skip := lintDiscoveryExcludedDirs[name]; skip || strings.HasPrefix(name, "_") {
 					return filepath.SkipDir
 				}
 			}
 			return nil
 		}
-		if entry.Type()&fs.ModeSymlink != 0 || !strings.HasSuffix(entry.Name(), ".nflow") {
+		// Skip non-.nflow, symlinks, partials (_*.nflow), and flat companion files (*--*.nflow)
+		name := entry.Name()
+		if entry.Type()&fs.ModeSymlink != 0 ||
+			!strings.HasSuffix(name, ".nflow") ||
+			strings.HasPrefix(name, "_") ||
+			strings.Contains(name, "--") {
 			return nil
 		}
 		found++

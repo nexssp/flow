@@ -1,6 +1,7 @@
 package match
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/nexssp/kernel/xerr"
@@ -155,4 +156,60 @@ func TestWithSymbolEnvironment_BindsFileLocal(t *testing.T) {
 	ns, ok := env["filelocal"].(map[string]any)
 	ktest.RequireCondition(t, ok, "filelocal not bound as map: %T", env["filelocal"])
 	ktest.RequireEqual(t, ns["role"], "from_file")
+}
+
+func TestSubjectRelativeRelationalConditions(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		condition string
+		value     int
+		want      bool
+	}{
+		{"> 90", 91, true},
+		{"> 90", 90, false},
+		{">= 50", 50, true},
+		{">= 50", 49, false},
+		{"< 50", 49, true},
+		{"< 50", 50, false},
+		{"<= 50", 50, true},
+		{"<= 50", 51, false},
+	} {
+		t.Run(tc.condition+"/"+strconv.Itoa(tc.value), func(t *testing.T) {
+			program, err := CompileCondition(matchConditionExpression(".peak", tc.condition))
+			if err != nil {
+				t.Fatalf("compile %q: %v", tc.condition, err)
+			}
+			got, err := EvaluateProgram(program, map[string]any{"__match_subject__": tc.value})
+			if err != nil {
+				t.Fatalf("evaluate: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSubjectRelativeInvalidRelationalExpression(t *testing.T) {
+	t.Parallel()
+	for _, condition := range []string{">", ">= nope ???", "< ("} {
+		if _, err := CompileCondition(matchConditionExpression(".peak", condition)); err == nil {
+			t.Errorf("CompileCondition(%q) succeeded; want invalid-expression error", condition)
+		}
+	}
+}
+
+func TestSubjectMatchEqualityCompatibility(t *testing.T) {
+	t.Parallel()
+	program, err := CompileCondition(matchConditionExpression(".status", `"ACTIVE"`))
+	if err != nil {
+		t.Fatalf("compile equality condition: %v", err)
+	}
+	got, err := EvaluateProgram(program, map[string]any{"__match_subject__": "ACTIVE"})
+	if err != nil || got != true {
+		t.Fatalf("legacy equality result = %v, %v; want true, nil", got, err)
+	}
+	if got := matchConditionExpression("", ".ok"); got != ".ok" {
+		t.Fatalf("subjectless match changed condition to %q", got)
+	}
 }
