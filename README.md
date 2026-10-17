@@ -11,6 +11,8 @@ Nexss Flow is a Go runtime and language for composing `.nflow` programs from reg
 
 ## Install
 
+Prebuilt CLI downloads are published on [GitHub Releases](https://github.com/nexssp/flow/releases) for Linux, macOS, and Windows (amd64 and arm64), with SHA-256 checksums. See [CLI releases](docs/releases.md) for archive details and publishing instructions.
+
 Install the CLI from the latest tagged release:
 
 ```sh

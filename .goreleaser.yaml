@@ -1,0 +1,50 @@
+version: 2
+project_name: nflow
+
+builds:
+  - id: nflow
+    main: ./cmd/nflow
+    binary: nflow
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+      - -mod=readonly
+    ldflags:
+      - >-
+        -s -w
+        -X github.com/nexssp/flow/builder.Version=v{{ .Version }}
+        -X github.com/nexssp/flow/builder.Commit={{ .FullCommit }}
+        -X github.com/nexssp/flow/builder.BuiltAt={{ .Date }}
+
+archives:
+  - formats: [tar.gz]
+    name_template: 'nflow_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+      - NOTICE
+
+checksum:
+  name_template: 'nflow_{{ .Version }}_checksums.txt'
+  algorithm: sha256
+
+changelog:
+  use: git
+
+release:
+  github:
+    owner: nexssp
+    name: flow
+  prerelease: auto
+  mode: keep-existing
