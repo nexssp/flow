@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -21,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nexssp/kernel/xfs"
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
@@ -384,57 +387,101 @@ func harnessKey(reqs []require.Requirement, goworkPath string, usedNative ...nat
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
+// moduleSourceFingerprint hashes local build inputs by content, not mtimes.
+// Include non-Go files because go:embed may consume NFlow, YAML, text or other
+// assets. Extra invalidations are safer than reusing a stale compiled runner.
 func moduleSourceFingerprint(root string) string {
 	h := sha256.New()
-	var files int
-	var newest int64
-
-	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	fmt.Fprintln(h, "module-content-v2")
+	walkErr := func() error {
+		absolute, err := filepath.Abs(root)
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", "vendor", "testdata":
-				return fs.SkipDir
+		canonical, err := filepath.EvalSymlinks(absolute)
+		if err != nil {
+			return err
+		}
+		confined, err := xfs.OpenRoot(canonical)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = confined.Close() }()
+		cacheRoot, err := filepath.Abs(harnessCacheRoot())
+		if err != nil {
+			return err
+		}
+		if resolved, resolveErr := filepath.EvalSymlinks(cacheRoot); resolveErr == nil {
+			cacheRoot = resolved
+		}
+		return filepath.WalkDir(canonical, func(path string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
 			}
+			if d.IsDir() {
+				// Cached runners are outputs, not inputs, even inside a source module.
+				if path == cacheRoot && path != canonical {
+					return fs.SkipDir
+				}
+				switch d.Name() {
+				case ".git", "node_modules":
+					return fs.SkipDir
+				}
+				return nil
+			}
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			if !info.Mode().IsRegular() {
+				// Go source discovery and go:embed do not follow file symlinks.
+				return nil
+			}
+			rel, err := filepath.Rel(canonical, path)
+			if err != nil {
+				return err
+			}
+			file, err := confined.Open(rel)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(h, "file=%q size=%d\n", filepath.ToSlash(rel), info.Size())
+			_, copyErr := io.Copy(h, file)
+			closeErr := file.Close()
+			if copyErr != nil {
+				return copyErr
+			}
+			if closeErr != nil {
+				return closeErr
+			}
+			fmt.Fprintln(h)
 			return nil
-		}
-		if !strings.HasSuffix(path, ".go") {
-			return nil
-		}
-		info, statErr := d.Info()
-		if statErr != nil {
-			return statErr
-		}
-		files++
-		if mtime := info.ModTime().UnixNano(); mtime > newest {
-			newest = mtime
-		}
-		return nil
-	})
+		})
+	}()
 	if walkErr != nil {
 		slog.Debug("harness: source fingerprint walk", "err", walkErr)
+		// A failed scan must not reuse an earlier partial fingerprint.
+		fmt.Fprintf(h, "unreadable=%s\n", rand.Text())
 	}
-
-	fmt.Fprintf(h, "files=%d newest=%d", files, newest)
-	return hex.EncodeToString(h.Sum(nil))[:8]
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 const harnessCacheEnv = "NFLOW_HARNESS_CACHE"
 
-func harnessCacheDir(key string) (string, error) {
+func harnessCacheRoot() string {
 	base := os.Getenv(harnessCacheEnv)
-	if base == "" {
-		var err error
-		base, err = os.UserCacheDir()
-		if err != nil {
-			base = os.TempDir()
-		}
-		base = filepath.Join(base, "nflow", "harness")
+	if base != "" {
+		return base
 	}
-	dir := filepath.Join(base, key)
-	//nolint:gosec // The cache root is explicitly configurable; key is a generated content hash.
+	base, err := os.UserCacheDir()
+	if err != nil {
+		base = os.TempDir()
+	}
+	return filepath.Join(base, "nflow", "harness")
+}
+
+func harnessCacheDir(key string) (string, error) {
+	dir := filepath.Join(harnessCacheRoot(), key)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("harness: cache dir: %w", err)
 	}
