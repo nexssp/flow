@@ -11,9 +11,10 @@ import (
 // `@config:key=value` and the block form `@config { key: value, ... }`.
 // Each pair is written to meta["config"] under its key.
 var ConfigDirective = compiler.Directive{
-	Name:    "config",
-	Example: "@config:strict=true\n@config {\n  retries: 3 :cli=\"r\"\n}",
-	Handler: handleConfig,
+	Name:     "config",
+	Example:  "@config:strict=true\n@config {\n  retries: 3 :cli=\"r\"\n}",
+	Handler:  handleConfig,
+	Metadata: configMetadata(),
 }
 
 func handleConfig(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {

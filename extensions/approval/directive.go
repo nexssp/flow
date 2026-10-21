@@ -23,9 +23,10 @@ type Declaration struct {
 
 // Directive parses an approval declaration and stores it in compiler metadata.
 var Directive = compiler.Directive{
-	Name:    "approval",
-	Example: "@approval finance_review {\n  role: reviewer\n  reason: confirm the transfer\n  expires: 30m\n}",
-	Handler: handleDirective,
+	Name:     "approval",
+	Example:  "@approval finance_review {\n  role: reviewer\n  reason: confirm the transfer\n  expires: 30m\n}",
+	Handler:  handleDirective,
+	Metadata: approvalMetadata(),
 }
 
 type approvalHeader struct {

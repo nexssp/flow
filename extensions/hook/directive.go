@@ -10,9 +10,10 @@ import (
 // Directive parses `@hook:name1,name2` and appends every name to
 // meta["hooks"]. WrapPipeline consumes the list.
 var Directive = compiler.Directive{
-	Name:    "hook",
-	Example: "@hook:hook.verify",
-	Handler: handleDirective,
+	Name:     "hook",
+	Example:  "@hook:hook.verify",
+	Handler:  handleDirective,
+	Metadata: compiler.AppendMetadata[string]("hooks"),
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {

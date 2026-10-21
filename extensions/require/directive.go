@@ -8,9 +8,10 @@ import (
 )
 
 var Directive = compiler.Directive{
-	Name:    "require",
-	Example: "@require ./locallib as mylib\n@require github.com/nexssp/text-tools v1.0.0 as text_tools",
-	Handler: handleDirective,
+	Name:     "require",
+	Example:  "@require ./locallib as mylib\n@require github.com/nexssp/text-tools v1.0.0 as text_tools",
+	Handler:  handleDirective,
+	Metadata: metadataMerger(),
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {

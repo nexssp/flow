@@ -35,9 +35,10 @@ func profilesFromMeta(meta map[string]any) map[string]profileDef {
 // references it. The parent may be declared either before or after the
 // child; only the use site requires the parent to exist by then.
 var ProfileDirective = compiler.Directive{
-	Name:    "profile",
-	Example: "@profile reliable :timeout=2s :retry=4",
-	Handler: handleProfile,
+	Name:     "profile",
+	Example:  "@profile reliable :timeout=2s :retry=4",
+	Handler:  handleProfile,
+	Metadata: profilesMetadataMerger(),
 }
 
 func handleProfile(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {

@@ -30,6 +30,7 @@ const metaKey = "scope.spans"
 // span is one parsed @scope block: the line range covered by its body
 // and the modifiers declared in its header.
 type span struct {
+	file      string
 	start     int
 	end       int
 	modifiers []string
@@ -47,9 +48,10 @@ func spansFromMeta(meta map[string]any) []span {
 
 // Directive parses `@scope :mods { ... }`.
 var Directive = compiler.Directive{
-	Name:    "scope",
-	Example: "@scope :timeout=5s :retry=3 {\n  http.request\n}",
-	Handler: handleDirective,
+	Name:     "scope",
+	Example:  "@scope :timeout=5s :retry=3 {\n  http.request\n}",
+	Handler:  handleDirective,
+	Metadata: compiler.AppendMetadata[span](metaKey),
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
@@ -83,6 +85,7 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	}
 
 	appendSpan(req.Out, span{
+		file:      req.File,
 		start:     req.I + 2,
 		end:       endLine,
 		modifiers: mods,

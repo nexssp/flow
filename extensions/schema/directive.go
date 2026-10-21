@@ -11,9 +11,10 @@ import (
 // Directive parses `@schema NAME { ... }` into a Schema appended to
 // meta["schemas"]. Duplicate names are a compile error.
 var Directive = compiler.Directive{
-	Name:    "schema",
-	Example: `@schema Plan { Summary string }`,
-	Handler: handleDirective,
+	Name:     "schema",
+	Example:  `@schema Plan { Summary string }`,
+	Handler:  handleDirective,
+	Metadata: metadataMerger(),
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {

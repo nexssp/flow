@@ -21,9 +21,10 @@ import (
 // `@pipeline name` with no modifiers is valid and behaves exactly as it
 // did before modifiers were supported.
 var Directive = compiler.Directive{
-	Name:    "pipeline",
-	Example: "@pipeline pack:route=\"POST /pack\"\n  src -> dst\n@end",
-	Handler: handleDirective,
+	Name:     "pipeline",
+	Example:  "@pipeline pack:route=\"POST /pack\"\n  src -> dst\n@end",
+	Handler:  handleDirective,
+	Metadata: pipelineMetadata(),
 }
 
 // AppliedModifier is a modifier together with the origin that produced

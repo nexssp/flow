@@ -17,7 +17,8 @@ var Directive = compiler.Directive{
   primary_queue: "billing-operations"
   max_retries:   "3"
 }`,
-	Handler: handleDirective,
+	Handler:  handleDirective,
+	Metadata: symbolsMetadata(),
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {

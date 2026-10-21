@@ -16,9 +16,10 @@ import (
 )
 
 var ConstDirective = compiler.Directive{
-	Name:    "const",
-	Example: `@const DLQ_SUBJECT = "orders.dlq"`,
-	Handler: handleConst,
+	Name:     "const",
+	Example:  `@const DLQ_SUBJECT = "orders.dlq"`,
+	Handler:  handleConst,
+	Metadata: constantsMetadata(),
 }
 
 var ConstLoadDirective = compiler.Directive{

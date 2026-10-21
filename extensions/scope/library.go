@@ -29,7 +29,7 @@ func Bundle(_ map[string]string) compiler.Bundle {
 				return compiler.PreprocessContributions{}
 			}
 			return compiler.PreprocessContributions{
-				CompileOpts: []compiler.CompileOption{compiler.WithLineModifiers(makeLookups(spans)...)},
+				CompileOpts: []compiler.CompileOption{compiler.WithLineModifiers(makeLookups(spans, compiler.SourceLinesFromMeta(meta))...)},
 			}
 		},
 		Fixtures: fixturesFS,
@@ -41,7 +41,11 @@ func Bundle(_ map[string]string) compiler.Bundle {
 // collision inside prependInherited. Each lookup carries its own
 // source so `nflow explain` can attribute a modifier to the specific
 // @scope block that produced it.
-func makeLookups(spans []span) []compiler.LineLookup {
+func makeLookups(spans []span, lineage ...[]compiler.SourceLine) []compiler.LineLookup {
+	var sourceLines []compiler.SourceLine
+	if len(lineage) > 0 {
+		sourceLines = lineage[0]
+	}
 	out := make([]compiler.LineLookup, 0, len(spans))
 	for _, s := range spans {
 		out = append(out, compiler.LineLookup{
@@ -50,7 +54,7 @@ func makeLookups(spans []span) []compiler.LineLookup {
 				Label: "line " + strconv.Itoa(s.start),
 			},
 			Fn: func(line int) []string {
-				if s.start <= line && line <= s.end {
+				if scopeSourceLineMatches(s, line, sourceLines) {
 					return s.modifiers
 				}
 				return nil
@@ -58,4 +62,19 @@ func makeLookups(spans []span) []compiler.LineLookup {
 		})
 	}
 	return out
+}
+
+func scopeSourceLineMatches(s span, line int, sourceLines []compiler.SourceLine) bool {
+	if len(sourceLines) == 0 {
+		return s.start <= line && line <= s.end
+	}
+	if line < 1 || line > len(sourceLines) {
+		return false
+	}
+	for _, origin := range sourceLines[line-1].Origins {
+		if origin.File == s.file && s.start <= origin.Line && origin.Line <= s.end {
+			return true
+		}
+	}
+	return false
 }

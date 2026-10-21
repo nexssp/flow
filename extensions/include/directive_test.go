@@ -10,9 +10,12 @@ import (
 	"github.com/nexssp/kernel/xtest/ktest"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/extensions/constants"
 	"github.com/nexssp/flow/extensions/macros"
 	pipelineext "github.com/nexssp/flow/extensions/pipeline"
+	"github.com/nexssp/flow/extensions/require"
 	runtimeext "github.com/nexssp/flow/extensions/runtime"
+	"github.com/nexssp/flow/extensions/symbols"
 	"github.com/nexssp/flow/runner"
 )
 
@@ -46,6 +49,7 @@ func runInclude(tb testing.TB, line, baseDir string, recurse func(string) (strin
 		Out:     out,
 		File:    "<test>",
 		BaseDir: baseDir,
+		Table:   includeTestDirectiveTable(),
 		Recurse: recurse,
 	})
 	return out, err
@@ -146,12 +150,12 @@ func TestMergeIncludedMeta_RejectsUnalignedPipelineModifierSources(t *testing.T)
 func TestDirective_ConcatenatesRequire(t *testing.T) {
 	t.Parallel()
 	out, err := runInclude(t, `@include "child.nflow"`, "", func(_ string) (string, map[string]any, error) {
-		return "", map[string]any{"require": []string{"a", "b"}}, nil
+		return "", map[string]any{"require": []require.Requirement{{Import: "a"}, {Import: "b"}}}, nil
 	})
 	ktest.RequireNoError(t, err)
 
-	req, _ := out["require"].([]string)
-	ktest.RequireEqual(t, req, []string{"a", "b"})
+	req, _ := out["require"].([]require.Requirement)
+	ktest.RequireEqual(t, req, []require.Requirement{{Import: "a"}, {Import: "b"}})
 }
 
 func TestDirective_ParentValueWins(t *testing.T) {
@@ -269,4 +273,19 @@ func TestMergeIncludedMeta_RejectsDuplicateSymbolNamespace(t *testing.T) {
 	ktest.RequireErrorContains(t, mergeIncludedMeta(parent, included), "duplicate @symbols namespace \"route\"")
 	got, _ := parent["symbols"].(map[string]compiler.SymbolNamespace)
 	ktest.RequireEqual(t, got["route"].Symbols["status"], "parent")
+}
+
+// Unit fixtures install exactly the metadata owners they exercise. Production
+// obtains the same contributions from its active bundle set.
+func includeTestDirectiveTable() *compiler.DirectiveTable {
+	var directives []compiler.Directive
+	bundles := []compiler.Bundle{Bundle(nil), pipelineext.Bundle(nil), constants.Bundle(nil), require.Bundle(nil), macros.Bundle(nil), symbols.Bundle(nil)}
+	for i := range bundles {
+		directives = append(directives, bundles[i].Directives...)
+	}
+	return compiler.NewDirectiveTable(directives...)
+}
+
+func mergeIncludedMeta(parent, included map[string]any) error {
+	return includeTestDirectiveTable().MergeMetadata(compiler.DirectiveReq{Out: parent}, included)
 }

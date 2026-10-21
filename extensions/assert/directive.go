@@ -11,9 +11,10 @@ import (
 // The colon after "assert" is optional: `@assert: x == 1` and
 // `@assert x == 1` are equivalent.
 var Directive = compiler.Directive{
-	Name:    "assert",
-	Example: `@assert: result != nil`,
-	Handler: handleDirective,
+	Name:     "assert",
+	Example:  `@assert: result != nil`,
+	Handler:  handleDirective,
+	Metadata: compiler.AppendMetadata[string]("asserts"),
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
