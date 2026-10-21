@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/nexssp/kernel/action"
@@ -25,52 +26,75 @@ func materialize(req compiler.MaterializeReq) error {
 
 	pipelineMods, _ := req.Meta["pipeline_modifiers"].(map[string][]string)
 
-	for name, source := range pipelines {
-		mods := pipelineMods[name]
-		schemaName, compileMods, err := splitSchemaModifier(name, mods)
-		if err != nil {
-			return err
-		}
-
-		canonicalName := name
-		if !strings.Contains(canonicalName, ".") {
-			canonicalName = "pipeline." + canonicalName
-		}
-
-		program, err := req.Compile(canonicalName, source, compileMods...)
-		if err != nil {
-			return fmt.Errorf("compile sub-pipeline %q: %w", name, err)
-		}
-
-		// Rename the action to its canonical name ("pipeline.<name>")
-		// so it does not collide with the root atom's name ("runtime.const").
-		// Dynamic preserves all modifiers, status codes, tags, and route bindings.
-		var act action.AnyAction = action.Dynamic(program).Name(canonicalName).Build()
-		if schemaName != "" {
-			targetSchema, ok := schemaext.ByName(req.Meta, schemaName)
-			if !ok {
-				return fmt.Errorf("@pipeline %q: :schema=%s: unknown schema", name, schemaName)
+	names := make([]string, 0, len(pipelines))
+	for name := range pipelines {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	pending := names
+	for len(pending) > 0 {
+		nextPending := make([]string, 0, len(pending))
+		compileErrors := make(map[string]error, len(pending))
+		mounted := 0
+		for _, name := range pending {
+			source := pipelines[name]
+			mods := pipelineMods[name]
+			schemaName, compileMods, err := splitSchemaModifier(name, mods)
+			if err != nil {
+				return err
 			}
-			act = wrapWithSchemaBoundary(act, schemaName, targetSchema, schemaext.SchemasFromMap(req.Meta))
-		}
-		if req.Introspection {
-			act = action.WithComposition(act, action.IntrospectionComposition{
-				Kind: "pipeline",
-				Children: []action.IntrospectionChild{{
-					Node: program, Relation: "pipeline_body", Role: "body", Label: canonicalName,
-				}},
-			})
-		}
 
-		err = req.Resolver.Mount(action.Library{
-			Name: "pipeline." + name,
-			Actions: []action.AnyAction{
-				act,
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("mount sub-pipeline %q: %w", name, err)
+			canonicalName := name
+			if !strings.Contains(canonicalName, ".") {
+				canonicalName = "pipeline." + canonicalName
+			}
+
+			program, err := req.Compile(canonicalName, source, compileMods...)
+			if err != nil {
+				nextPending = append(nextPending, name)
+				compileErrors[name] = err
+				continue
+			}
+
+			// Rename the action to its canonical name ("pipeline.<name>")
+			// so it does not collide with the root atom's name ("runtime.const").
+			// Dynamic preserves all modifiers, status codes, tags, and route bindings.
+			var act action.AnyAction = action.Dynamic(program).Name(canonicalName).Build()
+			if schemaName != "" {
+				targetSchema, ok := schemaext.ByName(req.Meta, schemaName)
+				if !ok {
+					return fmt.Errorf("@pipeline %q: :schema=%s: unknown schema", name, schemaName)
+				}
+				act = wrapWithSchemaBoundary(act, schemaName, targetSchema, schemaext.SchemasFromMap(req.Meta))
+			}
+			if req.Introspection {
+				act = action.WithComposition(act, action.IntrospectionComposition{
+					Kind: "pipeline",
+					Children: []action.IntrospectionChild{{
+						Node: program, Relation: "pipeline_body", Role: "body", Label: canonicalName,
+					}},
+				})
+			}
+
+			err = req.Resolver.Mount(action.Library{
+				Name: "pipeline." + name,
+				Actions: []action.AnyAction{
+					act,
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("mount sub-pipeline %q: %w", name, err)
+			}
+			mounted++
 		}
+		if mounted == 0 {
+			diagnostics := make([]error, 0, len(nextPending))
+			for _, name := range nextPending {
+				diagnostics = append(diagnostics, fmt.Errorf("compile sub-pipeline %q: %w", name, compileErrors[name]))
+			}
+			return fmt.Errorf("unable to materialize sub-pipelines (no progress): %w", errors.Join(diagnostics...))
+		}
+		pending = nextPending
 	}
 	return nil
 }
