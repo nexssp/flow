@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/nexssp/kernel/xerr"
 
@@ -245,21 +244,7 @@ func (inv *invocation) sourceRequiresFromFile(ctx context.Context, path string) 
 	if err != nil {
 		return nil, err
 	}
-	reqs := require.FromMeta(meta)
-
-	if strings.Contains(string(src), "cov.") && !hasRequirement(reqs, "selftestkit") {
-		reqs = append(reqs, require.Requirement{Import: "selftestkit"})
-	}
-	return reqs, nil
-}
-
-func hasRequirement(reqs []require.Requirement, id string) bool {
-	for i := range reqs {
-		if reqs[i].Import == id || require.NormalizeID(reqs[i].Import) == id {
-			return true
-		}
-	}
-	return false
+	return require.FromMeta(meta), nil
 }
 
 func SourceRequires(path string) ([]require.Requirement, error) {

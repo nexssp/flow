@@ -43,6 +43,17 @@ type FileResolverBinding struct {
 	Resolver xfile.Resolver
 }
 
+// BuildExtension describes the source-level dependencies of a bundle for
+// generated Go builds. It is deliberately a token-level linking contract,
+// not an AST-level guarantee that every selected action executes.
+type BuildExtension struct {
+	Always    bool
+	Modifiers []string
+	Requires  []string
+	Replaces  []string
+	Sources   func(meta map[string]any) []string
+}
+
 // Bundle is one extension distribution.
 type Bundle struct {
 	ID            string
@@ -70,6 +81,9 @@ type Bundle struct {
 	// Shutdowns are invoked by the runner host after the outer invocation
 	// completes. Compile and Execute do not close bundle resources.
 	Shutdowns []ShutdownFunc
+
+	// Build contributes optional source-level build planning metadata.
+	Build BuildExtension
 }
 
 // BundleWithFileResolver returns a copy of bundle with one additional typed

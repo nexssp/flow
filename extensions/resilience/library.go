@@ -63,6 +63,7 @@ func bundleWithConfig(cfg Config, registry *action.CircuitBreakerRegistry) compi
 	return compiler.Bundle{
 		ID:              ID,
 		Libraries:       []action.Library{{Name: ID}},
+		Build:           compiler.BuildExtension{Modifiers: []string{"retry", "circuit_breaker"}, Replaces: []string{retry.ID}},
 		Fixtures:        fixturesFS,
 		Modifiers:       Modifiers(),
 		AcceptedOptions: append([]string(nil), acceptedOptions...),

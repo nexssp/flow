@@ -71,6 +71,7 @@ func Preprocess(ctx context.Context, dt *DirectiveTable, source, file string) (c
 		return "", nil, err
 	}
 	if dt == nil {
+		observePreprocess(ctx, PreprocessEvent{File: file, Original: source, Source: source, Clean: source, Metadata: meta})
 		return source, meta, nil
 	}
 	stack := &includeStack{seen: make(map[string]bool, 8)}
@@ -132,6 +133,7 @@ func preprocess(
 	body := make([]string, len(lines))
 	embedded := make(map[int][]SourceLine)
 	blanked := make(map[int]bool)
+	var directives []string
 
 	i := 0
 	for i < len(lines) {
@@ -185,6 +187,7 @@ func preprocess(
 		if err != nil {
 			return "", nil, err
 		}
+		directives = append(directives, name)
 
 		for _, bl := range res.BlankLines {
 			if bl >= 0 && bl < len(body) {
@@ -205,6 +208,10 @@ func preprocess(
 	}
 	meta[sourceLinesKey] = renderedSourceLines(file, body, embedded)
 	clean = strings.Join(body, "\n")
+	observePreprocess(ctx, PreprocessEvent{
+		File: file, Original: source, Source: strings.Join(lines, "\n"),
+		Clean: clean, Metadata: meta, Directives: directives,
+	})
 	return clean, meta, nil
 }
 

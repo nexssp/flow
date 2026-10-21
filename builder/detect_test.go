@@ -1,73 +1,84 @@
 package builder
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
 
-func TestDetectUsedNativeBundlesIncludesFileLocalSymbols(t *testing.T) {
-	source := `@symbols routing {
-    needs_review: "NEEDS_REVIEW"
+	"github.com/nexssp/kernel/xtest/ktest"
+)
+
+func planSourceFixture(t *testing.T, source string, all bool) []nativeBundleInfo {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "main.nflow")
+	sources, err := buildSourcesFrom(t.Context(), path, source)
+	ktest.RequireNoError(t, err)
+	plan, err := nativeBundlesForSources(sources, nil, all)
+	ktest.RequireNoError(t, err)
+	return plan
 }
-route.check`
 
-	used := detectUsedNativeBundles(source, false)
-	for _, bundle := range used {
-		if bundle.id == "symbols" {
-			if bundle.pkg != "github.com/nexssp/flow/extensions/symbols" {
-				t.Fatalf("symbols package = %q", bundle.pkg)
-			}
-			return
+func planHasBundle(plan []nativeBundleInfo, id string) bool {
+	for _, bundle := range plan {
+		if bundle.id == id {
+			return true
 		}
 	}
-	t.Fatal("file-local @symbols directive did not select the native symbols bundle")
+	return false
 }
 
-func TestDetectUsedNativeBundlesIncludesSymbolsForIncludedFlows(t *testing.T) {
-	source := `@include "shared/routing.nflow"
-route.check`
-	used := detectUsedNativeBundles(source, false)
-	for _, bundle := range used {
-		if bundle.id == "symbols" {
-			if bundle.pkg != "github.com/nexssp/flow/extensions/symbols" {
-				t.Fatalf("symbols package = %q", bundle.pkg)
-			}
-			return
-		}
-	}
-	t.Fatal("symbols bundle must be linked because an included flow may declare @symbols")
+func TestNativePlanUsesFileLocalSymbols(t *testing.T) {
+	t.Parallel()
+	plan := planSourceFixture(t, "@symbols routing {\nneeds_review: \"NEEDS_REVIEW\"\n}\nroute.check", false)
+	ktest.RequireTrue(t, planHasBundle(plan, "symbols"))
+	ktest.RequireFalse(t, planHasBundle(planSourceFixture(t, "runtime.noop", false), "symbols"))
 }
 
-func TestDetectUsedNativeBundlesSelectsResilienceWithoutDuplicateIDs(t *testing.T) {
-	tests := []struct {
-		name           string
-		source         string
-		forceAll       bool
-		wantResilience bool
-		wantRetry      bool
+func TestNativePlanUsesIncludedSymbolsInsteadOfAlwaysIncludingThem(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	flow := filepath.Join(root, "main.nflow")
+	writeSourceGraphFixture(t, flow, "@include child.nflow\nroute.check")
+	writeSourceGraphFixture(t, filepath.Join(root, "child.nflow"), "@symbols routing {\nvalue: \"READY\"\n}\n")
+	sources, err := buildSources(t.Context(), flow)
+	ktest.RequireNoError(t, err)
+	plan, err := nativeBundlesForSources(sources, nil, false)
+	ktest.RequireNoError(t, err)
+	ktest.RequireTrue(t, planHasBundle(plan, "symbols"))
+}
+
+func TestNativePlanUsesExtensionOwnedRetryReplacement(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name       string
+		source     string
+		all        bool
+		resilience bool
+		retry      bool
 	}{
-		{name: "require resilience", source: "@require resilience", wantResilience: true},
-		{name: "breaker modifier", source: "payment.charge :circuit_breaker=payments", wantResilience: true},
-		{name: "legacy retry only", source: "payment.charge :retry", wantRetry: true},
-		{name: "require resilience with retry policy", source: "@require resilience\npayment.charge :retry", wantResilience: true},
-		{name: "breaker modifier with retry policy", source: "payment.charge :circuit_breaker=payments :retry", wantResilience: true},
-		{name: "legacy retry requirement", source: "@require retry { default_max: \"2\" }\npayment.charge :retry", wantRetry: true},
-		{name: "all bundles with resilience", source: "@require resilience\npayment.charge :retry", forceAll: true, wantResilience: true},
-		{name: "all bundles with legacy retry", source: "payment.charge :retry", forceAll: true, wantRetry: true},
-	}
-	for _, test := range tests {
+		{name: "explicit resilience", source: "@require resilience\npayment.charge :retry", resilience: true},
+		{name: "legacy retry", source: "payment.charge :retry", retry: true},
+		{name: "explicit legacy retry", source: "@require retry { default_max: \"2\" }\npayment.charge :retry", retry: true},
+		{name: "all with resilience", source: "@require resilience\npayment.charge :retry", all: true, resilience: true},
+		{name: "all standard only", source: "payment.charge :retry", all: true, retry: true},
+		{name: "optional not inferred from modifier", source: "payment.charge :circuit_breaker=payments"},
+	} {
 		t.Run(test.name, func(t *testing.T) {
-			used := detectUsedNativeBundles(test.source, test.forceAll)
-			seen := make(map[string]bool, len(used))
-			var gotResilience, gotRetry bool
-			for _, bundle := range used {
-				if seen[bundle.id] {
-					t.Fatalf("native bundle %q selected more than once", bundle.id)
-				}
-				seen[bundle.id] = true
-				gotResilience = gotResilience || bundle.id == "resilience"
-				gotRetry = gotRetry || bundle.id == "retry"
-			}
-			if gotResilience != test.wantResilience || gotRetry != test.wantRetry {
-				t.Fatalf("selected resilience=%t retry=%t, want resilience=%t retry=%t", gotResilience, gotRetry, test.wantResilience, test.wantRetry)
+			plan := planSourceFixture(t, test.source, test.all)
+			ktest.RequireEqual(t, planHasBundle(plan, "resilience"), test.resilience)
+			ktest.RequireEqual(t, planHasBundle(plan, "retry"), test.retry)
+			seen := make(map[string]bool, len(plan))
+			for _, entry := range plan {
+				ktest.RequireFalse(t, seen[entry.id])
+				seen[entry.id] = true
 			}
 		})
+	}
+}
+
+func TestNativePlanIgnoresFeatureNamesInCommentsAndStrings(t *testing.T) {
+	t.Parallel()
+	plan := planSourceFixture(t, "# fs.read cov.echo render.markdown :retry\n{value: \"log.info @symbols :retry cov.echo\"} -> runtime.noop", false)
+	for _, id := range []string{"fs", "nodes_log", "symbols", "retry", "selftestkit", "render"} {
+		ktest.RequireFalse(t, planHasBundle(plan, id))
 	}
 }

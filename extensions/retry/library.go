@@ -62,6 +62,7 @@ func BundleWithConfig(cfg Config) compiler.Bundle {
 	return compiler.Bundle{
 		ID:              ID,
 		Libraries:       []action.Library{{Name: ID}},
+		Build:           compiler.BuildExtension{Modifiers: []string{"retry"}},
 		Fixtures:        fixturesFS,
 		AcceptedOptions: append([]string(nil), acceptedOptions...),
 		AtomAdvise: func(atom *compiler.Atom, builder *action.Builder[any, any]) error {

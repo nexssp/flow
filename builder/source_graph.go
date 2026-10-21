@@ -4,78 +4,55 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/extensions/require"
 	"github.com/nexssp/flow/native"
 )
 
-// harnessSourceGraph supplies the native-bundle scanner with declarations and
-// action references from every included source, not just the entry point.
-// Keep the raw text: preprocessing removes directives and pipeline bodies that
-// still determine which packages the generated runner must link.
-func harnessSourceGraph(ctx context.Context, path string) (string, error) {
+// buildSources collects the existing preprocessor's lifecycle. It neither
+// replaces SourceLoader nor parses include paths, directives or metadata.
+func buildSources(ctx context.Context, path string) ([]compiler.BuildSource, error) {
 	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-	path, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
+		return nil, err
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return harnessSourceGraphFrom(ctx, path, string(data))
+	return buildSourcesFrom(ctx, path, string(data))
 }
 
-func harnessSourceGraphFrom(ctx context.Context, path, source string) (string, error) {
+func buildSourcesFrom(ctx context.Context, path, source string) ([]compiler.BuildSource, error) {
 	if err := ctx.Err(); err != nil {
-		return "", err
+		return nil, err
 	}
 	path, err := filepath.Abs(path)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	loader := &harnessSourceLoader{ctx: ctx}
-	loader.source.WriteString(source)
-	loader.source.WriteByte('\n')
-	// Let the shipped include directive resolve paths and the preprocessor
-	// handle constants, nested includes and cycle detection. Do not parse
-	// @include lines independently or flatten the executable workflow here.
-	clean, _, err := compiler.Preprocess(compiler.WithSourceLoader(ctx, loader), native.Directives(), source, path)
+	var sources []compiler.BuildSource
+	ctx = compiler.WithPreprocessObserver(ctx, func(event compiler.PreprocessEvent) {
+		sources = append(sources, compiler.BuildSource{
+			File: event.File, Raw: event.Source, Clean: event.Clean,
+			Metadata: event.Metadata, Directives: event.Directives,
+		})
+	})
+	_, _, err = compiler.Preprocess(ctx, native.Directives(), source, path)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-	loader.source.WriteString(clean)
-	loader.source.WriteByte('\n')
-	return loader.source.String(), nil
+	return sources, nil
 }
 
-type harnessSourceLoader struct {
-	ctx    context.Context
-	source strings.Builder
-}
-
-func (l *harnessSourceLoader) Load(currentFile, target string) (data []byte, resolvedPath string, err error) {
-	if contextErr := l.ctx.Err(); contextErr != nil {
-		return nil, "", contextErr
-	}
-	if !filepath.IsAbs(target) {
-		target = filepath.Join(filepath.Dir(currentFile), target)
-	}
-	path, err := filepath.Abs(target)
+func nativeBundlesForSources(sources []compiler.BuildSource, requirements []require.Requirement, all bool) ([]nativeBundleInfo, error) {
+	plan, err := native.PlanBuild(sources, requirements, all)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	data, err = os.ReadFile(path)
-	if err != nil {
-		return nil, "", err
+	bundles := make([]nativeBundleInfo, 0, len(plan))
+	for _, entry := range plan {
+		bundles = append(bundles, nativeBundleInfo{id: entry.ID, pkg: entry.ImportPath})
 	}
-	l.source.Write(data)
-	l.source.WriteByte('\n')
-	return data, path, nil
+	return bundles, nil
 }

@@ -3,7 +3,6 @@ package builder
 import (
 	"context"
 	"os"
-	"strings"
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
@@ -20,11 +19,7 @@ func SourceRequires(ctx context.Context, path string) ([]require.Requirement, er
 	if err != nil {
 		return nil, err
 	}
-	reqs := require.FromMeta(meta)
-	if strings.Contains(string(source), "cov.") && !hasRequirement(reqs, "selftestkit") {
-		reqs = append(reqs, require.Requirement{Import: "selftestkit"})
-	}
-	return reqs, nil
+	return require.FromMeta(meta), nil
 }
 
 func hasRequirement(reqs []require.Requirement, id string) bool {

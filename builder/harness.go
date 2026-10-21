@@ -59,16 +59,14 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 	flowFile := flowPath[0]
 	flowDir := flowDirectory(flowFile)
 
-	var combinedSource strings.Builder
+	var sources []compiler.BuildSource
 	for _, p := range flowPath {
-		src, err := harnessSourceGraph(ctx, p)
+		fragments, err := buildSources(ctx, p)
 		if err != nil {
-			return "", fmt.Errorf("harness: read source graph %s: %w", p, err)
+			return "", fmt.Errorf("harness: inspect source %s: %w", p, err)
 		}
-		combinedSource.WriteString(src)
-		combinedSource.WriteByte('\n')
+		sources = append(sources, fragments...)
 	}
-	source := combinedSource.String()
 
 	driverRoot, driverVersion := resolveDriverInfo()
 	goworkPath := findGoWork(flowDir)
@@ -79,7 +77,10 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 	}
 	external = resolved
 
-	usedNative := detectUsedNativeBundles(source, false)
+	usedNative, err := nativeBundlesForSources(sources, reqs, false)
+	if err != nil {
+		return "", fmt.Errorf("harness: bundle plan: %w", err)
+	}
 	key := harnessKey(external, goworkPath, usedNative...)
 
 	dir, err := harnessCacheDir(key)
@@ -112,7 +113,7 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 	}
 	defer func() { _ = os.RemoveAll(buildDir) }()
 
-	if err := writeHarness(buildDir, driverRoot, driverVersion, goworkPath, source, external, flowDir); err != nil {
+	if err := writeHarness(buildDir, driverRoot, driverVersion, goworkPath, usedNative, external, flowDir); err != nil {
 		return "", err
 	}
 
@@ -804,7 +805,8 @@ func writeBundleTargets(mainBuilder *strings.Builder, imports []bundleImport) {
 }
 
 func writeHarness(
-	directory, driverRoot, driverVersion, goworkPath, source string,
+	directory, driverRoot, driverVersion, goworkPath string,
+	usedNative []nativeBundleInfo,
 	requirements []require.Requirement,
 	sourceDirs ...string,
 ) error {
@@ -812,8 +814,6 @@ func writeHarness(
 	if err != nil {
 		return fmt.Errorf("harness: %w", err)
 	}
-
-	usedNative := detectUsedNativeBundles(source, false)
 
 	var mainBuilder strings.Builder
 	mainBuilder.WriteString("package main\n\n")

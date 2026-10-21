@@ -45,6 +45,7 @@ func init() {
 func Bundle(_ map[string]string) compiler.Bundle {
 	return compiler.Bundle{
 		ID:        ID,
+		Build:     compiler.BuildExtension{Always: true},
 		Libraries: []action.Library{Library()},
 		ArgSchemas: map[string][]compiler.ArgFieldSpec{
 			"progress.wrap": {{Name: "action", Kind: compiler.ArgCapabilityRef}},

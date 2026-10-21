@@ -339,9 +339,6 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 	}
 
 	reqs := require.FromMeta(meta)
-	if strings.Contains(clean, "cov.") && !hasRequirement(reqs, "selftestkit") {
-		reqs = append(reqs, require.Requirement{Import: "selftestkit"})
-	}
 	cfg, err := inv.buildConfig(reqs)
 	if err != nil {
 		return fatalf("config: %v", err)
