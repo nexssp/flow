@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xfile"
 )
 
@@ -56,19 +57,21 @@ type BuildExtension struct {
 
 // Bundle is one extension distribution.
 type Bundle struct {
-	ID            string
-	Alias         string // Local @require qualifier replacing library namespaces for this compilation.
-	Libraries     []action.Library
-	Directives    []Directive
-	Modifiers     []Modifier
-	Operators     []Operator
-	Primaries     []PrimaryExtension
-	Materialize   Materializer
-	OnPreprocess  func(meta map[string]any) PreprocessContributions
-	AtomAdvise    func(atom *Atom, builder *action.Builder[any, any]) error
-	WrapPipeline  func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error)
-	Hooks         []action.AnyHook
-	FileResolvers []FileResolverBinding
+	ID          string
+	Alias       string // Local @require qualifier replacing library namespaces for this compilation.
+	Libraries   []action.Library
+	Directives  []Directive
+	Modifiers   []Modifier
+	Operators   []Operator
+	Primaries   []PrimaryExtension
+	Materialize Materializer
+	// MaterializePhase defaults to MaterializeDeclarations; see materializer-lifecycle.md.
+	MaterializePhase MaterializePhase
+	OnPreprocess     func(meta map[string]any) PreprocessContributions
+	AtomAdvise       func(atom *Atom, builder *action.Builder[any, any]) error
+	WrapPipeline     func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error)
+	Hooks            []action.AnyHook
+	FileResolvers    []FileResolverBinding
 
 	ArgSchemas map[string][]ArgFieldSpec
 
@@ -97,6 +100,11 @@ func BundleWithFileResolver(bundle Bundle, provider xfile.Provider, resolver xfi
 func ValidateBundle(b Bundle) error {
 	if strings.TrimSpace(b.ID) == "" {
 		return errors.New("bundle: ID is required")
+	}
+	switch b.MaterializePhase {
+	case MaterializeDeclarations, MaterializeCompositions:
+	default:
+		return xerr.Validation(fmt.Sprintf("bundle %q: invalid materialize phase %d", b.ID, b.MaterializePhase))
 	}
 	if b.Alias != "" && !validNamespaceQualifier(b.Alias) {
 		return fmt.Errorf("bundle %q: invalid @require namespace qualifier %q", b.ID, b.Alias)

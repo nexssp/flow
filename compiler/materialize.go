@@ -6,6 +6,18 @@ import (
 	"github.com/nexssp/kernel/action"
 )
 
+// MaterializePhase orders extension materializers within the compile lifecycle.
+// Materializers in the same phase retain bundle registration order.
+type MaterializePhase int
+
+const (
+	// MaterializeDeclarations mounts actions declared in extension metadata.
+	// The zero value preserves the behavior of existing extension bundles.
+	MaterializeDeclarations MaterializePhase = iota
+	// MaterializeCompositions compiles declarations that consume mounted actions.
+	MaterializeCompositions
+)
+
 // MaterializeReq passes context, metadata, and compiler to the materialization phase.
 type MaterializeReq struct {
 	Ctx      context.Context

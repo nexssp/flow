@@ -84,6 +84,7 @@ type Bundle struct {
     Operators    []compiler.Operator
     Primaries    []compiler.PrimaryExtension
     Materialize  compiler.Materializer
+    MaterializePhase compiler.MaterializePhase
     OnPreprocess func(meta map[string]any) compiler.PreprocessContributions
     AtomAdvise   func(atom *compiler.Atom, builder *action.Builder[any, any]) error
     WrapPipeline func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error)
@@ -107,6 +108,7 @@ type Bundle struct {
 | `Operators` | Binary pipeline operators (rare; the syntax bundle uses this). |
 | `Primaries` | Parser extensions that intercept a token or keyword. |
 | `Materialize` | Mount additional actions from `meta` after preprocessing. |
+| `MaterializePhase` | Najpierw `MaterializeDeclarations` (wartość zerowa), potem `MaterializeCompositions`; stabilna kolejność w obrębie fazy. Zobacz [kontrakt lifecycle](materializer-lifecycle.md). |
 | `OnPreprocess` | Contribute additional primaries or compile options after preprocessing. |
 | `AtomAdvise` | Mutate an atom's builder before it runs. |
 | `WrapPipeline` | Wrap the compiled program (catch errors, install hooks, publish context). |

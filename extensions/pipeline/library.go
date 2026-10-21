@@ -31,10 +31,11 @@ func init() {
 
 func Bundle(_ map[string]string) compiler.Bundle {
 	return compiler.Bundle{
-		ID:          ID,
-		Libraries:   []action.Library{{Name: ID}},
-		Directives:  []compiler.Directive{Directive, EndDirective},
-		Materialize: materialize,
-		Fixtures:    fixturesFS,
+		ID:               ID,
+		Libraries:        []action.Library{{Name: ID}},
+		Directives:       []compiler.Directive{Directive, EndDirective},
+		Materialize:      materialize,
+		MaterializePhase: compiler.MaterializeCompositions,
+		Fixtures:         fixturesFS,
 	}
 }

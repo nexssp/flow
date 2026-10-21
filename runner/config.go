@@ -1,8 +1,10 @@
 package runner
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
+	"slices"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xfile"
@@ -137,10 +139,13 @@ func mountBundleLibrary(resolver *compiler.DynamicResolver, bundle compiler.Bund
 }
 
 func orderedMaterializers(bundles []compiler.Bundle) []compiler.Materializer {
+	ordered := slices.Clone(bundles)
+	slices.SortStableFunc(ordered, func(a, b compiler.Bundle) int {
+		return cmp.Compare(a.MaterializePhase, b.MaterializePhase)
+	})
 	var materializers []compiler.Materializer
-	var pipelineMaterializers []compiler.Materializer
-	for i := range bundles {
-		bundle := &bundles[i]
+	for i := range ordered {
+		bundle := &ordered[i]
 		if bundle.Materialize == nil {
 			continue
 		}
@@ -150,13 +155,9 @@ func orderedMaterializers(bundles []compiler.Bundle) []compiler.Materializer {
 			req.Alias = alias
 			return materializer(req)
 		}
-		if bundle.ID == "pipeline" {
-			pipelineMaterializers = append(pipelineMaterializers, wrapped)
-		} else {
-			materializers = append(materializers, wrapped)
-		}
+		materializers = append(materializers, wrapped)
 	}
-	return append(materializers, pipelineMaterializers...)
+	return materializers
 }
 
 func validateKeywordMappings(resolver *compiler.DynamicResolver) error {

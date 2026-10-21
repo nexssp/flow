@@ -19,6 +19,7 @@ func TestBundle_WiresDirectiveMaterializeFixtures(t *testing.T) {
 	ktest.RequireEqual(t, len(b.Directives), 2)
 	ktest.RequireEqual(t, b.Directives[0].Name, "pipeline")
 	ktest.RequireCondition(t, b.Materialize != nil, "Materialize is nil")
+	ktest.RequireEqual(t, b.MaterializePhase, compiler.MaterializeCompositions)
 	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
 }
 
