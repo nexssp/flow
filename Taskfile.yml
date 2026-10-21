@@ -43,9 +43,9 @@ tasks:
 
 
   fmt:       { desc: "golangci-lint fmt", cmds: [golangci-lint fmt] }
-  lint:      { desc: "golangci-lint run", cmds: [golangci-lint run] }
-  lint:new:  { desc: 'golangci-lint run --new-from-rev="BASE"', cmds: ['golangci-lint run --new-from-rev="{{.BASE}}"'] }
-  lint:fix:  { desc: 'golangci-lint run --fix --new-from-rev="BASE"', cmds: ['golangci-lint run --fix --new-from-rev="{{.BASE}}"'] }
+  lint:      { desc: "golangci-lint run [./...]", cmds: ['golangci-lint run {{.PKG}}'] }
+  lint:new:  { desc: 'golangci-lint run --new-from-rev="BASE" [./...]', cmds: ['golangci-lint run --new-from-rev="{{.BASE}}" {{.PKG}}'] }
+  lint:fix:  { desc: 'golangci-lint run --fix --new-from-rev="BASE" [./...]', cmds: ['golangci-lint run --fix --new-from-rev="{{.BASE}}" {{.PKG}}'] }
   vuln:      { desc: "govulncheck -show=version [./...]", cmds: ['govulncheck -show=version {{.PKG}}'] }
 
   # ── Workflows (Gates) ────────────────────────────────────────────
