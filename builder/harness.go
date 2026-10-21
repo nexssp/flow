@@ -61,11 +61,11 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 
 	var combinedSource strings.Builder
 	for _, p := range flowPath {
-		src, err := os.ReadFile(p)
+		src, err := harnessSourceGraph(ctx, p)
 		if err != nil {
-			return "", fmt.Errorf("harness: read %s: %w", p, err)
+			return "", fmt.Errorf("harness: read source graph %s: %w", p, err)
 		}
-		combinedSource.Write(src)
+		combinedSource.WriteString(src)
 		combinedSource.WriteByte('\n')
 	}
 	source := combinedSource.String()
@@ -352,7 +352,13 @@ func harnessKey(reqs []require.Requirement, goworkPath string, usedNative ...nat
 			}
 		}
 		if r.IsLocal() {
-			fmt.Fprintf(h, "  fingerprint=%s\n", moduleSourceFingerprint(r.LocalPath))
+			// Hash the provider selected by @require, not just its bundle package.
+			// Sibling packages and module metadata are inputs to the same build.
+			root := r.ModuleRoot
+			if r.IsLoose || root == "" {
+				root = r.LocalPath
+			}
+			fmt.Fprintf(h, "  fingerprint=%s\n", moduleSourceFingerprint(root))
 		}
 	}
 	native := append([]nativeBundleInfo(nil), usedNative...)

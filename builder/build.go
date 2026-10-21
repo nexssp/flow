@@ -430,7 +430,11 @@ func stageBuildDir(
 		return "", fmt.Errorf("embed: %w", err)
 	}
 
-	usedNative := detectUsedNativeBundles(embeddedSource, opts.allBundles)
+	sourceGraph, graphErr := harnessSourceGraphFrom(ctx, nflowPath, embeddedSource)
+	if graphErr != nil {
+		return "", fmt.Errorf("source graph: %w", graphErr)
+	}
+	usedNative := detectUsedNativeBundles(sourceGraph, opts.allBundles)
 
 	if err := writeBuildFile(buildRoot, "main.go", []byte(buildMain(usedNative, imports))); err != nil {
 		return "", fmt.Errorf("main.go: %w", err)

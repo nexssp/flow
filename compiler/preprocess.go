@@ -67,6 +67,9 @@ func (fileSystemLoader) Load(currentFile, target string) (data []byte, resolvedP
 // filesystem.
 func Preprocess(ctx context.Context, dt *DirectiveTable, source, file string) (clean string, meta map[string]any, err error) {
 	meta = make(map[string]any)
+	if err := ctx.Err(); err != nil {
+		return "", nil, err
+	}
 	if dt == nil {
 		return source, meta, nil
 	}
@@ -127,10 +130,14 @@ func preprocess(
 
 	lines := strings.Split(source, "\n")
 	body := make([]string, len(lines))
+	embedded := make(map[int][]SourceLine)
 	blanked := make(map[int]bool)
 
 	i := 0
 	for i < len(lines) {
+		if err := ctx.Err(); err != nil {
+			return "", nil, err
+		}
 		line := strings.TrimSpace(lines[i])
 
 		if !strings.HasPrefix(line, "@") || strings.HasPrefix(line, "@{") {
@@ -152,13 +159,14 @@ func preprocess(
 		}
 
 		req := DirectiveReq{
-			Lines:   lines,
-			Body:    body,
-			I:       i,
-			Out:     meta,
-			File:    file,
-			BaseDir: baseDir,
-			Table:   dt,
+			Lines:       lines,
+			Body:        body,
+			I:           i,
+			Out:         meta,
+			File:        file,
+			BaseDir:     baseDir,
+			Table:       dt,
+			embedSource: func(clean string, lineage []SourceLine) { body[i] = clean; embedded[i] = lineage },
 			Recurse: func(target string) (string, map[string]any, error) {
 				data, resolvedPath, loadErr := loader.Load(file, target)
 				if loadErr != nil {
@@ -192,7 +200,12 @@ func preprocess(
 		i = next
 	}
 
-	return strings.Join(body, "\n"), meta, nil
+	if err := ctx.Err(); err != nil {
+		return "", nil, err
+	}
+	meta[sourceLinesKey] = renderedSourceLines(file, body, embedded)
+	clean = strings.Join(body, "\n")
+	return clean, meta, nil
 }
 
 func directiveName(line string) string {
