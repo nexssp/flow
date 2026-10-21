@@ -7,6 +7,7 @@ require (
 	github.com/nexssp/kernel v0.35.0
 	github.com/nexssp/validation v0.3.0
 	github.com/tetratelabs/wazero v1.12.0
+	golang.org/x/mod v0.42.0
 	golang.org/x/sync v0.24.0
 	golang.org/x/sys v0.49.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -27,7 +28,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/telemetry v0.0.0-20261010193011-f71dc92da45e // indirect
 	golang.org/x/term v0.47.0 // indirect
 	golang.org/x/text v0.43.0 // indirect

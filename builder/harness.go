@@ -18,12 +18,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/nexssp/kernel/xfs"
+	"golang.org/x/mod/modfile"
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
@@ -382,8 +384,12 @@ func harnessKey(reqs []require.Requirement, goworkPath string, usedNative ...nat
 			fmt.Fprintf(h, "gowork_sum=%s\n", hex.EncodeToString(sum[:8]))
 		}
 		gw := parseGoWork(goworkPath)
-		sort.Strings(gw.useDirs)
-		for _, dir := range gw.useDirs {
+		// Replacement-only modules are build inputs too, including transitive
+		// dependencies that are not selected directly by an @require directive.
+		dirs := append([]string(nil), gw.useDirs...)
+		dirs = append(dirs, gw.localReplaceDirs...)
+		sort.Strings(dirs)
+		for _, dir := range slices.Compact(dirs) {
 			fmt.Fprintf(h, "gowork_mod=%s:%s\n", dir, moduleSourceFingerprint(dir))
 		}
 	}
@@ -1293,8 +1299,9 @@ func driverModuleReplaces(driverRoot, modulePath string) bool {
 }
 
 type goWorkInfo struct {
-	useDirs  []string
-	replaces map[string]string
+	useDirs          []string
+	replaces         map[string]string
+	localReplaceDirs []string
 }
 
 func parseGoWork(goworkPath string) goWorkInfo {
@@ -1345,7 +1352,7 @@ func parseGoWork(goworkPath string) goWorkInfo {
 			}
 			continue
 		case strings.HasPrefix(line, "replace "):
-			parseReplaceLine(baseDir, strings.TrimPrefix(line, "replace"), info.replaces)
+			parseReplaceLine(baseDir, strings.TrimPrefix(line, "replace"), &info)
 			continue
 		}
 
@@ -1355,7 +1362,7 @@ func parseGoWork(goworkPath string) goWorkInfo {
 				info.useDirs = append(info.useDirs, absolutizeDir(baseDir, rawDir))
 			}
 		} else if inReplace {
-			parseReplaceLine(baseDir, line, info.replaces)
+			parseReplaceLine(baseDir, line, &info)
 		}
 	}
 
@@ -1369,7 +1376,7 @@ func parseGoWork(goworkPath string) goWorkInfo {
 	return info
 }
 
-func parseReplaceLine(baseDir, line string, dst map[string]string) {
+func parseReplaceLine(baseDir, line string, info *goWorkInfo) {
 	parts := strings.Fields(line)
 	var oldMod, newTarget string
 	switch {
@@ -1385,7 +1392,12 @@ func parseReplaceLine(baseDir, line string, dst map[string]string) {
 	}
 
 	if oldMod != "" && newTarget != "" {
-		dst[oldMod] = absolutizeDir(baseDir, newTarget)
+		target := absolutizeDir(baseDir, newTarget)
+		info.replaces[oldMod] = target
+		// Preserve replacement resolution, but only fingerprint local sources.
+		if modfile.IsDirectoryPath(newTarget) {
+			info.localReplaceDirs = append(info.localReplaceDirs, target)
+		}
 	}
 }
 
