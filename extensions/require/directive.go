@@ -8,10 +8,9 @@ import (
 )
 
 var Directive = compiler.Directive{
-	Name:     "require",
-	Example:  "@require ./locallib as mylib\n@require github.com/nexssp/text-tools v1.0.0 as text_tools",
-	Handler:  handleDirective,
-	Metadata: metadataMerger(),
+	Name:    "require",
+	Example: "@require ./locallib as mylib\n@require github.com/nexssp/text-tools v1.0.0 as text_tools",
+	Handler: handleDirective,
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
@@ -68,6 +67,9 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 				compiler.Position{File: req.File, Line: req.I + 1},
 				"@require: namespace qualifier %q is already used for module %q", r.Alias, old.Import)
 		}
+	}
+	if declareErr := req.Declare("require", requirementKey(&r)); declareErr != nil {
+		return compiler.DirectiveRes{}, declareErr
 	}
 	req.Out["require"] = append(existing, r)
 	return compiler.DirectiveRes{Next: next}, nil

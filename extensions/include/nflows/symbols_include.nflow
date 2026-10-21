@@ -1,7 +1,12 @@
-@description "Include file-local symbols and use them in the parent flow"
+@description "Source-imported symbols stay local and are addressable by namespace"
 @symbols invoice {
   needs_review: "NEEDS_REVIEW"
 }
-@include ./child.nflow
-{ status: invoice.needs_review, queue: queues.review }
-@assert: result.status == invoice.needs_review && result.queue == queues.review
+@symbols queues {
+  review: "parent-review"
+}
+@include ./child.nflow AS billing
+{ status: invoice.needs_review, local_queue: queues.review, imported_queue: billing.queues.review }
+@assert: result.status == invoice.needs_review
+@assert: result.local_queue == "parent-review"
+@assert: result.imported_queue == "ap-exceptions"

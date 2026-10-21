@@ -59,11 +59,11 @@ If you try to write `@pipeline get_user :route="GET /users/" + .id`, the compile
 @end
 ```
 
-### 4. `@include` for Shared Configuration
+### 4. `@include` does not export constants
 
-Because `@const` directives are evaluated by the preprocessor, you can extract them into a `constants.nflow` file and include them everywhere. The preprocessor parses top-down, meaning included constants instantly "spill over" into the importing file.
+`@include` imports a source module; it does not textually inline the file or merge its compile-time declarations into the parent. `@const` names remain local to the module in which they are declared. Use `@include` to reuse exported module capabilities, not as a shared-constants mechanism. `@require` remains independently responsible for loading extension bundles.
 
 ```nflow
-@include "constants.nflow"
+@include "payments.nflow" AS billing
 @require github.com/nexssp/transportnats/nexssflow { url: "${env.nats_url}" }
 ```

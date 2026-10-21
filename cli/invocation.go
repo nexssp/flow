@@ -244,7 +244,7 @@ func (inv *invocation) sourceRequiresFromFile(ctx context.Context, path string) 
 	if err != nil {
 		return nil, err
 	}
-	return require.FromMeta(meta), nil
+	return require.SourceRequirements(meta)
 }
 
 func SourceRequires(path string) ([]require.Requirement, error) {

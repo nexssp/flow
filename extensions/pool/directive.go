@@ -10,10 +10,9 @@ import (
 // Directive parses `@pool NAME [members] { options }` and appends a
 // Declaration to meta["pools"].
 var Directive = compiler.Directive{
-	Name:     "pool",
-	Example:  `@pool fast [cheap, mid] { strategy: "round_robin" }`,
-	Handler:  handleDirective,
-	Metadata: metadataMerger(),
+	Name:    "pool",
+	Example: `@pool fast [cheap, mid] { strategy: "round_robin" }`,
+	Handler: handleDirective,
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
@@ -49,6 +48,9 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 		next = after
 	}
 
+	if err := req.Declare("pool", name); err != nil {
+		return compiler.DirectiveRes{}, err
+	}
 	for _, existing := range DeclarationsFromMeta(req.Out) {
 		if existing.Name == name {
 			return compiler.DirectiveRes{}, compiler.SourceError(pos, "@pool %s: duplicate declaration", name)

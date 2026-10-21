@@ -7,6 +7,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/nexssp/kernel/xerr"
@@ -16,10 +17,9 @@ import (
 )
 
 var ConstDirective = compiler.Directive{
-	Name:     "const",
-	Example:  `@const DLQ_SUBJECT = "orders.dlq"`,
-	Handler:  handleConst,
-	Metadata: constantsMetadata(),
+	Name:    "const",
+	Example: `@const DLQ_SUBJECT = "orders.dlq"`,
+	Handler: handleConst,
 }
 
 var ConstLoadDirective = compiler.Directive{
@@ -41,6 +41,9 @@ func handleConst(_ context.Context, req compiler.DirectiveReq) (compiler.Directi
 	cleanKey := strings.TrimSpace(key)
 	cleanVal := compiler.TrimQuotes(strings.TrimSpace(val))
 
+	if err := req.Declare("const", cleanKey); err != nil {
+		return compiler.DirectiveRes{}, err
+	}
 	storeAndApply(req, map[string]string{cleanKey: cleanVal})
 	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }
@@ -76,6 +79,16 @@ func handleConstLoad(ctx context.Context, req compiler.DirectiveReq) (compiler.D
 
 	flat := make(map[string]string)
 	flattenJSON(namespace, parsed, flat)
+	keys := make([]string, 0, len(flat))
+	for key := range flat {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if err := req.Declare("const", key); err != nil {
+			return compiler.DirectiveRes{}, err
+		}
+	}
 
 	storeAndApply(req, flat)
 	return compiler.DirectiveRes{Next: req.I + 1}, nil

@@ -41,7 +41,7 @@ func TestBuildSourcesNestedRelativeIncludesAndConstants(t *testing.T) {
 func TestBuildSourcesDiamondDoesNotLookLikeCycle(t *testing.T) {
 	root := t.TempDir()
 	flow := filepath.Join(root, "main.nflow")
-	writeSourceGraphFixture(t, flow, "@include \"left/branch.nflow\"\n@include \"right/branch.nflow\"\n")
+	writeSourceGraphFixture(t, flow, "@include \"left/branch.nflow\" AS left\n@include \"right/branch.nflow\" AS right\n")
 	writeSourceGraphFixture(t, filepath.Join(root, "left", "branch.nflow"), "@include \"../common/shared.nflow\"\nleft.marker\n")
 	writeSourceGraphFixture(t, filepath.Join(root, "right", "branch.nflow"), "@include \"../common/shared.nflow\"\nright.marker\n")
 	writeSourceGraphFixture(t, filepath.Join(root, "common", "shared.nflow"), "shared.marker\n")

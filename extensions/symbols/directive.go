@@ -17,8 +17,7 @@ var Directive = compiler.Directive{
   primary_queue: "billing-operations"
   max_retries:   "3"
 }`,
-	Handler:  handleDirective,
-	Metadata: symbolsMetadata(),
+	Handler: handleDirective,
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
@@ -72,10 +71,14 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	if namespaces == nil {
 		namespaces = make(map[string]compiler.SymbolNamespace, 1)
 	}
+	if err := req.DeclareIn("namespace", "symbols", name); err != nil {
+		return compiler.DirectiveRes{}, err
+	}
 	if _, dup := namespaces[name]; dup {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@symbols: duplicate namespace %q", name)
 	}
+
 	namespaces[name] = compiler.SymbolNamespace{Name: name, Symbols: symbols}
 	req.Out["symbols"] = namespaces
 

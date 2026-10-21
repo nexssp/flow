@@ -35,10 +35,9 @@ func profilesFromMeta(meta map[string]any) map[string]profileDef {
 // references it. The parent may be declared either before or after the
 // child; only the use site requires the parent to exist by then.
 var ProfileDirective = compiler.Directive{
-	Name:     "profile",
-	Example:  "@profile reliable :timeout=2s :retry=4",
-	Handler:  handleProfile,
-	Metadata: profilesMetadataMerger(),
+	Name:    "profile",
+	Example: "@profile reliable :timeout=2s :retry=4",
+	Handler: handleProfile,
 }
 
 func handleProfile(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
@@ -59,13 +58,17 @@ func handleProfile(_ context.Context, req compiler.DirectiveReq) (compiler.Direc
 	}
 
 	profiles := profilesFromMeta(req.Out)
-	if profiles == nil {
-		profiles = make(map[string]profileDef)
-		req.Out[profilesKey] = profiles
+	if err := req.Declare("profile", name); err != nil {
+		return compiler.DirectiveRes{}, err
 	}
 	if _, dup := profiles[name]; dup {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@profile %s: duplicate declaration", name)
+	}
+
+	if profiles == nil {
+		profiles = make(map[string]profileDef)
+		req.Out[profilesKey] = profiles
 	}
 	profiles[name] = profileDef{parent: parent, mods: mods}
 

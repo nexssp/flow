@@ -94,9 +94,6 @@ var localSymbolsKey = xctx.NewKey[map[string]SymbolNamespace]("flow.local_symbol
 // compilation. Program source reaches this through the compiler after
 // preprocessing; the process-global registry is never touched by source.
 func WithLocalSymbols(ctx context.Context, syms map[string]SymbolNamespace) context.Context {
-	if len(syms) == 0 {
-		return ctx
-	}
 	return localSymbolsKey.With(ctx, syms)
 }
 
@@ -109,8 +106,21 @@ func LocalSymbolsFrom(ctx context.Context) map[string]SymbolNamespace {
 // SymbolsFromMeta returns the file-local symbol namespaces carried by compile
 // metadata. A missing or malformed value is treated as no local symbols.
 func SymbolsFromMeta(meta map[string]any) map[string]SymbolNamespace {
-	syms, _ := meta["symbols"].(map[string]SymbolNamespace)
-	return syms
+	local, _ := meta["symbols"].(map[string]SymbolNamespace)
+	imported := SourceImports(meta)
+	if len(imported) == 0 {
+		return local
+	}
+	symbols := make(map[string]SymbolNamespace, len(local)+len(imported))
+	maps.Copy(symbols, local)
+	for _, module := range imported {
+		members := make(map[string]any)
+		for name, ns := range SymbolsFromMeta(module.Source.Metadata()) {
+			members[name] = ns.Symbols
+		}
+		symbols[module.Namespace] = SymbolNamespace{Name: module.Namespace, Symbols: members}
+	}
+	return symbols
 }
 
 // MergeSymbolNamespaces returns a fresh environment containing every

@@ -19,7 +19,7 @@ func materialize(req compiler.MaterializeReq) error {
 			act = action.WithComposition(act, poolComposition(declaration, req.Resolver))
 		}
 		if err := req.Resolver.Mount(action.Library{
-			Name:    "pool." + declaration.Name,
+			Name:    compiler.DeclarationOwner(req.Meta, "pool", declaration.Name, "pool."+declaration.Name),
 			Actions: []action.AnyAction{act},
 		}); err != nil {
 			return xerr.Internal("@pool "+declaration.Name+": mount: "+err.Error(), err)

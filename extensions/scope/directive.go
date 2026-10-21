@@ -48,10 +48,9 @@ func spansFromMeta(meta map[string]any) []span {
 
 // Directive parses `@scope :mods { ... }`.
 var Directive = compiler.Directive{
-	Name:     "scope",
-	Example:  "@scope :timeout=5s :retry=3 {\n  http.request\n}",
-	Handler:  handleDirective,
-	Metadata: compiler.AppendMetadata[span](metaKey),
+	Name:    "scope",
+	Example: "@scope :timeout=5s :retry=3 {\n  http.request\n}",
+	Handler: handleDirective,
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {

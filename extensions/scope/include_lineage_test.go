@@ -12,7 +12,7 @@ import (
 	includeext "github.com/nexssp/flow/extensions/include"
 )
 
-func TestIncludeRetainsScopedPoliciesAndFollowingLineNumbers(t *testing.T) {
+func TestIncludeKeepsScopedPoliciesInTheirSourceModules(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	main := filepath.Join(root, "main.nflow")
@@ -27,7 +27,7 @@ func TestIncludeRetainsScopedPoliciesAndFollowingLineNumbers(t *testing.T) {
 	found := make(map[string][][]string)
 	for i, line := range strings.Split(clean, "\n") {
 		name := strings.TrimSpace(line)
-		if name != "leaf.action" && name != "root.action" {
+		if name != "root.action" {
 			continue
 		}
 		for _, lookup := range lookups {
@@ -36,6 +36,24 @@ func TestIncludeRetainsScopedPoliciesAndFollowingLineNumbers(t *testing.T) {
 			}
 		}
 	}
-	ktest.RequireEqual(t, found["leaf.action"], [][]string{{"timeout=5s"}, {"timeout=1s"}})
 	ktest.RequireEqual(t, found["root.action"], [][]string{{"retry=2"}})
+
+	rootImports := compiler.SourceImports(metadata)
+	ktest.RequireEqual(t, len(rootImports), 1)
+	childMeta := rootImports[0].Source.Metadata()
+	childImports := compiler.SourceImports(childMeta)
+	ktest.RequireEqual(t, len(childImports), 1)
+	leafMeta := childImports[0].Source.Metadata()
+
+	modifiers := func(meta map[string]any) [][]string {
+		spans := spansFromMeta(meta)
+		out := make([][]string, 0, len(spans))
+		for _, span := range spans {
+			out = append(out, span.modifiers)
+		}
+		return out
+	}
+	ktest.RequireEqual(t, modifiers(metadata), [][]string{{"timeout=5s"}, {"retry=2"}})
+	ktest.RequireEqual(t, modifiers(childMeta), [][]string{{"timeout=1s"}})
+	ktest.RequireEqual(t, modifiers(leafMeta), [][]string{})
 }

@@ -1,0 +1,3 @@
+@pipeline nested_result
+  runtime.const @{ value: "nested-module" }
+@end

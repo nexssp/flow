@@ -183,6 +183,9 @@ func preprocess(
 				return preprocess(ctx, dt, string(data), resolvedPath, stack)
 			},
 		}
+		req.Import = func(target, namespace string) error {
+			return importSource(ctx, dt, loader, stack, req, target, namespace)
+		}
 		res, err := handler.Do(ctx, req)
 		if err != nil {
 			return "", nil, err

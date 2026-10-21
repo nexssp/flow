@@ -41,7 +41,7 @@ func materialize(req compiler.MaterializeReq) error {
 	for _, declaration := range DeclarationsFromMeta(req.Meta) {
 		gate := newGateAction(declaration)
 		if err := req.Resolver.Mount(action.Library{
-			Name:    "approval." + declaration.Name,
+			Name:    compiler.DeclarationOwner(req.Meta, "approval", declaration.Name, "approval."+declaration.Name),
 			Actions: []action.AnyAction{gate},
 		}); err != nil {
 			return xerr.Internal("materialize approval gate "+declaration.Name, err)

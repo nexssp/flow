@@ -978,8 +978,7 @@ func lookupSymbolValue(ctx context.Context, raw string) (any, bool) {
 	if ctx != nil {
 		if local := LocalSymbolsFrom(ctx); local != nil {
 			if localNS, exists := local[ns]; exists {
-				val, found := localNS.Symbols[name]
-				return val, found
+				return lookupPath(localNS.Symbols, name)
 			}
 		}
 	}

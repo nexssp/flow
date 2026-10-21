@@ -36,9 +36,74 @@ type Requirement struct {
 
 func (r Requirement) IsLocal() bool { return r.LocalPath != "" }
 
+// FromMeta returns requirements in declaration/include order, preserving the
+// first declaration's options. Use SourceRequirements to report alias conflicts.
 func FromMeta(meta map[string]any) []Requirement {
-	reqs, _ := meta["require"].([]Requirement)
-	return reqs
+	requirements, err := SourceRequirements(meta)
+	if err != nil {
+		return nil
+	}
+	return requirements
+}
+
+type sourceRequirements struct {
+	values  []Requirement
+	seen    map[string]bool
+	aliases map[string]requirementOrigin
+}
+
+type requirementOrigin struct {
+	target   string
+	position compiler.Position
+}
+
+// SourceRequirements discovers dependencies through parsed source modules.
+// Include does not merge requirement state; the existing @require first-wins
+// and alias-conflict rules apply in the original source order.
+func SourceRequirements(meta map[string]any) ([]Requirement, error) {
+	collected := &sourceRequirements{seen: make(map[string]bool), aliases: make(map[string]requirementOrigin)}
+	if err := collected.visit(meta); err != nil {
+		return nil, err
+	}
+	return collected.values, nil
+}
+
+func (collected *sourceRequirements) visit(meta map[string]any) error {
+	local, _ := meta["require"].([]Requirement)
+	imported := compiler.SourceImports(meta)
+	next := 0
+	for i := range local {
+		candidate := &local[i]
+		key := requirementKey(candidate)
+		position, _ := compiler.DeclarationPosition(meta, "require", key)
+		for next < len(imported) && imported[next].Position.Line < position.Line {
+			if err := collected.visit(imported[next].Source.Metadata()); err != nil {
+				return err
+			}
+			next++
+		}
+		if collected.seen[key] {
+			continue
+		}
+		if candidate.Alias != "" {
+			if prior, exists := collected.aliases[candidate.Alias]; exists {
+				return compiler.SourceError(position, "@require: namespace qualifier %q is already used for module %q; first declared at %s", candidate.Alias, prior.target, prior.position)
+			}
+			collected.aliases[candidate.Alias] = requirementOrigin{target: candidate.Import, position: position}
+		}
+		collected.seen[key] = true
+		collected.values = append(collected.values, *candidate)
+	}
+	for ; next < len(imported); next++ {
+		if err := collected.visit(imported[next].Source.Metadata()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func requirementKey(requirement *Requirement) string {
+	return requirement.Import + "\x00" + requirement.Version + "\x00" + requirement.Alias
 }
 
 type Plan struct {

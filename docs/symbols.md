@@ -18,8 +18,9 @@ Use symbols for domain values that must stay consistent across routing, output c
 
 - Namespace and symbol names are identifiers: letters or `_` first, then letters, digits, or `_`.
 - Values declared by `@symbols` are strings. Quote values containing spaces or punctuation.
-- A namespace and each member may be declared only once in one effective flow. Duplicate namespace or member declarations fail preprocessing rather than silently choosing a winner.
-- `@include` brings distinct namespaces from included files into the parent. Reusing a namespace across the parent and included files is an error, independent of include/declaration order.
+- A namespace and each member may be declared only once in one source module. Duplicate declarations fail preprocessing rather than silently choosing a winner.
+- `@include "payments.nflow" AS billing` keeps the included declarations in their module; use `billing.queues.review` to access an exported symbol. Without `AS`, the file stem supplies the qualifier (`payments.queues.review`). An included unqualified `queues.review` does not enter the parent's local scope, so parent and child may each have a local `queues` namespace.
+- Duplicate declarations in the same module are errors with diagnostics pointing to both the duplicate and original source locations. The same local declaration name in distinct modules is not a duplicate.
 - File-local declarations never mutate the process-global registry. A local namespace completely shadows a global namespace of the same name, including for direct data-value resolution.
 
 Extensions can provide global namespaces through `Bundle.Symbols` or `compiler.RegisterNamespace`. The compiler's runtime symbol registry is the source used by expressions outside a file-local declaration.

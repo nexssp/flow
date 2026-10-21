@@ -37,7 +37,7 @@ func materialize(req compiler.MaterializeReq) error {
 		}).Description("Validate payload against " + targetSchema.Name).Build()
 
 		err := req.Resolver.Mount(action.Library{
-			Name:    "schema." + targetSchema.Name,
+			Name:    compiler.DeclarationOwner(req.Meta, "schema", targetSchema.Name, "schema."+targetSchema.Name),
 			Actions: []action.AnyAction{validateAct},
 		})
 		if err != nil {

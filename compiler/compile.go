@@ -110,20 +110,24 @@ func prepareSource(ctx context.Context, dt *DirectiveTable, source, name string,
 	if err != nil {
 		return nil, err
 	}
-	var contributions PreprocessContributions
-	for _, fn := range cfg.onPreprocess {
-		c := fn(meta)
-		contributions.Primaries = append(contributions.Primaries, c.Primaries...)
-		contributions.CompileOpts = append(contributions.CompileOpts, c.CompileOpts...)
-	}
-	return &PreparedSource{
-		source:              source,
-		name:                name,
-		clean:               clean,
-		meta:                meta,
-		contributions:       contributions,
+	prepared := &PreparedSource{
+		source: source, name: name, clean: clean, meta: meta,
 		actionIntrospection: cfg.actionIntrospection,
-	}, nil
+	}
+	prepareContributions(prepared, cfg)
+	return prepared, nil
+}
+
+func prepareContributions(prepared *PreparedSource, cfg *compileConfig) {
+	for _, imported := range SourceImports(prepared.meta) {
+		imported.Source.actionIntrospection = cfg.actionIntrospection
+		prepareContributions(imported.Source, cfg)
+	}
+	for _, fn := range cfg.onPreprocess {
+		c := fn(prepared.meta)
+		prepared.contributions.Primaries = append(prepared.contributions.Primaries, c.Primaries...)
+		prepared.contributions.CompileOpts = append(prepared.contributions.CompileOpts, c.CompileOpts...)
+	}
 }
 
 func CompileAction(

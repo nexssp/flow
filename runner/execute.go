@@ -157,9 +157,24 @@ func ExecutePrepared(
 
 func compilePrepared(ctx context.Context, cfg Config, prepared *compiler.PreparedSource) (Compilation, error) {
 	cfg.CompileOpts = compileOptsWithRunnerPolicies(cfg)
+	return compileSource(ctx, cfg, prepared)
+}
+
+func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedSource) (Compilation, error) {
+	ctx = compiler.WithLocalSymbols(ctx, compiler.SymbolsFromMeta(prepared.Metadata()))
 	resolver, err := newExecutionResolver(cfg.Resolver, cfg.Hooks)
 	if err != nil {
 		return Compilation{}, err
+	}
+
+	for _, imported := range compiler.SourceImports(prepared.Metadata()) {
+		child, childErr := compileSource(ctx, cfg, imported.Source)
+		if childErr != nil {
+			return Compilation{}, compiler.SourceError(imported.Position, "@include %s: %w", imported.Namespace, childErr)
+		}
+		if exportErr := mountSourceModule(cfg, resolver, imported, child); exportErr != nil {
+			return Compilation{}, exportErr
+		}
 	}
 
 	meta := prepared.Metadata()

@@ -19,7 +19,7 @@ func SourceRequires(ctx context.Context, path string) ([]require.Requirement, er
 	if err != nil {
 		return nil, err
 	}
-	return require.FromMeta(meta), nil
+	return require.SourceRequirements(meta)
 }
 
 func hasRequirement(reqs []require.Requirement, id string) bool {

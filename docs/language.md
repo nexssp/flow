@@ -277,13 +277,15 @@ the pipeline is compiled.
 | `@require PATH [version] [as alias] [{ options }]` | Load an external bundle |
 | `@config { ... }` / `@config:key=value` | Compile-time key/value pairs |
 | `@config.load:path="..."` | Load config from a JSON/TOML/YAML file |
-| `@include "path.nflow"` | Inline another file |
+| `@include "path.nflow" [AS namespace]` | Import another source module |
 | `@symbols NAME { ... }` | Declare file-local symbolic values |
 | `@on_error { when ... -> target }` | Route a runtime error to a recovery target |
 | `@hook:name` | Attach a Kernel hook to the compiled program |
 | `@schema NAME { Field Type `tags` }` | Runtime payload validation and defaults; see [schema documentation](schema.md) |
 | `@approval NAME { ... }` | Declare a named human-approval gate; see [pause and resume](approval-resume.md) |
 ---
+
+`@include "payments.nflow" AS billing` imports the file as a separate source module; its exported pipeline is called as `billing.pipeline.charge`. Without `AS`, the filename stem is the namespace, so the same file is called as `payments.pipeline.charge`. Imports are not textual inlining or a metadata merger: declarations stay in their module, local references resolve there, and a clean imported body remains a compiled module call rather than being pasted into the parent source. A declaration-only import contributes no execution atom. Nested imports carry their own namespace. Constants, profiles, macros, and schemas remain module-local; do not rely on imported macros or schemas in parent modifiers/declarations. `@require` continues to load bundles independently of `@include`.
 
 For symbol declaration syntax, include behavior, namespace precedence, and supported expression contexts, see [Symbols](symbols.md).
 

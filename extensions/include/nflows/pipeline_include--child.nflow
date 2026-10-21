@@ -1,3 +1,18 @@
-@pipeline included_flow
-  runtime.const @{ value: "included" }
+@include ./nested.nflow AS nested
+@profile local_policy :retry=2
+
+@pipeline charge
+  runtime.const @{ value: "child-charge" }
+@end
+
+@pipeline local_support
+  runtime.const @{ value: "child-local-pipeline" }
+@end
+
+@pipeline local_chain :profile=local_policy :tag="child-module"
+  {} -> pipeline.local_support
+@end
+
+@pipeline uses_nested
+  {} -> nested.pipeline.nested_result
 @end

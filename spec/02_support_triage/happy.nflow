@@ -15,4 +15,4 @@
   subject: "Charged twice for one order",
   message: "I see two pending charges for order SO-2048."
 }
--> pipeline.triage
+-> triage.pipeline.triage

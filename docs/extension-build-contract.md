@@ -1,50 +1,43 @@
-# Extension-owned metadata and build planning
+# Source modules and build planning
 
 ## Missing contracts
 
-The directive table knows which directives are active, but Include previously
-maintained a second, closed list of other extensions' metadata keys. New
-extensions could preprocess correctly yet lose declarations on the second
-include. A SourceLoader observes reads, not directive execution or the resulting
-metadata. Replacing it to collect raw text also overrides a caller's loader.
+`@include` is a source-based module import. The compiler loads and preprocesses
+the imported source recursively, preserving its own declaration state and
+resolver instead of merging child metadata into the parent. The include
+extension parses the path and optional namespace alias; it does not maintain a
+closed list of metadata keys owned by other extensions. Source modules can be
+reused with different aliases, and each nested import has its own scope.
 
 The build generator maintained another native bundle catalog and substring
 matchers. This could omit shipped features, select features mentioned only in
 comments, or silently expose optional self-test features in ordinary flows.
 
 These are DSL composition concerns in Flow's compiler microkernel, not
-application-independent runtime behavior. Existing Kernel action lifecycle hooks
-cannot represent directive metadata ownership or preprocessing source fragments.
-No Kernel runtime change or second registry is needed.
+application-independent runtime behavior. Imported clean bodies are compiled
+as module bodies and invoked at their import site rather than textually pasted
+into parent source. A declaration-only import does not add an execution atom.
+The module exposes qualified capabilities and symbols; declarations such as
+constants, profiles, macros and schemas remain local. Duplicate declaration
+errors identify both source locations. `@require` remains separate and is not
+changed by source imports.
 
-## Metadata ownership
+## Import and declaration scope
 
-A directive can contribute one MetadataMerger with an explicit list of keys.
-The existing DirectiveTable validates ownership and composes active mergers.
-Include delegates to that table; it does not import or name another extension.
-Typed append is reusable infrastructure; domain-specific duplicate and
-replacement rules stay in their owning extension. Coupled pipeline body,
-modifier and origin maps are merged as one record.
+Each parsed source owns its declarations. Pipeline references inside an imported
+pipeline are resolved against that module, including its local pipelines and
+nested imports; parent references continue to use the parent resolver. Exported
+pipelines and capabilities are qualified by the alias (or filename stem by
+default), for example `billing.pipeline.charge`. An imported symbol namespace
+is likewise qualified, as in `billing.queues.review`; it does not become an
+unqualified parent namespace. Imported macros and schemas are not promised for
+use in parent modifiers or declarations.
 
-Mergers use copy-on-write for nested values. The table commits its temporary
-metadata map only after successful merging. AfterMerge can update the caller's
-remaining source lines; these callbacks must validate before mutating lines.
-Constants owns its own post-include substitution. Unknown, unowned metadata
-retains the existing parent-wins behavior for compatibility.
-
-## Preprocess lifecycle
-
-WithPreprocessObserver observes successful fragments synchronously after their
-children. It composes with an existing observer and leaves SourceLoader intact.
-Events carry the original source, substituted directive input, cleaned executable
-body, metadata and actual successful directive invocations. A diamond is evaluated
-per include edge; it is not a cycle. Cancellation is checked before preprocessing,
-between directives and before reporting success.
-
-EmbedSource composes cleaned fragments without destroying line boundaries. The
-compiler retains outer-to-inner source ancestry for every rendered line. Scope
-owns its span-merging rule and matches against that ancestry, preserving both
-enclosing policies and following source line numbers through nested includes.
+The compiler owns source loading, cycle detection, source positions, duplicate
+declaration diagnostics and module resolution. There is no `MetadataMerger` or
+special-case extension metadata whitelist for include. A repeated name in one
+module is rejected with both declaration locations; same-named locals in
+separate modules are isolated.
 
 ## Build ownership
 
@@ -68,13 +61,7 @@ is not simulated by substring matching or a builder-only parser.
 
 ## Compatibility
 
-No source flattening is performed for Include: quoted whitespace and comment
-boundaries remain intact. Existing cache fingerprint changes and local-module
-root selection are preserved. Full changed files are delivered in stages; no
-workspace files or repository-wide lint settings are replaced.
-
-External metadata collections must declare their own merger. The former llms
-and sandboxes special cases have no owning extensions in the supplied tree;
-those external owners are not migrated here. Unowned values remain parent-wins,
-not an implicit append policy. Optional cov usage needs an explicit selftestkit
-requirement; resilience is likewise selected explicitly.
+Imported files remain source modules rather than being flattened into parent
+source; source locations and nested module boundaries remain significant.
+Optional `cov` usage needs an explicit selftestkit requirement; resilience is
+likewise selected explicitly.

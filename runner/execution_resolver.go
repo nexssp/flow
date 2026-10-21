@@ -235,7 +235,7 @@ func buildSnapshot[T any](baseNames []string, mounted map[string]T, getLocked fu
 func (r *executionResolver) Mount(lib action.Library) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if err := r.mountLocked(lib, ""); err != nil {
+	if err := r.mountLocked(lib, "", r.hooks); err != nil {
 		return err
 	}
 	r.invalidateAllSnapshotsLocked()
@@ -245,14 +245,14 @@ func (r *executionResolver) Mount(lib action.Library) error {
 func (r *executionResolver) MountWithAlias(lib action.Library, alias string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if err := r.mountLocked(lib, alias); err != nil {
+	if err := r.mountLocked(lib, alias, r.hooks); err != nil {
 		return err
 	}
 	r.invalidateAllSnapshotsLocked()
 	return nil
 }
 
-func (r *executionResolver) mountLocked(lib action.Library, alias string) error {
+func (r *executionResolver) mountLocked(lib action.Library, alias string, hooks []action.AnyHook) error {
 	stage, err := compiler.NewDynamicResolver()
 	if err != nil {
 		return err
@@ -312,12 +312,12 @@ func (r *executionResolver) mountLocked(lib action.Library, alias string) error 
 
 	for _, act := range stage.Actions() {
 		name := act.Describe().Name
-		r.mountedActions[name] = act.CloneWithHooks(r.hooks...)
+		r.mountedActions[name] = act.CloneWithHooks(hooks...)
 		r.owners[name] = pending[name]
 	}
 	for _, src := range stage.Streams() {
 		name := src.Describe().Name
-		r.mountedStreams[name] = src.CloneWithHooks(r.hooks...)
+		r.mountedStreams[name] = src.CloneWithHooks(hooks...)
 		r.owners[name] = pending[name]
 	}
 	for _, op := range stage.Operators() {

@@ -25,10 +25,9 @@ const (
 // time by macroPrimary, not here: it depends on invocation order, not
 // on the declaration order.
 var Directive = compiler.Directive{
-	Name:     "macro",
-	Example:  "@macro greet(name) {\n  runtime.const @{ value: $name }\n}",
-	Handler:  handleDirective,
-	Metadata: metadataMerger(),
+	Name:    "macro",
+	Example: "@macro greet(name) {\n  runtime.const @{ value: $name }\n}",
+	Handler: handleDirective,
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
@@ -66,6 +65,9 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	}
 
 	existing, _ := req.Out[DeclarationKey].([]Declaration)
+	if err := req.Declare("macro", name); err != nil {
+		return compiler.DirectiveRes{}, err
+	}
 	for _, prior := range existing {
 		if prior.Name == name {
 			return compiler.DirectiveRes{}, compiler.SourceError(pos,

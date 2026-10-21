@@ -1,4 +1,25 @@
-@description "Include a file that defines a reusable pipeline"
+@description "Source imports keep pipeline namespaces and references local"
+@profile local_policy :retry=1
+
+@pipeline charge :profile=local_policy :tag="parent-module"
+  runtime.const @{ value: "parent-charge" }
+@end
+
+@include ./child.nflow AS billing
+@include ./child.nflow AS payments
 @include ./child.nflow
-@assert: result == "included"
-{} -> pipeline.included_flow
+
+@assert: result.parent == "parent-charge"
+@assert: result.billing == "child-charge"
+@assert: result.payments == "child-charge"
+@assert: result.defaulted == "child-charge"
+@assert: result.isolated == "child-local-pipeline"
+@assert: result.nested == "nested-module"
+parallel {
+  parent: pipeline.charge,
+  billing: billing.pipeline.charge,
+  payments: payments.pipeline.charge,
+  defaulted: child.pipeline.charge,
+  isolated: billing.pipeline.local_chain,
+  nested: billing.pipeline.uses_nested,
+}

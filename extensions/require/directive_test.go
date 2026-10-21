@@ -2,12 +2,14 @@ package require
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
 	compiler "github.com/nexssp/flow/compiler"
+	includeext "github.com/nexssp/flow/extensions/include"
 )
 
 func runDirective(tb testing.TB, lines ...string) (map[string]any, error) {
@@ -78,6 +80,25 @@ func TestDirective_DuplicateCollapsed(t *testing.T) {
 	}
 	requirements, _ := out["require"].([]Requirement)
 	ktest.RequireEqual(t, len(requirements), 1)
+
+	for _, tc := range []struct{ name, source, want string }{
+		{"include first", "@include child.nflow\n@require example.com/foo v1.0.0 { id: root }", "child"},
+		{"parent first", "@require example.com/foo v1.0.0 { id: root }\n@include child.nflow", "root"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), "main.nflow")
+			child := filepath.Join(filepath.Dir(root), "child.nflow")
+			ctx := compiler.WithSourceLoader(t.Context(), compiler.SourceMap{
+				child: "@require example.com/foo v1.0.0 { id: child }",
+			})
+			_, meta, preprocessErr := compiler.Preprocess(ctx, compiler.NewDirectiveTable(Directive, includeext.Directive), tc.source, root)
+			ktest.RequireNoError(t, preprocessErr)
+			collected, collectErr := SourceRequirements(meta)
+			ktest.RequireNoError(t, collectErr)
+			ktest.RequireEqual(t, len(collected), 1)
+			ktest.RequireEqual(t, collected[0].Options["id"], tc.want)
+		})
+	}
 }
 
 func TestDirective_MissingModule(t *testing.T) {

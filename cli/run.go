@@ -220,7 +220,11 @@ func runEmbeddedInfo(ctx context.Context, inv *invocation, source string, args [
 		return fatalf("preprocess: %v", err)
 	}
 
-	cfg, err := inv.buildConfig(require.FromMeta(meta))
+	reqs, reqErr := require.SourceRequirements(meta)
+	if reqErr != nil {
+		return fatalf("requires: %v", reqErr)
+	}
+	cfg, err := inv.buildConfig(reqs)
 	if err != nil {
 		return fatalf("config: %v", err)
 	}
@@ -338,7 +342,10 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 		payload = readPipedStdin(payload)
 	}
 
-	reqs := require.FromMeta(meta)
+	reqs, reqErr := require.SourceRequirements(meta)
+	if reqErr != nil {
+		return fatalf("requires: %v", reqErr)
+	}
 	cfg, err := inv.buildConfig(reqs)
 	if err != nil {
 		return fatalf("config: %v", err)

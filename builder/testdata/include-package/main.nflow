@@ -1,2 +1,2 @@
 @include parts/pipelines.nflow
-{} -> pipeline.echo
+{} -> pipelines.pipeline.echo

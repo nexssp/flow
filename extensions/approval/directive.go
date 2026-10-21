@@ -23,10 +23,9 @@ type Declaration struct {
 
 // Directive parses an approval declaration and stores it in compiler metadata.
 var Directive = compiler.Directive{
-	Name:     "approval",
-	Example:  "@approval finance_review {\n  role: reviewer\n  reason: confirm the transfer\n  expires: 30m\n}",
-	Handler:  handleDirective,
-	Metadata: approvalMetadata(),
+	Name:    "approval",
+	Example: "@approval finance_review {\n  role: reviewer\n  reason: confirm the transfer\n  expires: 30m\n}",
+	Handler: handleDirective,
 }
 
 type approvalHeader struct {
@@ -53,11 +52,15 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	}
 
 	declarations := DeclarationsFromMeta(req.Out)
+	if err := req.Declare("approval", header.name); err != nil {
+		return compiler.DirectiveRes{}, err
+	}
 	for _, existing := range declarations {
 		if existing.Name == header.name {
 			return compiler.DirectiveRes{}, compiler.SourceError(header.position, "@approval %s: duplicate declaration (already at %s)", header.name, existing.Position)
 		}
 	}
+
 	req.Out[metadataKey] = append(declarations, decl)
 	return compiler.DirectiveRes{Next: next}, nil
 }

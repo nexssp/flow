@@ -19,10 +19,11 @@ type DirectiveReq struct {
 	embedSource func(string, []SourceLine)
 
 	// Recurse runs the full preprocess on another .nflow file and
-	// returns its cleaned body plus merged metadata. Used by @include
-	// so directives in included files produce declarations in the
-	// parent's Out map.
+	// returns its cleaned body and file-local compilation state.
 	Recurse func(absPath string) (clean string, meta map[string]any, err error)
+
+	// Import parses a module in its own source scope. It never merges Out.
+	Import func(target, namespace string) error
 }
 
 type DirectiveRes struct {
@@ -37,10 +38,9 @@ type DirectiveRes struct {
 }
 
 type Directive struct {
-	Name     string
-	Example  string
-	Handler  func(context.Context, DirectiveReq) (DirectiveRes, error)
-	Metadata *MetadataMerger
+	Name    string
+	Example string
+	Handler func(context.Context, DirectiveReq) (DirectiveRes, error)
 }
 
 func (d Directive) Action() *action.BuiltAction[DirectiveReq, DirectiveRes] {
@@ -51,39 +51,21 @@ func (d Directive) Action() *action.BuiltAction[DirectiveReq, DirectiveRes] {
 }
 
 type DirectiveTable struct {
-	byName   map[string]*action.BuiltAction[DirectiveReq, DirectiveRes]
-	ordered  []Directive
-	metadata []*MetadataMerger
+	byName  map[string]*action.BuiltAction[DirectiveReq, DirectiveRes]
+	ordered []Directive
 }
 
 func NewDirectiveTable(ds ...Directive) *DirectiveTable {
 	t := &DirectiveTable{
-		byName:   make(map[string]*action.BuiltAction[DirectiveReq, DirectiveRes], len(ds)),
-		ordered:  append([]Directive(nil), ds...),
-		metadata: make([]*MetadataMerger, 0, len(ds)),
+		byName:  make(map[string]*action.BuiltAction[DirectiveReq, DirectiveRes], len(ds)),
+		ordered: append([]Directive(nil), ds...),
 	}
-	metadataKeys := make(map[string]string)
 	for _, d := range ds {
 		if d.Name == "" {
 			panic("core: directive with empty name")
 		}
 		if _, dup := t.byName[d.Name]; dup {
 			panic("core: duplicate directive " + d.Name)
-		}
-		if merger := d.Metadata; merger != nil {
-			if merger.Merge == nil {
-				panic("core: directive " + d.Name + " has nil metadata merge")
-			}
-			for _, key := range merger.Keys {
-				if key == "" {
-					panic("core: directive " + d.Name + " has empty metadata key")
-				}
-				if previous, dup := metadataKeys[key]; dup {
-					panic("core: duplicate metadata key " + key + " in directives " + previous + " and " + d.Name)
-				}
-				metadataKeys[key] = d.Name
-			}
-			t.metadata = append(t.metadata, merger)
 		}
 		t.byName[d.Name] = d.Action()
 	}

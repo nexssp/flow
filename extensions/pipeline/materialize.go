@@ -77,7 +77,7 @@ func materialize(req compiler.MaterializeReq) error {
 			}
 
 			err = req.Resolver.Mount(action.Library{
-				Name: "pipeline." + name,
+				Name: compiler.DeclarationOwner(req.Meta, "pipeline", canonicalName, "pipeline."+name),
 				Actions: []action.AnyAction{
 					act,
 				},

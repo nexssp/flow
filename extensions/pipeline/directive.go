@@ -21,10 +21,9 @@ import (
 // `@pipeline name` with no modifiers is valid and behaves exactly as it
 // did before modifiers were supported.
 var Directive = compiler.Directive{
-	Name:     "pipeline",
-	Example:  "@pipeline pack:route=\"POST /pack\"\n  src -> dst\n@end",
-	Handler:  handleDirective,
-	Metadata: pipelineMetadata(),
+	Name:    "pipeline",
+	Example: "@pipeline pack:route=\"POST /pack\"\n  src -> dst\n@end",
+	Handler: handleDirective,
 }
 
 // AppliedModifier is a modifier together with the origin that produced
@@ -42,6 +41,13 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 		return compiler.DirectiveRes{}, err
 	}
 
+	canonical := name
+	if !strings.Contains(canonical, ".") {
+		canonical = "pipeline." + canonical
+	}
+	if declareErr := req.Declare("pipeline", canonical); declareErr != nil {
+		return compiler.DirectiveRes{}, declareErr
+	}
 	applied, err := expandProfiles(mods, req.Out, pos, name)
 	if err != nil {
 		return compiler.DirectiveRes{}, err

@@ -54,7 +54,10 @@ func runRequire(ctx context.Context, inv *invocation, args []string) int {
 		return fatalf("preprocess: %v", err)
 	}
 
-	reqs, _ := meta["require"].([]require.Requirement)
+	reqs, reqErr := require.SourceRequirements(meta)
+	if reqErr != nil {
+		return fatalf("requires: %v", reqErr)
+	}
 	if len(reqs) == 0 {
 		fmt.Fprintln(os.Stderr, "no @require declarations found in", path)
 		return 0

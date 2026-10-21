@@ -25,4 +25,4 @@
   subject: "Payment status unclear",
   message: "Please check whether the charge completed."
 }
--> pipeline.triage
+-> triage.pipeline.triage

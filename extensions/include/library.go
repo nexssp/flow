@@ -1,11 +1,11 @@
-// Package include provides the `@include "file.nflow"` directive. The
-// referenced file is preprocessed recursively in the caller's context
-// (cycle detection uses the include chain), and its pipelines,
-// declarations, and require block are merged into the parent's meta.
+// Package include provides the `@include "file.nflow" [AS namespace]` source-module import.
+// The compiler preprocesses each imported file in its own declaration scope and
+// resolver. Its exported capabilities and symbols are qualified by the explicit
+// alias or, by default, the filename stem; child declarations are never merged
+// into the parent's scope. `@require` remains an independent bundle directive.
 //
-// Typical use:
-//
-//	@include ./shared/child.nflow
+// For example, `@include ./shared/payments.nflow AS billing` exposes a child
+// pipeline as `billing.pipeline.charge`.
 package include
 
 import (
