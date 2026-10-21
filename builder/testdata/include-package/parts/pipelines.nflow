@@ -1,0 +1,4 @@
+@include deep/leaf.nflow
+@pipeline echo
+  {value: "two  spaces"} -> runtime.noop
+@end

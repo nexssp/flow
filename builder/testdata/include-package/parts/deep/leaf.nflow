@@ -1,0 +1,5 @@
+# A source snapshot must preserve comment and string boundaries.
+@assert result.value == "two  spaces"
+@symbols state {
+  ready: "READY"
+}

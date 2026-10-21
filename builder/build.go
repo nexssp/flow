@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -178,7 +179,7 @@ func stageBuildDir(
 		return "", fmt.Errorf("embed: %w", writeErr)
 	}
 
-	sources, graphErr := buildSourcesFrom(ctx, nflowPath, embeddedSource)
+	sources, sourceFiles, graphErr := packageBuildSources(ctx, nflowPath, embeddedSource, resolvedReqs)
 	if graphErr != nil {
 		return "", fmt.Errorf("source graph: %w", graphErr)
 	}
@@ -187,7 +188,18 @@ func stageBuildDir(
 		return "", fmt.Errorf("bundle plan: %w", err)
 	}
 
-	if err := writeBuildFile(buildRoot, "main.go", []byte(buildMain(usedNative, imports))); err != nil {
+	sourceManifest, err := json.Marshal(sourceFiles)
+	if err != nil {
+		return "", fmt.Errorf("source manifest: %w", err)
+	}
+	if writeErr := writeBuildFile(buildRoot, "sources.json", sourceManifest); writeErr != nil {
+		return "", fmt.Errorf("source manifest: %w", writeErr)
+	}
+	sourceName, err := filepath.Abs(nflowPath)
+	if err != nil {
+		return "", fmt.Errorf("source name: %w", err)
+	}
+	if err := writeBuildFile(buildRoot, "main.go", []byte(buildMain(usedNative, imports, sourceName))); err != nil {
 		return "", fmt.Errorf("main.go: %w", err)
 	}
 
@@ -474,7 +486,7 @@ func buildFail(step string, err error) int {
 	return 1
 }
 
-func buildMain(usedBundles []nativeBundleInfo, imports []bundleImport) string {
+func buildMain(usedBundles []nativeBundleInfo, imports []bundleImport, sourceName string) string {
 	var b strings.Builder
 	b.WriteString(`package main
 
@@ -495,10 +507,14 @@ import (
 	}
 	writeBundleImports(&b, imports)
 
-	b.WriteString(`)
-
+	b.WriteString(")\n")
+	fmt.Fprintf(&b, "const sourceName = %q\n", sourceName)
+	b.WriteString(`
 //go:embed workflow.nflow
 var embedded string
+
+//go:embed sources.json
+var sourceManifest []byte
 
 var (
 	Version = "dev"
@@ -593,7 +609,13 @@ func main() {
 		JournalDir:  durability.JournalDir,
 		ExecutionID: durability.ExecutionID,
 	}
-	os.Exit(runner.RunSource(context.Background(), cfg, embedded, "<embedded>", payload, opts))
+	var sourceFiles compiler.SourceMap
+ if err := json.Unmarshal(sourceManifest, &sourceFiles); err != nil {
+  fmt.Fprintf(os.Stderr, "source manifest: %v\n",err)
+  os.Exit(2)
+ }
+ ctx := compiler.WithSourceLoader(context.Background(),sourceFiles)
+ os.Exit(runner.RunSource(ctx, cfg, embedded, sourceName, payload, opts))
 }
 
 func countVerbosity(flags []string) int {
