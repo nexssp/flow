@@ -5,3 +5,4 @@
   expires: 30m
 }
 const @{ value: "declaration loaded" }
+@assert: result == "declaration loaded"

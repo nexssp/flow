@@ -1,0 +1,3 @@
+@description "Host-configured embed bundle resolves a typed asset reference"
+@embed terms "terms.txt"
+runtime.const @{ value: embed.terms }

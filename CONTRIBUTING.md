@@ -1,91 +1,66 @@
 # Contributing to Nexss Ecosystem
 
-This repository is part of the **Nexss Ecosystem**.
-
-We keep packages small, focused, and composable. Contributions should improve
-correctness, clarity, portability, or measured performance without expanding the
-public API unnecessarily.
+This repository is part of the **Nexss Ecosystem**. Keep packages focused and composable. Changes should improve correctness, clarity, portability, or measured performance without expanding the public API unnecessarily.
 
 ## Toolchain
 
-Every workflow in this repo goes through [Task](https://taskfile.dev). Do not
-invoke `go build`, `go test`, `golangci-lint`, or `govulncheck` directly — the
-`task` targets keep flags, ordering, and cache behavior identical to CI.
-This repository uses **one root Go module**; `compiler`, `builder`, `extensions`, `runner`,
-`native`, `cli`, and `integration` are package boundaries within the same module.
+Use the Go version declared in `go.mod`, [Task](https://taskfile.dev), and the golangci-lint version pinned in [CI](.github/workflows/ci.yml). The root module contains `compiler`, `builder`, `extensions`, `runner`, `native`, and `cli`; these are package boundaries, not separately released modules.
 
 Install Task once:
 
-```bash
-brew install go-task/tap/go-task                       # macOS / Linuxbrew
-scoop install task                                     # Windows (Scoop)
-go install github.com/go-task/task/v3/cmd/task@latest  # any platform
+```sh
+go install github.com/go-task/task/v3/cmd/task@latest
 ```
 
-Bootstrap the repo:
-
-```bash
-task           # list every available target
-task setup     # fetch repo templates + install tool deps (gotestsum, govulncheck)
-```
+Make sure Go's binary directory is on `PATH`. `task --list` shows the current targets. `task setup` fetches missing repository templates and installs gotestsum and govulncheck; it does not install golangci-lint. Install that tool separately using the version pinned in CI.
 
 ## Before opening a pull request
 
-Run the full gate:
+The normal full verification workflow is:
 
-```bash
-task tidy       # go mod tidy — keep root go.mod / go.sum clean
-task fmt        # gofumpt + gci (auto-fix)
-task pre-push   # [fmt:check, lint, test:race]
-task ci:pr      # [fmt:check, lint:new, test:pr] — fast push/PR gate
-task ci         # [fmt:check, lint, test:race:nocache] — full uncached-race gate
+```sh
+task tidy       # update go.mod / go.sum; inspect and commit any required changes
+task fmt        # auto-format Go sources; inspect the resulting diff
+task pre-push   # extension self-tests, lint, short race tests
+task ci         # extension self-tests, integrated specs, lint, uncached race tests
 ```
 
-Optional extra checks when relevant:
+`task ci` runs its dependencies in parallel. Formatting is a separate operation, not a dependency of these gates. There is no `ci:pr`, `fmt:check`, `examples`, or `test:harness` target in this checkout.
 
-```bash
+Useful focused checks:
+
+```sh
+task lint -- ./compiler ./runner
+task test -- ./compiler -run '^TestParser' -count=1
+task test:race:nocache -- ./runner -run '^TestApproval'
+task lint:nflow # static lint of the in-repository spec/ sources
+task specs      # execute the integrated acceptance flows and their assertions
+task self       # native and optional-bundle extension conformance checks
+task test:smoke # CLI smoke checks
 task vuln       # govulncheck
-task examples   # run curated .nflow files as runtime smoke checks
-task lint:nflow # lint ./examples
-task self       # compiler and extension-contributed NFlow self-test; also included in task test and task ci
-task test:smoke # CLI smoke test
-task test:harness # CLI build and @require harness integration tests
 ```
 
-Run `task examples`, `task lint:nflow`, or `task test:smoke` whenever you touch
-the compiler, the DSL, `.nflow` files, or CLI wiring. Run `task test:harness`
-when changing CLI harness builds, generated-binary execution, or `@require`
-resolution. A green `task test` is not enough on its own in those cases.
+For a deliberately scoped review, select explicit packages and test names rather than invoking the full gates. Record the commands, results, and untested scope. Do not describe focused checks as a full-suite pass.
+
+The `examples/` directory points to the central [examples repository](https://github.com/nexssp/examples). Run its example targets from that checkout, not this one. In this repository, use `task specs` and `task lint:nflow` when changing DSL composition or CLI wiring. For build or `@require` changes, select the relevant tests in `builder/` and `cli/`; these can compile additional binaries.
 
 ## Requirements
 
-- A change to a **public interface** requires a compatibility explanation and tests.
-- A performance claim requires a benchmark on a documented Go version and hardware.
-- New dependencies require a clear reason, license review, and evidence that the
-dependency is not better placed in an adapter package.
-- Keep business rules, transports, hosted services, and provider-specific
-  behavior outside this repository.
-- New DSL features must use the existing extension/bundle mechanism — scaffold
-  with `task ext:new -- <go_package_name>` rather than hand-rolling the layout.
-- Do not add `testify` or other assertion helpers; use `xtest` / `xtest/ktest`.
+- Public-interface changes need a compatibility explanation and tests.
+- Performance claims need a benchmark with the Go version and hardware documented.
+- New dependencies need a reason, license review, and evidence that they do not belong in an adapter package instead.
+- Keep business rules, transports, hosted services, and provider-specific behavior outside the compiler core.
+- Add DSL features through the extension/bundle mechanism; scaffold with `task ext:new -- <go_package_name>`.
+- Reuse Kernel primitives and `xtest` / `xtest/ktest`; do not add parallel helpers or `testify`.
 
-## Local pre-commit (optional)
+## Local pre-commit hooks
 
-Install the hooks:
-
-```bash
+```sh
 pre-commit install
 # or
 prek install
 ```
 
-Hooks are wired to `task pre-commit` (on commit) and `task pre-push` (on push),
-so **Task must be installed first** — see the Toolchain section above.
+The hooks call `task pre-commit` and `task pre-push`, which run broad checks. Task and golangci-lint must be available on `PATH` first. Do not trigger these hooks as part of a review explicitly restricted to focused checks.
 
-## Getting help
-
-If a core or Kernel change appears necessary, write a short RFC before opening
-the PR: describe the missing contract, alternatives considered, and why an
-existing extension or adapter cannot solve the problem.
-
-Thank you for contributing to Nexss.
+If a core or Kernel change appears necessary, write a short RFC describing the missing contract, alternatives, and why an existing extension or adapter cannot solve it.

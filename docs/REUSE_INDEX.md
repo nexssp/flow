@@ -191,10 +191,10 @@ polling loops, never `time.Sleep` for synchronization.
 
 ## Flow
 
-This repository. Packages are top-level; there is no `compiler/`
-wrapper.
+This repository uses a root Go module. Compiler APIs live in `compiler/`;
+execution, building, CLI, and extensions have their own package boundaries.
 
-### `flow/compiler` — compiler internals
+### `compiler` — compiler internals (`github.com/nexssp/flow/compiler`)
 
 | API | Use |
 |---|---|
@@ -302,12 +302,12 @@ Look here first when adding a DSL feature.
 | `cli.RunWithBundles(args, bundles)` | Entry point for harness binaries |
 | `cli.RunEmbedded(ctx, src, args)` | Entry point for `nflow build` binaries |
 | `cli.SourceRequires(path)` | Extract `@require` declarations from a file |
-| `cli.EnsureHarness`, `cli.ExecHarness` | Harness cache and invocation |
+| `builder.EnsureHarnessContext`, `builder.ExecHarnessContext` | Harness cache and invocation with cancellation |
 | `cli.Completion(shell, w)` | Shell completion scripts |
-| `cli.Print`, `cli.Version` | Build metadata |
+| `cli.Print`, `builder.ResolvedBuildInfo` | Build metadata |
 | `cli.SelfBuild(ctx)` | In-place rebuild |
 
-### `flow/contracts` — context bridges
+### `flow/compiler/contracts` — context bridges
 
 | API | Use |
 |---|---|
@@ -316,7 +316,7 @@ Look here first when adding a DSL feature.
 | `contracts.WithCompiler` / `CompilerFromContext` | Compiler handoff (used by `supervisor`) |
 | `contracts.WithActionResolver` / `ActionResolverFromContext` | Resolver handoff |
 
-### `flow/template` — text template rendering
+### `flow/extensions/template` — text template rendering
 
 Package-agnostic. `flowtemplate.Render(source, vars)` — Go `text/template`
 syntax, missing-key error, no HTML escaping, no shell.

@@ -38,7 +38,7 @@ Keep the source name and callsite layout stable when resuming. Reusing an execut
 
 ## Operational limits
 
-- FileJournal persists completed results and coordinates idempotency claims among goroutines using the same in-process instance. It is **not a distributed lock service**: do not run the same execution ID concurrently from separate processes if duplicate side effects would be unsafe.
+- FileJournal persists completed results and coordinates idempotency claims among goroutines using the same in-process instance. It is **not an execution-wide lock or a distributed lock service**: do not run the same execution ID concurrently, either within one process or across processes, if duplicate side effects would be unsafe. The separate `:idempotent` claim mechanism does not make an entire workflow exclusive.
 - Kernel durable middleware serializes erased `any` results as JSON. Replayed data uses JSON-native shapes (for example, numbers may become `float64`); keep durable results JSON-compatible and account for that normalization.
 - `:idempotent` without `Config.IdempotencyStore` continues to use Kernel's default in-memory store. With the FileJournal store, cached idempotency responses use Kernel's default TTL unless configured elsewhere.
 - FileJournal errors on durable-step reads/writes are returned through Kernel; custom-store `Get` has a legacy no-error contract, so unreadable records fail closed during response decoding. Normal idempotency completion uses the coordinator methods and surfaces persistence failures.

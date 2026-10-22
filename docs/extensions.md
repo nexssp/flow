@@ -88,13 +88,17 @@ type Bundle struct {
     OnPreprocess func(meta map[string]any) compiler.PreprocessContributions
     AtomAdvise   func(atom *compiler.Atom, builder *action.Builder[any, any]) error
     WrapPipeline func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error)
+    Hooks        []action.AnyHook
     FileResolvers []compiler.FileResolverBinding
 
     ArgSchemas      map[string][]compiler.ArgFieldSpec
     AcceptedOptions []string
+    Symbols         []compiler.SymbolNamespace
 
     SelfTest func() []compiler.SelfTestSection
     Fixtures fs.FS
+    Shutdowns []compiler.ShutdownFunc
+    Build compiler.BuildExtension
 }
 ```
 
@@ -108,15 +112,19 @@ type Bundle struct {
 | `Operators` | Binary pipeline operators (rare; the syntax bundle uses this). |
 | `Primaries` | Parser extensions that intercept a token or keyword. |
 | `Materialize` | Mount additional actions from `meta` after preprocessing. |
-| `MaterializePhase` | Najpierw `MaterializeDeclarations` (wartość zerowa), potem `MaterializeCompositions`; stabilna kolejność w obrębie fazy. Zobacz [kontrakt lifecycle](materializer-lifecycle.md). |
+| `MaterializePhase` | Selects `MaterializeDeclarations` (the zero value) or `MaterializeCompositions`; order is stable within each phase. See the [materialization lifecycle](materializer-lifecycle.md). |
 | `OnPreprocess` | Contribute additional primaries or compile options after preprocessing. |
 | `AtomAdvise` | Mutate an atom's builder before it runs. |
 | `WrapPipeline` | Wrap the compiled program (catch errors, install hooks, publish context). |
+| `Hooks` | Kernel action hooks mounted with the bundle's action libraries. |
 | `FileResolvers` | Provider-scoped `xfile.Resolver` bindings. `runner.BuildConfig` composes them automatically and exposes the resolver through the runtime context. |
 | `ArgSchemas` | Declare which action arguments are capability references. |
 | `AcceptedOptions` | Whitelist keys accepted in `@require ... { ... }`. `nil` accepts anything. |
+| `Symbols` | Global symbol namespaces contributed by the bundle. |
 | `SelfTest` | Inline features run by `nflow self test`. |
 | `Fixtures` | Embedded `.nflow` files run as features. |
+| `Shutdowns` | Context-aware cleanup callbacks invoked by the runner host. |
+| `Build` | Optional source-level contribution to standalone build planning. |
 
 ### `ID` rules
 
@@ -432,7 +440,8 @@ recommended shape for options with more than two fields.
 
 Every extension must embed at least one runnable `.nflow` fixture. These
 are executable conformance cases, not snippets: `nflow self test` runs
-each through the real compiler and runtime, and every fixture should have
+the fixtures contributed by `native.SelftestBundles()` through the real
+compiler and runtime, and every fixture should have
 an `@description` and assert meaningful behavior where possible. Keep every
 `.nflow` directly in `nflows/`; use descriptive filenames instead of
 `happy/`, `errors/`, or `edge/` subdirectories. For example:
@@ -455,6 +464,12 @@ separator. For example, `read--input.json` is staged as `input.json`, while
 flows use the same convention and are staged for their parent rather than
 run as standalone fixtures.
 
+The `embed` extension requires an explicit host filesystem root, so its
+[`host_root.nflow`](../extensions/embed/nflows/host_root.nflow) fixture is
+embedded and executed by a dedicated Go test rather than the native CLI
+self-test. Run `go test ./extensions/embed -run '^TestHostRootNFlowFixture$' -count=1`.
+The shared `files` package is not a DSL bundle.
+
 Keep DSL behavior in NFlow fixtures whenever it can be expressed and
 asserted there. Inline `SelfTest()` is reserved for behavior that cannot
 be exercised deterministically from a `.nflow` file, such as a truly live
@@ -469,10 +484,14 @@ behavior work. Use the root [`spec/`](../spec/README.md) tree when the
 value is in a practical, multi-extension workflow. An integrated spec
 may own a local `bundle/library.go` and require it with `@require ./bundle`;
 keep these scenarios deterministic and assert their observable contract.
-The root `examples/` tree remains the place for smaller tutorial-first
-walkthroughs. `task self` runs all extension fixtures, while `task lint:nflow`
-runs integrated scenarios; both gates are included in `task test` and
-`task ci`.
+Tutorial-first walkthroughs live in the central
+[examples repository](https://github.com/nexssp/examples/tree/main/flow).
+`task self` runs the native self-test fixtures; `task lint:nflow` statically
+checks the integrated sources without executing them. `task specs` executes
+the integrated scenarios and their assertions. `task test` runs Go tests,
+including the extension conformance gate and the host-root embed fixture,
+but not the integrated scenarios. `task ci` includes self-tests, executed
+specs, lint, and Go tests.
 
 Compiler-only lexer, parser, AST, and compile-contract cases belong in
 `compiler/*_test.go`; executable `.nflow` flows exercise registered

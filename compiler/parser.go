@@ -3,7 +3,6 @@ package compiler
 import (
 	"context"
 	"fmt"
-	"maps"
 	"strconv"
 	"strings"
 )
@@ -174,6 +173,12 @@ func (p *Parser) SubParse(src string) (Expr, error) {
 }
 
 func (p *Parser) parseExpr(minPrec int) (Expr, error) {
+	if p.depth >= maxParseDepth {
+		return nil, p.errorf(p.Cur().Line, "parse depth exceeded (%d)", maxParseDepth)
+	}
+	p.depth++
+	defer func() { p.depth-- }()
+
 	left, err := p.parsePrimary()
 	if err != nil {
 		return nil, err
@@ -226,6 +231,9 @@ func (p *Parser) parseExpr(minPrec int) (Expr, error) {
 		if err != nil {
 			return nil, p.errorf(p.Cur().Line, "operator %s: %v", meta.Name, err)
 		}
+		if res.Node == nil {
+			return nil, p.errorf(p.Cur().Line, "operator %s returned a nil expression", meta.Name)
+		}
 		left = res.Node
 	}
 }
@@ -235,7 +243,17 @@ func (p *Parser) parsePrimary() (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return p.parsePostfixModifiers(expr)
+	if expr == nil {
+		return nil, p.errorf(p.Cur().Line, "primary extension returned a nil expression")
+	}
+	expr, err = p.parsePostfixModifiers(expr)
+	if err != nil {
+		return nil, err
+	}
+	if expr == nil {
+		return nil, p.errorf(p.Cur().Line, "postfix extension returned a nil expression")
+	}
+	return expr, nil
 }
 
 func (p *Parser) parsePrimaryInner() (Expr, error) {
@@ -277,6 +295,9 @@ func (p *Parser) parsePrimaryInner() (Expr, error) {
 	}
 
 	if p.Cur().Type == TokString {
+		if p.Cur().Unterminated {
+			return nil, p.errorf(p.Cur().Line, "unterminated string")
+		}
 		s := p.Cur().Lit
 		pos := p.currentPos()
 		p.Next()
@@ -378,6 +399,9 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 			p.Next()
 
 		case TokAtBrace:
+			if p.Cur().Unterminated {
+				return nil, p.errorf(p.Cur().Line, "unterminated argument block; expected '}'")
+			}
 			args, err := parseAtBrace(p.Cur().Lit, p.Position())
 			if err != nil {
 				return nil, err
@@ -385,7 +409,12 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 			if a.Args == nil {
 				a.Args = args
 			} else {
-				maps.Copy(a.Args, args)
+				for key, value := range args {
+					if _, exists := a.Args[key]; exists {
+						return nil, SourceError(p.Position(), "duplicate argument %q", key)
+					}
+					a.Args[key] = value
+				}
 			}
 			p.Next()
 
@@ -477,13 +506,16 @@ func (p *Parser) parseLegacyParams(a *Atom) error {
 		}
 		key := p.Cur().Lit
 		p.Next()
+		if _, exists := a.Params[key]; exists {
+			return p.errorf(p.Cur().Line, "duplicate parameter %q", key)
+		}
 
 		if p.Cur().Type != TokEquals {
 			return p.errorf(p.Cur().Line, "expected '=' after %q", key)
 		}
 		p.Next()
 
-		value, err := p.consumeValue()
+		value, err := p.consumeLegacyValue()
 		if err != nil {
 			return err
 		}
@@ -523,6 +555,24 @@ func (p *Parser) parseModifier(a *Atom) error {
 func (p *Parser) consumeValue() (string, error) {
 	var sb strings.Builder
 	for p.valueTokenContinues() {
+		if p.Cur().Type == TokString && p.Cur().Unterminated {
+			return "", p.errorf(p.Cur().Line, "unterminated string")
+		}
+		p.writeValueToken(&sb)
+		p.Next()
+	}
+	if sb.Len() == 0 {
+		return "", p.errorf(p.Cur().Line, "expected value")
+	}
+	return sb.String(), nil
+}
+
+func (p *Parser) consumeLegacyValue() (string, error) {
+	var sb strings.Builder
+	for p.Cur().Type != TokComma && p.valueTokenContinues() {
+		if p.Cur().Type == TokString && p.Cur().Unterminated {
+			return "", p.errorf(p.Cur().Line, "unterminated string")
+		}
 		p.writeValueToken(&sb)
 		p.Next()
 	}

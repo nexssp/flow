@@ -102,6 +102,9 @@ func (j *FileJournal) GetStep(ctx context.Context, executionID, stepName string)
 	}
 	j.mu.RLock()
 	defer j.mu.RUnlock()
+	if err := contextErr(ctx); err != nil {
+		return nil, false, err
+	}
 	if err := j.ensureOpenLocked(); err != nil {
 		return nil, false, err
 	}
@@ -122,6 +125,9 @@ func (j *FileJournal) RecordStep(ctx context.Context, executionID, stepName stri
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	if err := contextErr(ctx); err != nil {
+		return err
+	}
 	if err := j.ensureOpenLocked(); err != nil {
 		return err
 	}
@@ -141,6 +147,10 @@ func (j *FileJournal) Get(ctx context.Context, key string) (action.IdempotencyEn
 	}
 	j.mu.RLock()
 	defer j.mu.RUnlock()
+	if err := contextErr(ctx); err != nil {
+		slog.ErrorContext(ctx, "file idempotency store context canceled", "error", err)
+		return action.IdempotencyEntry{Body: []byte("{")}, true
+	}
 	if err := j.ensureOpenLocked(); err != nil {
 		slog.ErrorContext(ctx, "file idempotency store unavailable", "error", err)
 		return action.IdempotencyEntry{Body: []byte("{")}, true
@@ -169,6 +179,10 @@ func (j *FileJournal) Set(ctx context.Context, key string, entry action.Idempote
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	if err := contextErr(ctx); err != nil {
+		slog.ErrorContext(ctx, "file idempotency store context canceled", "error", err)
+		return
+	}
 	if err := j.ensureOpenLocked(); err != nil {
 		slog.ErrorContext(ctx, "file idempotency store unavailable", "error", err)
 		return
@@ -191,6 +205,9 @@ func (j *FileJournal) Claim(ctx context.Context, key, requestHash string, leaseT
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	if err := contextErr(ctx); err != nil {
+		return action.IdempotencyClaim{}, err
+	}
 	if err := j.ensureOpenLocked(); err != nil {
 		return action.IdempotencyClaim{}, err
 	}
@@ -234,6 +251,9 @@ func (j *FileJournal) Complete(ctx context.Context, key, token string, entry act
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	if err := contextErr(ctx); err != nil {
+		return err
+	}
 	if err := j.ensureOpenLocked(); err != nil {
 		return err
 	}
@@ -260,6 +280,9 @@ func (j *FileJournal) Release(ctx context.Context, key, token string) error {
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	if err := contextErr(ctx); err != nil {
+		return err
+	}
 	if err := j.ensureOpenLocked(); err != nil {
 		return err
 	}
@@ -284,6 +307,9 @@ func (j *FileJournal) RenewClaim(ctx context.Context, key, token string, leaseTT
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	if err := contextErr(ctx); err != nil {
+		return err
+	}
 	if err := j.ensureOpenLocked(); err != nil {
 		return err
 	}

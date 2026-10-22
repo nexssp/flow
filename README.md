@@ -59,7 +59,7 @@ Run the complete set locally with `task examples:nflow` from the central example
 
 ## Integrated specifications
 
-The root [`spec/`](spec/README.md) suite contains deterministic, real-world workflows that combine extensions with scenario-local custom bundles. It covers order intake, support triage and safe recovery, and payment reconciliation. Run its lint gate with `task lint:nflow`; `task test` and `task ci` also run every extension's categorized NFlow conformance suite.
+The root [`spec/`](spec/README.md) suite contains deterministic, real-world workflows that combine extensions with scenario-local custom bundles. It covers order intake, support triage and safe recovery, and payment reconciliation. Run its static lint gate with `task lint:nflow` and execute its assertions with `task specs`. `task test` runs Go tests, including native extension conformance and the host-root embed fixture, but not integrated scenarios. `task ci` includes the integrated scenarios as well. See [focused syntax checks](docs/cli.md#self-test) for a smaller verification scope.
 
 ## Verify without running a flow 🌀
 
@@ -67,7 +67,7 @@ Use `nflow lint <file.nflow>` for a static check, or pass a directory or Go-styl
 
 The similarly named build commands do different jobs:
 
-- `nflow build -o ./bin/my-flow flow/00_flow_basics/04_data_transformation.nflow` creates a standalone executable with the flow embedded. It is a packaging/build command, not a check-only validator; the flow runs when you launch the generated executable. Put `-o` before the input path with the current CLI parser. `nflow help build` currently advertises `--target`, but this checkout's implementation does not parse that flag; the command above uses the supported `-o` option.
+- `nflow build -o ./bin/my-flow flow/00_flow_basics/04_data_transformation.nflow` creates a standalone executable with the flow embedded. It is a packaging/build command, not a check-only validator; the flow runs when you launch the generated executable. Build flags may precede or follow the input path; use `nflow help build` for supported options.
 - `task build` compiles the repository's Go packages. It does not validate or execute `.nflow` files.
 - `task test` runs the repository's short test suite. Use `task test -- ./runner` to target a package, `task test:race` for race detection, and `task ci` for the complete repository gate.
 

@@ -44,3 +44,15 @@ func TestRequiredModifierOwner(t *testing.T) {
 	ktest.RequireEqual(t, compiler.RequiredModifierOwner("profile"), compiler.OwnerGrammar)
 	ktest.RequireEqual(t, compiler.RequiredModifierOwner("model"), compiler.OwnerBundle)
 }
+
+func TestDetectRequiredBundlesReturnsSortedIDs(t *testing.T) {
+	t.Parallel()
+	expr := &compiler.PipeExpr{
+		L: &compiler.Atom{Name: "remote.call"},
+		R: &compiler.Atom{Name: "runtime.noop"},
+	}
+	want := []string{"pipeline", "remote", "runtime", "syntax"}
+	for range 20 {
+		ktest.RequireEqual(t, compiler.DetectRequiredBundles(expr), want)
+	}
+}

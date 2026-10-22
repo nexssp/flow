@@ -1,29 +1,36 @@
-# Action Input Validation
+# Runtime action-request validation
 
-`@config:strict` + `:strict` / `:lenient` — runtime request validation
-via `validation.Struct`.
+Flow's `@config:strict=true` and atom modifiers `:strict` / `:lenient` opt
+typed action requests into the validation hook from
+[`github.com/nexssp/validation`](https://pkg.go.dev/github.com/nexssp/validation).
+This is distinct from named `@schema` pipeline-boundary validation; see
+[`schema.md`](schema.md).
 
 ## The problem
 
-`->` is a data pipe, not a type pipe. When `A` returns `{name: "x"}` and
-`B` expects `struct{Description string; Tier string}`, `Coerce` silently
-zeroes the mismatched fields:
+Pipeline edges pass values through the action coercion boundary. When the
+compiler can identify both neighboring capabilities and their typed payloads,
+it checks compatibility before execution. It cannot infer the result of an
+arbitrary projection or other dynamic expression. A runtime map may also
+contain fields that do not map to a typed request field, so use validation tags
+when the resulting request needs required-field or value checks:
 
 ```
 A: {name: "x", tier: "pro"}
-         ↓ InvokeAny → Coerce[Req_B]
-B: {Description: "", Tier: "pro"}   ← name vanished, no error
+         ↓ runtime coercion to B's typed request
+B: fields populated according to its JSON field names; validation tags
+  can reject absent or invalid required values
 ```
 
-The compile-time edge check in `flow/pipeline_types.go` catches only
-direct `A -> B`. Any projection `{ }` or `with @{ }` in between
-disables the check, because the parser cannot see what flows through.
-
-Runtime strict closes that gap.
+The compiler's typed-edge analysis is in `compiler/analyze.go`. It checks
+adjacent edges for which it has contracts; it does not statically infer data
+shapes produced by projections. Runtime strict validation is useful for typed
+action request structs whose `validate:` tags should be enforced after request
+coercion.
 
 ## Four validation states
 
-| `@config:strict` | `:strict` | `:lenient` | Validates? |
+| `@config:strict=true` | `:strict` | `:lenient` | Validates? |
 |:---:|:---:|:---:|:---:|
 | – | – | – | ❌ |
 | ✅ | – | – | ✅ |
@@ -31,21 +38,25 @@ Runtime strict closes that gap.
 | ✅ | – | ✅ | ❌ |
 | ✅ | ✅ | ✅ | ❌ (`:lenient` wins) |
 
-Zero `TypedPayload.ReqPayload()` (an `any` action) → validation never
-runs, regardless of flags. There is no schema to check.
+No typed, struct-shaped request with validation rules (or `Validatable`)
+means the validation hook has nothing to check.
 
 ## How it works
 
-1. **`buildAtom`** sees `strict == true` and the action is typed.
-2. Calls `act.CloneWithHooks(validation.Hook())` **before**
-   `wrapWithInjections` and `ApplyAll` turn it into `Dynamic` (which
-   type-erases and loses `Req`).
-3. Hook `OnBuild` checks whether `Req` carries `validate:` tags. If
-   not → hook drops itself, the atom pays nothing.
-4. Hook `Before` calls `validation.Struct(ctx, req)` on the coerced
-   struct. Error → `xerr.ValidationDetails` → `KindValidation`.
+1. Atom construction reads global strict configuration and the atom's
+   `:strict` / `:lenient` markers.
+2. For a typed action request, Flow clones the action with
+   `validation.Hook()` before finalizing the atom for execution.
+3. The hook's `OnBuild` predicate keeps itself only for request types with
+   validation tags or the `Validatable` contract.
+4. Before the action runs, the hook validates its coerced request with
+   `validation.Struct`; failures are returned as structured
+   `xerr.Validation` errors.
 
 ## Three ways to enable
+
+These snippets assume the named producer/consumer actions are registered by
+the embedding host or an explicitly loaded bundle.
 
 **Per file:**
 ```nflow
@@ -90,32 +101,34 @@ Flow:
 { name: "Maksymilian" } -> create_user
 ```
 
-The error reaches the transport as `xerr.KindValidation` (HTTP 400).
+The runtime error is classified as `xerr.KindValidation`. A transport may
+map that kind to an HTTP response; the CLI does not turn every validation
+failure into an HTTP request.
 
 ## What strict does not do
 
-- **Does not validate `Res`.** Only request, not response.
-- **Does not run on `any` actions.** Without
-  `TypedPayload.ReqPayload()` there is no schema.
-- **Does not check at compile time.** A projection `{ }` is a runtime
-  expression. The compile-time check (direct `A -> B`) is a separate
-  mechanism in `pipeline_types.go`, always active, independent of
-  strict.
-- **Does not block `@{ }` injection.** Args are injected **before**
-  the `Before` hook, so they join the input map in validation.
-- **Does not check `@schema`.** `@schema` is a separate runtime guard
-  for `map[string]any`, legacy from before tags. Both can coexist.
+- **Does not validate responses.** It validates the action request only.
+- **Does not validate arbitrary `any` or map requests.** The validation
+  package's hook is enabled for eligible typed request structures.
+- **Does not perform compile-time payload validation.** The separate typed
+  edge analysis in `compiler/analyze.go` checks compatible statically known
+  edges, not future input values or arbitrary projection results.
+- **Does not prohibit action argument binding.** Validation applies to the
+  typed request the action receives after the atom's inputs are assembled.
+- **Does not replace `@schema`.** Named schemas validate/default pipeline
+  payloads at a pipeline boundary or through `NAME.validate`; the two
+  mechanisms may be used together.
 
 ## Dependencies
 
-`github.com/nexssp/validation` — the hook and `Struct` come from this
-package. `flow/compiler/strict.go` only orchestrates (flag precedence,
-installation order in `buildAtom`).
+`github.com/nexssp/validation` provides `Hook`, `Struct`, and `Validatable`.
+[`compiler/strict.go`](../compiler/strict.go) reads global strict config;
+[`compiler/ast_build.go`](../compiler/ast_build.go) attaches the hook while
+building an atom.
 
 ## Related
 
-- `flow/docs/parameters.md` — three parameter channels (`@{ }`, input,
-  `:mod`)
-- `flow/pipeline_types.go` — compile-time edge check
-- `nexssp/validation/action.go` — `ValidateAction`, `AutoValidate`,
-  `validation.Hook()`
+- [Language reference](language-reference.md) — argument, expression, and
+  validation boundaries
+- [`compiler/analyze.go`](../compiler/analyze.go) — typed-edge analysis
+- [Schema documentation](schema.md) — named schemas and pipeline validation

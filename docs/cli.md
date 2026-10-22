@@ -47,7 +47,9 @@ nflow run flow.nflow --journal-dir .flow-state --execution-id flow-0123456789abc
 Use a new execution ID when the workflow changes. Keep the source name and
 callsite layout stable when resuming; a matching ID can replay a result
 recorded for the same source position. A FileJournal is local to one process
-for idempotency claim coordination and is not a distributed lock service.
+for idempotency claim coordination and is not an execution-wide or distributed
+lock service. Do not run the same execution ID concurrently, even within one
+process, when repeating side effects would be unsafe.
 
 If the file declares `@require`, the CLI builds or reuses a harness
 binary that links the requested modules and runs the flow through it.
@@ -184,7 +186,7 @@ after preprocessing. It does not evaluate policies.
 ## Build a standalone executable
 
 ```sh
-nflow build flow.nflow -o /tmp/my-flow
+nflow build -o /tmp/my-flow flow.nflow
 /tmp/my-flow
 ```
 
@@ -198,15 +200,20 @@ Options:
 | Flag | Effect |
 |---|---|
 | `-o FILE` | Output path. Defaults to the source filename without extension. |
+| `--debug`, `-d` | Keep debug symbols. |
+| `--no-trimpath` | Keep full source paths in the built executable. |
+| `--all-bundles` | Link all native bundles rather than the planned subset. |
 
-`-o` must come before the input path. The current parser stops reading
-flags when it reaches the positional argument, so
-`nflow build flow.nflow -o out` does not set the output.
+Build flags may precede or follow the input path. `--output FILE` and
+`--output=FILE` are also accepted; an empty or missing output value is an
+error. The output must not refer to the source workflow, including via a
+symlink or hard link.
 
-The build runs `go mod tidy -e` and `go build` in a temporary directory
-with the source and a generated `main.go`. It targets the host
-platform; for cross-compilation, invoke `go build` on the generated
-harness yourself with `GOOS` and `GOARCH` set.
+The build runs `go mod tidy` and `go build` in a temporary directory
+with the source and a generated `main.go`. Dependency-resolution errors
+stop the build. It defaults to the host platform; for cross-compilation,
+set `GOOS` and `GOARCH` when invoking `nflow build`. The temporary build
+directory is removed when the command returns.
 
 ---
 
@@ -274,7 +281,27 @@ Options:
 | `--save-baseline` | Write `.nflow_selftest_baseline.json` for regression detection |
 | `--no-color` | Disable ANSI output |
 
-Exit code is 0 only when every selected feature passes.
+Exit code is 1 when a selected feature fails and 2 when no features match.
+Explicitly skipped features do not make the CLI return a failure; the
+repository's `TestAllNFlowConformance` gate below additionally requires zero
+skips and a passing result for every discovered feature.
+
+When changing fixture discovery, inventory wiring, or parser syntax in this
+repository, these focused Go checks exercise the corresponding gates without
+running the full repository suite:
+
+```sh
+go test ./native ./cli/selftest -run '^(TestSelftest_|TestAllNFlowConformance$)' -count=1 -v
+go test ./extensions/embed -run '^TestHostRootNFlowFixture$' -count=1
+go test ./compiler -run '^Test(Parse|Parser|SubParse|ApplyAll|ValidateModifier|ModifierTable|NewModifierTable|DiscoverFixtures)' -count=1
+```
+
+Run them from the repository root with the Go version specified in `go.mod`.
+`TestAllNFlowConformance` executes the same native/optional-bundle fixtures as
+`nflow self test`, and additionally rejects skipped or missing results. The
+separate embed test supplies the host filesystem root that its fixture needs.
+Use `task specs` to execute integrated acceptance scenarios and `task lint:nflow`
+for their static lint gate.
 
 ---
 

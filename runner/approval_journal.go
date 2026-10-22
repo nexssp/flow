@@ -18,6 +18,9 @@ func (j *FileJournal) LoadApprovalSuspension(ctx context.Context, executionID st
 	}
 	j.mu.RLock()
 	defer j.mu.RUnlock()
+	if err := contextErr(ctx); err != nil {
+		return ApprovalSuspension{}, false, err
+	}
 	if err := j.ensureOpenLocked(); err != nil {
 		return ApprovalSuspension{}, false, err
 	}
@@ -54,6 +57,9 @@ func (j *FileJournal) SaveApprovalSuspension(ctx context.Context, suspension App
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	if err := contextErr(ctx); err != nil {
+		return err
+	}
 	if err := j.ensureOpenLocked(); err != nil {
 		return err
 	}
@@ -71,6 +77,9 @@ func (j *FileJournal) ClearApprovalSuspension(ctx context.Context, executionID s
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	if err := contextErr(ctx); err != nil {
+		return err
+	}
 	if err := j.ensureOpenLocked(); err != nil {
 		return err
 	}

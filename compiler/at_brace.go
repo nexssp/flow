@@ -19,9 +19,10 @@ func parseAtBrace(raw string, base Position) (map[string]*Value, error) {
 }
 
 type braceScanner struct {
-	src  string
-	pos  int
-	base Position
+	src   string
+	pos   int
+	base  Position
+	depth int
 }
 
 func (b *braceScanner) eof() bool { return b.pos >= len(b.src) }
@@ -66,6 +67,9 @@ func (b *braceScanner) parseEntries(dst map[string]*Value) error {
 		val, err := b.readValue()
 		if err != nil {
 			return err
+		}
+		if _, exists := dst[key]; exists {
+			return b.errf("duplicate key %q", key)
 		}
 		dst[key] = val
 		b.skipWS()
@@ -124,8 +128,14 @@ func (b *braceScanner) readValue() (*Value, error) {
 }
 
 func (b *braceScanner) readObject() (*Value, error) {
+	if b.depth >= maxParseDepth {
+		return nil, b.errf("parse depth exceeded (%d)", maxParseDepth)
+	}
+	b.depth++
+	defer func() { b.depth-- }()
 	b.advance()
 	v := &Value{Kind: ValueMap}
+	keys := make(map[string]struct{})
 	for {
 		b.skipWS()
 		if b.peek() == '}' {
@@ -145,6 +155,10 @@ func (b *braceScanner) readObject() (*Value, error) {
 		if err != nil {
 			return nil, err
 		}
+		if _, exists := keys[key]; exists {
+			return nil, b.errf("duplicate key %q in nested object", key)
+		}
+		keys[key] = struct{}{}
 		v.Map = append(v.Map, MapEntry{Key: key, Value: val})
 		b.skipWS()
 		switch b.peek() {
@@ -160,6 +174,11 @@ func (b *braceScanner) readObject() (*Value, error) {
 }
 
 func (b *braceScanner) readArray() (*Value, error) {
+	if b.depth >= maxParseDepth {
+		return nil, b.errf("parse depth exceeded (%d)", maxParseDepth)
+	}
+	b.depth++
+	defer func() { b.depth-- }()
 	b.advance()
 	v := &Value{Kind: ValueSlice}
 	for {

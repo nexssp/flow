@@ -64,7 +64,7 @@ type captureResult struct {
 // captureExecution redirects stdout and stderr into a pipe for the
 // duration of runFunc. Allocation measurement happens inside
 // runner.Execute, not here: the phase boundaries live there.
-func captureExecution(runFunc func() (any, error)) captureResult {
+func captureExecution(runFunc func() (any, error)) (result captureResult) {
 	outputMutex.Lock()
 	defer outputMutex.Unlock()
 
@@ -91,18 +91,21 @@ func captureExecution(runFunc func() (any, error)) captureResult {
 		}
 	}()
 
+	defer func() {
+		os.Stdout = previousStdout
+		os.Stderr = previousStderr
+		slog.SetDefault(previousLogger)
+		_ = pipeWriter.Close()
+		<-doneChannel
+		_ = pipeReader.Close()
+		result.captured = buffer.Bytes()
+	}()
+
 	output, err := runFunc()
 
-	_ = pipeWriter.Close()
-	os.Stdout = previousStdout
-	os.Stderr = previousStderr
-	slog.SetDefault(previousLogger)
-	<-doneChannel
-
 	return captureResult{
-		captured: buffer.Bytes(),
-		output:   output,
-		err:      err,
+		output: output,
+		err:    err,
 	}
 }
 
@@ -199,10 +202,14 @@ func prepareFeatureDir(feature compiler.SelfTestFeature) (cleanup func(), err er
 	removeAll := func() { _ = os.RemoveAll(tempDir) }
 
 	for name, content := range feature.Files {
+		if !filepath.IsLocal(name) {
+			removeAll()
+			return nil, fmt.Errorf("selftest: fixture path %q must stay within the temporary directory", name)
+		}
 		target := filepath.Join(tempDir, name)
 		if mkErr := os.MkdirAll(filepath.Dir(target), 0o755); mkErr != nil {
 			removeAll()
-			return nil, err
+			return nil, mkErr
 		}
 		writeErr := os.WriteFile(target, []byte(content), 0o600)
 		if writeErr != nil {

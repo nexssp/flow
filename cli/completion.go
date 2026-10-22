@@ -34,17 +34,17 @@ func Completion(shell string, w io.Writer) error {
 // may return nothing. Kept for API stability.
 var ErrCompletionEmpty = errors.New("completion: nothing to complete")
 
-const bashCompletion = `# nexssflow bash completion.
+const bashCompletion = `# nflow bash completion.
 # Install:
-#   nexssflow completion bash | sudo tee /etc/bash_completion.d/nexssflow > /dev/null
+#   nflow completion bash | sudo tee /etc/bash_completion.d/nflow > /dev/null
 # Or per user:
-#   nexssflow completion bash > ~/.local/share/bash-completion/completions/nexssflow
-_nexssflow() {
+#   nflow completion bash > ~/.local/share/bash-completion/completions/nflow
+_nflow() {
     local cur prev subcommands flags sub
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    subcommands="run build info test help version selfbuild completion"
+    subcommands="init run build serve lint explain expand catalog list show completion self require pin info help version"
 
     if [ "$COMP_CWORD" -eq 1 ]; then
         COMPREPLY=($(compgen -W "$subcommands" -- "$cur"))
@@ -58,7 +58,7 @@ _nexssflow() {
             flags="-v -vv -vvv --assert= --approval= --budget= --max-tokens= --journal-dir= --execution-id="
             ;;
         build)
-            flags="-o --output="
+            flags="-o --output= --debug -d --no-trimpath --all-bundles"
             ;;
         completion)
             flags="bash zsh pwsh powershell"
@@ -77,32 +77,41 @@ _nexssflow() {
         completion)
             COMPREPLY=($(compgen -W "$flags" -- "$cur"))
             ;;
-        run|info|test|build)
+	    run|build|serve|lint|explain|expand|list|info)
             COMPREPLY=($(compgen -f -X '!*.nflow' -- "$cur"))
             ;;
     esac
 }
-complete -F _nexssflow nexssflow
+complete -F _nflow nflow
 `
 
-const zshCompletion = `#compdef nexssflow
-# nexssflow zsh completion.
-# Install: nexssflow completion zsh > "${fpath[1]}/_nexssflow"
-_nexssflow() {
+const zshCompletion = `#compdef nflow
+# nflow zsh completion.
+# Install: nflow completion zsh > "${fpath[1]}/_nflow"
+_nflow() {
     local -a subcommands
     subcommands=(
         'run:run a .nflow pipeline'
         'build:compile a .nflow into a standalone executable'
+        'serve:validate a flow for serve mode'
+        'lint:check .nflow sources'
+        'explain:inspect a .nflow file'
+        'expand:show macro expansions'
+        'catalog:dump the compiler catalog'
+        'list:list compiler capabilities'
+        'show:show one compiler capability'
+        'init:initialize a project or bundle'
+        'self:manage the nflow binary or run self-tests'
+        'require:resolve @require dependencies'
+        'pin:pin @require versions'
         'info:describe a .nflow file'
-        'test:run a .nflow in test mode'
-        'selfbuild:rebuild the nexssflow binary with VCS metadata'
         'completion:print a shell completion script'
         'version:print build info'
         'help:print usage'
     )
 
     if (( CURRENT == 2 )); then
-        _describe -t commands 'nexssflow command' subcommands
+        _describe -t commands 'nflow command' subcommands
         return
     fi
 
@@ -116,29 +125,31 @@ _nexssflow() {
             ;;
         build)
             _arguments '1:flow file:_files -g "*.nflow"' \
-                '-o:output file:_files' '--output=:output file:_files'
-            ;;
-        info|test)
-            _arguments '1:flow file:_files -g "*.nflow"'
+	            '-o:output file:_files' '--output=:output file:_files' \
+	            '--debug[keep debug symbols]' '-d[keep debug symbols]' \
+	            '--no-trimpath[keep full source paths]' '--all-bundles[link all native extensions]'
+	            ;;
+	        info|serve|lint|explain|expand)
+	            _arguments '1:flow file:_files -g "*.nflow"'
             ;;
         completion)
             _values 'shell' bash zsh pwsh powershell
             ;;
     esac
 }
-_nexssflow "$@"
+_nflow "$@"
 `
 
 //
 //nolint:gosec // G101 false positive: shell completion script, not credentials.
-const pwshCompletion = `# nexssflow PowerShell completion.
-# Install: nexssflow completion pwsh | Out-String | Invoke-Expression
+const pwshCompletion = `# nflow PowerShell completion.
+# Install: nflow completion pwsh | Out-String | Invoke-Expression
 # Or append to your $PROFILE:
-#   nexssflow completion pwsh >> $PROFILE
-Register-ArgumentCompleter -Native -CommandName nexssflow -ScriptBlock {
+#   nflow completion pwsh >> $PROFILE
+Register-ArgumentCompleter -Native -CommandName nflow -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
 
-    $subcommands = @('run', 'build', 'info', 'test', 'selfbuild', 'completion', 'version', 'help')
+    $subcommands = @('init', 'run', 'build', 'serve', 'lint', 'explain', 'expand', 'catalog', 'list', 'show', 'completion', 'self', 'require', 'pin', 'info', 'help', 'version')
     $shells      = @('bash', 'zsh', 'pwsh', 'powershell')
 
     function emit([string[]]$values, [string]$kind) {
@@ -166,7 +177,7 @@ Register-ArgumentCompleter -Native -CommandName nexssflow -ScriptBlock {
 
     $flags = switch ($sub) {
         'run'   { @('-v', '-vv', '-vvv', '--assert=', '--approval=', '--budget=', '--max-tokens=', '--journal-dir=', '--execution-id=') }
-        'build' { @('-o', '--output=') }
+        'build' { @('-o', '--output=', '--debug', '-d', '--no-trimpath', '--all-bundles') }
         default { @() }
     }
 
@@ -175,7 +186,7 @@ Register-ArgumentCompleter -Native -CommandName nexssflow -ScriptBlock {
         return
     }
 
-    if ($sub -in @('run', 'build', 'info', 'test')) {
+    if ($sub -in @('run', 'build', 'serve', 'lint', 'explain', 'expand', 'info')) {
         $pattern = if ($wordToComplete) { "$wordToComplete*.nflow" } else { "*.nflow" }
         Get-ChildItem -Filter $pattern -File -ErrorAction SilentlyContinue | ForEach-Object {
             [System.Management.Automation.CompletionResult]::new(

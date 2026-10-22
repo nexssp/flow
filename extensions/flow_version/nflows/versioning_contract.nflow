@@ -9,3 +9,4 @@
 @flow_version ">=0.0.0"
 
 const @{ value: "ok" }
+@assert: result == "ok"

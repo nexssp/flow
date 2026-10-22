@@ -8,7 +8,7 @@
 @assert: result.priority == "urgent"
 @assert: result.queue == "billing-escalations"
 @assert: result.reply_status == "draft"
-@assert: result.reply_text != nil
+@assert: result.reply_text == "We have received ticket SUP-5821. A support specialist will review it shortly."
 {
   ticket_id: "SUP-5821",
   customer_id: "cus-2048",

@@ -174,12 +174,24 @@ func validateAllFlagRefs(ast Expr, cliArgs []string) error {
 // values. It never descends into Value kinds that cannot hold a textual
 // reference (numbers, bools, state references).
 func walkAtomValues(atom *Atom, visit func(raw, where string) error) error {
-	for key, value := range atom.Params {
+	paramKeys := make([]string, 0, len(atom.Params))
+	for key := range atom.Params {
+		paramKeys = append(paramKeys, key)
+	}
+	slices.Sort(paramKeys)
+	for _, key := range paramKeys {
+		value := atom.Params[key]
 		if err := visit(value, "param "+key); err != nil {
 			return err
 		}
 	}
-	for key, val := range atom.Args {
+	argKeys := make([]string, 0, len(atom.Args))
+	for key := range atom.Args {
+		argKeys = append(argKeys, key)
+	}
+	slices.Sort(argKeys)
+	for _, key := range argKeys {
+		val := atom.Args[key]
 		if err := walkValueStrings(val, "arg "+key, visit); err != nil {
 			return err
 		}

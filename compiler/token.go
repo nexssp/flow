@@ -56,8 +56,9 @@ func (t TokenType) String() string {
 }
 
 type Token struct {
-	Type   TokenType
-	Lit    string
-	Line   int
-	Offset int
+	Type         TokenType
+	Lit          string
+	Line         int
+	Offset       int
+	Unterminated bool
 }

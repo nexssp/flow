@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xtest/ktest"
 
 	compiler "github.com/nexssp/flow/compiler"
@@ -50,6 +51,26 @@ func TestBundle_BuildSources(t *testing.T) {
 			ktest.RequireEqual(t, sources(tc.meta), tc.want)
 		})
 	}
+}
+
+func TestBundle_BuildSourcesPreservesDependenciesAfterDescriptionColon(t *testing.T) {
+	t.Parallel()
+	body := "runtime.sleep :retry=3"
+	bundles := []compiler.Bundle{
+		Bundle(nil),
+		{ID: "runtime", Libraries: []action.Library{{Name: "runtime", Actions: []action.AnyAction{
+			action.New("runtime.sleep", func(context.Context, any) (any, error) { return nil, nil }).Build(),
+		}}}},
+		{ID: "retry", Build: compiler.BuildExtension{Modifiers: []string{"retry"}}},
+	}
+	selected, err := compiler.AnalyzeBuildUsage(bundles, []compiler.BuildUsage{{
+		Raw:        "@description \"Pipelines: named fragments compose like actions\"\n@pipeline child\n" + body + "\n@end\nchild",
+		Clean:      "child",
+		Directives: []string{"pipeline", "end"},
+		Metadata:   map[string]any{"pipelines": map[string]string{"child": body}},
+	}})
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, selected, []string{"pipeline", "runtime", "retry"})
 }
 
 func TestDirective_SingleLineHeader(t *testing.T) {

@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -151,6 +152,10 @@ func scaffoldBundle(targetDir string) int {
 	if targetDir == "." {
 		targetDir = "nexssflow"
 	}
+	pkgName := filepath.Base(targetDir)
+	if !token.IsIdentifier(pkgName) {
+		return fatalf("init --bundle: directory name %q is not a valid Go package identifier", pkgName)
+	}
 
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return fatalf("init --bundle: create directory %s: %v", targetDir, err)
@@ -162,7 +167,6 @@ func scaffoldBundle(targetDir string) int {
 		return 0
 	}
 
-	pkgName := filepath.Base(targetDir)
 	idName := pkgName
 	if idName == "nexssflow" {
 		if cwd, err := os.Getwd(); err == nil {
@@ -186,7 +190,7 @@ func init() {
 }
 
 func Bundle(opts map[string]string) compiler.Bundle {
-	runAction := action.New("%s.run", func(ctx context.Context, in map[string]any) (map[string]any, error) {
+	runAction := action.New(%q, func(ctx context.Context, in map[string]any) (map[string]any, error) {
 		return map[string]any{
 			"status":   "ok",
 			"received": in,
@@ -203,7 +207,7 @@ func Bundle(opts map[string]string) compiler.Bundle {
 		},
 	}
 }
-`, pkgName, idName, idName)
+	`, pkgName, idName, idName+".run")
 
 	if err := os.WriteFile(targetFile, []byte(content), 0o600); err != nil {
 		return fatalf("init --bundle: write %s: %v", targetFile, err)

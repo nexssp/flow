@@ -875,6 +875,13 @@ func copyLoosePackage(r require.Requirement, dstDir string) error {
 	srcDir := r.LocalPath
 	candidate := filepath.Join(srcDir, defaultAdapterDirectory)
 	if require.HasGoFiles(candidate) {
+		info, err := os.Lstat(candidate)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
+			return fmt.Errorf("harness: loose-package adapter directory %q must not be a symlink", candidate)
+		}
 		srcDir = candidate
 	}
 
@@ -890,6 +897,13 @@ func copyLoosePackage(r require.Requirement, dstDir string) error {
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
 			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
+			return fmt.Errorf("harness: loose-package Go source %q must not be a symlink", entry.Name())
 		}
 		srcFile := filepath.Join(srcDir, entry.Name())
 		data, err := os.ReadFile(srcFile)

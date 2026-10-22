@@ -13,17 +13,19 @@ fetch:timeout=5s:retry=3:auth:role=admin:tag="fast,hot"
 
 ## Three layers
 
-The modifier surface is deliberately split across three places. Nothing
-else parses `:name=value` strings.
+The modifier surface is split across the parser, compiler constructors, and
+the active modifier bundles. The parser records modifier tokens; the compiler
+constructors decode the supported value shapes.
 
 | Layer | Location | Owns |
 |---|---|---|
-| Parsing primitives | `flow/compiler/modifier.go` | `Duration`, `Int`, `Int32`, `Int64`, `Float64`, `String`, `StringList`, `Flag` |
-| Standard modifiers | `flow/modifiers/standard.go` | `:timeout=`, `:retry=`, `:cache=`, `:auth`, `:role=`, `:name=`, `:tag=`, `:read_only`, … |
-| Extension modifiers | `flow/extensions/<domain>/modifiers.go` | Everything else: `:breaker_failures=`, `:budget=`, `:model=`, `:nats=`, … |
+| Parsing primitives | [`compiler/modifier.go`](../compiler/modifier.go) | `Duration`, `Int`, `Int32`, `Int64`, `Float64`, `String`, `StringList`, `Flag` |
+| Standard modifiers | [`extensions/modifiers_core/`](../extensions/modifiers_core/), [`extensions/modifiers_auth/`](../extensions/modifiers_auth/), and [`extensions/modifiers_meta/`](../extensions/modifiers_meta/) | Kernel policy, authorization, and metadata modifiers such as `:timeout=`, `:retry=`, `:auth`, `:role=`, `:name=`, `:tag=`, `:read_only`, … |
+| Extension modifiers | `extensions/<domain>/` | Domain-specific modifiers contributed by extensions |
 
-Core owns the parsing rules for the seven DSL value shapes. Extensions own
-their domain. Nothing in between duplicates either.
+The compiler provides typed constructors for the DSL value shapes. The
+standard modifier bundles and domain extensions register their own names;
+the active modifier table determines which are available in a given host.
 
 ## Writing one modifier
 
@@ -78,13 +80,14 @@ catalog.
 
 ## Registering
 
-Standard modifiers register through `flow/modifiers/standard.go`. Bundle
-modifiers register through `compiler.Bundle.Modifiers`:
+Standard modifiers are defined in the `extensions/modifiers_*` bundles.
+Bundle modifiers register through `compiler.Bundle.Modifiers`:
 
 ```go
 func Bundle() compiler.Bundle {
     return compiler.Bundle{
-        Library:   action.Library{Name: ImportPath},
+        ID:        ID,
+        Libraries: []action.Library{{Name: ID}},
         Modifiers: Modifiers(),
     }
 }
@@ -101,9 +104,8 @@ func Modifiers() []compiler.Modifier {
 }
 ```
 
-Registration is eager. A duplicate name — two modifiers claiming `:retry`
-across two bundles — panics at table construction, not at pipeline
-execution.
+Registration is eager. Duplicate modifier names are rejected while the
+modifier table is constructed, not deferred until pipeline execution.
 
 ## Rules
 

@@ -45,8 +45,11 @@ var helpRegistry = map[string]helpText{
 	},
 	"build": {
 		Summary: "Compile a .nflow file into a standalone executable with embedded source and @require modules.",
-		Usage:   "nflow build <file.nflow> -o <output> [flags]",
-		Flags:   `  -o FILE             output binary (required)`,
+		Usage:   "nflow build <file.nflow> [-o <output>] [--debug] [--no-trimpath] [--all-bundles]",
+		Flags: `  -o, --output FILE   output binary (default: source filename)
+	  --debug, -d        keep debug symbols
+	  --no-trimpath      keep full source paths
+	  --all-bundles      link all native extensions`,
 		Examples: []string{
 			`nflow build flows/client.nflow -o client.exe`,
 		},

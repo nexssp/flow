@@ -28,9 +28,15 @@
 
 @assert: result.batch_id == "BATCH-2026-10-11"
 @assert: result.currency == "USD"
+@assert: result.payment_total_cents == 20000
+@assert: result.bank_total_cents == 20000
 @assert: result.variance_cents == 0
 @assert: result.matched_count == 1
 @assert: result.exception_count == 2
+@assert: result.exceptions[0].type == "payment_mismatch_or_missing"
+@assert: result.exceptions[0].reference == "PAY-1002"
+@assert: result.exceptions[1].type == "bank_only"
+@assert: result.exceptions[1].reference == "BANK-FEE-01"
 {
   batch_id: "BATCH-2026-10-11",
   currency: "USD",

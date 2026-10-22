@@ -120,3 +120,34 @@ func TestToJSONSchemaIncludesTypedDefault(t *testing.T) {
 		t.Fatalf("JSON Schema default = %#v, want integer 2", depth["default"])
 	}
 }
+
+func TestToJSONSchemaPreservesAnyAndStructArrayTypes(t *testing.T) {
+	t.Parallel()
+
+	s := Schema{Name: "Payload", Fields: []Field{
+		{Name: "Value", JSONName: "value", Type: "any", Kind: KindAny},
+		{Name: "Items", JSONName: "items", Type: "[]Item", Kind: KindStruct, Slice: true},
+	}}
+	properties, ok := ToJSONSchema(s)["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("schema properties must be an object")
+	}
+	value, ok := properties["value"].(map[string]any)
+	if !ok {
+		t.Fatal("value schema must be an object")
+	}
+	if _, constrained := value["type"]; constrained {
+		t.Fatalf("any field schema = %#v, want no restrictive type", value)
+	}
+	array, ok := properties["items"].(map[string]any)
+	if !ok {
+		t.Fatal("array schema must be an object")
+	}
+	items, ok := array["items"].(map[string]any)
+	if !ok {
+		t.Fatal("array item schema must be an object")
+	}
+	if items["type"] != typeObject {
+		t.Fatalf("struct array item schema = %#v, want object", items)
+	}
+}

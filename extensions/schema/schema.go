@@ -302,31 +302,12 @@ func ToJSONSchema(s Schema) map[string]any {
 	var required []string
 
 	for _, f := range s.Fields {
-		prop := map[string]any{}
-		switch f.Kind {
-		case KindString, KindAny:
-			prop["type"] = typeString
-		case KindInt, KindFloat:
-			prop["type"] = typeNumber
-		case KindBool:
-			prop["type"] = "boolean"
-		case KindStruct:
-			prop["type"] = typeObject
-		}
+		prop := jsonSchemaKind(f.Kind)
 
 		if f.Slice {
-			elemType := typeString
-			switch f.Kind {
-			case KindInt, KindFloat:
-				elemType = typeNumber
-			case KindBool:
-				elemType = "boolean"
-			case KindString, KindAny, KindStruct:
-				elemType = typeString
-			}
 			prop = map[string]any{
 				"type":  "array",
-				"items": map[string]any{"type": elemType},
+				"items": prop,
 			}
 		}
 
@@ -368,4 +349,21 @@ func ToJSONSchema(s Schema) map[string]any {
 		out["required"] = required
 	}
 	return out
+}
+
+func jsonSchemaKind(kind Kind) map[string]any {
+	prop := map[string]any{}
+	switch kind {
+	case KindString:
+		prop["type"] = typeString
+	case KindInt, KindFloat:
+		prop["type"] = typeNumber
+	case KindBool:
+		prop["type"] = "boolean"
+	case KindStruct:
+		prop["type"] = typeObject
+	case KindAny:
+		// Any accepts all JSON types, so it must not carry a type restriction.
+	}
+	return prop
 }

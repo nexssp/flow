@@ -40,6 +40,9 @@ func Bundle(_ map[string]string) compiler.Bundle {
 		MaterializePhase: compiler.MaterializeCompositions,
 		Fixtures:         fixturesFS,
 		Build: compiler.BuildExtension{
+			// Keep preprocessed pipeline bodies explicit: raw-source lexing can
+			// miss their dependencies after a colon in a quoted @description
+			// (scanAtPrompt/scanString). The @{...} quote fix does not fix that.
 			Sources: func(meta map[string]any) []string {
 				pipelines, _ := meta["pipelines"].(map[string]string)
 				var sources []string

@@ -34,7 +34,7 @@ what they provide: `keyword.go`, `directive.go`, `modifiers.go`,
             ID:        ID,
             Libraries: []action.Library{{Name: ID}},
             Primaries: []compiler.PrimaryExtension{loopKeyword{}},
-            Fixtures:  fixturesFS,  // required for every extension
+            Fixtures:  fixturesFS,  // native/CLI self-test fixtures
         }
     }
 
@@ -46,9 +46,13 @@ with the same ID panic at `init()`.
 
 Every extension must embed at least one runnable `.nflow` fixture directly
 in `nflows/`. Keep behavior-specific names in the filenames rather than
-creating `happy/`, `errors/`, or `edge/` subdirectories. The complete suite
-runs through `nflow self test`; no extension should be left without a passing
-fixture.
+creating `happy/`, `errors/`, or `edge/` subdirectories. Bundles in
+`native.SelftestBundles()` run their fixtures through `nflow self test`.
+The host-configured `embed` bundle instead embeds its fixture in
+[`host_fixture_test.go`](embed/host_fixture_test.go), which supplies the
+required filesystem root and verifies the typed reference. Run it with
+`go test ./extensions/embed -run '^TestHostRootNFlowFixture$' -count=1`.
+The `files` package is a shared helper, not a standalone DSL bundle.
 
 A fixture is a real `.nflow` file the runner executes like any pipeline:
 
@@ -78,8 +82,9 @@ Real-world scenarios that combine several extensions belong in the root
 suite. A scenario may own a custom `bundle/library.go` and use
 `@require ./bundle`; keep it deterministic, assert meaningful outcomes,
 and use it to demonstrate composition rather than repeat a single
-extension fixture. `task specs`, `task test`, and `task ci` execute these
-integrated scenarios.
+extension fixture. `task specs` and `task ci` execute these integrated
+scenarios. `task test` runs Go tests, including the extension conformance
+gate, but does not run the integrated scenarios.
 
 ## Tests
 

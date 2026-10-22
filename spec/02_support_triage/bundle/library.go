@@ -31,6 +31,8 @@ func Bundle(_ map[string]string) compiler.Bundle {
 					Description("Route tickets by urgency and billing intent").Build(),
 				action.New("support.draft_reply", draftReply).
 					Description("Create a safe response draft without sending it").Build(),
+				action.New("support.manual_review", manualReview).
+					Description("Preserve a ticket for manual review without sending a reply").Build(),
 			},
 		}},
 	}
@@ -52,6 +54,9 @@ func lookupTier(_ context.Context, in map[string]any) (map[string]any, error) {
 }
 
 func classifyTicket(_ context.Context, in map[string]any) (map[string]any, error) {
+	if status, _ := in["status"].(string); status == "manual_review" {
+		return cloneMap(in), nil
+	}
 	subject, _ := in["subject"].(string)
 	message, _ := in["message"].(string)
 	text := strings.ToLower(subject + " " + message)
@@ -79,6 +84,9 @@ func classifyTicket(_ context.Context, in map[string]any) (map[string]any, error
 }
 
 func draftReply(_ context.Context, in map[string]any) (map[string]any, error) {
+	if status, _ := in["status"].(string); status == "manual_review" {
+		return cloneMap(in), nil
+	}
 	ticketID, _ := in["ticket_id"].(string)
 	if strings.TrimSpace(ticketID) == "" {
 		return nil, errors.New("support.draft_reply: ticket_id is required")
@@ -86,6 +94,18 @@ func draftReply(_ context.Context, in map[string]any) (map[string]any, error) {
 	out := cloneMap(in)
 	out["reply_status"] = "draft"
 	out["reply_text"] = fmt.Sprintf("We have received ticket %s. A support specialist will review it shortly.", ticketID)
+	return out, nil
+}
+
+func manualReview(_ context.Context, in map[string]any) (map[string]any, error) {
+	ticketID, ok := in["ticket_id"].(string)
+	if !ok || strings.TrimSpace(ticketID) == "" {
+		return nil, xerr.Validation("support.manual_review: ticket_id is required")
+	}
+	out := cloneMap(in)
+	out["status"] = "manual_review"
+	out["queue"] = "customer-success-manual"
+	out["reply_status"] = "draft_not_sent"
 	return out, nil
 }
 

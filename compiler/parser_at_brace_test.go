@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -139,5 +140,55 @@ func TestParseAtBrace_RejectsMalformed(t *testing.T) {
 				t.Fatalf("expected error for %q", src)
 			}
 		})
+	}
+}
+
+func TestParseAtBrace_QuotedBracesAndDuplicateKeys(t *testing.T) {
+	t.Parallel()
+	parsed, err := newTestParser(t, `wrap @{ text: "{ nested }" }`).Parse()
+	if err != nil {
+		t.Fatalf("quoted braces should not close the argument block: %v", err)
+	}
+	atom, ok := parsed.(*Atom)
+	if !ok {
+		t.Fatalf("parsed expression has type %T, want *Atom", parsed)
+	}
+	if got := atom.Args["text"].Str; got != "{ nested }" {
+		t.Fatalf("text = %q, want quoted braces", got)
+	}
+	for _, src := range []string{
+		`wrap @{ key: 1, key: 2 }`,
+		`wrap @{ outer: { key: 1, key: 2 } }`,
+		`wrap @{ key: 1 } @{ key: 2 }`,
+		`wrap(key=1, key=2)`,
+	} {
+		if _, err := newTestParser(t, src).Parse(); err == nil || !strings.Contains(err.Error(), "duplicate") {
+			t.Errorf("Parse(%q) error = %v, want duplicate-key/parameter error", src, err)
+		}
+	}
+}
+
+func TestParseRejectsUnterminatedStringOrArgumentBlock(t *testing.T) {
+	t.Parallel()
+	for _, src := range []string{`"unterminated`, `wrap @{ key: "unterminated }`} {
+		if _, err := newTestParser(t, src).Parse(); err == nil {
+			t.Errorf("Parse(%q) unexpectedly succeeded", src)
+		}
+	}
+}
+
+func TestParseLimitsNestedExpressionDepth(t *testing.T) {
+	t.Parallel()
+	src := strings.Repeat("(", maxParseDepth+1) + "noop" + strings.Repeat(")", maxParseDepth+1)
+	if _, err := newTestParser(t, src).Parse(); err == nil || !strings.Contains(err.Error(), "parse depth exceeded") {
+		t.Fatalf("Parse(deep input) error = %v, want parse-depth diagnostic", err)
+	}
+}
+
+func TestParseLimitsNestedArgumentDepth(t *testing.T) {
+	t.Parallel()
+	src := "wrap @{ value: " + strings.Repeat("{value: ", maxParseDepth+1) + "null" + strings.Repeat("}", maxParseDepth+1) + " }"
+	if _, err := newTestParser(t, src).Parse(); err == nil || !strings.Contains(err.Error(), "parse depth exceeded") {
+		t.Fatalf("Parse(deep argument) error = %v, want parse-depth diagnostic", err)
 	}
 }

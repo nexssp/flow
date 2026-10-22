@@ -100,8 +100,32 @@ func (l *Lexer) scanAtBrace() Token {
 	l.pos += 2
 	start := l.pos
 	depth := 1
+	var quote byte
 	for l.pos < len(l.src) {
-		switch l.src[l.pos] {
+		c := l.src[l.pos]
+		if quote != 0 {
+			if c == '\\' && l.pos+1 < len(l.src) {
+				if l.src[l.pos+1] == '\n' {
+					l.line++
+				}
+				l.pos += 2
+				continue
+			}
+			switch c {
+			case quote:
+				quote = 0
+			case '\n':
+				l.line++
+			}
+			l.pos++
+			continue
+		}
+		if (c == '"' || c == '\'' || c == '`') && l.quoteCanStart(l.pos, start) {
+			quote = c
+			l.pos++
+			continue
+		}
+		switch c {
 		case '{':
 			depth++
 		case '}':
@@ -116,7 +140,20 @@ func (l *Lexer) scanAtBrace() Token {
 		}
 		l.pos++
 	}
-	return Token{Type: TokAtBrace, Lit: l.src[start:], Line: startLine}
+	return Token{Type: TokAtBrace, Lit: l.src[start:], Line: startLine, Unterminated: true}
+}
+
+// quoteCanStart distinguishes quoted values from apostrophes embedded in bare
+// words. In this grammar, quoted scalars begin at the start of a value.
+func (l *Lexer) quoteCanStart(pos, start int) bool {
+	for i := pos - 1; i >= start; i-- {
+		c := l.src[i]
+		if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
+			continue
+		}
+		return c == ':' || c == ',' || c == '[' || c == '{'
+	}
+	return true
 }
 
 func (l *Lexer) scanAtPrompt() Token {
@@ -194,18 +231,26 @@ func (l *Lexer) scanString(q byte) Token {
 	line := l.line
 	l.pos++
 	start := l.pos
+	terminated := false
 	for l.pos < len(l.src) && l.src[l.pos] != q {
 		if l.src[l.pos] == '\\' && l.pos+1 < len(l.src) {
+			if l.src[l.pos+1] == '\n' {
+				l.line++
+			}
 			l.pos += 2
 		} else {
+			if l.src[l.pos] == '\n' {
+				l.line++
+			}
 			l.pos++
 		}
 	}
 	out := l.src[start:l.pos]
 	if l.pos < len(l.src) {
 		l.pos++
+		terminated = true
 	}
-	return Token{Type: TokString, Lit: out, Line: line}
+	return Token{Type: TokString, Lit: out, Line: line, Unterminated: !terminated}
 }
 
 func (l *Lexer) scanNumber() Token {

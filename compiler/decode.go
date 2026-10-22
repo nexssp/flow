@@ -26,6 +26,9 @@ func Decode[T any](raw map[string]string) (T, error) {
 	var out T
 	v := reflect.ValueOf(&out).Elem()
 	t := v.Type()
+	if t.Kind() != reflect.Struct {
+		return out, fmt.Errorf("options target must be a struct, got %s", t.Kind())
+	}
 
 	used := make(map[string]bool, len(raw))
 
@@ -43,7 +46,7 @@ func Decode[T any](raw map[string]string) (T, error) {
 		if present {
 			used[key] = true
 		}
-		if !present || rawVal == "" {
+		if !present {
 			if def := f.Tag.Get("default"); def != "" {
 				rawVal = def
 			} else {

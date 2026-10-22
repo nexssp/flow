@@ -5,8 +5,12 @@ patterns. This page is a syntax walkthrough. For the authoritative,
 implementation-backed language and runtime reference, see
 [language-reference.md](language-reference.md); for the CLI, see [cli.md](cli.md).
 
-Every snippet on this page is a real, working flow. Copy any of them
-into a file and run it:
+The snippets demonstrate syntax and control-flow behavior. Examples that call
+capabilities such as `http.request`, `service.primary`, or `distribute.map`
+require the corresponding bundle or host registration; they are not all
+standalone programs for the stock CLI. For a concrete runnable example, use a
+fixture under `extensions/<name>/nflows/` or a linked example from the
+[README](../README.md). A basic local run is:
 
 ```sh
 nflow run my-flow.nflow

@@ -18,6 +18,7 @@ type buildOptions struct {
 	debug      bool
 	noTrimpath bool
 	allBundles bool
+	help       bool
 	positional []string
 }
 
@@ -40,6 +41,9 @@ func RunBuild(ctx context.Context, args []string, sourceRequires func(context.Co
 	opts, rc := parseBuildArgs(args)
 	if rc != 0 {
 		return rc
+	}
+	if opts.help {
+		return 0
 	}
 	if len(opts.positional) < 1 {
 		return fatalf("usage: nflow build <file.nflow> [-o <output>] [--debug]")
@@ -134,7 +138,37 @@ func resolveBuildOutputPath(nflowPath, out string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return "", fmt.Errorf("create output directory %s: %w", filepath.Dir(abs), err)
 	}
+	if sameBuildInputOutput(nflowPath, abs) {
+		return "", fmt.Errorf("output path %s refers to the input workflow; choose a different output path", abs)
+	}
 	return abs, nil
+}
+
+func sameBuildInputOutput(inputPath, outputPath string) bool {
+	inputInfo, err := os.Stat(inputPath)
+	if err != nil {
+		return false
+	}
+	if outputInfo, statErr := os.Stat(outputPath); statErr == nil && os.SameFile(inputInfo, outputInfo) {
+		return true
+	}
+
+	inputReal, err := filepath.EvalSymlinks(inputPath)
+	if err != nil {
+		return false
+	}
+	outputReal, err := filepath.EvalSymlinks(outputPath)
+	if err == nil {
+		return filepath.Clean(inputReal) == filepath.Clean(outputReal)
+	}
+	if !os.IsNotExist(err) {
+		return false
+	}
+	parentReal, err := filepath.EvalSymlinks(filepath.Dir(outputPath))
+	if err != nil {
+		return false
+	}
+	return filepath.Clean(inputReal) == filepath.Join(parentReal, filepath.Base(outputPath))
 }
 
 func stageBuildDir(
@@ -423,15 +457,21 @@ func parseBuildArgs(args []string) (opts buildOptions, rc int) {
 		a := args[i]
 		switch {
 		case a == "-o" || a == "--output":
-			if i+1 >= len(args) {
+			if i+1 >= len(args) || args[i+1] == "" || strings.HasPrefix(args[i+1], "-") {
 				return opts, fatalf("build: flag %s requires a value", a)
 			}
 			i++
 			opts.output = args[i]
 		case strings.HasPrefix(a, "-o="):
 			opts.output = strings.TrimPrefix(a, "-o=")
+			if opts.output == "" {
+				return opts, fatalf("build: flag -o requires a value")
+			}
 		case strings.HasPrefix(a, "--output="):
 			opts.output = strings.TrimPrefix(a, "--output=")
+			if opts.output == "" {
+				return opts, fatalf("build: flag --output requires a value")
+			}
 
 		case a == "--debug" || a == "-d":
 			opts.debug = true
@@ -441,6 +481,7 @@ func parseBuildArgs(args []string) (opts buildOptions, rc int) {
 			opts.allBundles = true
 
 		case a == flagHelp || a == flagHelpShort:
+			opts.help = true
 			printBuildHelp()
 			return opts, 0
 
@@ -455,7 +496,7 @@ func parseBuildArgs(args []string) (opts buildOptions, rc int) {
 }
 
 func printBuildHelp() {
-	fmt.Fprint(os.Stderr, `Usage: nflow build <file.nflow> [-o <output>] [--debug] [--all-bundles]
+	fmt.Fprint(os.Stderr, `Usage: nflow build <file.nflow> [-o <output>] [--debug] [--no-trimpath] [--all-bundles]
 
 Compile a .nflow file into a standalone, tree-shaken executable. The binary
 embeds the workflow and links only the required native and @require modules.

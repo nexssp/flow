@@ -2,8 +2,11 @@ package external
 
 import (
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xtest/ktest"
 )
@@ -85,6 +88,47 @@ func TestDecodeBody(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			ktest.RequireEqual(t, decodeBody(c.in), c.want)
+		})
+	}
+}
+
+func TestHTTPRequestResponseBodyLimit(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		body     string
+		tooLarge bool
+	}{
+		{name: "oversized text", body: strings.Repeat("x", httpResponseMaxBytes+1), tooLarge: true},
+		{name: "oversized JSON", body: `"` + strings.Repeat("x", httpResponseMaxBytes-1) + `"`, tooLarge: true},
+		{name: "exact limit", body: strings.Repeat("x", httpResponseMaxBytes)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+
+			raw, err := action.InvokeAny(t.Context(), HTTPRequest, map[string]any{"url": server.URL})
+			if tc.tooLarge {
+				ktest.RequireErrorKind(t, err, xerr.KindValidation)
+				ktest.RequireStringContains(t, err.Error(), "http.request: response body exceeds 16777216-byte limit")
+				result, ok := raw.(HTTPResult)
+				ktest.RequireCondition(t, ok, "result type = %T, want HTTPResult", raw)
+				ktest.RequireEqual(t, result, HTTPResult{})
+				return
+			}
+
+			ktest.RequireNoError(t, err)
+			result, ok := raw.(HTTPResult)
+			ktest.RequireCondition(t, ok, "result type = %T, want HTTPResult", raw)
+			body, ok := result.Body.(string)
+			ktest.RequireCondition(t, ok, "body type = %T, want string", result.Body)
+			ktest.RequireEqual(t, len(body), httpResponseMaxBytes)
+			ktest.RequireEqual(t, body, tc.body)
 		})
 	}
 }

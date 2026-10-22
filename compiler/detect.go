@@ -1,6 +1,9 @@
 package compiler
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // DetectRequiredBundles inspects an AST and returns the list of bundle IDs
 // that must be compiled into the binary.
@@ -30,5 +33,6 @@ func DetectRequiredBundles(expr Expr) []string {
 	for bundle := range seen {
 		bundles = append(bundles, bundle)
 	}
+	slices.Sort(bundles)
 	return bundles
 }

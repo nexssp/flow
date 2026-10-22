@@ -1,25 +1,59 @@
-# Kolejność materializacji rozszerzeń
+# Extension materialization order
 
-## Decyzja
+## Contract
 
-`Bundle.MaterializePhase` deklaruje fazę materializacji rozszerzenia. Runner wykonuje najpierw `compiler.MaterializeDeclarations`, potem `compiler.MaterializeCompositions`. W obrębie fazy zachowuje kolejność przekazanych bundli. Wartość zerowa oznacza deklaracje, więc istniejące rozszerzenia nie muszą zmieniać swoich deklaracji. Nieobsługiwana faza jest błędem walidacji bundle, również gdy bundle nie ma materializera.
+`Bundle.MaterializePhase` declares an extension's materialization phase. The
+runner executes `compiler.MaterializeDeclarations` first, then
+`compiler.MaterializeCompositions`, preserving the supplied bundle order within
+each phase. The zero value means declarations, so existing extensions need not
+change their declarations. An unsupported phase is a bundle validation error,
+even when the bundle has no materializer.
 
-Faza deklaracji montuje akcje na podstawie metadanych. Faza kompozycji kompiluje deklaracje odwołujące się do tych akcji. Rozszerzenie `pipeline` samo deklaruje fazę kompozycji; runner nie rozpoznaje jego identyfikatora. Kolejność nie zależy od `Bundle.Alias`, a przekazanie aliasu do materializera pozostaje bez zmian. Bundle bez materializera nie dodaje kroku wykonania.
+The declaration phase mounts actions from metadata. The composition phase
+compiles declarations that refer to those actions. The `pipeline` extension
+declares its own composition phase; the runner does not recognize its ID.
+Ordering does not depend on `Bundle.Alias`, and aliases are still passed to
+materializers unchanged. A bundle without a materializer adds no execution
+step.
 
-## Dlaczego ten kontrakt
+## Why this contract
 
-Dotychczas runner przesuwał bundle o identyfikatorze `pipeline` na koniec. Była to wiedza o konkretnej funkcji języka w warstwie wykonawczej. Sam adapter rozszerzenia nie może zapewnić kolejności wobec materializerów innych bundli: ustala ją `runner.BuildConfig`.
+Previously, the runner moved the bundle with ID `pipeline` to the end. That
+placed knowledge about one language feature in the execution layer. An
+extension adapter alone cannot establish ordering relative to other bundles'
+materializers; `runner.BuildConfig` owns that ordering.
 
-Kontrakt pozostaje w istniejącym mikrordzeniu rozszerzeń Flow (`compiler.Bundle`), a runner jedynie go wykonuje. Nie dodajemy mechanizmu do zewnętrznego modułu Kernel: to kolejność etapów kompilacji Flow, a nie nowa prymitywa wykonania akcji. Sprawdzono istniejące kontrakty Bundle/Materializer i katalog reuse; DAG Kernela służy grafom akcji, nie jest potrzebny do stabilnego uporządkowania dwóch faz.
+The contract remains in Flow's existing extension microkernel
+(`compiler.Bundle`); the runner only executes it. No Kernel mechanism is needed:
+this is ordering of Flow compilation stages, not a new action-execution
+primitive. Kernel's DAG serves action graphs and is not needed to stably order
+these two phases.
 
-Alternatywy: warunek po nazwie narusza granicę rozszerzeń; ręczna kolejność natywnego katalogu nie obejmuje zewnętrznych bundli; dowolne priorytety liczbowe nie opisują intencji; graf zależności przed/po byłby większym kontraktem niż potrzebuje ten etap. Używamy stabilnego sortowania z biblioteki standardowej, bez własnego sortowania topologicznego.
+Alternatives considered: a bundle-name special case violates extension
+boundaries; manually ordering the native catalog does not cover external
+bundles; arbitrary numeric priorities do not express intent; and a full
+before/after dependency graph is more contract than this stage needs. The
+runner uses stable sorting from the standard library, not a custom topological
+sort.
 
-## Granice i zgodność
+## Boundaries and compatibility
 
-To kontrakt faz, nie graf zależności między rozszerzeniami i nie gwarancja rozwiązania zależności wewnątrz jednej fazy. Wewnętrzne zależności sub-pipelines nadal rozwiązuje rozszerzenie `pipeline`. Kolejność dyrektyw, hooków, bibliotek, preprocessingu i wrapperów nie zmienia się. Nie zmieniamy sygnatury `Materializer` ani struktury `MaterializeReq`.
+This is a phase-ordering contract, not a dependency graph between extensions
+and not a guarantee that dependencies within one phase will be resolved. The
+`pipeline` extension continues to resolve its internal sub-pipeline
+dependencies. Directive, hook, library, preprocessing, and wrapper order is
+unchanged. The `Materializer` signature and `MaterializeReq` structure are
+unchanged.
 
-Dodanie pola do publicznego `Bundle` zachowuje istniejące literały z nazwami pól; zewnętrzne literały pozycyjne wymagają aktualizacji. To ograniczenie zgodności źródłowej należy uwzględnić przy wydaniu. Nowe wartości faz wymagają jawnego rozszerzenia kontraktu i jego walidacji.
+Adding a field to public `Bundle` preserves existing keyed literals; external
+unkeyed literals require updating. Account for this source-compatibility
+constraint when releasing. New phase values require an explicit contract
+extension and validation.
 
-## Weryfikacja
+## Verification
 
-Testy obejmują stabilność faz, neutralność identyfikatorów (także nazwy `pipeline`), zachowanie aliasów i żądania, brak mutacji wejściowych bundli, puste materializery, propagację błędów, walidację faz i integrację rzeczywistego pipeline z deklaracją dostarczoną przez inny bundle. Istniejące testy zależności i cykli sub-pipelines pozostają aktywne.
+Tests cover phase stability, ID neutrality (including the ID `pipeline`),
+alias and request preservation, no mutation of input bundles, empty
+materializers, error propagation, phase validation, and integration of a real
+pipeline declaration with actions supplied by another bundle. Existing
+sub-pipeline dependency and cycle tests remain in place.

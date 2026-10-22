@@ -30,6 +30,7 @@
 @assert: result.customer_email == "ada@example.test"
 @assert: result.item_count == 2
 @assert: result.subtotal == 80
+@assert: result.currency == "USD"
 @assert: result.source == "storefront"
 @assert: result.status == "accepted"
 {

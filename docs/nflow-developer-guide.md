@@ -1,6 +1,9 @@
 # Nexss Flow (`.nflow`) — Developer Guide & Best Practices Specification
 
-This specification defines the canonical style, architectural boundaries, and idioms for writing readable, maintainable, and verifiable `.nflow` programs.
+This guide collects style recommendations and examples for `.nflow` programs.
+The [implementation-backed language reference](language-reference.md) defines
+the supported syntax and runtime behavior; examples requiring external actions
+or transports need those capabilities mounted by a host or `@require` bundle.
 
 ---
 
@@ -24,7 +27,7 @@ The Lexer treats `:` as a distinct token (`TokColon`). Spaces between modifiers 
 ### 1.2 The Field Name Question: `JobID` vs. `job_id`
 In Go, field names start with an uppercase letter to be exported (`JobID`). However, in `.nflow` payloads, APIs, and JSON, wire keys are lowercased/snake_cased (`job_id`).
 
-In `flow/extensions/schema/directive.go`:
+In [`extensions/schema/directive.go`](../extensions/schema/directive.go):
 ```go
 if jsonName, ok := tags["json"]; ok {
     field.JSONName = strings.Split(jsonName, ",")[0]
@@ -47,36 +50,37 @@ if field.JSONName == "" {
 }
 
 # The incoming payload uses the JSON name:
-nats.kv.create @{
+{
   key: "jobs." + .job_id,
   ttl: .ttl
 }
+-> nats.kv.create
 ```
 *Why this exists:* The struct tags allow seamless interop with Go engines, `thttp`, `tcli`, `tbus`, and `validator/v10` without requiring runtime reflection remapping.
 
 ---
 
 ### 1.3 `@{ ... }` (Action Args) vs. `{ ... }` (Projections)
-Do not use `{ ... }` to feed arguments into an action.
 
-- **`@{ key: value }` — Argument Block (Compile-Time Bound):**
-  Supplies parameters directly into the action's execution signature. Supports static type checking via `compiler.ArgSchemas`.
-- **`{ key: value }` — Runtime Projection:**
-  Evaluated at runtime using `expr-lang` to reshape or transform state.
+- **`@{ key: value }` — structured action arguments:** These values are
+  supplied to an action. They are not arbitrary expressions; `compiler.ArgSchemas`
+  declares capability-reference fields, not general payload types.
+- **`{ key: expression, ... }` — runtime projection:** Evaluated using
+  `expr-lang` to calculate or reshape data from the current input.
+
+For example, a calculated key belongs in a projection, not in an argument
+expression:
 
 ```nflow
-# BAD: Extra map allocation and unvalidated stage
-{
-  bucket: artifact_buckets.jobs,
-  key: "jobs." + .job_id
-} -> nats.kv.get
-
-# GOOD: Direct argument binding, zero allocation overhead
-nats.kv.get @{
-  bucket: artifact_buckets.jobs,
-  key: "jobs." + .job_id
-}
+{ job_id: "job-42", bucket: "ARTIFACT_JOBS" }
+-> { bucket: .bucket, key: "jobs." + .job_id }
+-> nats.kv.get
 ```
+
+The final action receives the projected request as pipeline input. The action
+must accept that request shape; `nats.kv.get` here is an illustrative provider
+action, not part of every host's registry. For argument-block examples and the
+exact supported data/reference forms, see the [language reference](language-reference.md).
 
 ---
 
@@ -107,10 +111,14 @@ Always pin versions for remote modules, and assign local namespaces using `as <n
 }
 
 # Remote transport bundle
-@require github.com/nexssp/transportnats/nexssflow as nats {
-  url: "${NATS_URL ?? 'nats://127.0.0.1:4222'}"
+@require github.com/nexssp/transportnats/nexssflow v1.2.3 as nats {
+  url: "nats://127.0.0.1:4222"
 }
 ```
+
+The remote path and version above illustrate the form; the package must
+actually exist and provide a Flow bundle. `${...}` constants are textual
+substitutions, not environment-variable or fallback-expression syntax.
 
 ---
 
@@ -160,7 +168,7 @@ Every pipeline exposed to an external transport or HTTP route must be guarded by
   :schema=CompleteJobRequest
   :nats_request="artifact.jobs.complete"
 
-  nats.kv.update @{
+  {
     bucket:   buckets.jobs,
     key:      "jobs." + .job_id,
     revision: .expected_revision,
@@ -174,6 +182,7 @@ Every pipeline exposed to an external transport or HTTP route must be guarded by
       updated_at:     .updated_at
     }
   }
+  -> nats.kv.update
 @end
 ```
 
@@ -211,16 +220,23 @@ parallel {
 
 ---
 
-## 4. Complete Reference Program
+## 4. Illustrative provider-specific workflow sketch
 
-The artifact workflow with JetStream KV and ObjectStore, formatted according to the guidelines:
+This JetStream KV and ObjectStore sketch depends on the NATS extension and
+provider actions shown below; it is not a stock-CLI fixture or a verified
+contract for a particular NATS provider release. The package/version and
+provider-specific actions, request shapes, and modifiers must be checked
+against the bundle actually installed by your host. The Flow syntax uses
+projections to calculate request fields before passing them as action input;
+it does not put expressions inside `@{ ... }` argument blocks. See §1.3 and
+the [language reference](language-reference.md) for that boundary.
 
 ```nflow
 @description "Cross-process report artifact workflow with JetStream KV and ObjectStore"
 
 # ── 1. Transports & Dependencies ──────────────────────────────────────────────
-@require github.com/nexssp/transportnats/nexssflow as nats {
-  url: "${NATS_URL ?? 'nats://127.0.0.1:4222'}"
+@require github.com/nexssp/transportnats/nexssflow v1.2.3 as nats {
+  url: "nats://127.0.0.1:4222"
 }
 
 # ── 2. Constant Symbols ───────────────────────────────────────────────────────
@@ -271,7 +287,7 @@ The artifact workflow with JetStream KV and ObjectStore, formatted according to 
   :schema=ReserveJobRequest
   :nats_request="artifact.jobs.reserve"
 
-  nats.kv.create @{
+  {
     bucket: buckets.jobs,
     key:    "jobs." + .job_id,
     ttl:    .ttl,
@@ -281,6 +297,7 @@ The artifact workflow with JetStream KV and ObjectStore, formatted according to 
       reserved_at: .reserved_at
     }
   }
+  -> nats.kv.create
 @end
 
 # 2. Upload binary payload to ObjectStore (decoded from base64)
@@ -288,13 +305,14 @@ The artifact workflow with JetStream KV and ObjectStore, formatted according to 
   :schema=StoreArtifactRequest
   :nats_request="artifact.object.store"
 
-  nats.object.put @{
+  {
     bucket:    buckets.objects,
     name:      "jobs/" + .job_id + "/artifact.bin",
     data:      .artifact_base64,
     encoding:  "base64",
     max_bytes: 1048576
   }
+  -> nats.object.put
 @end
 
 # 3. Revision-checked update (optimistic concurrency control)
@@ -302,7 +320,7 @@ The artifact workflow with JetStream KV and ObjectStore, formatted according to 
   :schema=CompleteJobRequest
   :nats_request="artifact.jobs.complete"
 
-  nats.kv.update @{
+  {
     bucket:   buckets.jobs,
     key:      "jobs." + .job_id,
     revision: .expected_revision,
@@ -316,6 +334,7 @@ The artifact workflow with JetStream KV and ObjectStore, formatted according to 
       updated_at:     .updated_at
     }
   }
+  -> nats.kv.update
 @end
 
 # 4. Fetch job state
@@ -323,10 +342,11 @@ The artifact workflow with JetStream KV and ObjectStore, formatted according to 
   :schema=GetJobRequest
   :nats_request="artifact.jobs.get"
 
-  nats.kv.get @{
+  {
     bucket: buckets.jobs,
     key:    "jobs." + .job_id
   }
+  -> nats.kv.get
 @end
 
 # 5. Fetch raw object
@@ -334,11 +354,12 @@ The artifact workflow with JetStream KV and ObjectStore, formatted according to 
   :schema=GetArtifactRequest
   :nats_request="artifact.object.get"
 
-  nats.object.get @{
+  {
     bucket:    buckets.objects,
     name:      .name,
     max_bytes: 1048576
   }
+  -> nats.object.get
 @end
 
 # ── 5. Transport Daemon ───────────────────────────────────────────────────────
@@ -349,11 +370,11 @@ nats.listen
 
 ## 5. Summary Cheat Sheet for Code Reviews
 
-| Check | Correct | Reject |
+| Check | Preferred | Avoid |
 | :--- | :--- | :--- |
 | **Modifier Spacing** | `action :timeout=5s :retry=3` | `action:timeout=5s:retry=3` |
-| **Action Args** | `action @{ key: .field }` | `{ key: .field } -> action` |
-| **Pipeline Modifiers** | Place on indented lines under `@pipeline` | Crammed into one long header line |
+| **Action Args** | `action @{ key: .field }` for supported data/reference values; use a projection for calculations | `action @{ key: "prefix" + .field }` |
+| **Pipeline Modifiers** | Place long headers on indented lines | Cramming many modifiers into one long header line |
 | **Field References** | Use the `json:"..."` tag name (`.job_id`) | Using struct field name (`.JobID`) |
 | **Error Handling** | Catch typed `xerr.Kind` via `? on_error` | Raw string matches or silent drops |
 | **Magic Strings** | Declare in `@symbols` namespace | Hardcoded strings scattered across actions |

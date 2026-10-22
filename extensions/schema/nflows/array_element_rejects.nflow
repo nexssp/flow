@@ -1,0 +1,9 @@
+@description "validate=dive,gt=0 rejects a non-positive array element"
+@schema OrderBatch {
+  Amounts []int `json:"amounts" validate:"required,dive,gt=0"`
+}
+@assert: result.status == "rejected"
+{ amounts: [10, 0, 99] } -> OrderBatch.validate ? on_error {
+  xerr.KindValidation -> { status: "rejected" },
+  else -> { status: "unexpected" }
+}

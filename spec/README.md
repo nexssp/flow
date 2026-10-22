@@ -18,7 +18,7 @@ Each scenario is self-contained. When a workflow needs domain-specific Go action
 
 The local package uses the repository's single root Go module; do not add a nested `go.mod`. Keep the NFlow entrypoint beside its scenario bundle, use additional entrypoints for meaningful paths such as happy, failure, and recovery, and make assertions describe observable outcomes. Use fixed inputs and local deterministic behavior so the checks run offline and do not send messages, change accounts, or mutate external systems.
 
-Use **`extensions/<name>/nflows/{happy,errors,edge}/`** for a single extension's conformance examples. Use **root `spec/`** when the value is the composition: multiple extensions, local domain actions, and a realistic workflow contract. Keep tutorial-first, smaller user walkthroughs in `examples/`.
+Use **`extensions/<name>/nflows/*.nflow`** for a single extension's conformance examples, with descriptive filenames and flat companion files. Use **root `spec/`** when the value is the composition: multiple extensions, local domain actions, and a realistic workflow contract. Tutorial-first walkthroughs live in the central [examples repository](https://github.com/nexssp/examples/tree/main/flow).
 
 Run all integrated scenarios with:
 
@@ -26,9 +26,9 @@ Run all integrated scenarios with:
 task specs
 ```
 
-This runs the five entrypoints listed above (order intake, its separate email normalization check, both support triage paths, and payment reconciliation) through `nflow run`, which evaluates their `@assert` directives. All five entrypoints are attempted; any execution or assertion failure makes the task return a non-zero exit status. Included helper files such as `02_support_triage/common/triage.nflow` are loaded by their entrypoints, not run separately. Add each new scenario entrypoint to the `specs` task in the root `Taskfile.yml`.
+This builds the CLI once, then runs every `spec/<scenario>/*.nflow` entrypoint through `nflow run`, which evaluates its `@assert` directives. The one-level glob deliberately includes all entrypoints beside scenario bundles while leaving nested included helpers such as `02_support_triage/common/triage.nflow` to be loaded by their parent workflow. Every matched entrypoint is attempted; any execution or assertion failure makes the task return a non-zero exit status. Add new scenario entrypoints beside their scenario bundle; the `specs` task discovers them automatically.
 
-`task ci`, also invoked by the GitHub Actions CI workflow, runs `task specs` together with every extension's `nflow self test` suite and the Go lint/test gates. `task test` runs only the Go tests; it does not execute the integrated scenarios or extension self-tests. The extension self-test gate is also useful on its own:
+`task ci`, also invoked by the GitHub Actions CI workflow, runs `task specs` together with the native extension self-tests and the Go lint/test gates. `task test` runs Go tests, including the extension conformance gate and host-configured embed fixture, but it does not execute the integrated scenarios. The CLI extension self-test gate is also useful on its own:
 
 ```sh
 task self

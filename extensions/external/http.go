@@ -23,6 +23,8 @@ type HTTPResult struct {
 
 var httpClient = &http.Client{Timeout: 30 * time.Second}
 
+const httpResponseMaxBytes = 16 << 20
+
 // HTTPRequest performs an HTTP request and maps the status to a
 // classified error kind (429 → TooManyRequests, 5xx → Unavailable, …).
 // The response body is always returned, even on error, so a fallback
@@ -60,9 +62,12 @@ var HTTPRequest = action.New("http.request", func(ctx context.Context, in map[st
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, httpResponseMaxBytes+1))
 	if err != nil {
 		return HTTPResult{}, xerr.Internal("http.request: read body", err)
+	}
+	if len(raw) > httpResponseMaxBytes {
+		return HTTPResult{}, xerr.Validation(fmt.Sprintf("http.request: response body exceeds %d-byte limit", httpResponseMaxBytes))
 	}
 
 	result := HTTPResult{Status: resp.StatusCode, Body: decodeBody(raw)}

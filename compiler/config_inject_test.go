@@ -244,6 +244,21 @@ func TestValidateConfigRefsInUnquotedValues(t *testing.T) {
 	}
 }
 
+func TestValidateConfigRefsChoosesFirstMapDiagnosticDeterministically(t *testing.T) {
+	t.Parallel()
+	ast := &Atom{
+		Name: "noop",
+		Params: map[string]string{
+			"z_param": "@config.missing_z",
+			"a_param": "@config.missing_a",
+		},
+	}
+	for range 20 {
+		err := validateConfigRefs(ast, map[string]string{"known": "value"}, nil)
+		ktest.RequireErrorContains(t, err, "param a_param: unknown @config.missing_a")
+	}
+}
+
 func TestParser_ConfigMarker(t *testing.T) {
 	t.Parallel()
 

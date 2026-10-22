@@ -7,9 +7,17 @@
   Message    string `json:"message"     validate:"required"`
 }
 
+@pipeline manual_review
+  error.passthrough
+  -> support.manual_review
+@end
+
 @pipeline triage
   SupportTicket.validate
-  -> support.lookup_tier:retry=2
+  -> support.lookup_tier:retry=2 ? on_error {
+    xerr.KindUnavailable -> pipeline.manual_review,
+    else -> error.info
+  }
   -> support.classify
   -> support.draft_reply
 @end
