@@ -58,13 +58,12 @@ func TestParseLocalRequirementWithNamespaceQualifier(t *testing.T) {
 }
 
 // TestParseRemoteRequirement covers the three forms a remote requirement
-// can take: same-module subpackage without a version, a versioned
-// module, and a version that does not start with 'v'.
+// can take: same-module subpackage without a version, and a versioned
+// module using either an unprefixed or v-prefixed selector.
 //
 // A missing version is allowed by design: same-module subpackages and
-// modules wired through a replace directive resolve without one. A
-// version that does not start with 'v' is rejected — go modules use
-// semver tags and the DSL should not accept otherwise.
+// modules wired through a replace directive resolve without one. Go module
+// queries also accept selector forms beyond v-prefixed semantic versions.
 func TestParseRemoteRequirement(t *testing.T) {
 	t.Parallel()
 
@@ -79,8 +78,12 @@ func TestParseRemoteRequirement(t *testing.T) {
 		t.Fatal("remote requirement was incorrectly flagged as local")
 	}
 
-	if _, err := Parse("github.com/nexssp/cost 1.0.0", "", nil, "test.nflow", 1); err == nil {
-		t.Fatal("expected error on version missing leading 'v'")
+	unprefixed, err := Parse("github.com/nexssp/cost 1.0.0", "", nil, "test.nflow", 1)
+	if err != nil {
+		t.Fatalf("Go-style unprefixed selector rejected: %v", err)
+	}
+	if unprefixed.Version != "1.0.0" {
+		t.Fatalf("unexpected unprefixed selector: %+v", unprefixed)
 	}
 
 	versioned, err := Parse("github.com/nexssp/cost v1.0.0", "", map[string]string{"retries": "3"}, "test.nflow", 1)

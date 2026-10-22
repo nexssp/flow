@@ -3,15 +3,12 @@ package cli
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
+	"github.com/nexssp/flow/builder"
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 )
@@ -57,6 +54,9 @@ func runRequire(ctx context.Context, inv *invocation, args []string) int {
 	reqs, reqErr := require.SourceRequirements(meta)
 	if reqErr != nil {
 		return fatalf("requires: %v", reqErr)
+	}
+	if lockErr := builder.ValidateRequirementLock(ctx, path, reqs); lockErr != nil {
+		return fatalf("requirement lock: %v", lockErr)
 	}
 	if len(reqs) == 0 {
 		fmt.Fprintln(os.Stderr, "no @require declarations found in", path)
@@ -127,94 +127,4 @@ func findModuleRoot(dir string) string {
 		}
 		curr = parent
 	}
-}
-
-// runRequirePin pins missing versions for @require directives in a .nflow file.
-func runRequirePin(ctx context.Context, args []string) int {
-	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: nexssflow require pin <file.nflow>")
-		return 2
-	}
-	path := args[0]
-
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return fatalf("read %s: %v", path, err)
-	}
-
-	lines := strings.Split(string(content), "\n")
-	modified := false
-
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, "@require") {
-			continue
-		}
-
-		rawSpec := strings.TrimPrefix(trimmed, "@require")
-		optsIdx := strings.Index(rawSpec, "{")
-		specOnly := rawSpec
-		trailing := ""
-		if optsIdx >= 0 {
-			specOnly = rawSpec[:optsIdx]
-			trailing = " " + strings.TrimSpace(rawSpec[optsIdx:])
-		}
-
-		parts := strings.Fields(specOnly)
-		if len(parts) != 1 ||
-			strings.HasPrefix(parts[0], "./") ||
-			strings.HasPrefix(parts[0], "../") {
-			continue
-		}
-
-		modulePath := strings.Trim(parts[0], `"'`)
-
-		ver, err := resolveLatestVersion(ctx, modulePath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "⚠️  could not resolve version for %s: %v\n",
-				modulePath, err)
-			continue
-		}
-
-		leadingSpace := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
-		lines[i] = fmt.Sprintf("%s@require %s %s%s",
-			leadingSpace, modulePath, ver, trailing)
-		modified = true
-		fmt.Printf("✓ Pinned %s to %s\n", modulePath, ver)
-	}
-
-	if modified {
-		//nolint:gosec // G703: path is the .nflow file the user asked to pin
-		if err := os.WriteFile(path,
-			[]byte(strings.Join(lines, "\n")), 0o600); err != nil {
-			return fatalf("write %s: %v", path, err)
-		}
-		fmt.Printf("✓ Successfully updated %s\n", path)
-	} else {
-		fmt.Println("Everything up to date. No unpinned @require directives found.")
-	}
-
-	return 0
-}
-
-func resolveLatestVersion(ctx context.Context, modulePath string) (string, error) {
-	//nolint:gosec // G204: modulePath is parsed from a trusted @require directive in a .nflow source.
-	cmd := exec.CommandContext(ctx, "go", "list", "-m", "-json", modulePath+"@latest")
-	out, err := cmd.Output()
-	if err != nil {
-		cmd = exec.CommandContext(ctx, "go", "list", "-m", "-json", modulePath)
-		out, err = cmd.Output()
-		if err != nil {
-			return "", err
-		}
-	}
-
-	var res struct {
-		Version string `json:"version"`
-	}
-	if err := json.Unmarshal(out, &res); err != nil || res.Version == "" {
-		return "", errors.New("invalid metadata from go list")
-	}
-
-	return res.Version, nil
 }

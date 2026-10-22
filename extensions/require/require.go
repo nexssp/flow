@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"go/token"
 	"os"
@@ -11,27 +12,29 @@ import (
 	"strings"
 	"unicode"
 
+	"golang.org/x/mod/module"
+
 	compiler "github.com/nexssp/flow/compiler"
 )
 
 type Requirement struct {
-	Import string
+	Import string `json:"Import"`
 	// PackagePath is the Go import path selected for the bundle package.
 	// It may differ from Import when a bare repository target defaults to
 	// its nexssflow package or when Go resolves a package to a nested module.
-	PackagePath string
-	Alias       string
-	Version     string
+	PackagePath string `json:"PackagePath"`
+	Alias       string `json:"Alias"`
+	Version     string `json:"Version"`
 	// ResolvedVersion is the provider module version selected by Go for a
 	// versioned remote bundle package. Local and workspace replacements may
 	// leave it empty.
-	ResolvedVersion string
-	LocalPath       string
-	ModuleRoot      string
-	ModulePath      string
-	IsLoose         bool
-	LooseID         string
-	Options         map[string]string
+	ResolvedVersion string            `json:"ResolvedVersion"`
+	LocalPath       string            `json:"LocalPath"`
+	ModuleRoot      string            `json:"ModuleRoot"`
+	ModulePath      string            `json:"ModulePath"`
+	IsLoose         bool              `json:"IsLoose"`
+	LooseID         string            `json:"LooseID"`
+	Options         map[string]string `json:"Options"`
 }
 
 func (r Requirement) IsLocal() bool { return r.LocalPath != "" }
@@ -128,6 +131,7 @@ func Parse(spec, baseDir string, opts map[string]string, file string, line int) 
 	parts = parts[1:]
 
 	version := ""
+	hasVersion := false
 	alias := ""
 	for len(parts) > 0 {
 		if parts[0] == "as" {
@@ -150,17 +154,19 @@ func Parse(spec, baseDir string, opts map[string]string, file string, line int) 
 			parts = parts[2:]
 			continue
 		}
-		if version != "" {
+		if hasVersion {
 			return Requirement{}, compiler.SourceError(
 				compiler.Position{File: file, Line: line},
 				"@require: extraneous tokens after declaration: %v", parts)
 		}
-		version = strings.Trim(parts[0], `"'`)
-		if !strings.HasPrefix(version, "v") && !isLocal(importPath) {
+		var err error
+		version, err = parseRemoteSelector(parts[0])
+		if err != nil {
 			return Requirement{}, compiler.SourceError(
 				compiler.Position{File: file, Line: line},
-				"@require: remote @require needs a version: `@require %s v1.2.3`", importPath)
+				"@require: invalid selector %q: %v", parts[0], err)
 		}
+		hasVersion = true
 		parts = parts[1:]
 	}
 
@@ -184,6 +190,42 @@ func Parse(spec, baseDir string, opts map[string]string, file string, line int) 
 		Version: version,
 		Options: opts,
 	}, nil
+}
+
+// parseRemoteSelector validates the selector passed to Go's module query
+// syntax. Selectors are broader than semantic versions: they may be tags,
+// branch names (including slash-separated names), commit hashes, or keywords
+// such as "latest". CheckFilePath provides Go's conservative path-character
+// validation; the extra checks avoid ambiguous or unsafe @require tokens.
+func parseRemoteSelector(raw string) (string, error) {
+	selector := raw
+	if strings.HasPrefix(raw, `"`) || strings.HasPrefix(raw, `'`) {
+		quote := raw[0]
+		if len(raw) < 2 || raw[len(raw)-1] != quote {
+			return "", errors.New("unmatched quote")
+		}
+		selector = raw[1 : len(raw)-1]
+	} else if strings.ContainsAny(raw, `"'`) {
+		return "", errors.New("quotes must surround the entire selector")
+	}
+	if selector == "" {
+		return "", errors.New("selector must not be empty")
+	}
+	if strings.HasPrefix(selector, "-") {
+		return "", errors.New("selector must not begin with '-'")
+	}
+	for _, r := range selector {
+		if r == '@' {
+			return "", errors.New("selector must not contain '@'")
+		}
+		if unicode.IsSpace(r) || unicode.IsControl(r) {
+			return "", errors.New("selector must not contain whitespace or control characters")
+		}
+	}
+	if err := module.CheckFilePath(selector); err != nil {
+		return "", err
+	}
+	return selector, nil
 }
 
 func isLocal(s string) bool {

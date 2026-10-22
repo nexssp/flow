@@ -26,3 +26,12 @@ func TestRequirementsToRetainSkipsMatchingAndFlowRoot(t *testing.T) {
 		t.Fatalf("retained requirements = %#v, want none", got)
 	}
 }
+
+func TestRequirementsToRetainPreservesHigherSelectedVersion(t *testing.T) {
+	driver := []moduleRequirement{{path: "github.com/nexssp/kernel", version: "v0.30.0"}}
+	harness := []moduleRequirement{{path: "github.com/nexssp/kernel", version: "v0.35.0"}}
+
+	if got := requirementsToRetain(driver, harness); len(got) != 0 {
+		t.Fatalf("higher selected requirement was downgraded/retained unnecessarily: %#v", got)
+	}
+}

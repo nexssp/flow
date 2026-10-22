@@ -107,10 +107,13 @@ func TestDirective_MissingModule(t *testing.T) {
 	ktest.RequireErrorContains(t, err, "missing module")
 }
 
-func TestDirective_VersionWithoutV(t *testing.T) {
+func TestDirective_UnprefixedVersionSelector(t *testing.T) {
 	t.Parallel()
-	_, err := runDirective(t, `@require example.com/foo 1.0.0`)
-	ktest.RequireErrorContains(t, err, "needs a version")
+	out, err := runDirective(t, `@require example.com/foo 1.0.0`)
+	ktest.RequireNoError(t, err)
+	requirements, _ := out["require"].([]Requirement)
+	ktest.RequireEqual(t, len(requirements), 1)
+	ktest.RequireEqual(t, requirements[0].Version, "1.0.0")
 }
 
 func TestDirective_TooManyArgs(t *testing.T) {

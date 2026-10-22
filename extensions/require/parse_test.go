@@ -51,6 +51,49 @@ func TestParseInlineOptions_SingleLine(t *testing.T) {
 	ktest.RequireEqual(t, next, 1)
 }
 
+func TestParseRemoteSelectors(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		selector string
+		want     string
+	}{
+		{selector: "1.0.0", want: "1.0.0"},
+		{selector: "v1.2.3", want: "v1.2.3"},
+		{selector: "release/v2", want: "release/v2"},
+		{selector: "feature-branch", want: "feature-branch"},
+		{selector: "0123456789abcdef0123456789abcdef01234567", want: "0123456789abcdef0123456789abcdef01234567"},
+		{selector: "latest", want: "latest"},
+		{selector: `"release/v2"`, want: "release/v2"},
+	} {
+		t.Run(tc.selector, func(t *testing.T) {
+			t.Parallel()
+			got, err := Parse("example.com/foo "+tc.selector, "", nil, "test.nflow", 1)
+			ktest.RequireNoError(t, err)
+			ktest.RequireEqual(t, got.Version, tc.want)
+		})
+	}
+}
+
+func TestParseRejectsInvalidRemoteSelectors(t *testing.T) {
+	t.Parallel()
+	for _, selector := range []string{
+		"-branch",
+		"branch@revision",
+		`""`,
+		`" "`,
+		`"branch`,
+		"bad:selector",
+		"bad\x01selector",
+		"branch extra",
+	} {
+		t.Run(selector, func(t *testing.T) {
+			t.Parallel()
+			_, err := Parse("example.com/foo "+selector, "", nil, "test.nflow", 1)
+			ktest.RequireCondition(t, err != nil, "expected invalid selector %q to be rejected", selector)
+		})
+	}
+}
+
 func TestParseInlineOptions_MultiLine(t *testing.T) {
 	t.Parallel()
 	lines := []string{

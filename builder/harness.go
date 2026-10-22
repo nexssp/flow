@@ -26,6 +26,7 @@ import (
 
 	"github.com/nexssp/kernel/xfs"
 	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/semver"
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
@@ -61,30 +62,88 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 	flowFile := flowPath[0]
 	flowDir := flowDirectory(flowFile)
 
-	var sources []compiler.BuildSource
-	for _, p := range flowPath {
-		fragments, err := buildSources(ctx, p)
-		if err != nil {
-			return "", fmt.Errorf("harness: inspect source %s: %w", p, err)
-		}
-		sources = append(sources, fragments...)
-	}
-
-	driverRoot, driverVersion := resolveDriverInfo()
-	goworkPath := findGoWork(flowDir)
-
-	resolved, err := resolveRequirementPackagesWithContext(ctx, external, driverRoot, driverVersion, goworkPath, flowDir)
+	sources, err := harnessSources(ctx, flowPath)
 	if err != nil {
 		return "", err
 	}
-	external = resolved
+	driverRoot, driverVersion := resolveDriverInfo()
+	goworkPath := findGoWork(flowDir)
+	inputs, err := resolveHarnessBuildInputs(
+		ctx, reqs, flowFile, flowDir, driverRoot, driverVersion, goworkPath, sources,
+	)
+	if err != nil {
+		return "", err
+	}
+	return buildHarnessRunner(ctx, inputs.key, inputs.external, driverRoot, driverVersion, goworkPath, inputs.usedNative, flowDir, inputs.dependencyLock)
+}
 
+func harnessSources(ctx context.Context, flowPath []string) ([]compiler.BuildSource, error) {
+	var sources []compiler.BuildSource
+	for _, path := range flowPath {
+		fragments, err := buildSources(ctx, path)
+		if err != nil {
+			return nil, fmt.Errorf("harness: inspect source %s: %w", path, err)
+		}
+		sources = append(sources, fragments...)
+	}
+	if len(flowPath) > 1 {
+		for _, path := range flowPath {
+			if _, err := os.Stat(path + ".lock"); err == nil || !errors.Is(err, os.ErrNotExist) {
+				return nil, errors.New("locked workflows must be linted individually, not in a multi-file harness")
+			}
+		}
+	}
+	return sources, nil
+}
+
+type harnessBuildInputs struct {
+	external       []require.Requirement
+	usedNative     []nativeBundleInfo
+	dependencyLock *requirementLock
+	key            string
+}
+
+func resolveHarnessBuildInputs(ctx context.Context, reqs []require.Requirement, flowFile, flowDir, driverRoot, driverVersion, goworkPath string, sources []compiler.BuildSource) (*harnessBuildInputs, error) {
+	resolved, dependencyLock, err := resolveRequirementsForFlow(ctx, reqs, flowFile, driverRoot, driverVersion, goworkPath)
+	if err != nil {
+		return nil, err
+	}
+	external := filterExternalRequires(resolved)
 	usedNative, err := nativeBundlesForSources(sources, reqs, false)
 	if err != nil {
-		return "", fmt.Errorf("harness: bundle plan: %w", err)
+		return nil, fmt.Errorf("harness: bundle plan: %w", err)
 	}
 	key := harnessKey(external, goworkPath, usedNative...)
+	moduleDefinition := harnessGoMod(driverRoot, driverVersion, goworkPath, external, flowDir)
+	if dependencyLock != nil {
+		err = validateLockedLocalModules(dependencyLock)
+		if err != nil {
+			return nil, err
+		}
+		moduleDefinition = dependencyLock.GoMod
+	}
+	toolchain, err := requirementBuildToolchain(ctx, moduleDefinition)
+	if err != nil {
+		return nil, err
+	}
+	if dependencyLock != nil && toolchain != dependencyLock.Toolchain {
+		return nil, fmt.Errorf("requirement lock build toolchain mismatch: locked %s, selected %s", dependencyLock.Toolchain, toolchain)
+	}
+	digest, err := requirementLockDigest(dependencyLock)
+	if err != nil {
+		return nil, err
+	}
+	sum := sha256.Sum256([]byte(key + digest + toolchain))
+	key = hex.EncodeToString(sum[:])[:16]
+	return &harnessBuildInputs{
+		external:       external,
+		usedNative:     usedNative,
+		dependencyLock: dependencyLock,
+		key:            key,
+	}, nil
+}
 
+func buildHarnessRunner(ctx context.Context, key string, external []require.Requirement, driverRoot, driverVersion, goworkPath string, usedNative []nativeBundleInfo, flowDir string, dependencyLock *requirementLock) (string, error) {
 	dir, err := harnessCacheDir(key)
 	if err != nil {
 		return "", err
@@ -120,19 +179,16 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 	}
 
 	tidyStep := startProgress("⚙️  nflow: resolving dependencies (go mod tidy -e)")
-	tidyErr := runGoContext(ctx, buildDir, "mod", "tidy", "-e")
+	tidyErr := prepareRequirementDependencies(ctx, buildDir, driverRoot, dependencyLock)
 	if tidyErr != nil {
 		tidyStep.Complete("failed")
 		return "", explainBuildError(tidyErr, external)
 	}
 	tidyStep.Complete("done")
 
-	if err := retainDriverRequirements(ctx, buildDir, driverRoot); err != nil {
-		return "", err
-	}
 	tmp := bin + ".tmp." + strconv.Itoa(os.Getpid())
 	buildStep := startProgress(fmt.Sprintf("🔨 nflow: compiling runner binary [%s]", key[:8]))
-	buildErr := runGoContext(ctx, buildDir, "build", "-trimpath", "-o", tmp, ".")
+	buildErr := runGoContext(ctx, buildDir, "build", "-mod=readonly", "-trimpath", "-o", tmp, ".")
 	if buildErr != nil {
 		buildStep.Complete("failed")
 		return "", explainBuildError(buildErr, external)
@@ -196,7 +252,10 @@ func requirementsToRetain(driverRequirements, harnessRequirements []moduleRequir
 
 	var retained []moduleRequirement
 	for _, requirement := range driverRequirements {
-		if requirement.path == flowRootModulePath || present[requirement.path] == requirement.version {
+		selected := present[requirement.path]
+		// Driver requirements are lower bounds, not forced downgrades of
+		// dependencies selected by an external bundle through Go's MVS.
+		if requirement.path == flowRootModulePath || (selected != "" && semver.Compare(selected, requirement.version) >= 0) {
 			continue
 		}
 		retained = append(retained, requirement)
@@ -442,6 +501,10 @@ func moduleSourceFingerprint(root string) string {
 				}
 				return nil
 			}
+			// Lock files are outputs of dependency resolution, not module inputs.
+			if strings.HasSuffix(d.Name(), ".nflow.lock") {
+				return nil
+			}
 			info, err := d.Info()
 			if err != nil {
 				return err
@@ -531,10 +594,7 @@ func runGoContext(parent context.Context, dir string, args ...string) error {
 	)
 
 	if err := cmd.Run(); err != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return fmt.Errorf("go %s: timed out after %s", strings.Join(args, " "), goCommandTimeout())
-		}
-		return fmt.Errorf("go %s: %w\n%s", strings.Join(args, " "), err, capture.String())
+		return goCommandFailure(ctx, args, err, capture.String())
 	}
 	return nil
 }
@@ -552,12 +612,19 @@ func runGoOutputContext(parent context.Context, dir string, args ...string) ([]b
 	cmd.Stderr = io.MultiWriter(os.Stderr, capture)
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GIT_TERMINAL_PROMPT=0")
 	if err := cmd.Run(); err != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return nil, fmt.Errorf("go %s: timed out after %s", strings.Join(args, " "), goCommandTimeout())
-		}
-		return nil, fmt.Errorf("go %s: %w\n%s", strings.Join(args, " "), err, capture.String())
+		return nil, goCommandFailure(ctx, args, err, capture.String())
 	}
 	return stdout.Bytes(), nil
+}
+
+func goCommandFailure(ctx context.Context, args []string, err error, output string) error {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return fmt.Errorf("go %s: timed out after %s: %w", strings.Join(args, " "), goCommandTimeout(), ctx.Err())
+	}
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
+	return fmt.Errorf("go %s: %w\n%s", strings.Join(args, " "), err, output)
 }
 
 func resolveRequirementPackages(reqs []require.Requirement, driverRoot, driverVersion, goworkPath string, sourceDirs ...string) ([]require.Requirement, error) {
@@ -1138,6 +1205,14 @@ func writeRequires(b *strings.Builder, reqs []require.Requirement, driverVersion
 		flowVersion = "v0.0.0"
 	}
 
+	versions := driverModuleVersions(flowVersion, driverRoot)
+	for i := range reqs {
+		addRequiredModuleVersion(versions, &reqs[i])
+	}
+	writeRequiredModules(b, versions)
+}
+
+func driverModuleVersions(flowVersion, driverRoot string) map[string]string {
 	versions := map[string]string{"github.com/nexssp/flow": flowVersion}
 	if driverRoot != "" {
 		if dependencies, err := readModuleRequirements(filepath.Join(driverRoot, "go.mod")); err == nil {
@@ -1148,39 +1223,42 @@ func writeRequires(b *strings.Builder, reqs []require.Requirement, driverVersion
 			}
 		}
 	}
+	return versions
+}
 
-	seen := map[string]bool{}
-	for i := range reqs {
-		r := &reqs[i]
-		if r.IsLoose {
-			continue
-		}
-		targetID := require.NormalizeID(r.Import)
-		if _, ok := compiler.Lookup(targetID); ok {
-			continue
-		}
-		if _, ok := compiler.Lookup(r.Import); ok {
-			continue
-		}
-		mod := modulePathForRequirement(*r)
-		if mod == "" || mod == "github.com/nexssp/flow" || mod == "nflow-harness" || seen[mod] {
-			continue
-		}
-		firstSegment, _, _ := strings.Cut(mod, "/")
-		if !strings.Contains(firstSegment, ".") {
-			continue
-		}
-		seen[mod] = true
-		version := r.ResolvedVersion
-		if version == "" {
-			version = r.Version
-		}
-		if version == "" {
-			version = "v0.0.0"
-		}
-		versions[mod] = version
+func addRequiredModuleVersion(versions map[string]string, r *require.Requirement) {
+	if r.IsLoose {
+		return
 	}
+	targetID := require.NormalizeID(r.Import)
+	if _, ok := compiler.Lookup(targetID); ok {
+		return
+	}
+	if _, ok := compiler.Lookup(r.Import); ok {
+		return
+	}
+	mod := modulePathForRequirement(*r)
+	if mod == "" || mod == "github.com/nexssp/flow" || mod == "nflow-harness" {
+		return
+	}
+	firstSegment, _, _ := strings.Cut(mod, "/")
+	if !strings.Contains(firstSegment, ".") {
+		return
+	}
+	version := r.ResolvedVersion
+	if version == "" {
+		version = r.Version
+	}
+	if version == "" {
+		version = "v0.0.0"
+	}
+	if selected := versions[mod]; selected != "" && semver.Compare(selected, version) >= 0 {
+		return
+	}
+	versions[mod] = version
+}
 
+func writeRequiredModules(b *strings.Builder, versions map[string]string) {
 	modules := make([]string, 0, len(versions))
 	for module := range versions {
 		modules = append(modules, module)

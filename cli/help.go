@@ -149,6 +149,22 @@ var helpRegistry = map[string]helpText{
 			`nflow self test --json > report.json # CI-friendly output`,
 		},
 	},
+	"require": {
+		Summary: "Generate require glue or freeze @require dependencies into a sidecar lockfile.",
+		Usage:   "nflow require <file.nflow> [-o out.go] [-pkg main] | nflow require freeze <file.nflow>",
+		Examples: []string{
+			`nflow require flows/client.nflow                 # generate require glue`,
+			`nflow require freeze flows/client.nflow          # write flows/client.nflow.lock`,
+			`nflow require pin flows/client.nflow             # compatibility alias for freeze`,
+		},
+	},
+	"pin": {
+		Summary: "Compatibility alias for nflow require freeze; writes a sidecar lockfile.",
+		Usage:   "nflow pin <file.nflow>",
+		Examples: []string{
+			`nflow pin flows/client.nflow`,
+		},
+	},
 	"completion": {
 		Summary: "Print a shell completion script.",
 		Usage:   "nflow completion <bash|zsh|pwsh>",

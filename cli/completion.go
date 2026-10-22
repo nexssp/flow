@@ -63,6 +63,9 @@ _nflow() {
         completion)
             flags="bash zsh pwsh powershell"
             ;;
+        require)
+            flags="freeze pin"
+            ;;
         *)
             flags=""
             ;;
@@ -77,7 +80,14 @@ _nflow() {
         completion)
             COMPREPLY=($(compgen -W "$flags" -- "$cur"))
             ;;
-	    run|build|serve|lint|explain|expand|list|info)
+	    require)
+	        if [[ "${COMP_WORDS[2]}" != "freeze" && "${COMP_WORDS[2]}" != "pin" ]]; then
+	            COMPREPLY=($(compgen -W "$flags" -- "$cur"))
+	        else
+	            COMPREPLY=($(compgen -f -X '!*.nflow' -- "$cur"))
+	        fi
+	        ;;
+	    pin|run|build|serve|lint|explain|expand|list|info)
             COMPREPLY=($(compgen -f -X '!*.nflow' -- "$cur"))
             ;;
     esac
@@ -102,8 +112,8 @@ _nflow() {
         'show:show one compiler capability'
         'init:initialize a project or bundle'
         'self:manage the nflow binary or run self-tests'
-        'require:resolve @require dependencies'
-        'pin:pin @require versions'
+        'require:generate glue or freeze @require dependencies'
+        'pin:compatibility alias for require freeze'
         'info:describe a .nflow file'
         'completion:print a shell completion script'
         'version:print build info'
@@ -132,9 +142,19 @@ _nflow() {
 	        info|serve|lint|explain|expand)
 	            _arguments '1:flow file:_files -g "*.nflow"'
             ;;
-        completion)
-            _values 'shell' bash zsh pwsh powershell
-            ;;
+	        completion)
+	            _values 'shell' bash zsh pwsh powershell
+	            ;;
+	        require)
+	            if (( CURRENT == 3 )); then
+	                _values 'operation' freeze pin
+	            else
+	                _arguments '1:operation:(freeze pin)' '2:flow file:_files -g "*.nflow"'
+	            fi
+	            ;;
+	        pin)
+	            _arguments '1:flow file:_files -g "*.nflow"'
+	            ;;
     esac
 }
 _nflow "$@"
@@ -175,6 +195,11 @@ Register-ArgumentCompleter -Native -CommandName nflow -ScriptBlock {
         return
     }
 
+	if ($sub -eq 'require' -and $tokens.Count -le 3) {
+		emit @('freeze', 'pin') 'ParameterValue'
+		return
+	}
+
     $flags = switch ($sub) {
         'run'   { @('-v', '-vv', '-vvv', '--assert=', '--approval=', '--budget=', '--max-tokens=', '--journal-dir=', '--execution-id=') }
         'build' { @('-o', '--output=', '--debug', '-d', '--no-trimpath', '--all-bundles') }
@@ -186,7 +211,8 @@ Register-ArgumentCompleter -Native -CommandName nflow -ScriptBlock {
         return
     }
 
-    if ($sub -in @('run', 'build', 'serve', 'lint', 'explain', 'expand', 'info')) {
+    if ($sub -in @('run', 'build', 'serve', 'lint', 'explain', 'expand', 'info', 'pin') -or
+		($sub -eq 'require' -and $tokens.Count -ge 3 -and $tokens[2].ToString() -in @('freeze', 'pin'))) {
         $pattern = if ($wordToComplete) { "$wordToComplete*.nflow" } else { "*.nflow" }
         Get-ChildItem -Filter $pattern -File -ErrorAction SilentlyContinue | ForEach-Object {
             [System.Management.Automation.CompletionResult]::new(

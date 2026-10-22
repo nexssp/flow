@@ -66,6 +66,11 @@ func withHarness(ctx context.Context, inv *invocation, subcommand, flowPath stri
 }
 
 func withHarnessRequirements(ctx context.Context, inv *invocation, subcommand, flowPath string, reqs []require.Requirement, args []string, inProcess func(context.Context, *invocation, []string) int) int {
+	if flowPath != "" && !isInlineSource(flowPath) {
+		if err := builder.ValidateRequirementLock(ctx, flowPath, reqs); err != nil {
+			return fatalf("requirement lock: %v", err)
+		}
+	}
 	if len(reqs) == 0 || os.Getenv(harnessEnv) != "" {
 		return inProcess(ctx, inv, args)
 	}
@@ -294,6 +299,15 @@ func RunPath(ctx context.Context, args []string) int {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			return 2
+		}
+		if !isInlineSource(target) {
+			reqs, err := inv.sourceRequiresFromFile(runCtx, target)
+			if err != nil {
+				return fatalf("requires: %v", err)
+			}
+			if err := builder.ValidateRequirementLock(runCtx, target, reqs); err != nil {
+				return fatalf("requirement lock: %v", err)
+			}
 		}
 		return runSourceInInvocation(runCtx, inv, string(src), target, args)
 	})

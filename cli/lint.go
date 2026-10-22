@@ -37,11 +37,8 @@ func runLintInInvocation(ctx context.Context, inv *invocation, args []string) in
 		return fatalf("usage: nflow lint <file.nflow | directory | ./...>")
 	}
 
-	if len(args) == 1 && !isRecursiveLintPattern(args[0]) {
-		info, err := os.Stat(args[0])
-		if err != nil || !info.IsDir() {
-			return withHarness(ctx, inv, "lint", args[0], args, runLintInProcess)
-		}
+	if shouldLintSingleTarget(args) {
+		return withHarness(ctx, inv, "lint", args[0], args, runLintInProcess)
 	}
 
 	files, err := discoverLintFiles(args)
@@ -49,14 +46,15 @@ func runLintInInvocation(ctx context.Context, inv *invocation, args []string) in
 		return fatalf("%v", err)
 	}
 
-	var allRequirements []require.Requirement
-	for _, path := range files {
-		reqs, reqErr := inv.sourceRequiresFromFile(ctx, path)
-		if reqErr == nil {
-			allRequirements = append(allRequirements, reqs...)
-		}
+	allRequirements, lockIssues, lockedFiles := inspectLintRequirements(ctx, inv, files)
+	if len(lockIssues) > 0 {
+		return reportLintLockIssues(lockIssues)
 	}
-	if os.Getenv(harnessEnv) != "" || !requirementsNeedExternalHarness(inv, allRequirements) {
+	needsExternalHarness := requirementsNeedExternalHarness(inv, allRequirements)
+	if needsExternalHarness && len(files) > 1 && len(lockedFiles) > 0 {
+		return reportLintLockIssues(externalHarnessLockIssues(lockedFiles))
+	}
+	if os.Getenv(harnessEnv) != "" || !needsExternalHarness {
 		return runLintBatchForInvocation(ctx, inv, files)
 	}
 	bin, err := builder.EnsureHarnessContext(ctx, allRequirements, files...)
@@ -64,6 +62,55 @@ func runLintInInvocation(ctx context.Context, inv *invocation, args []string) in
 		return runLintBatchForInvocationWithHarnessError(ctx, inv, files, err)
 	}
 	return builder.ExecHarnessContext(ctx, bin, append([]string{"lint"}, files...))
+}
+
+func shouldLintSingleTarget(args []string) bool {
+	if len(args) != 1 || isRecursiveLintPattern(args[0]) {
+		return false
+	}
+	info, err := os.Stat(args[0])
+	if err != nil || !info.IsDir() {
+		return true
+	}
+	return false
+}
+
+func inspectLintRequirements(ctx context.Context, inv *invocation, files []string) ([]require.Requirement, []LintIssue, []string) {
+	var allRequirements []require.Requirement
+	var lockIssues []LintIssue
+	var lockedFiles []string
+	for _, path := range files {
+		reqs, requireErr := inv.sourceRequiresFromFile(ctx, path)
+		if requireErr != nil {
+			continue
+		}
+		allRequirements = append(allRequirements, reqs...)
+		if lockErr := builder.ValidateRequirementLock(ctx, path, reqs); lockErr != nil {
+			lockIssues = append(lockIssues, LintIssue{File: path, Kind: "lock", Message: lockErr.Error()})
+		}
+		if _, statErr := os.Stat(path + ".lock"); statErr == nil {
+			lockedFiles = append(lockedFiles, path)
+		}
+	}
+	return allRequirements, lockIssues, lockedFiles
+}
+
+func externalHarnessLockIssues(lockedFiles []string) []LintIssue {
+	issues := make([]LintIssue, 0, len(lockedFiles))
+	for _, path := range lockedFiles {
+		issues = append(issues, LintIssue{
+			File: path, Kind: "lock",
+			Message: "locked workflows cannot be linted together when an external harness is required; lint each locked file individually",
+		})
+	}
+	return issues
+}
+
+func reportLintLockIssues(issues []LintIssue) int {
+	if err := writeJSON(os.Stdout, issues, true); err != nil {
+		return fatalf("encode issues: %v", err)
+	}
+	return 1
 }
 
 var lintDiscoveryExcludedDirs = map[string]struct{}{
