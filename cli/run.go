@@ -54,21 +54,6 @@ func RunWithBundleFactoriesAndNative(
 	})
 }
 
-func dedupeBundleIDs(bundles []compiler.Bundle) []compiler.Bundle {
-	seen := make(map[string]int, len(bundles))
-	out := make([]compiler.Bundle, 0, len(bundles))
-	for i := range bundles {
-		b := bundles[i]
-		if idx, ok := seen[b.ID]; ok {
-			out[idx] = b
-			continue
-		}
-		seen[b.ID] = len(out)
-		out = append(out, b)
-	}
-	return out
-}
-
 func withHarness(ctx context.Context, inv *invocation, subcommand, flowPath string, args []string, inProcess func(context.Context, *invocation, []string) int) int {
 	if flowPath == "" || isInlineSource(flowPath) {
 		return inProcess(ctx, inv, args)

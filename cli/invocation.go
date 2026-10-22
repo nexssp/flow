@@ -183,13 +183,15 @@ func (inv *invocation) buildConfig(reqs []require.Requirement) (runner.Config, e
 		return runner.Config{}, xerr.Conflict("@require resilience and @require retry cannot be used together; resilience includes retry policy options")
 	}
 	baseBundles := nativeBundles
-	if usesResilience {
+	// An explicit retry requirement configures the native retry policy. This is
+	// the only supported same-ID replacement; other duplicates must be errors.
+	if usesResilience || hasBundleID(required, "retry") {
 		baseBundles = withoutBundleID(nativeBundles, "retry")
 	}
 	bundles := append([]compiler.Bundle(nil), baseBundles...)
 	bundles = append(bundles, inv.injected...)
 	bundles = append(bundles, required...)
-	return runner.BuildConfig(dedupeBundleIDs(bundles))
+	return runner.BuildConfig(bundles)
 }
 
 func hasBundleID(bundles []compiler.Bundle, id string) bool {
