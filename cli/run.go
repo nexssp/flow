@@ -99,12 +99,18 @@ func requirementsNeedExternalHarness(inv *invocation, reqs []require.Requirement
 }
 
 func runFlowInInvocation(ctx context.Context, inv *invocation, args []string) int {
-	target, _, _ := splitArgs(args)
+	target, _, _, err := splitArgs(args)
+	if err != nil {
+		return fatalf("%v", err)
+	}
 	return withHarness(ctx, inv, "run", target, args, runFlowInProcess)
 }
 
 func runFlowInProcess(ctx context.Context, inv *invocation, args []string) int {
-	target, _, _ := splitArgs(args)
+	target, _, _, err := splitArgs(args)
+	if err != nil {
+		return fatalf("%v", err)
+	}
 	if target == "" {
 		return fatalf("usage: nflow run <file.nflow | inline_dsl> [json_payload] [flags]")
 	}
@@ -276,7 +282,10 @@ func RunPath(ctx context.Context, args []string) int {
 		return fatalf("flow host: %v", err)
 	}
 	return runInvocation(ctx, inv, func(runCtx context.Context) int {
-		target, _, _ := splitArgs(args)
+		target, _, _, err := splitArgs(args)
+		if err != nil {
+			return fatalf("%v", err)
+		}
 		if target == "" {
 			fmt.Fprintln(os.Stderr, "usage: nflow <file.nflow> [json] [flags]")
 			return 2
@@ -301,7 +310,10 @@ func runSourceInProcess(ctx context.Context, src, name string, args []string) in
 }
 
 func runSourceInInvocation(ctx context.Context, inv *invocation, src, name string, args []string) int {
-	payload, flags := splitPayloadAndFlags(args)
+	payload, flags, err := splitPayloadAndFlags(args)
+	if err != nil {
+		return fatalf("%v", err)
+	}
 	durability, flags, err := runner.ParseDurabilityOptions(flags)
 	if err != nil {
 		return fatalf("run options: %v", err)
@@ -324,7 +336,10 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 	}
 
 	if !strings.Contains(clean, "io.stdin") {
-		payload = readPipedStdin(payload)
+		payload, err = readPipedStdin(payload)
+		if err != nil {
+			return fatalf("%v", err)
+		}
 	}
 
 	reqs, reqErr := require.SourceRequirements(meta)
@@ -447,20 +462,23 @@ func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string,
 	)
 }
 
-func readPipedStdin(current map[string]any) map[string]any {
+func readPipedStdin(current map[string]any) (map[string]any, error) {
 	stat, err := os.Stdin.Stat()
-	if err != nil || (stat.Mode()&os.ModeCharDevice) != 0 {
-		return current
+	if err != nil {
+		return nil, fmt.Errorf("stat stdin: %w", err)
+	}
+	if (stat.Mode() & os.ModeCharDevice) != 0 {
+		return current, nil
 	}
 
 	raw, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		return current
+		return nil, fmt.Errorf("read stdin: %w", err)
 	}
 
 	trimmed := strings.TrimSpace(string(raw))
 	if trimmed == "" {
-		return current
+		return current, nil
 	}
 
 	var parsed map[string]any
@@ -470,7 +488,7 @@ func readPipedStdin(current map[string]any) map[string]any {
 				current[k] = v
 			}
 		}
-		return current
+		return current, nil
 	}
 
 	if len(current) == 0 {
@@ -481,7 +499,7 @@ func readPipedStdin(current map[string]any) map[string]any {
 			current["input"] = trimmed
 		}
 	}
-	return current
+	return current, nil
 }
 
 func emitCleanOutput(w io.Writer, output any) {
@@ -589,7 +607,7 @@ func collectAsserts(meta map[string]any, extra []string) []string {
 	return out
 }
 
-func splitArgs(args []string) (target string, payload map[string]any, flags []string) {
+func splitArgs(args []string) (target string, payload map[string]any, flags []string, err error) {
 	payload = map[string]any{}
 	flags = make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
@@ -604,7 +622,7 @@ func splitArgs(args []string) (target string, payload map[string]any, flags []st
 			}
 		case strings.HasPrefix(a, "{"):
 			if err := json.Unmarshal([]byte(a), &payload); err != nil {
-				fmt.Fprintf(os.Stderr, "invalid JSON payload ignored: %v\n", err)
+				return "", nil, nil, fmt.Errorf("invalid JSON payload: %w", err)
 			}
 		case strings.HasPrefix(a, "-"):
 			flags = append(flags, a)
@@ -617,9 +635,9 @@ func splitArgs(args []string) (target string, payload map[string]any, flags []st
 	return
 }
 
-func splitPayloadAndFlags(args []string) (payload map[string]any, flags []string) {
-	_, payload, flags = splitArgs(args)
-	return payload, flags
+func splitPayloadAndFlags(args []string) (payload map[string]any, flags []string, err error) {
+	_, payload, flags, err = splitArgs(args)
+	return payload, flags, err
 }
 
 func countVerbosity(flags []string) int {

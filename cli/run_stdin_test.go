@@ -30,7 +30,8 @@ func TestReadPipedStdin_JSONObjectMerged(t *testing.T) {
 	withStdin(t, `{"user":"alice","count":42}`)
 
 	payload := map[string]any{"existing": "kept"}
-	got := readPipedStdin(payload)
+	got, err := readPipedStdin(payload)
+	ktest.RequireNoError(t, err)
 
 	user, ok := got["user"].(string)
 	ktest.RequireCondition(t, ok, "user is %T, want string", got["user"])
@@ -49,7 +50,8 @@ func TestReadPipedStdin_ExistingKeysWin(t *testing.T) {
 	withStdin(t, `{"user":"from-stdin"}`)
 
 	payload := map[string]any{"user": "from-args"}
-	got := readPipedStdin(payload)
+	got, err := readPipedStdin(payload)
+	ktest.RequireNoError(t, err)
 
 	ktest.RequireEqual(t, got["user"], "from-args")
 }
@@ -58,7 +60,8 @@ func TestReadPipedStdin_EmptyStdinIsNoop(t *testing.T) {
 	withStdin(t, "")
 
 	payload := map[string]any{"x": 1}
-	got := readPipedStdin(payload)
+	got, err := readPipedStdin(payload)
+	ktest.RequireNoError(t, err)
 
 	ktest.RequireEqual(t, got, map[string]any{"x": 1})
 }
@@ -67,7 +70,8 @@ func TestReadPipedStdin_NonJSONWrappedUnderInput(t *testing.T) {
 	withStdin(t, "plain text payload\n")
 
 	payload := map[string]any{}
-	got := readPipedStdin(payload)
+	got, err := readPipedStdin(payload)
+	ktest.RequireNoError(t, err)
 
 	ktest.RequireEqual(t, got["input"], "plain text payload")
 }
@@ -76,7 +80,8 @@ func TestReadPipedStdin_NonJSONAndExistingPayloadIsNoop(t *testing.T) {
 	withStdin(t, "raw")
 
 	payload := map[string]any{"user": "alice"}
-	got := readPipedStdin(payload)
+	got, err := readPipedStdin(payload)
+	ktest.RequireNoError(t, err)
 
 	ktest.RequireEqual(t, got, map[string]any{"user": "alice"})
 	if _, has := got["input"]; has {
@@ -87,7 +92,8 @@ func TestReadPipedStdin_NonJSONAndExistingPayloadIsNoop(t *testing.T) {
 func TestReadPipedStdin_NonObjectJSONWrappedUnderInput(t *testing.T) {
 	withStdin(t, `[1,2,3]`)
 
-	got := readPipedStdin(map[string]any{})
+	got, err := readPipedStdin(map[string]any{})
+	ktest.RequireNoError(t, err)
 
 	arr, ok := got["input"].([]any)
 	ktest.RequireTrue(t, ok)

@@ -48,12 +48,15 @@ func TestRunSourceInProcess_ExecutionIDRequiresJournal(t *testing.T) {
 }
 
 func TestSplitArgs_DurabilityValuesBeforeTarget(t *testing.T) {
-	target, _, flags := splitArgs([]string{
+	target, _, flags, err := splitArgs([]string{
 		"--journal-dir", ".flow-state",
 		"--execution-id", "run-42",
 		"flows/invoice.nflow",
 		"--json",
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if target != "flows/invoice.nflow" {
 		t.Fatalf("target = %q, want flow path", target)
 	}
