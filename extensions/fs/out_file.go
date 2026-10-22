@@ -3,6 +3,7 @@ package fs
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"iter"
 	"os"
 	"path/filepath"
@@ -73,13 +74,26 @@ func openOutFile(cfg OutFileConfig) (*os.File, error) {
 }
 
 func writeOutStream[T any](
-	file *os.File,
+	file io.WriteCloser,
 	up iter.Seq2[T, error],
 	flushEach bool,
 	yield func(T, error) bool,
-) error {
+) (streamErr error) {
 	writer := bufio.NewWriterSize(file, 64*1024)
-	defer func() { _ = writer.Flush(); _ = file.Close() }()
+	stopped := false
+	defer func() {
+		flushErr := writer.Flush()
+		closeErr := file.Close()
+		// Cleanup must not replace the first error or resume a stopped iterator.
+		if streamErr != nil || stopped {
+			return
+		}
+		if flushErr != nil {
+			streamErr = xerr.Internal("out.file: flush", flushErr)
+		} else if closeErr != nil {
+			streamErr = xerr.Internal("out.file: close", closeErr)
+		}
+	}()
 
 	for item, itemErr := range up {
 		if itemErr != nil {
@@ -97,6 +111,7 @@ func writeOutStream[T any](
 			}
 		}
 		if !yield(item, nil) {
+			stopped = true
 			return nil
 		}
 	}

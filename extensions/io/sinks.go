@@ -32,25 +32,46 @@ func writeLineTo(get func() io.Writer) func(iter.Seq2[any, error]) iter.Seq2[any
 	return func(up iter.Seq2[any, error]) iter.Seq2[any, error] {
 		return func(yield func(any, error) bool) {
 			w := get()
-			writer := bufio.NewWriter(w)
-			flushEach := isCharDevice(w)
-			defer func() { _ = writer.Flush() }()
-			for item, err := range up {
-				if err != nil {
-					yield(nil, err)
-					return
-				}
-				if _, err := fmt.Fprintln(writer, item); err != nil {
-					yield(nil, err)
-					return
-				}
-				if flushEach {
+			writeLines(up, w, isCharDevice(w))(yield)
+		}
+	}
+}
+
+// writeLines writes and forwards a sequence. Flush errors are reported only
+// when no earlier upstream or write error takes precedence. Once downstream
+// stops, a best-effort flush is performed without yielding another value.
+func writeLines(up iter.Seq2[any, error], w io.Writer, flushEach bool) iter.Seq2[any, error] {
+	return func(yield func(any, error) bool) {
+		writer := bufio.NewWriter(w)
+		for item, err := range up {
+			if err != nil {
+				_ = writer.Flush()
+				yield(nil, err)
+				return
+			}
+
+			if _, err := fmt.Fprintln(writer, item); err != nil {
+				_ = writer.Flush()
+				yield(nil, err)
+				return
+			}
+
+			if flushEach {
+				if err := writer.Flush(); err != nil {
 					_ = writer.Flush()
-				}
-				if !yield(item, nil) {
+					yield(nil, err)
 					return
 				}
 			}
+
+			if !yield(item, nil) {
+				_ = writer.Flush()
+				return
+			}
+		}
+
+		if err := writer.Flush(); err != nil {
+			yield(nil, err)
 		}
 	}
 }
