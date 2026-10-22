@@ -14,6 +14,8 @@ package pipeline
 
 import (
 	"embed"
+	"maps"
+	"slices"
 
 	"github.com/nexssp/kernel/action"
 
@@ -37,5 +39,15 @@ func Bundle(_ map[string]string) compiler.Bundle {
 		Materialize:      materialize,
 		MaterializePhase: compiler.MaterializeCompositions,
 		Fixtures:         fixturesFS,
+		Build: compiler.BuildExtension{
+			Sources: func(meta map[string]any) []string {
+				pipelines, _ := meta["pipelines"].(map[string]string)
+				var sources []string
+				for _, name := range slices.Sorted(maps.Keys(pipelines)) {
+					sources = append(sources, pipelines[name])
+				}
+				return sources
+			},
+		},
 	}
 }

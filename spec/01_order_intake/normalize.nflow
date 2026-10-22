@@ -1,0 +1,11 @@
+@description "Order normalization trims surrounding email whitespace"
+@require ./bundle
+
+@assert: result.customer_email == "ada@example.test"
+{
+  email: "  ada@example.test  ",
+  items: [
+    { sku: "NOTEBOOK-01", unit_price: 25, quantity: 1 }
+  ]
+}
+-> order.normalize

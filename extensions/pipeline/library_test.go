@@ -23,6 +23,35 @@ func TestBundle_WiresDirectiveMaterializeFixtures(t *testing.T) {
 	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
 }
 
+func TestBundle_BuildSources(t *testing.T) {
+	t.Parallel()
+	sources := Bundle(nil).Build.Sources
+	ktest.RequireCondition(t, sources != nil, "Build.Sources is nil")
+	for _, tc := range []struct {
+		name string
+		meta map[string]any
+		want []string
+	}{
+		{name: "nil metadata"},
+		{name: "missing pipelines", meta: map[string]any{}},
+		{name: "wrong type", meta: map[string]any{"pipelines": "not a pipeline map"}},
+		{name: "empty pipelines", meta: map[string]any{"pipelines": map[string]string{}}},
+		{
+			name: "bodies in pipeline name order",
+			meta: map[string]any{"pipelines": map[string]string{
+				"zebra": "runtime.noop :retry=3",
+				"alpha": "runtime.debug",
+			}},
+			want: []string{"runtime.debug", "runtime.noop :retry=3"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ktest.RequireEqual(t, sources(tc.meta), tc.want)
+		})
+	}
+}
+
 func TestDirective_SingleLineHeader(t *testing.T) {
 	t.Parallel()
 	out := map[string]any{}

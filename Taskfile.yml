@@ -31,6 +31,28 @@ tasks:
 
   self: {desc: '{{.NFLOW}} self test', cmds: ['{{.NFLOW}} self test']}
 
+  specs:
+    desc: Execute all integrated acceptance scenarios (including @assert checks)
+    cmds:
+      - |
+        status=0
+        for spec in \
+          ./spec/01_order_intake/main.nflow \
+          ./spec/01_order_intake/normalize.nflow \
+          ./spec/02_support_triage/happy.nflow \
+          ./spec/02_support_triage/fallback.nflow \
+          ./spec/03_reconciliation/main.nflow
+        do
+          echo "=== $spec ==="
+          if {{.NFLOW}} run "$spec"; then
+            echo "PASS: $spec"
+          else
+            echo "FAIL: $spec" >&2
+            status=1
+          fi
+        done
+        exit "$status"
+
   catalog:
     desc: Write the compiler catalog to catalog.json
     cmds:
@@ -53,8 +75,8 @@ tasks:
   pre-commit: { desc: "[self, lint, test]", deps: [self, lint, test] }
   pre-push:   { desc: "[self, lint, test:race]", deps: [self, lint, test:race] }
   ci:
-    desc: "[self, lint, test:race:nocache] (parallel + failfast)"
-    deps: [self, lint, test:race:nocache]
+    desc: "[self, specs, lint, test:race:nocache] (parallel + failfast)"
+    deps: [self, specs, lint, test:race:nocache]
     output: prefixed
 
   tools:     { desc: "go install -> gotest.tools/gotestsum@latest golang.org/x/vuln/cmd/govulncheck@latest",  cmds: ["go install gotest.tools/gotestsum@latest", "go install golang.org/x/vuln/cmd/govulncheck@latest"] }

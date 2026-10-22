@@ -38,6 +38,22 @@ func TestNativePlanSeesExpandedActionInCapturedPipeline(t *testing.T) {
 	ktest.RequireTrue(t, planHasBundle(plan, "pipeline"))
 }
 
+// Captured pipeline bodies contribute their nested modifiers to bundle selection.
+func TestNativePlanSelectsRetryFromCapturedPipelineBody(t *testing.T) {
+	t.Parallel()
+	sources := []compiler.BuildSource{{
+		Clean:      "{} -> pipeline.child",
+		Directives: []string{"pipeline"},
+		Metadata: map[string]any{
+			"pipelines": map[string]string{"child": "runtime.noop :retry=3"},
+		},
+	}}
+	plan, err := nativeBundlesForSources(sources, nil, false)
+	ktest.RequireNoError(t, err)
+	ktest.RequireTrue(t, planHasBundle(plan, "pipeline"))
+	ktest.RequireTrue(t, planHasBundle(plan, "retry"))
+}
+
 func TestSourceRequiresDoesNotActivateSelftestkitFromText(t *testing.T) {
 	t.Parallel()
 	for _, source := range []string{"# cov.echo\nruntime.noop", "{value: \"cov.echo\"} -> runtime.noop", "cov.echo"} {

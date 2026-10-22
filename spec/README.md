@@ -4,7 +4,7 @@
 
 ## Scenarios
 
-1. **[Order intake](01_order_intake/main.nflow)** validates an order, normalizes the customer's email, calculates a safe subtotal, applies a bounded retry policy, enforces a macro invariant, and returns an explicit accepted-order record.
+1. **[Order intake](01_order_intake/main.nflow)** validates an order, normalizes the customer's email, calculates a safe subtotal, applies a bounded retry policy, enforces a macro invariant, and returns an explicit accepted-order record. The separate **[email normalization check](01_order_intake/normalize.nflow)** sends a lowercase email with surrounding spaces directly to `order.normalize`, bypassing schema validation so its assertion isolates whitespace trimming; the main scenario retains uppercase-to-lowercase coverage.
 2. **[Support triage](02_support_triage/happy.nflow)** validates and classifies a duplicate-charge ticket, routes it to the billing escalation queue, and creates a reply draft without sending a customer message. The [unavailable-upstream case](02_support_triage/fallback.nflow) preserves the ticket for manual review and explicitly keeps the reply unsent.
 3. **[Payment reconciliation](03_reconciliation/main.nflow)** matches payment and bank references, reports mismatches and bank-only rows as audit exceptions, calculates totals in integer cents, and asserts that the batch variance is zero.
 
@@ -26,7 +26,9 @@ Run all integrated scenarios with:
 task specs
 ```
 
-`task test` and `task ci` run `task specs` together with every extension's `nflow self test` suite and the Go test gates. The extension self-test gate is also useful on its own:
+This runs the five entrypoints listed above (order intake, its separate email normalization check, both support triage paths, and payment reconciliation) through `nflow run`, which evaluates their `@assert` directives. All five entrypoints are attempted; any execution or assertion failure makes the task return a non-zero exit status. Included helper files such as `02_support_triage/common/triage.nflow` are loaded by their entrypoints, not run separately. Add each new scenario entrypoint to the `specs` task in the root `Taskfile.yml`.
+
+`task ci`, also invoked by the GitHub Actions CI workflow, runs `task specs` together with every extension's `nflow self test` suite and the Go lint/test gates. `task test` runs only the Go tests; it does not execute the integrated scenarios or extension self-tests. The extension self-test gate is also useful on its own:
 
 ```sh
 task self

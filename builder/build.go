@@ -544,7 +544,10 @@ func main() {
 	var flags []string
 	for _, arg := range runArgs {
 		if strings.HasPrefix(arg, "{") {
-			_ = json.Unmarshal([]byte(arg), &payload)
+			if err := json.Unmarshal([]byte(arg), &payload); err != nil {
+				fmt.Fprintf(os.Stderr, "invalid JSON payload: %v\n", err)
+				os.Exit(2)
+			}
 		} else if strings.HasPrefix(arg, "-") {
 			flags = append(flags, arg)
 		}

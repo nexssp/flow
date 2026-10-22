@@ -34,7 +34,7 @@
 @assert: result.status == "accepted"
 {
   order_id: "SO-2048",
-  email: "  ADA@EXAMPLE.TEST ",
+  email: "ADA@EXAMPLE.TEST",
   items: [
     { sku: "NOTEBOOK-01", unit_price: 25, quantity: 2 },
     { sku: "USB-C-02", unit_price: 30, quantity: 1 }
