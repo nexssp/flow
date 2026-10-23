@@ -91,7 +91,7 @@ task ci
 - [Language syntax walkthrough](docs/language.md)
 - [Symbol namespaces and single-source values](docs/symbols.md)
 - [CLI and runtime](docs/cli.md)
-- [Requirement locks](docs/REQUIRE_LOCK.md)
+- [Managing requirements](docs/requirements.md)
 - [Extension bundles](extensions/README.md)
 - [Durable runner execution](docs/runner-durability.md)
 - [Approval pause and resume](docs/approval-resume.md)

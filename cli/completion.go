@@ -40,10 +40,9 @@ const bashCompletion = `# nflow bash completion.
 # Or per user:
 #   nflow completion bash > ~/.local/share/bash-completion/completions/nflow
 _nflow() {
-    local cur prev subcommands flags sub
+    local cur prev subcommands flags sub op
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-
     subcommands="init run build serve lint explain expand catalog list show completion self require pin info help version"
 
     if [ "$COMP_CWORD" -eq 1 ]; then
@@ -52,23 +51,18 @@ _nflow() {
     fi
 
     sub="${COMP_WORDS[1]}"
-
+    op="${COMP_WORDS[2]}"
     case "$sub" in
-        run)
-            flags="-v -vv -vvv --assert= --approval= --budget= --max-tokens= --journal-dir= --execution-id="
-            ;;
-        build)
-            flags="-o --output= --debug -d --no-trimpath --all-bundles"
-            ;;
-        completion)
-            flags="bash zsh pwsh powershell"
-            ;;
+        run) flags="-v -vv -vvv --assert= --approval= --budget= --max-tokens= --journal-dir= --execution-id=" ;;
+        build) flags="-o --output= --debug -d --no-trimpath --all-bundles" ;;
+        completion) flags="bash zsh pwsh powershell" ;;
         require)
-            flags="freeze pin"
-            ;;
-        *)
-            flags=""
-            ;;
+            if [ "$COMP_CWORD" -eq 2 ]; then flags="check update pin reset"
+            elif [[ "$op" == "check" || "$op" == "update" || "$op" == "pin" ]]; then flags="--package"
+            else flags=""
+            fi ;;
+        pin) flags="--package" ;;
+        *) flags="" ;;
     esac
 
     if [[ "$cur" == -* ]]; then
@@ -77,19 +71,18 @@ _nflow() {
     fi
 
     case "$sub" in
-        completion)
-            COMPREPLY=($(compgen -W "$flags" -- "$cur"))
-            ;;
-	    require)
-	        if [[ "${COMP_WORDS[2]}" != "freeze" && "${COMP_WORDS[2]}" != "pin" ]]; then
-	            COMPREPLY=($(compgen -W "$flags" -- "$cur"))
-	        else
-	            COMPREPLY=($(compgen -f -X '!*.nflow' -- "$cur"))
-	        fi
-	        ;;
-	    pin|run|build|serve|lint|explain|expand|list|info)
-            COMPREPLY=($(compgen -f -X '!*.nflow' -- "$cur"))
-            ;;
+        completion) COMPREPLY=($(compgen -W "$flags" -- "$cur")) ;;
+        require)
+            if [ "$COMP_CWORD" -eq 2 ]; then
+                COMPREPLY=($(compgen -W "check update pin reset" -- "$cur"))
+            elif [[ "$op" == "check" || "$op" == "update" || "$op" == "pin" || "$op" == "reset" ]]; then
+                if [[ "$prev" == "--package" ]]; then return; fi
+                COMPREPLY=($(compgen -f -X '!*.nflow' -- "$cur"))
+            fi ;;
+        pin)
+            if [[ "$prev" == "--package" ]]; then COMPREPLY=(); else COMPREPLY=($(compgen -f -X '!*.nflow' -- "$cur")); fi ;;
+        run|build|serve|lint|explain|expand|list|info)
+            COMPREPLY=($(compgen -f -X '!*.nflow' -- "$cur")) ;;
     esac
 }
 complete -F _nflow nflow
@@ -112,8 +105,8 @@ _nflow() {
         'show:show one compiler capability'
         'init:initialize a project or bundle'
         'self:manage the nflow binary or run self-tests'
-        'require:generate glue or freeze @require dependencies'
-        'pin:compatibility alias for require freeze'
+        'require:generate glue or manage direct @require selectors'
+        'pin:alias for require pin'
         'info:describe a .nflow file'
         'completion:print a shell completion script'
         'version:print build info'
@@ -129,32 +122,35 @@ _nflow() {
     case "$sub" in
         run)
             _arguments '1:flow file:_files -g "*.nflow"' \
-                '-v' '-vv' '-vvv' \
-                '--assert=' '--approval=' '--budget=' '--max-tokens=' \
+                '-v' '-vv' '-vvv' '--assert=' '--approval=' '--budget=' '--max-tokens=' \
                 '--journal-dir=' '--execution-id='
             ;;
         build)
             _arguments '1:flow file:_files -g "*.nflow"' \
-	            '-o:output file:_files' '--output=:output file:_files' \
-	            '--debug[keep debug symbols]' '-d[keep debug symbols]' \
-	            '--no-trimpath[keep full source paths]' '--all-bundles[link all native extensions]'
-	            ;;
-	        info|serve|lint|explain|expand)
-	            _arguments '1:flow file:_files -g "*.nflow"'
+                '-o:output file:_files' '--output=:output file:_files' \
+                '--debug[keep debug symbols]' '-d[keep debug symbols]' \
+                '--no-trimpath[keep full source paths]' '--all-bundles[link all native extensions]'
             ;;
-	        completion)
-	            _values 'shell' bash zsh pwsh powershell
-	            ;;
-	        require)
-	            if (( CURRENT == 3 )); then
-	                _values 'operation' freeze pin
-	            else
-	                _arguments '1:operation:(freeze pin)' '2:flow file:_files -g "*.nflow"'
-	            fi
-	            ;;
-	        pin)
-	            _arguments '1:flow file:_files -g "*.nflow"'
-	            ;;
+        info|serve|lint|explain|expand)
+            _arguments '1:flow file:_files -g "*.nflow"'
+            ;;
+        completion)
+            _values 'shell' bash zsh pwsh powershell
+            ;;
+        require)
+            if (( CURRENT == 3 )); then
+                _values 'operation' check update pin reset
+            elif [[ "${words[3]}" == "reset" ]]; then
+                _arguments '1:operation:(reset)' '2:flow file:_files -g "*.nflow"'
+            else
+                _arguments '1:operation:(check update pin reset)' '2:flow file:_files -g "*.nflow"' \
+                    '--package=[select requirements by exact import or glob]:pattern:'
+            fi
+            ;;
+        pin)
+            _arguments '1:flow file:_files -g "*.nflow"' \
+                '--package=[select requirements by exact import or glob]:pattern:'
+            ;;
     esac
 }
 _nflow "$@"
@@ -195,14 +191,16 @@ Register-ArgumentCompleter -Native -CommandName nflow -ScriptBlock {
         return
     }
 
-	if ($sub -eq 'require' -and $tokens.Count -le 3) {
-		emit @('freeze', 'pin') 'ParameterValue'
-		return
-	}
+	if ($sub -eq 'require' -and ($tokens.Count -le 2 -or ($tokens.Count -eq 3 -and $tokens[2].ToString() -notin @('check', 'update', 'pin', 'reset')))) {
+        emit @('check', 'update', 'pin', 'reset') 'ParameterValue'
+        return
+    }
 
     $flags = switch ($sub) {
         'run'   { @('-v', '-vv', '-vvv', '--assert=', '--approval=', '--budget=', '--max-tokens=', '--journal-dir=', '--execution-id=') }
         'build' { @('-o', '--output=', '--debug', '-d', '--no-trimpath', '--all-bundles') }
+		'require' { if ($tokens.Count -ge 3 -and $tokens[2].ToString() -in @('check', 'update', 'pin')) { @('--package') } else { @() } }
+        'pin' { @('--package') }
         default { @() }
     }
 
@@ -212,7 +210,7 @@ Register-ArgumentCompleter -Native -CommandName nflow -ScriptBlock {
     }
 
     if ($sub -in @('run', 'build', 'serve', 'lint', 'explain', 'expand', 'info', 'pin') -or
-		($sub -eq 'require' -and $tokens.Count -ge 3 -and $tokens[2].ToString() -in @('freeze', 'pin'))) {
+		($sub -eq 'require' -and $tokens.Count -ge 3 -and $tokens[2].ToString() -in @('check', 'update', 'pin', 'reset'))) {
         $pattern = if ($wordToComplete) { "$wordToComplete*.nflow" } else { "*.nflow" }
         Get-ChildItem -Filter $pattern -File -ErrorAction SilentlyContinue | ForEach-Object {
             [System.Management.Automation.CompletionResult]::new(

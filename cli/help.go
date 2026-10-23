@@ -150,17 +150,22 @@ var helpRegistry = map[string]helpText{
 		},
 	},
 	"require": {
-		Summary: "Generate require glue or freeze @require dependencies into a sidecar lockfile.",
-		Usage:   "nflow require <file.nflow> [-o out.go] [-pkg main] | nflow require freeze <file.nflow>",
+		Summary: "Generate require glue or manage direct @require selectors in source.",
+		Usage:   "nflow require <file.nflow> [-o out.go] [-pkg main] | nflow require <check|update|pin> <file.nflow> [--package <pattern>] | nflow require reset <file.nflow>",
+		Flags:   `      --package PATTERN  select direct requirements by exact import or glob`,
 		Examples: []string{
 			`nflow require flows/client.nflow                 # generate require glue`,
-			`nflow require freeze flows/client.nflow          # write flows/client.nflow.lock`,
-			`nflow require pin flows/client.nflow             # compatibility alias for freeze`,
+			`nflow require check flows/client.nflow           # report canonical selectors and latest`,
+			`nflow require update flows/client.nflow          # select latest for direct remotes`,
+			`nflow require pin flows/client.nflow             # canonicalize existing selectors in source`,
+			`nflow pin flows/client.nflow                     # alias for require pin`,
+			`nflow require reset flows/client.nflow           # restore and consume .bak`,
 		},
 	},
 	"pin": {
-		Summary: "Compatibility alias for nflow require freeze; writes a sidecar lockfile.",
-		Usage:   "nflow pin <file.nflow>",
+		Summary: "Alias for nflow require pin; canonicalizes direct remote selectors in source.",
+		Usage:   "nflow pin <file.nflow> [--package <pattern>]",
+		Flags:   `      --package PATTERN  select direct requirements by exact import or glob`,
 		Examples: []string{
 			`nflow pin flows/client.nflow`,
 		},

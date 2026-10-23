@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nexssp/flow/builder"
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 )
@@ -54,9 +53,6 @@ func runRequire(ctx context.Context, inv *invocation, args []string) int {
 	reqs, reqErr := require.SourceRequirements(meta)
 	if reqErr != nil {
 		return fatalf("requires: %v", reqErr)
-	}
-	if lockErr := builder.ValidateRequirementLock(ctx, path, reqs); lockErr != nil {
-		return fatalf("requirement lock: %v", lockErr)
 	}
 	if len(reqs) == 0 {
 		fmt.Fprintln(os.Stderr, "no @require declarations found in", path)

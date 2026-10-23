@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/mod/module"
 
@@ -18,23 +19,23 @@ import (
 )
 
 type Requirement struct {
-	Import string `json:"Import"`
+	Import string
 	// PackagePath is the Go import path selected for the bundle package.
 	// It may differ from Import when a bare repository target defaults to
 	// its nexssflow package or when Go resolves a package to a nested module.
-	PackagePath string `json:"PackagePath"`
-	Alias       string `json:"Alias"`
-	Version     string `json:"Version"`
+	PackagePath string
+	Alias       string
+	Version     string
 	// ResolvedVersion is the provider module version selected by Go for a
 	// versioned remote bundle package. Local and workspace replacements may
 	// leave it empty.
-	ResolvedVersion string            `json:"ResolvedVersion"`
-	LocalPath       string            `json:"LocalPath"`
-	ModuleRoot      string            `json:"ModuleRoot"`
-	ModulePath      string            `json:"ModulePath"`
-	IsLoose         bool              `json:"IsLoose"`
-	LooseID         string            `json:"LooseID"`
-	Options         map[string]string `json:"Options"`
+	ResolvedVersion string
+	LocalPath       string
+	ModuleRoot      string
+	ModulePath      string
+	IsLoose         bool
+	LooseID         string
+	Options         map[string]string
 }
 
 func (r Requirement) IsLocal() bool { return r.LocalPath != "" }
@@ -119,35 +120,73 @@ type ResolvedModule struct {
 	GoMod       string
 }
 
+type requirementToken struct {
+	raw        string
+	start, end int
+}
+
+// SourceDeclaration identifies one direct @require declaration in the source
+// file that produced metadata. Selector offsets are byte offsets into the
+// original, complete directive line and include any selector quote marks.
+type SourceDeclaration struct {
+	// SourceLine is the executed header, used to reject edits after substitutions.
+	SourceLine    string
+	Requirement   Requirement
+	Line          int
+	SelectorStart int
+	SelectorEnd   int
+}
+
+const sourceDeclarationsKey = "require.source.declarations"
+
+// DirectDeclarations returns only @require directives executed in this
+// metadata scope. Included source files retain their own declaration lists.
+func DirectDeclarations(meta map[string]any) []SourceDeclaration {
+	declarations, _ := meta[sourceDeclarationsKey].([]SourceDeclaration)
+	return append([]SourceDeclaration(nil), declarations...)
+}
+
 func Parse(spec, baseDir string, opts map[string]string, file string, line int) (Requirement, error) {
-	parts := strings.Fields(spec)
+	requirement, _, _, err := parseRequirement(spec, baseDir, opts, file, line)
+	return requirement, err
+}
+
+// parseRequirement is the single grammar implementation for both public
+// parsing and source declaration capture. The returned selector bounds are
+// relative to spec; when no selector occurs, both are the end of the import
+// token, ready for a source updater to insert one.
+func parseRequirement(spec, baseDir string, opts map[string]string, file string, line int) (requirement Requirement, selectorStart, selectorEnd int, err error) {
+	cleanSpec := stripRequirementComment(spec)
+	parts := tokenizeRequirement(cleanSpec)
 	if len(parts) == 0 {
-		return Requirement{}, compiler.SourceError(
+		return Requirement{}, 0, 0, compiler.SourceError(
 			compiler.Position{File: file, Line: line},
 			"@require: missing module target")
 	}
 
-	importPath := strings.Trim(parts[0], `"'`)
+	importToken := parts[0]
+	importPath := strings.Trim(importToken.raw, `"'`)
 	parts = parts[1:]
 
 	version := ""
 	hasVersion := false
 	alias := ""
+	selectorStart, selectorEnd = importToken.end, importToken.end
 	for len(parts) > 0 {
-		if parts[0] == "as" {
+		if parts[0].raw == "as" {
 			if alias != "" {
-				return Requirement{}, compiler.SourceError(
+				return Requirement{}, 0, 0, compiler.SourceError(
 					compiler.Position{File: file, Line: line},
 					"@require: only one local namespace qualifier is allowed")
 			}
 			if len(parts) < 2 {
-				return Requirement{}, compiler.SourceError(
+				return Requirement{}, 0, 0, compiler.SourceError(
 					compiler.Position{File: file, Line: line},
 					"@require: missing local namespace qualifier after `as`")
 			}
-			alias = strings.Trim(parts[1], `"'`)
+			alias = strings.Trim(parts[1].raw, `"'`)
 			if !validNamespaceQualifier(alias) {
-				return Requirement{}, compiler.SourceError(
+				return Requirement{}, 0, 0, compiler.SourceError(
 					compiler.Position{File: file, Line: line},
 					"@require: invalid local namespace qualifier %q", alias)
 			}
@@ -155,33 +194,34 @@ func Parse(spec, baseDir string, opts map[string]string, file string, line int) 
 			continue
 		}
 		if hasVersion {
-			return Requirement{}, compiler.SourceError(
+			return Requirement{}, 0, 0, compiler.SourceError(
 				compiler.Position{File: file, Line: line},
-				"@require: extraneous tokens after declaration: %v", parts)
+				"@require: extraneous tokens after declaration: %v", tokenValues(parts))
 		}
-		var err error
-		version, err = parseRemoteSelector(parts[0])
-		if err != nil {
-			return Requirement{}, compiler.SourceError(
+		var selectorErr error
+		version, selectorErr = parseRemoteSelector(parts[0].raw)
+		if selectorErr != nil {
+			return Requirement{}, 0, 0, compiler.SourceError(
 				compiler.Position{File: file, Line: line},
-				"@require: invalid selector %q: %v", parts[0], err)
+				"@require: invalid selector %q: %v", parts[0].raw, selectorErr)
 		}
+		selectorStart, selectorEnd = parts[0].start, parts[0].end
 		hasVersion = true
 		parts = parts[1:]
 	}
 
 	if isLocal(importPath) {
 		if version != "" {
-			return Requirement{}, compiler.SourceError(
+			return Requirement{}, 0, 0, compiler.SourceError(
 				compiler.Position{File: file, Line: line},
 				"@require: local path must not carry a version: %q", importPath)
 		}
 		req, err := resolveLocal(importPath, baseDir, opts, file, line)
 		if err != nil {
-			return Requirement{}, err
+			return Requirement{}, 0, 0, err
 		}
 		req.Alias = alias
-		return req, nil
+		return req, selectorStart, selectorEnd, nil
 	}
 
 	return Requirement{
@@ -189,7 +229,84 @@ func Parse(spec, baseDir string, opts map[string]string, file string, line int) 
 		Alias:   alias,
 		Version: version,
 		Options: opts,
-	}, nil
+	}, selectorStart, selectorEnd, nil
+}
+
+func tokenizeRequirement(spec string) []requirementToken {
+	var tokens []requirementToken
+	for i := 0; i < len(spec); {
+		for i < len(spec) {
+			r, size := utf8.DecodeRuneInString(spec[i:])
+			if !unicode.IsSpace(r) {
+				break
+			}
+			i += size
+		}
+		if i == len(spec) {
+			break
+		}
+		start := i
+		var quote byte
+		for i < len(spec) {
+			c := spec[i]
+			if quote != 0 {
+				if c == quote {
+					quote = 0
+				}
+				i++
+				continue
+			}
+			if c == '"' || c == '\'' {
+				quote = c
+				i++
+				continue
+			}
+			r, size := utf8.DecodeRuneInString(spec[i:])
+			if unicode.IsSpace(r) {
+				break
+			}
+			i += size
+		}
+		tokens = append(tokens, requirementToken{raw: spec[start:i], start: start, end: i})
+	}
+	return tokens
+}
+
+func tokenValues(tokens []requirementToken) []string {
+	values := make([]string, len(tokens))
+	for i := range tokens {
+		values[i] = tokens[i].raw
+	}
+	return values
+}
+
+// stripRequirementComment recognizes # and // only outside quotes and at a
+// token boundary. This keeps URLs and quoted paths/selectors intact.
+func stripRequirementComment(spec string) string {
+	var quote byte
+	for i := range len(spec) {
+		c := spec[i]
+		if quote != 0 {
+			if c == quote {
+				quote = 0
+			}
+			continue
+		}
+		if c == '"' || c == '\'' {
+			quote = c
+			continue
+		}
+		if (c == '#' || c == '/' && i+1 < len(spec) && spec[i+1] == '/') &&
+			(i == 0 || isSpaceBefore(spec, i)) {
+			return spec[:i]
+		}
+	}
+	return spec
+}
+
+func isSpaceBefore(text string, index int) bool {
+	r, _ := utf8.DecodeLastRuneInString(text[:index])
+	return unicode.IsSpace(r)
 }
 
 // parseRemoteSelector validates the selector passed to Go's module query

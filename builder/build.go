@@ -3,7 +3,6 @@ package builder
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -75,14 +74,9 @@ func RunBuild(ctx context.Context, args []string, sourceRequires func(context.Co
 		return buildFail("stage", err)
 	}
 	defer func() { _ = os.RemoveAll(buildDir) }()
-	dependencyLock, err := readRequirementLock(nflowPath, reqs)
-	if err != nil && !errors.Is(err, errRequirementLockAbsent) {
-		return buildFail("requirement lock", err)
-	}
-	driverRoot, _ := resolveDriverInfo()
 	tidyStart := time.Now()
 	fmt.Fprintf(os.Stderr, "⚙️  nflow: resolving dependencies (go mod tidy)  — first run may download modules\n")
-	if err = prepareRequirementDependencies(ctx, buildDir, driverRoot, dependencyLock); err != nil {
+	if err = runGoContext(ctx, buildDir, "mod", "tidy"); err != nil {
 		return buildFail("go mod tidy", err)
 	}
 	fmt.Fprintf(os.Stderr, "   ✓ dependencies resolved in %s\n", time.Since(tidyStart).Round(time.Millisecond))
@@ -199,7 +193,7 @@ func stageBuildDir(
 	}()
 
 	flowDir := filepath.Dir(nflowPath)
-	resolvedReqs, _, err := resolveRequirementsForFlow(ctx, reqs, nflowPath, driverRoot, driverVersion, goworkPath)
+	resolvedReqs, err := resolveRequirementPackagesWithContext(ctx, reqs, driverRoot, driverVersion, goworkPath, flowDir)
 	if err != nil {
 		return "", err
 	}

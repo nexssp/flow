@@ -94,7 +94,7 @@ func runCLI(ctx context.Context, inv *invocation, args []string) int {
 		return handleRequire(ctx, inv, rest)
 	}
 	if cmd == "pin" {
-		return runRequireFreeze(ctx, inv, rest, "nflow pin <file.nflow>")
+		return runRequireSource(ctx, inv, requirePin, rest)
 	}
 	if cmd == "info" {
 		return runFlowInInvocation(ctx, inv, append([]string{"--info"}, rest...))
@@ -182,10 +182,10 @@ func runCompletion(args []string) int {
 func handleRequire(ctx context.Context, inv *invocation, args []string) int {
 	if len(args) > 0 {
 		switch args[0] {
+		case requireCheck, requireUpdate, requirePin, requireReset:
+			return runRequireSource(ctx, inv, args[0], args[1:])
 		case "freeze":
-			return runRequireFreeze(ctx, inv, args[1:], "nflow require freeze <file.nflow>")
-		case "pin":
-			return runRequireFreeze(ctx, inv, args[1:], "nflow require pin <file.nflow>")
+			return fatalf("require freeze was removed; use require pin to write canonical versions into the .nflow source")
 		}
 	}
 	return runRequire(ctx, inv, args)

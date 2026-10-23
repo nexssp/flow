@@ -370,3 +370,19 @@ unrecognized key is a compile error:
 ```
 
 See [extensions.md](extensions.md) for the bundle contract.
+
+---
+
+## Manage requirements
+
+The `require` commands inspect and edit direct `@require` selectors in the named source file:
+
+```sh
+nflow require check flows/client.nflow
+nflow require update flows/client.nflow --package 'github.com/acme/*'
+nflow require pin flows/client.nflow --package github.com/acme/client
+nflow pin flows/client.nflow  # alias for require pin
+nflow require reset flows/client.nflow
+```
+
+`check` is read-only and reports each selected remote requirement's current canonical selector and the latest available version. `update` queries latest for selected direct remote requirements. `pin` resolves and canonicalizes each existing selector (branch, tag, hash, or `latest`); a selector omitted from a remote requirement resolves to `latest` only when no local/workspace provider supplies it. Local, workspace, and built-in requirements are skipped. `--package` accepts an exact import path or a glob; without it, every direct requirement in the named file is selected. Included files are never edited. See [Managing requirements](requirements.md) for backup behavior and matching semantics.

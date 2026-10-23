@@ -3,6 +3,7 @@ package require
 import (
 	"context"
 	"strings"
+	"unicode"
 
 	compiler "github.com/nexssp/flow/compiler"
 )
@@ -14,9 +15,29 @@ var Directive = compiler.Directive{
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
-	line := strings.TrimSpace(req.Lines[req.I])
-	spec := strings.TrimSpace(strings.TrimPrefix(line, "@require"))
-	if spec == "" {
+	line := req.Lines[req.I]
+	leading := len(line) - len(strings.TrimLeftFunc(line, unicode.IsSpace))
+	trimmed := line[leading:]
+	if !strings.HasPrefix(trimmed, "@require") {
+		return compiler.DirectiveRes{}, compiler.SourceError(
+			compiler.Position{File: req.File, Line: req.I + 1},
+			"@require: missing module path",
+		)
+	}
+	headerStart := leading + len("@require")
+	header := line[headerStart:]
+	commentEnd := len(stripRequirementComment(header))
+	header = header[:commentEnd]
+	openIdx := firstUnquotedBrace(header)
+	specEnd := len(header)
+	if openIdx >= 0 {
+		specEnd = openIdx
+	}
+	specRaw := header[:specEnd]
+	specLeading := len(specRaw) - len(strings.TrimLeftFunc(specRaw, unicode.IsSpace))
+	spec := specRaw[specLeading:]
+	specBase := headerStart + specLeading
+	if strings.TrimSpace(spec) == "" {
 		return compiler.DirectiveRes{}, compiler.SourceError(
 			compiler.Position{File: req.File, Line: req.I + 1},
 			"@require: missing module path",
@@ -26,10 +47,8 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	opts := map[string]string{}
 	next := req.I + 1
 
-	if openIdx := strings.Index(spec, "{"); openIdx >= 0 {
-		inline := spec[openIdx:]
-		spec = strings.TrimSpace(spec[:openIdx])
-
+	if openIdx >= 0 {
+		inline := line[headerStart+openIdx:]
 		parsed, after, err := parseInlineOptions(inline, req.Lines, req.I)
 		if err != nil {
 			return compiler.DirectiveRes{}, compiler.SourceError(
@@ -51,10 +70,18 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 		next = after
 	}
 
-	r, err := Parse(spec, req.BaseDir, opts, req.File, req.I+1)
+	r, selectorStart, selectorEnd, err := parseRequirement(spec, req.BaseDir, opts, req.File, req.I+1)
 	if err != nil {
 		return compiler.DirectiveRes{}, err
 	}
+	declaration := SourceDeclaration{
+		SourceLine:    line,
+		Requirement:   r,
+		Line:          req.I + 1,
+		SelectorStart: specBase + selectorStart,
+		SelectorEnd:   specBase + selectorEnd,
+	}
+	req.Out[sourceDeclarationsKey] = append(sourceDeclarationList(req.Out), declaration)
 
 	existing, _ := req.Out["require"].([]Requirement)
 	for i := range existing {
@@ -73,4 +100,30 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	}
 	req.Out["require"] = append(existing, r)
 	return compiler.DirectiveRes{Next: next}, nil
+}
+
+func sourceDeclarationList(meta map[string]any) []SourceDeclaration {
+	declarations, _ := meta[sourceDeclarationsKey].([]SourceDeclaration)
+	return declarations
+}
+
+func firstUnquotedBrace(text string) int {
+	var quote byte
+	for i := range len(text) {
+		c := text[i]
+		if quote != 0 {
+			if c == quote {
+				quote = 0
+			}
+			continue
+		}
+		if c == '"' || c == '\'' {
+			quote = c
+			continue
+		}
+		if c == '{' {
+			return i
+		}
+	}
+	return -1
 }
