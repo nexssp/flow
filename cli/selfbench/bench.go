@@ -101,21 +101,7 @@ func writeReport(report Report, opts Options) error {
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(report)
 	}
-	if _, err := fmt.Fprintf(opts.Out, "self bench: %s %s/%s, %d CPUs, GOMAXPROCS=%d\ncompile/setup and first run are in-process, not process cold start; warmup excluded\n", report.GoVersion, report.OS, report.Arch, report.CPUs, report.GOMAXPROCS); err != nil {
-		return err
-	}
-	for i := range report.Results {
-		r := &report.Results[i]
-		if _, err := fmt.Fprintf(opts.Out, "%s\n  compile %.3f ms | first %.3f ms | warmup %d\n  warm n=%d min=%.3f mean=%.3f max=%.3f p50=%.3f p95=%.3f p99=%.3f ms rps=%.1f errors=%d\n", r.Name, r.CompileMs, r.FirstRunMs, r.Warmup, r.Warm.Iterations, r.Warm.MinMs, r.Warm.MeanMs, r.Warm.MaxMs, r.Warm.P50Ms, r.Warm.P95Ms, r.Warm.P99Ms, r.Warm.RPS, r.Warm.Errors); err != nil {
-			return err
-		}
-		if r.Error != "" {
-			if _, err := fmt.Fprintln(opts.Out, "  ERROR: "+r.Error); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return renderReport(report, opts.Out)
 }
 
 func measure(ctx context.Context, cfg runner.Config, scenario Scenario, opts Options) (result Result) {

@@ -4,6 +4,7 @@ go 1.26.9
 
 require (
 	github.com/expr-lang/expr v1.17.8
+	github.com/mattn/go-isatty v0.0.20
 	github.com/nexssp/kernel v0.35.0
 	github.com/nexssp/validation v0.3.0
 	github.com/tetratelabs/wazero v1.12.0
@@ -25,7 +26,6 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/leodido/go-urn v1.5.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/telemetry v0.0.0-20261010193011-f71dc92da45e // indirect

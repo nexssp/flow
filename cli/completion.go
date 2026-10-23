@@ -43,7 +43,7 @@ _nflow() {
     local cur prev subcommands flags sub op
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    subcommands="init run build serve lint explain expand catalog list show completion self require pin info help version"
+    subcommands="init run build serve lint explain expand catalog list show completion self require pin info help version env"
 
     if [ "$COMP_CWORD" -eq 1 ]; then
         COMPREPLY=($(compgen -W "$subcommands" -- "$cur"))
@@ -134,6 +134,7 @@ _nflow() {
         'completion:print a shell completion script'
         'version:print build info'
         'help:print usage'
+        'env:show NFlow environment settings'
     )
 
     if (( CURRENT == 2 )); then
@@ -205,7 +206,7 @@ const pwshCompletion = `# nflow PowerShell completion.
 Register-ArgumentCompleter -Native -CommandName nflow -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
 
-    $subcommands = @('init', 'run', 'build', 'serve', 'lint', 'explain', 'expand', 'catalog', 'list', 'show', 'completion', 'self', 'require', 'pin', 'info', 'help', 'version')
+    $subcommands = @('init', 'run', 'build', 'serve', 'lint', 'explain', 'expand', 'catalog', 'list', 'show', 'completion', 'self', 'require', 'pin', 'info', 'help', 'version', 'env')
     $shells      = @('bash', 'zsh', 'pwsh', 'powershell')
 
     function emit([string[]]$values, [string]$kind) {

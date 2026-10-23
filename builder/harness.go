@@ -525,12 +525,14 @@ func runGoContext(parent context.Context, dir string, args ...string) error {
 	cmd.Stdin = os.Stdin
 
 	capture := newTailBuffer(maxCapturedOutputBytes)
+	warnings := newGoWarningWriter(parent, os.Stderr)
+	defer warnings.Flush()
 	if os.Getenv("NFLOW_GO_VERBOSE") == "1" {
 		cmd.Stdout = io.MultiWriter(os.Stderr, capture)
 		cmd.Stderr = io.MultiWriter(os.Stderr, capture)
 	} else {
 		cmd.Stdout = capture
-		cmd.Stderr = capture
+		cmd.Stderr = io.MultiWriter(capture, warnings)
 	}
 
 	cmd.Env = append(os.Environ(),
@@ -554,7 +556,12 @@ func runGoOutputContext(parent context.Context, dir string, args ...string) ([]b
 	var stdout bytes.Buffer
 	capture := newTailBuffer(maxCapturedOutputBytes)
 	cmd.Stdout = &stdout
-	cmd.Stderr = io.MultiWriter(os.Stderr, capture)
+	warnings := newGoWarningWriter(parent, os.Stderr)
+	defer warnings.Flush()
+	cmd.Stderr = io.MultiWriter(capture, warnings)
+	if os.Getenv("NFLOW_GO_VERBOSE") == "1" {
+		cmd.Stderr = io.MultiWriter(os.Stderr, capture)
+	}
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GIT_TERMINAL_PROMPT=0")
 	if err := cmd.Run(); err != nil {
 		return nil, goCommandFailure(ctx, args, err, capture.String())

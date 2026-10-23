@@ -62,6 +62,7 @@ func RunContext(ctx context.Context, args []string) int {
 }
 
 func runCLI(ctx context.Context, inv *invocation, args []string) int {
+	ctx = builder.WithGoDiagnostics(ctx)
 	setupLogger()
 
 	if len(args) == 0 {
