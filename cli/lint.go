@@ -46,14 +46,8 @@ func runLintInInvocation(ctx context.Context, inv *invocation, args []string) in
 		return fatalf("%v", err)
 	}
 
-	allRequirements, lockIssues, lockedFiles := inspectLintRequirements(ctx, inv, files)
-	if len(lockIssues) > 0 {
-		return reportLintLockIssues(lockIssues)
-	}
+	allRequirements := inspectLintRequirements(ctx, inv, files)
 	needsExternalHarness := requirementsNeedExternalHarness(inv, allRequirements)
-	if needsExternalHarness && len(files) > 1 && len(lockedFiles) > 0 {
-		return reportLintLockIssues(externalHarnessLockIssues(lockedFiles))
-	}
 	if os.Getenv(harnessEnv) != "" || !needsExternalHarness {
 		return runLintBatchForInvocation(ctx, inv, files)
 	}
@@ -75,42 +69,16 @@ func shouldLintSingleTarget(args []string) bool {
 	return false
 }
 
-func inspectLintRequirements(ctx context.Context, inv *invocation, files []string) ([]require.Requirement, []LintIssue, []string) {
+func inspectLintRequirements(ctx context.Context, inv *invocation, files []string) []require.Requirement {
 	var allRequirements []require.Requirement
-	var lockIssues []LintIssue
-	var lockedFiles []string
 	for _, path := range files {
 		reqs, requireErr := inv.sourceRequiresFromFile(ctx, path)
 		if requireErr != nil {
 			continue
 		}
 		allRequirements = append(allRequirements, reqs...)
-		if lockErr := builder.ValidateRequirementLock(ctx, path, reqs); lockErr != nil {
-			lockIssues = append(lockIssues, LintIssue{File: path, Kind: "lock", Message: lockErr.Error()})
-		}
-		if _, statErr := os.Stat(path + ".lock"); statErr == nil {
-			lockedFiles = append(lockedFiles, path)
-		}
 	}
-	return allRequirements, lockIssues, lockedFiles
-}
-
-func externalHarnessLockIssues(lockedFiles []string) []LintIssue {
-	issues := make([]LintIssue, 0, len(lockedFiles))
-	for _, path := range lockedFiles {
-		issues = append(issues, LintIssue{
-			File: path, Kind: "lock",
-			Message: "locked workflows cannot be linted together when an external harness is required; lint each locked file individually",
-		})
-	}
-	return issues
-}
-
-func reportLintLockIssues(issues []LintIssue) int {
-	if err := writeJSON(os.Stdout, issues, true); err != nil {
-		return fatalf("encode issues: %v", err)
-	}
-	return 1
+	return allRequirements
 }
 
 var lintDiscoveryExcludedDirs = map[string]struct{}{

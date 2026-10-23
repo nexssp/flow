@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,6 +74,76 @@ func TestRequireSourceBuiltinsIgnoreSidecars(t *testing.T) {
 	ktest.RequireEqual(t, string(data), "prior source")
 	_, err = os.Stat(file + ".bak")
 	ktest.RequireTrue(t, os.IsNotExist(err))
+}
+
+func TestRequireSourceExecutionIgnoresSidecars(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "flow.nflow")
+	other := filepath.Join(root, "other.nflow")
+	const source = "runtime.noop\n"
+	for _, path := range []string{file, other} {
+		ktest.RequireNoError(t, os.WriteFile(path, []byte(source), 0o600))
+		ktest.RequireNoError(t, os.WriteFile(path+".bak", []byte("obsolete backup"), 0o600))
+	}
+	for _, sidecar := range []string{"missing", "malformed"} {
+		t.Run(sidecar, func(t *testing.T) {
+			if sidecar == "malformed" {
+				for _, path := range []string{file, other} {
+					ktest.RequireNoError(t, os.WriteFile(path+".lock", []byte("obsolete lock"), 0o600))
+				}
+			}
+			for _, args := range [][]string{
+				{"run", file, "--json"},
+				{file, "--json"},
+				{"lint", file},
+				{"lint", file, other},
+				{"lint", root},
+				{"lint", filepath.Join(root, "...")},
+			} {
+				t.Run(strings.Join(args, " "), func(t *testing.T) {
+					withStdin(t, "")
+					var code int
+					_, stderr := captureIO(t, func() { code = RunContext(t.Context(), args) })
+					ktest.RequireCondition(t, code == 0, "CLI failed: %s", stderr)
+				})
+			}
+			t.Run("RunPath", func(t *testing.T) {
+				withStdin(t, "")
+				var code int
+				_, stderr := captureIO(t, func() { code = RunPath(t.Context(), []string{file, "--json"}) })
+				ktest.RequireCondition(t, code == 0, "RunPath failed: %s", stderr)
+			})
+		})
+	}
+	for _, path := range []string{file, other} {
+		for suffix, want := range map[string]string{"": source, ".bak": "obsolete backup", ".lock": "obsolete lock"} {
+			data, err := os.ReadFile(path + suffix)
+			ktest.RequireNoError(t, err)
+			ktest.RequireEqual(t, string(data), want)
+		}
+	}
+}
+
+func TestRequireSourceBatchLintIgnoresSidecarsWithExternalRequirements(t *testing.T) {
+	// Exercise batch dispatch without downloading an external module. An existing
+	// harness must report the missing bundle, not reject obsolete sidecars.
+	t.Setenv(harnessEnv, "1")
+	root := t.TempDir()
+	good := filepath.Join(root, "good.nflow")
+	external := filepath.Join(root, "external.nflow")
+	ktest.RequireNoError(t, os.WriteFile(good, []byte("runtime.noop\n"), 0o600))
+	ktest.RequireNoError(t, os.WriteFile(external, []byte("@require example.invalid/module/nexssflow v0.0.1\nmodule.action\n"), 0o600))
+	for _, path := range []string{good, external} {
+		ktest.RequireNoError(t, os.WriteFile(path+".lock", []byte("obsolete lock"), 0o600))
+	}
+	var code int
+	stdout, _ := captureIO(t, func() { code = RunContext(t.Context(), []string{"lint", root}) })
+	ktest.RequireEqual(t, code, 1)
+	var issues []LintIssue
+	ktest.RequireNoError(t, json.Unmarshal([]byte(stdout), &issues))
+	ktest.RequireEqual(t, len(issues), 1)
+	ktest.RequireEqual(t, issues[0].File, external)
+	ktest.RequireEqual(t, issues[0].Kind, "config")
 }
 
 func TestRequireSourceHelpAndCompletion(t *testing.T) {
