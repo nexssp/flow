@@ -1,0 +1,14 @@
+@description "Decode, normalize and validate a local API JSON request"
+@schema BenchRequest {
+  Name string `json:"name" validate:"required"`
+  Email string `json:"email" validate:"required,email"`
+  Quantity int `json:"quantity" validate:"gte=1,lte=100"`
+}
+@assert: result.name == "alice"
+@assert: result.email == "alice@example.com"
+@assert: result.total == 2495
+{ body: '{"name":"  ALICE  ","email":" Alice@Example.COM ","quantity":5}' }
+-> { request: fromJSON(.body) }
+-> { name: lower(trim(.request.name)), email: lower(trim(.request.email)), quantity: .request.quantity }
+-> BenchRequest.validate
+-> { name: .name, email: .email, total: .quantity * 499 }

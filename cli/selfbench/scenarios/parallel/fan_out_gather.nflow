@@ -1,0 +1,11 @@
+@description "Fan out four bounded local branches and gather their results"
+@assert: result.total == 1056
+@assert: result.branches == 4
+{ values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32] }
+-> parallel {
+  count: { value: len(.values) },
+  sum: { value: sum(.values) },
+  doubled: { value: sum(.values) * 2 },
+  maximum: { value: max(.values) }
+}
+-> { total: .doubled.value, branches: 4, count: .count.value, sum: .sum.value, maximum: .maximum.value }

@@ -72,44 +72,16 @@ func runBenchmark(ctx context.Context, resolver contracts.ActionResolver, req Be
 		invokeOnce(ctx, target, req.Payload) //nolint:errcheck // warmup errors are not counted
 	}
 
-	samples := make([]time.Duration, req.Iterations)
-	var errorsCount int
-	var sum time.Duration
-	started := time.Now()
-
-	for i := range req.Iterations {
-		if err := ctx.Err(); err != nil {
-			return BenchRunRes{}, err
-		}
-		sampleStart := time.Now()
-		err := invokeOnce(ctx, target, req.Payload)
-		elapsed := time.Since(sampleStart)
-		samples[i] = elapsed
-		sum += elapsed
-		if err != nil {
-			errorsCount++
-		}
+	res, err := Measure(ctx, req.Iterations, func(ctx context.Context) error {
+		_, err := action.InvokeAny(ctx, target, req.Payload)
+		return err
+	})
+	if err != nil {
+		return BenchRunRes{}, err
 	}
-
-	totalElapsed := time.Since(started)
-	slices.Sort(samples)
-
-	nanos := max(totalElapsed.Nanoseconds(), 1)
-
-	return BenchRunRes{
-		Action:     req.Action,
-		Iterations: req.Iterations,
-		Warmup:     req.Warmup,
-		Errors:     errorsCount,
-		MinMs:      toMillis(samples[0]),
-		MaxMs:      toMillis(samples[len(samples)-1]),
-		MeanMs:     toMillis(sum / time.Duration(req.Iterations)),
-		P50Ms:      toMillis(percentile(samples, 0.50)),
-		P95Ms:      toMillis(percentile(samples, 0.95)),
-		P99Ms:      toMillis(percentile(samples, 0.99)),
-		RPS:        float64(req.Iterations) * 1e9 / float64(nanos),
-		ElapsedMs:  totalElapsed.Milliseconds(),
-	}, nil
+	res.Action = req.Action
+	res.Warmup = req.Warmup
+	return res, nil
 }
 
 func invokeOnce(ctx context.Context, target action.AnyAction, payload any) (err error) {
@@ -120,6 +92,59 @@ func invokeOnce(ctx context.Context, target action.AnyAction, payload any) (err 
 	}()
 	_, err = action.InvokeAny(ctx, target, payload)
 	return err
+}
+
+// Measure invokes callback iterations times and reports the latency distribution.
+// It does not perform warmup; callers that need warmup should do so before calling Measure.
+func Measure(ctx context.Context, iterations int, invoke func(context.Context) error) (BenchRunRes, error) {
+	if iterations < 1 || iterations > benchMaxIterations {
+		return BenchRunRes{}, xerr.BadRequest("bench.measure: iterations must be between 1 and 1000000")
+	}
+
+	samples := make([]time.Duration, iterations)
+	var errorsCount int
+	var sum time.Duration
+	started := time.Now()
+
+	for i := range iterations {
+		if err := ctx.Err(); err != nil {
+			return BenchRunRes{}, err
+		}
+		sampleStart := time.Now()
+		err := invokeSafely(ctx, invoke)
+		elapsed := time.Since(sampleStart)
+		samples[i] = elapsed
+		sum += elapsed
+		if err != nil {
+			errorsCount++
+		}
+	}
+
+	totalElapsed := time.Since(started)
+	slices.Sort(samples)
+	nanos := max(totalElapsed.Nanoseconds(), 1)
+
+	return BenchRunRes{
+		Iterations: iterations,
+		Errors:     errorsCount,
+		MinMs:      toMillis(samples[0]),
+		MaxMs:      toMillis(samples[len(samples)-1]),
+		MeanMs:     toMillis(sum / time.Duration(iterations)),
+		P50Ms:      toMillis(percentile(samples, 0.50)),
+		P95Ms:      toMillis(percentile(samples, 0.95)),
+		P99Ms:      toMillis(percentile(samples, 0.99)),
+		RPS:        float64(iterations) * 1e9 / float64(nanos),
+		ElapsedMs:  totalElapsed.Milliseconds(),
+	}, nil
+}
+
+func invokeSafely(ctx context.Context, invoke func(context.Context) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = xerr.PanicRecovery(recovered)
+		}
+	}()
+	return invoke(ctx)
 }
 
 func percentile(sorted []time.Duration, p float64) time.Duration {

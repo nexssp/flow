@@ -121,7 +121,7 @@ func handleHelp(args []string) int {
 
 func runSelf(ctx context.Context, inv *invocation, args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: nflow self <up|test> [flags] [filter...]")
+		fmt.Fprintln(os.Stderr, "usage: nflow self <up|test|bench> [flags] [filter...]")
 		return 2
 	}
 	switch args[0] {
@@ -131,6 +131,8 @@ func runSelf(ctx context.Context, inv *invocation, args []string) int {
 			return 1
 		}
 		return 0
+	case "bench":
+		return runSelfBench(ctx, inv, args[1:])
 	case "test":
 		flags := args[1:]
 		bundles, err := inv.selftestBundles()

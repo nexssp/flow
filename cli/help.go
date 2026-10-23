@@ -135,11 +135,18 @@ var helpRegistry = map[string]helpText{
 		},
 	},
 	"self": {
-		Summary: "Manage the installed nflow binary, or run the embedded feature coverage suite.",
-		Usage:   "nflow self <up|test> [filter...]",
-		Flags: `      --verbose     print DSL on failure
-      --json        machine-readable JSON summary
-      --no-color    disable ANSI color`,
+		Summary: "Manage the installed nflow binary, run self-tests, or benchmark built-in scenarios.",
+		Usage:   "nflow self <up|test|bench> [filter...] [flags]\n  nflow self bench [filter...] [--path FILE_OR_DIR] [--iterations N] [--warmup N] [--json] [--list]",
+		Flags: `Self test:
+      --verbose             print DSL on failure
+      --json                machine-readable JSON summary
+      --no-color            disable ANSI color
+Self bench:
+      --path FILE_OR_DIR    benchmark one file or discover a directory instead of built-ins
+      --iterations N        measured iterations (default 50; range 1..1000000)
+      --warmup N            unreported warmups (default 3; range 0..1000000)
+      --json                machine-readable benchmark report
+      --list                list matching scenarios without running them`,
 		Examples: []string{
 			`nflow self up                        # rebuild with VCS metadata from source tree`,
 			`nflow self test                      # run the whole coverage suite`,
@@ -147,6 +154,9 @@ var helpRegistry = map[string]helpText{
 			`nflow self test loop assert          # anything matching "loop" OR "assert"`,
 			`nflow self test §3.4                 # a single feature by ref`,
 			`nflow self test --json > report.json # CI-friendly output`,
+			`nflow self bench                    # benchmark built-in scenarios`,
+			`nflow self bench api --iterations 100 --warmup 5`,
+			`nflow self bench --path ./flows --list`,
 		},
 	},
 	"require": {

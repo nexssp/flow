@@ -56,6 +56,12 @@ _nflow() {
         run) flags="-v -vv -vvv --assert= --approval= --budget= --max-tokens= --journal-dir= --execution-id=" ;;
         build) flags="-o --output= --debug -d --no-trimpath --all-bundles" ;;
         completion) flags="bash zsh pwsh powershell" ;;
+        self)
+            if [ "$COMP_CWORD" -eq 2 ]; then flags="up test bench"
+            elif [[ "$op" == "bench" ]]; then flags="--path --iterations --warmup --json --list"
+            elif [[ "$op" == "test" ]]; then flags="--verbose --json --no-color"
+            else flags=""
+            fi ;;
         require)
             if [ "$COMP_CWORD" -eq 2 ]; then flags="check update pin reset"
             elif [[ "$op" == "check" || "$op" == "update" || "$op" == "pin" ]]; then flags="--package"
@@ -65,6 +71,11 @@ _nflow() {
         *) flags="" ;;
     esac
 
+    if [[ "$sub" == "self" && "$op" == "bench" && ( "$prev" == "--path" || "$prev" == "--iterations" || "$prev" == "--warmup" ) ]]; then
+        COMPREPLY=()
+        return
+    fi
+
     if [[ "$cur" == -* ]]; then
         COMPREPLY=($(compgen -W "$flags" -- "$cur"))
         return
@@ -72,6 +83,12 @@ _nflow() {
 
     case "$sub" in
         completion) COMPREPLY=($(compgen -W "$flags" -- "$cur")) ;;
+        self)
+            if [ "$COMP_CWORD" -eq 2 ]; then
+                COMPREPLY=($(compgen -W "up test bench" -- "$cur"))
+            else
+                COMPREPLY=()
+            fi ;;
         require)
             if [ "$COMP_CWORD" -eq 2 ]; then
                 COMPREPLY=($(compgen -W "check update pin reset" -- "$cur"))
@@ -104,7 +121,7 @@ _nflow() {
         'list:list compiler capabilities'
         'show:show one compiler capability'
         'init:initialize a project or bundle'
-        'self:manage the nflow binary or run self-tests'
+        'self:manage the nflow binary, run self-tests, or benchmark scenarios'
         'require:generate glue or manage direct @require selectors'
         'pin:alias for require pin'
         'info:describe a .nflow file'
@@ -133,6 +150,18 @@ _nflow() {
             ;;
         info|serve|lint|explain|expand)
             _arguments '1:flow file:_files -g "*.nflow"'
+            ;;
+        self)
+            if (( CURRENT == 3 )); then
+                _values 'operation' up test bench
+            elif [[ "${words[3]}" == "bench" ]]; then
+                _arguments \
+                    '--path=[use a custom file or directory]:file or directory:()' \
+                    '--iterations=[number of measured iterations]:N:()' \
+                    '--warmup=[number of warmup iterations]:N:()' \
+                    '--json[emit a JSON report]' \
+                    '--list[list matching scenarios without running]'
+            fi
             ;;
         completion)
             _values 'shell' bash zsh pwsh powershell
@@ -191,6 +220,17 @@ Register-ArgumentCompleter -Native -CommandName nflow -ScriptBlock {
         return
     }
 
+    if ($sub -eq 'self' -and ($tokens.Count -le 2 -or
+        ($tokens.Count -eq 3 -and $tokens[2].ToString() -notin @('up', 'test', 'bench')))) {
+        emit @('up', 'test', 'bench') 'ParameterValue'
+        return
+    }
+
+    if ($sub -eq 'self' -and $tokens.Count -ge 4 -and
+        $tokens[-2].ToString() -in @('--path', '--iterations', '--warmup')) {
+        return
+    }
+
 	if ($sub -eq 'require' -and ($tokens.Count -le 2 -or ($tokens.Count -eq 3 -and $tokens[2].ToString() -notin @('check', 'update', 'pin', 'reset')))) {
         emit @('check', 'update', 'pin', 'reset') 'ParameterValue'
         return
@@ -199,6 +239,7 @@ Register-ArgumentCompleter -Native -CommandName nflow -ScriptBlock {
     $flags = switch ($sub) {
         'run'   { @('-v', '-vv', '-vvv', '--assert=', '--approval=', '--budget=', '--max-tokens=', '--journal-dir=', '--execution-id=') }
         'build' { @('-o', '--output=', '--debug', '-d', '--no-trimpath', '--all-bundles') }
+		'self' { if ($tokens.Count -ge 3 -and $tokens[2].ToString() -eq 'bench') { @('--path', '--iterations', '--warmup', '--json', '--list') } elseif ($tokens.Count -ge 3 -and $tokens[2].ToString() -eq 'test') { @('--verbose', '--json', '--no-color') } else { @() } }
 		'require' { if ($tokens.Count -ge 3 -and $tokens[2].ToString() -in @('check', 'update', 'pin')) { @('--package') } else { @() } }
         'pin' { @('--package') }
         default { @() }

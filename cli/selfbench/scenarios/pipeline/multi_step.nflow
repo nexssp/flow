@@ -1,0 +1,17 @@
+@description "Compose three named local pipelines and projections"
+@pipeline bench_normalize
+  { name: lower(trim(.name)), quantity: .quantity, price: .price }
+@end
+@pipeline bench_price
+  { name: .name, subtotal: .quantity * .price, tax_rate: 0.23 }
+@end
+@pipeline bench_total
+  { name: .name, total: .subtotal * (1 + .tax_rate), status: "ready" }
+@end
+@assert: result.name == "order"
+@assert: result.total == 1230
+@assert: result.status == "ready"
+{ name: " ORDER ", quantity: 4, price: 250 }
+-> pipeline.bench_normalize
+-> pipeline.bench_price
+-> pipeline.bench_total

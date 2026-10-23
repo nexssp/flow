@@ -276,7 +276,7 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 	}
 	compileStart := time.Now()
 
-	var startStats, compileStats, runStats runtime.MemStats
+	var startStats, compileStats runtime.MemStats
 	if cfg.MeasureAllocs {
 		readMemStats(&startStats)
 	}
@@ -291,11 +291,44 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
 		return result, err
 	}
+	return executeCompiled(ctx, cfg, compiled, src, name, payload, executionID, compileDuration, &startStats, &compileStats, &compileStats)
+}
+
+// ExecuteCompiled executes a previously compiled program without compiling it again.
+// cfg, src, and name must match the values used to create compiled; src and name
+// are used for approval identity. The compilation's program, resolver, and other
+// retained state are reused intentionally, so this is warm repeated execution,
+// not a process-cold-start benchmark. Each call gets its own execution identity.
+func ExecuteCompiled(ctx context.Context, cfg Config, compiled Compilation, src, name string, payload map[string]any) (Execution, error) {
+	ctx, executionID, identityErr := ensureExecutionIdentity(ctx)
+	if identityErr != nil {
+		return Execution{}, identityErr
+	}
+	var runStartStats runtime.MemStats
+	if cfg.MeasureAllocs {
+		readMemStats(&runStartStats)
+	}
+	return executeCompiled(ctx, cfg, compiled, src, name, payload, executionID, 0, nil, nil, &runStartStats)
+}
+
+func executeCompiled(
+	ctx context.Context,
+	cfg Config,
+	compiled Compilation,
+	src, name string,
+	payload map[string]any,
+	executionID string,
+	compileDuration time.Duration,
+	compileStartStats, compileEndStats, runStartStats *runtime.MemStats,
+) (Execution, error) {
 	if compiled.Program == nil {
 		result := Execution{ExecutionID: executionID, Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
-		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
+		if compileStartStats != nil && compileEndStats != nil {
+			fillCompileAllocs(&result, cfg.MeasureAllocs, compileStartStats, compileEndStats)
+		}
 		return result, errors.New("compile: source is empty")
 	}
+	var runStats runtime.MemStats
 
 	if syms := compiler.SymbolsFromMeta(compiled.Meta); len(syms) > 0 {
 		ctx = compiler.WithLocalSymbols(ctx, syms)
@@ -334,8 +367,12 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 		CompileDuration: compileDuration,
 		RunDuration:     runDuration,
 	}
-	fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
-	fillRunAllocs(&result, cfg.MeasureAllocs, &compileStats, &runStats)
+	if cfg.MeasureAllocs {
+		if compileStartStats != nil && compileEndStats != nil {
+			fillCompileAllocs(&result, true, compileStartStats, compileEndStats)
+		}
+		fillRunAllocs(&result, true, runStartStats, &runStats)
+	}
 	if err != nil {
 		return result, err
 	}

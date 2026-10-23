@@ -305,6 +305,64 @@ for their static lint gate.
 
 ---
 
+## Benchmark built-in scenarios
+
+```sh
+nflow self bench [filter...] [--path FILE_OR_DIR] [--iterations N] [--warmup N] [--json] [--list]
+```
+
+`self bench` measures whole `.nflow` scenarios, reusing the sampling and
+latency-summary primitive used by `bench.run`; it does not benchmark the
+`bench.run` action itself and is not a correctness gate. Use `nflow self test` for feature-correctness coverage.
+Benchmarks run locally and the built-in scenarios do not call external services.
+
+With no `--path`, the command discovers embedded scenarios recursively from
+`cli/selfbench/scenarios`, including every `*.nflow` file. Add a scenario there
+as a `.nflow` file (or nested folder) to include it in the built-in set; rebuild
+the CLI for that embedded change to take effect. Alternatively, `--path` selects
+a single file or a directory on disk and **replaces**, rather than extends, the
+default embedded set. Custom scenarios can therefore be benchmarked without
+rebuilding:
+
+```sh
+nflow self bench --path ./bench-flows
+nflow self bench --path ./bench-flows/parse.nflow parse
+```
+
+Zero or more filters match case-insensitive substrings in scenario paths,
+relative to the selected scenario root; multiple filters are ORed. For example,
+`nflow self bench parse setup` selects paths containing either `parse` or
+`setup`. `--list` prints the selected scenarios without compiling or executing
+them.
+
+| Option | Default and behavior |
+|---|---|
+| `--path FILE_OR_DIR` | Use one custom `.nflow` file or recursively discover `*.nflow` files below a directory instead of embedded scenarios. |
+| `--iterations N` | Number of measured warm iterations; default `50`, allowed range `1..1000000`. |
+| `--warmup N` | Number of unreported warmup iterations; default `3`, allowed range `0..1000000`. |
+| `--json` | Emit the benchmark report as JSON. |
+| `--list` | List matching scenario paths and do not execute them. |
+
+For each scenario, `compile_ms` measures in-process compile/setup time and
+`first_run_ms` measures its first execution. **`first_run_ms` is not an OS or
+process cold-start measurement.** Warm-run metrics exclude warmup and report
+minimum, maximum, mean, p50, p95, and p99 latency, runs per second (`rps`), and
+errors. Each scenario is compiled once; repeated executions reuse its compiled
+program and any retained cache/state, but receive fresh payload maps and execution
+identities. Timed samples include the normal runner execution wrapper; they are
+not isolated action-call timings. `@assert:` directives are checked by scenario
+tests, not in the timed benchmark loop. A benchmark failure returns exit code **1**. Invalid flags or no
+matching scenarios return **2**; a successful run or `--list` returns **0**.
+
+Treat custom `.nflow` files as untrusted code: like `nflow run`, benchmarking a
+custom flow may cause arbitrary effects allowed by its actions. Use only flows
+you trust and account for any external side effects they may perform. Scenario
+file discovery rejects symlinks. Custom flows use the capabilities linked into
+the current binary; `self bench` does not build a new `@require` harness. In JSON
+mode, scenario stdout is redirected to stderr to keep the report parseable.
+
+---
+
 ## Rebuild the CLI in place
 
 ```sh
