@@ -399,7 +399,33 @@ nflow version
 Prints version, commit hash, build time, Go version, and platform. When
 the binary was installed with `go install` or built without linker
 flags, the values come from the module and VCS metadata Go embeds
-automatically.
+automatically. This command and its `--version` / `-v` aliases stay offline.
+
+```sh
+nflow version check
+```
+
+Explicitly queries the [latest stable GitHub release](https://github.com/nexssp/flow/releases/latest)
+using the public Releases API (10-second timeout). Prints current/latest versions
+and, only when a newer stable release is found, an exact manual update command:
+
+```sh
+go install github.com/nexssp/flow/cmd/nflow@v0.39.0
+```
+
+The version above is illustrative; the command pins the tag returned by GitHub.
+It requires Go and installs into `GOBIN` or `GOPATH/bin`; check that this is the
+`nflow` on your `PATH`. Prebuilt-binary users can instead download and verify the
+matching [release archive](releases.md#download-and-verify). Nothing is installed
+or updated automatically. GitHub's latest published stable release is the source,
+not unreleased tags, prereleases, or the Go proxy's potentially different `@latest`.
+
+Development, pseudo-version, git-describe, and unknown builds are identified
+without claiming an update is available. A network/API failure (including rate
+limits), absent release, or invalid release response prints `Latest: unavailable`
+and explains that availability could not be determined; exit status is **1**.
+A completed lookup returns **0**, whether or not an update is available or the
+current build can be compared. Invalid usage returns **2**.
 
 ---
 

@@ -1,0 +1,4 @@
+@description "@flow_version AND-combines whitespace-separated comparator constraints"
+@flow_version ">=0.0.0 <9999.0.0"
+@assert: result == "ok"
+const @{ value: "ok" }

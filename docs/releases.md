@@ -4,6 +4,8 @@ Prebuilt `nflow` command-line binaries are published on the [GitHub Releases pag
 
 ## Unreleased — intentional behavior changes
 
+- **Simple compiler-version ranges.** `@flow_version ">=0.37.0 <0.40.0"` requires every whitespace-separated comparison to hold (AND). Existing exact/single comparisons and version parsing remain compatible; no OR, wildcard, caret, or tilde range language is added. Development/unknown compiler builds retain their existing bypass.
+- **Manual release check.** `nflow version check` prints current/latest using the latest stable GitHub release and suggests a pinned `go install` command only for a newer release. It never updates automatically; plain `nflow version` stays offline. Unknown/development builds and failed lookups do not claim an update is available. See [CLI version help](cli.md#version) for exit codes and limitations.
 - **Explicit empty strings stay empty.** Argument decoding no longer replaces an explicitly supplied `""` with the field's default. Omit the argument to use its default; check workflows that previously relied on an empty value selecting it.
 - **Build help succeeds.** `nflow build --help` exits with status **0**, not **2**, and does not require an input file. Scripts should treat this as a successful help request rather than a usage error.
 - **Local self-bench command.** `nflow self bench` discovers embedded `.nflow` scenarios, supports custom paths, warmup and iteration controls, JSON output, and listing without execution. Built-in scenarios are local and do not call external services; see the [CLI guide](cli.md#benchmark-built-in-scenarios) for metric semantics and custom-flow safety.

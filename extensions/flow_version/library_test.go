@@ -67,10 +67,55 @@ func TestFlowVersion_Unsatisfied(t *testing.T) {
 	}
 }
 
+func TestFlowVersion_RangeSatisfied(t *testing.T) {
+	withCompilerVersion(t, "v0.38.0")
+
+	for _, line := range []string{
+		`@flow_version ">=0.37.0 <0.40.0"`,
+		`@flow_version ">= 0.37.0 < 0.40.0"`,
+		`@flow_version ">=v0.37.0 <=v0.38.0 ==0.38.0"`,
+		"@flow_version \"  >=0.37.0\t<0.40.0  \"",
+	} {
+		t.Run(line, func(t *testing.T) {
+			ktest.RequireNoError(t, runDirective(t, line))
+		})
+	}
+}
+
+func TestFlowVersion_RangeUnsatisfied(t *testing.T) {
+	withCompilerVersion(t, "v0.38.0")
+
+	for _, line := range []string{
+		`@flow_version ">=0.37.0 <0.38.0"`,
+		`@flow_version ">0.38.0 <=0.40.0"`,
+	} {
+		t.Run(line, func(t *testing.T) {
+			ktest.RequireErrorContains(t, runDirective(t, line), "not satisfied")
+		})
+	}
+}
+
+func TestFlowVersion_RangeBoundaries(t *testing.T) {
+	for _, version := range []string{"v0.37.0", "v0.39.99", "v0.36.99", "v0.40.0"} {
+		t.Run(version, func(t *testing.T) {
+			withCompilerVersion(t, version)
+			err := runDirective(t, `@flow_version ">=0.37.0 <0.40.0"`)
+			if version == "v0.37.0" || version == "v0.39.99" {
+				ktest.RequireNoError(t, err)
+			} else {
+				ktest.RequireErrorContains(t, err, "not satisfied")
+			}
+		})
+	}
+}
+
 func TestFlowVersion_DevCompilerSkipsCheck(t *testing.T) {
 	withCompilerVersion(t, compiler.VersionUnknown)
 
 	ktest.RequireNoError(t, runDirective(t, `@flow_version ">=99.0.0"`))
+	// Unknown/dev compilers preserve existing behavior: skip both parsing
+	// and comparison because there is no release version to check against.
+	ktest.RequireNoError(t, runDirective(t, `@flow_version ">="`))
 }
 
 func TestFlowVersion_MissingConstraintRejected(t *testing.T) {
@@ -83,8 +128,21 @@ func TestFlowVersion_MissingConstraintRejected(t *testing.T) {
 func TestFlowVersion_MalformedConstraintRejected(t *testing.T) {
 	withCompilerVersion(t, "v0.7.0")
 
-	err := runDirective(t, `@flow_version ">="`)
-	ktest.RequireErrorContains(t, err, "invalid constraint")
+	for _, line := range []string{
+		`@flow_version ">="`,
+		`@flow_version ">=0.7.0 <"`,
+		`@flow_version ">=0.7.0 nonsense"`,
+		`@flow_version "   "`,
+		`@flow_version ">=0.7.0 || <0.8.0"`,
+		`@flow_version ">=0.7.0,<0.8.0"`,
+		`@flow_version "^0.7.0"`,
+		`@flow_version "~0.7.0"`,
+		`@flow_version "0.7.*"`,
+	} {
+		t.Run(line, func(t *testing.T) {
+			ktest.RequireErrorContains(t, runDirective(t, line), "invalid constraint")
+		})
+	}
 }
 
 func TestFlowVersion_DuplicateRejected(t *testing.T) {

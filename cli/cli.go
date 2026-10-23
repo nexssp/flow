@@ -75,7 +75,10 @@ func runCLI(ctx context.Context, inv *invocation, args []string) int {
 		return handleHelp(args[1:])
 	}
 
-	if (cmd == "-v" && len(args) == 1) || cmd == "version" || cmd == "--version" {
+	if cmd == "version" {
+		return runVersion(ctx, args[1:])
+	}
+	if (cmd == "-v" && len(args) == 1) || cmd == "--version" {
 		Print(os.Stdout)
 		return 0
 	}

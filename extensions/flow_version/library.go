@@ -49,7 +49,8 @@ func Bundle(_ map[string]string) compiler.Bundle {
 // of `=`, `==`, `>=`, `<=`, `>`, `<`, or bare (implicit `=`), followed
 // by a MAJOR.MINOR.PATCH version, optionally prefixed with `v` and
 // optionally carrying a pre-release or build-metadata suffix that is
-// ignored for comparison.
+// ignored for comparison. Whitespace-separated constraints are ANDed, for
+// example `>=0.37.0 <0.40.0`.
 var Directive = compiler.Directive{
 	Name:    "flow_version",
 	Example: `@flow_version ">=0.7.0"`,
@@ -75,22 +76,34 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 		return compiler.DirectiveRes{Next: req.I + 1}, nil
 	}
 
-	op, wantRaw := splitOperator(raw)
-	want, err := parseSemver(wantRaw)
-	if err != nil {
-		return compiler.DirectiveRes{}, compiler.SourceError(pos,
-			"@flow_version: invalid constraint %q: %v", raw, err)
-	}
 	got, err := parseSemver(compiler.Version)
 	if err != nil {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@flow_version: running compiler version %q is not parseable: %v",
 			compiler.Version, err)
 	}
-	if !satisfies(op, got.compare(want)) {
+	parts := strings.Fields(raw)
+	if len(parts) == 0 {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
-			"@flow_version: constraint %q not satisfied by running compiler %q",
-			raw, compiler.Version)
+			"@flow_version: invalid constraint %q: no version terms", raw)
+	}
+	for i := 0; i < len(parts); i++ {
+		part := parts[i]
+		if _, version := splitOperator(part); version == "" && i+1 < len(parts) {
+			part += parts[i+1]
+			i++
+		}
+		op, wantRaw := splitOperator(part)
+		want, err := parseSemver(wantRaw)
+		if err != nil {
+			return compiler.DirectiveRes{}, compiler.SourceError(pos,
+				"@flow_version: invalid constraint %q: %v", raw, err)
+		}
+		if !satisfies(op, got.compare(want)) {
+			return compiler.DirectiveRes{}, compiler.SourceError(pos,
+				"@flow_version: constraint %q not satisfied by running compiler %q",
+				raw, compiler.Version)
+		}
 	}
 	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }

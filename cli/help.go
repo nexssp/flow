@@ -189,9 +189,9 @@ Self bench:
 		},
 	},
 	"version": {
-		Summary:  "Print build metadata (version, commit, built at).",
-		Usage:    "nflow version",
-		Examples: []string{`nflow version`},
+		Summary:  "Print build metadata offline, or check the latest stable GitHub release without updating.",
+		Usage:    "nflow version [check]",
+		Examples: []string{`nflow version`, `nflow version check`},
 	},
 }
 

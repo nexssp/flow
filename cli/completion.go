@@ -83,6 +83,12 @@ _nflow() {
 
     case "$sub" in
         completion) COMPREPLY=($(compgen -W "$flags" -- "$cur")) ;;
+        version)
+            if [ "$COMP_CWORD" -eq 2 ]; then
+                COMPREPLY=($(compgen -W "check" -- "$cur"))
+            else
+                COMPREPLY=()
+            fi ;;
         self)
             if [ "$COMP_CWORD" -eq 2 ]; then
                 COMPREPLY=($(compgen -W "up test bench" -- "$cur"))
@@ -166,6 +172,11 @@ _nflow() {
         completion)
             _values 'shell' bash zsh pwsh powershell
             ;;
+        version)
+            if (( CURRENT == 3 )); then
+                _values 'operation' check
+            fi
+            ;;
         require)
             if (( CURRENT == 3 )); then
                 _values 'operation' check update pin reset
@@ -217,6 +228,14 @@ Register-ArgumentCompleter -Native -CommandName nflow -ScriptBlock {
 
     if ($sub -eq 'completion') {
         emit $shells 'ParameterValue'
+        return
+    }
+
+    if ($sub -eq 'version') {
+        if ($tokens.Count -le 2 -or
+            ($tokens.Count -eq 3 -and $cursorPosition -le $tokens[2].Extent.EndOffset)) {
+            emit @('check') 'ParameterValue'
+        }
         return
     }
 
