@@ -7,7 +7,7 @@ The separate [`master_supported.nflow`](../runner/testdata/master_supported.nflo
 
 | Supplied construct | Verified behavior |
 |---|---|
-| `@description`, `@flow_version ">=0.0.0"` | Stock directives; accepted by the executable fixture. Version comparison follows the existing release/development-build rules, not a guarantee about a future runtime. |
+| `@description`, `@nflow_version ">=0.0.0"` | Stock directives; accepted by the executable fixture. Version comparison follows the existing release/development-build rules, not a guarantee about a future runtime. |
 | `@const DEFAULT_RETRY_COUNT = "2"` | Stock compile-time constant. The standalone compatibility fixture substitutes `${DEFAULT_RETRY_COUNT}` into its retry profile rather than leaving the declaration unused. |
 | Scalar/block `@config` | Stock configuration metadata. An isolated runner probe with `@config { app_env: "production" }` followed by `{ env: .app_env ?? "fallback" }` returned `"fallback"` while compilation metadata retained `app_env: production`: config is not automatically projection input. The original `?? "production"` fallback would conceal that distinction. |
 | `@symbols app_symbols` | Stock string namespace; `app_symbols.primary_queue` resolves during projection evaluation. The original numeric-looking `max_capacity: "100"` remains a string, not an integer declaration. |

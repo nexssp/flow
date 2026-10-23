@@ -470,3 +470,7 @@ nflow require reset flows/client.nflow
 ```
 
 `check` is read-only and reports each selected remote requirement's current canonical selector and the latest available version. `update` queries latest for selected direct remote requirements. `pin` resolves and canonicalizes each existing selector (branch, tag, hash, or `latest`); a selector omitted from a remote requirement resolves to `latest` only when no local/workspace provider supplies it. Local, workspace, and built-in requirements are skipped. `--package` accepts an exact import path or a glob; without it, every direct requirement in the named file is selected. Included files are never edited. See [Managing requirements](requirements.md) for backup behavior and matching semantics.
+
+### Compiler-version guard
+
+Declare `@nflow_version ">=0.38.0"` in a flow to require a compatible released compiler. `nflow lint` checks this guard as part of compilation; development/unknown builds retain the existing bypass. The previous directive spelling is no longer supported (breaking syntax change). This spelling targets the next release, planned `v0.38.0`; it is not present in the existing `v0.37.0` tag.

@@ -29,20 +29,20 @@ func withCompilerVersion(t *testing.T, version string) {
 	t.Cleanup(func() { compiler.Version = original })
 }
 
-func TestFlowVersion_Satisfied(t *testing.T) {
+func TestNFlowVersion_Satisfied(t *testing.T) {
 	withCompilerVersion(t, "v0.7.0")
 
 	for _, line := range []string{
-		`@flow_version "0.7.0"`,
-		`@flow_version "=0.7.0"`,
-		`@flow_version "==0.7.0"`,
-		`@flow_version ">=0.5.0"`,
-		`@flow_version ">=0.7.0"`,
-		`@flow_version "<=0.7.0"`,
-		`@flow_version "<=1.0.0"`,
-		`@flow_version ">0.5.0"`,
-		`@flow_version "<1.0.0"`,
-		`@flow_version "v0.7.0"`,
+		`@nflow_version "0.7.0"`,
+		`@nflow_version "=0.7.0"`,
+		`@nflow_version "==0.7.0"`,
+		`@nflow_version ">=0.5.0"`,
+		`@nflow_version ">=0.7.0"`,
+		`@nflow_version "<=0.7.0"`,
+		`@nflow_version "<=1.0.0"`,
+		`@nflow_version ">0.5.0"`,
+		`@nflow_version "<1.0.0"`,
+		`@nflow_version "v0.7.0"`,
 	} {
 		t.Run(line, func(t *testing.T) {
 			ktest.RequireNoError(t, runDirective(t, line))
@@ -50,15 +50,15 @@ func TestFlowVersion_Satisfied(t *testing.T) {
 	}
 }
 
-func TestFlowVersion_Unsatisfied(t *testing.T) {
+func TestNFlowVersion_Unsatisfied(t *testing.T) {
 	withCompilerVersion(t, "v0.7.0")
 
 	for _, line := range []string{
-		`@flow_version "0.8.0"`,
-		`@flow_version ">=0.8.0"`,
-		`@flow_version ">0.7.0"`,
-		`@flow_version "<=0.6.0"`,
-		`@flow_version "<0.7.0"`,
+		`@nflow_version "0.8.0"`,
+		`@nflow_version ">=0.8.0"`,
+		`@nflow_version ">0.7.0"`,
+		`@nflow_version "<=0.6.0"`,
+		`@nflow_version "<0.7.0"`,
 	} {
 		t.Run(line, func(t *testing.T) {
 			err := runDirective(t, line)
@@ -67,14 +67,14 @@ func TestFlowVersion_Unsatisfied(t *testing.T) {
 	}
 }
 
-func TestFlowVersion_RangeSatisfied(t *testing.T) {
+func TestNFlowVersion_RangeSatisfied(t *testing.T) {
 	withCompilerVersion(t, "v0.38.0")
 
 	for _, line := range []string{
-		`@flow_version ">=0.37.0 <0.40.0"`,
-		`@flow_version ">= 0.37.0 < 0.40.0"`,
-		`@flow_version ">=v0.37.0 <=v0.38.0 ==0.38.0"`,
-		"@flow_version \"  >=0.37.0\t<0.40.0  \"",
+		`@nflow_version ">=0.37.0 <0.40.0"`,
+		`@nflow_version ">= 0.37.0 < 0.40.0"`,
+		`@nflow_version ">=v0.37.0 <=v0.38.0 ==0.38.0"`,
+		"@nflow_version \"  >=0.37.0\t<0.40.0  \"",
 	} {
 		t.Run(line, func(t *testing.T) {
 			ktest.RequireNoError(t, runDirective(t, line))
@@ -82,12 +82,12 @@ func TestFlowVersion_RangeSatisfied(t *testing.T) {
 	}
 }
 
-func TestFlowVersion_RangeUnsatisfied(t *testing.T) {
+func TestNFlowVersion_RangeUnsatisfied(t *testing.T) {
 	withCompilerVersion(t, "v0.38.0")
 
 	for _, line := range []string{
-		`@flow_version ">=0.37.0 <0.38.0"`,
-		`@flow_version ">0.38.0 <=0.40.0"`,
+		`@nflow_version ">=0.37.0 <0.38.0"`,
+		`@nflow_version ">0.38.0 <=0.40.0"`,
 	} {
 		t.Run(line, func(t *testing.T) {
 			ktest.RequireErrorContains(t, runDirective(t, line), "not satisfied")
@@ -95,11 +95,11 @@ func TestFlowVersion_RangeUnsatisfied(t *testing.T) {
 	}
 }
 
-func TestFlowVersion_RangeBoundaries(t *testing.T) {
+func TestNFlowVersion_RangeBoundaries(t *testing.T) {
 	for _, version := range []string{"v0.37.0", "v0.39.99", "v0.36.99", "v0.40.0"} {
 		t.Run(version, func(t *testing.T) {
 			withCompilerVersion(t, version)
-			err := runDirective(t, `@flow_version ">=0.37.0 <0.40.0"`)
+			err := runDirective(t, `@nflow_version ">=0.37.0 <0.40.0"`)
 			if version == "v0.37.0" || version == "v0.39.99" {
 				ktest.RequireNoError(t, err)
 			} else {
@@ -109,35 +109,35 @@ func TestFlowVersion_RangeBoundaries(t *testing.T) {
 	}
 }
 
-func TestFlowVersion_DevCompilerSkipsCheck(t *testing.T) {
+func TestNFlowVersion_DevCompilerSkipsCheck(t *testing.T) {
 	withCompilerVersion(t, compiler.VersionUnknown)
 
-	ktest.RequireNoError(t, runDirective(t, `@flow_version ">=99.0.0"`))
+	ktest.RequireNoError(t, runDirective(t, `@nflow_version ">=99.0.0"`))
 	// Unknown/dev compilers preserve existing behavior: skip both parsing
 	// and comparison because there is no release version to check against.
-	ktest.RequireNoError(t, runDirective(t, `@flow_version ">="`))
+	ktest.RequireNoError(t, runDirective(t, `@nflow_version ">="`))
 }
 
-func TestFlowVersion_MissingConstraintRejected(t *testing.T) {
+func TestNFlowVersion_MissingConstraintRejected(t *testing.T) {
 	withCompilerVersion(t, "v0.7.0")
 
-	err := runDirective(t, `@flow_version`)
+	err := runDirective(t, `@nflow_version`)
 	ktest.RequireErrorContains(t, err, "requires a constraint")
 }
 
-func TestFlowVersion_MalformedConstraintRejected(t *testing.T) {
+func TestNFlowVersion_MalformedConstraintRejected(t *testing.T) {
 	withCompilerVersion(t, "v0.7.0")
 
 	for _, line := range []string{
-		`@flow_version ">="`,
-		`@flow_version ">=0.7.0 <"`,
-		`@flow_version ">=0.7.0 nonsense"`,
-		`@flow_version "   "`,
-		`@flow_version ">=0.7.0 || <0.8.0"`,
-		`@flow_version ">=0.7.0,<0.8.0"`,
-		`@flow_version "^0.7.0"`,
-		`@flow_version "~0.7.0"`,
-		`@flow_version "0.7.*"`,
+		`@nflow_version ">="`,
+		`@nflow_version ">=0.7.0 <"`,
+		`@nflow_version ">=0.7.0 nonsense"`,
+		`@nflow_version "   "`,
+		`@nflow_version ">=0.7.0 || <0.8.0"`,
+		`@nflow_version ">=0.7.0,<0.8.0"`,
+		`@nflow_version "^0.7.0"`,
+		`@nflow_version "~0.7.0"`,
+		`@nflow_version "0.7.*"`,
 	} {
 		t.Run(line, func(t *testing.T) {
 			ktest.RequireErrorContains(t, runDirective(t, line), "invalid constraint")
@@ -145,11 +145,11 @@ func TestFlowVersion_MalformedConstraintRejected(t *testing.T) {
 	}
 }
 
-func TestFlowVersion_DuplicateRejected(t *testing.T) {
+func TestNFlowVersion_DuplicateRejected(t *testing.T) {
 	withCompilerVersion(t, "v0.7.0")
 
 	req := compiler.DirectiveReq{
-		Lines: []string{`@flow_version ">=0.5.0"`},
+		Lines: []string{`@nflow_version ">=0.5.0"`},
 		I:     0,
 		Out:   map[string]any{},
 		File:  "test.nflow",
@@ -210,6 +210,6 @@ func TestFixtures_EmbeddedAndDescribed(t *testing.T) {
 		body, err := fs.ReadFile(bundle.Fixtures, "nflows/"+entry.Name())
 		ktest.RequireNoError(t, err)
 		ktest.RequireStringContains(t, string(body), "@description")
-		ktest.RequireStringContains(t, string(body), "@flow_version")
+		ktest.RequireStringContains(t, string(body), "@nflow_version")
 	}
 }

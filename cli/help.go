@@ -89,7 +89,7 @@ var helpRegistry = map[string]helpText{
 		},
 	},
 	"lint": {
-		Summary: "Check .nflow sources against the live registry. Exits 1 and prints JSON issues on failure.",
+		Summary: "Check .nflow sources against the live registry, including @nflow_version compiler constraints. Exits 1 and prints JSON issues on failure.",
 		Usage:   "nflow lint <file.nflow | directory | ./...> [target...]",
 		Examples: []string{
 			`nflow lint flows/client.nflow`,

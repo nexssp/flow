@@ -1,4 +1,4 @@
-// Package flow_version provides the @flow_version directive, which
+// Package flow_version provides the @nflow_version directive, which
 // rejects a .nflow file at compile time when the running compiler does
 // not satisfy the declared version constraint. It gives flow authors a
 // hard guarantee that a file will not be silently reinterpreted under
@@ -6,7 +6,7 @@
 //
 // Typical use:
 //
-//	@flow_version ">=0.7.0"
+//	@nflow_version ">=0.7.0"
 //
 // A source build (compiler.Version == "dev") accepts every constraint —
 // there is no release identity to compare against, and failing the
@@ -44,7 +44,7 @@ func Bundle(_ map[string]string) compiler.Bundle {
 	}
 }
 
-// Directive parses `@flow_version "CONSTRAINT"` and rejects the source
+// Directive parses `@nflow_version "CONSTRAINT"` and rejects the source
 // when the running compiler does not satisfy it. The constraint is one
 // of `=`, `==`, `>=`, `<=`, `>`, `<`, or bare (implicit `=`), followed
 // by a MAJOR.MINOR.PATCH version, optionally prefixed with `v` and
@@ -52,25 +52,25 @@ func Bundle(_ map[string]string) compiler.Bundle {
 // ignored for comparison. Whitespace-separated constraints are ANDed, for
 // example `>=0.37.0 <0.40.0`.
 var Directive = compiler.Directive{
-	Name:    "flow_version",
-	Example: `@flow_version ">=0.7.0"`,
+	Name:    "nflow_version",
+	Example: `@nflow_version ">=0.7.0"`,
 	Handler: handleDirective,
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 	pos := compiler.Position{File: req.File, Line: req.I + 1}
 
-	if _, exists := req.Out["flow_version"]; exists {
+	if _, exists := req.Out["nflow_version"]; exists {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
-			"@flow_version: duplicate declaration")
+			"@nflow_version: duplicate declaration")
 	}
 
 	raw := parseConstraintArg(req.Lines[req.I])
 	if raw == "" {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
-			`@flow_version requires a constraint, e.g. @flow_version ">=0.7.0"`)
+			`@nflow_version requires a constraint, e.g. @nflow_version ">=0.7.0"`)
 	}
-	req.Out["flow_version"] = raw
+	req.Out["nflow_version"] = raw
 
 	if compiler.Version == "" || compiler.Version == compiler.VersionUnknown {
 		return compiler.DirectiveRes{Next: req.I + 1}, nil
@@ -79,13 +79,13 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	got, err := parseSemver(compiler.Version)
 	if err != nil {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
-			"@flow_version: running compiler version %q is not parseable: %v",
+			"@nflow_version: running compiler version %q is not parseable: %v",
 			compiler.Version, err)
 	}
 	parts := strings.Fields(raw)
 	if len(parts) == 0 {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
-			"@flow_version: invalid constraint %q: no version terms", raw)
+			"@nflow_version: invalid constraint %q: no version terms", raw)
 	}
 	for i := 0; i < len(parts); i++ {
 		part := parts[i]
@@ -97,11 +97,11 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 		want, err := parseSemver(wantRaw)
 		if err != nil {
 			return compiler.DirectiveRes{}, compiler.SourceError(pos,
-				"@flow_version: invalid constraint %q: %v", raw, err)
+				"@nflow_version: invalid constraint %q: %v", raw, err)
 		}
 		if !satisfies(op, got.compare(want)) {
 			return compiler.DirectiveRes{}, compiler.SourceError(pos,
-				"@flow_version: constraint %q not satisfied by running compiler %q",
+				"@nflow_version: constraint %q not satisfied by running compiler %q",
 				raw, compiler.Version)
 		}
 	}
@@ -111,7 +111,7 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 // parseConstraintArg strips the directive name and any surrounding
 // quotes, tolerating an optional `:` separator.
 func parseConstraintArg(line string) string {
-	rest := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "@flow_version"))
+	rest := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "@nflow_version"))
 	rest = strings.TrimPrefix(rest, ":")
 	return strings.Trim(strings.TrimSpace(rest), `"'`+"`")
 }

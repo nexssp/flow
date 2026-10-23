@@ -4,7 +4,9 @@ Prebuilt `nflow` command-line binaries are published on the [GitHub Releases pag
 
 ## Unreleased — intentional behavior changes
 
-- **Simple compiler-version ranges.** `@flow_version ">=0.37.0 <0.40.0"` requires every whitespace-separated comparison to hold (AND). Existing exact/single comparisons and version parsing remain compatible; no OR, wildcard, caret, or tilde range language is added. Development/unknown compiler builds retain their existing bypass.
+- **Breaking syntax change: `@nflow_version` only.** The compiler-version directive is now named `@nflow_version`; the previous `@flow_version` spelling is rejected, not retained as an alias. Update existing `.nflow` files before upgrading. Constraint comparisons and the development-build bypass are unchanged. The technical `flow_version` extension package, bundle ID, and Go import paths are unchanged. This change targets the next release (planned `v0.38.0`, not yet tagged); the existing `v0.37.0` tag does not include it.
+
+- **Simple compiler-version ranges.** `@nflow_version ">=0.37.0 <0.40.0"` requires every whitespace-separated comparison to hold (AND). Existing exact/single comparisons and version parsing remain compatible; no OR, wildcard, caret, or tilde range language is added. Development/unknown compiler builds retain their existing bypass.
 - **Manual release check.** `nflow version check` prints current/latest using the latest stable GitHub release and suggests a pinned `go install` command only for a newer release. It never updates automatically; plain `nflow version` stays offline. Unknown/development builds and failed lookups do not claim an update is available. See [CLI version help](cli.md#version) for exit codes and limitations.
 - **Explicit empty strings stay empty.** Argument decoding no longer replaces an explicitly supplied `""` with the field's default. Omit the argument to use its default; check workflows that previously relied on an empty value selecting it.
 - **Build help succeeds.** `nflow build --help` exits with status **0**, not **2**, and does not require an input file. Scripts should treat this as a successful help request rather than a usage error.

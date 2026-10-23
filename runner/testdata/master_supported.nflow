@@ -1,5 +1,5 @@
 @description "Native runner conformance: supported master constructs"
-@flow_version ">=0.0.0"
+@nflow_version ">=0.0.0"
 @const DEFAULT_RETRY_COUNT = "2"
 @config:strict=false
 @config {

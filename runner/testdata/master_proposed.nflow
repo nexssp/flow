@@ -1,7 +1,7 @@
 @description "Comprehensive Master Specification: Exercises all native syntax and resilience policies"
 
 # ── 1. Compile-Time Flow Version Guard ────────────────────────────────────────
-@flow_version ">=0.0.0"
+@nflow_version ">=0.0.0"
 
 # ── 2. Global Compile-Time Constants & Configuration ──────────────────────────
 @const DEFAULT_RETRY_COUNT = "2"

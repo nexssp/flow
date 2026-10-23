@@ -1,6 +1,6 @@
 package compiler
 
-// Version is the compiler version string that the @flow_version
+// Version is the compiler version string that the @nflow_version
 // directive compares against. It is populated by the CLI at init time
 // from its linker-injected build metadata. When a test or embedded
 // runner leaves it unset, VersionUnknown tells the directive to accept
