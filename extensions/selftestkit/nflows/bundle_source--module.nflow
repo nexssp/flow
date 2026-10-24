@@ -1,0 +1,3 @@
+@pipeline result
+  runtime.const @{ value: "from-bundle-source" }
+@end

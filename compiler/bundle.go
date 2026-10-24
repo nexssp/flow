@@ -81,6 +81,10 @@ type Bundle struct {
 
 	SelfTest func() []SelfTestSection
 	Fixtures fs.FS
+	// SourceModules contains compile-time .nflow sources addressable through
+	// @include. Only paths listed in ExportedModules are visible to consumers.
+	SourceModules   fs.FS
+	ExportedModules []string
 
 	// Shutdowns are invoked by the runner host after the outer invocation
 	// completes. Compile and Execute do not close bundle resources.
@@ -109,6 +113,9 @@ func ValidateBundle(b Bundle) error {
 	}
 	if b.Alias != "" && !validNamespaceQualifier(b.Alias) {
 		return fmt.Errorf("bundle %q: invalid @require namespace qualifier %q", b.ID, b.Alias)
+	}
+	if err := validateBundleSourceModules(b); err != nil {
+		return err
 	}
 	seen := make(map[string]struct{}, len(b.Libraries))
 	for i := range b.Libraries {

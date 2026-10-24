@@ -29,6 +29,7 @@ type compileConfig struct {
 	cliArgs             []string
 	argSchemas          map[string][]ArgFieldSpec
 	lineMods            []LineLookup
+	bundleSources       *bundleSourceLoader
 	actionGraph         bool
 	actionIntrospection bool
 }
@@ -132,6 +133,12 @@ func WithLineModifiers(lookups ...LineLookup) CompileOption {
 	}
 }
 
+func withBundleSources(loader *bundleSourceLoader) CompileOption {
+	return func(c *compileConfig) {
+		c.bundleSources = loader
+	}
+}
+
 // BundleConfig collects every extension point from a set of bundles
 // into a single set of CompileOptions. Called once at startup.
 func BundleConfig(bundles ...Bundle) []CompileOption {
@@ -170,6 +177,9 @@ func BundleConfig(bundles ...Bundle) []CompileOption {
 	}
 	if len(schemas) > 0 {
 		opts = append(opts, WithArgSchemas(schemas))
+	}
+	if sourceLoader := newBundleSourceLoader(bundles); sourceLoader != nil {
+		opts = append(opts, withBundleSources(sourceLoader))
 	}
 	return opts
 }

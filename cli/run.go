@@ -58,7 +58,7 @@ func withHarness(ctx context.Context, inv *invocation, subcommand, flowPath stri
 	if flowPath == "" || isInlineSource(flowPath) {
 		return inProcess(ctx, inv, args)
 	}
-	reqs, err := inv.sourceRequiresFromFile(ctx, flowPath)
+	reqs, err := inv.requirementsForHarness(ctx, flowPath)
 	if err != nil {
 		return fatalf("%v", err)
 	}
@@ -202,22 +202,9 @@ func runEmbeddedInInvocation(ctx context.Context, inv *invocation, source string
 func runEmbeddedInfo(ctx context.Context, inv *invocation, source string, args []string) int {
 	wantJSON := hasFlag(args, "--json")
 
-	directives, err := inv.directiveTable()
+	clean, meta, cfg, err := inv.prepareRequiredSource(ctx, source, "<embedded>")
 	if err != nil {
-		return fatalf("directives: %v", err)
-	}
-	clean, meta, err := compiler.Preprocess(ctx, directives, source, "<embedded>")
-	if err != nil {
-		return fatalf("preprocess: %v", err)
-	}
-
-	reqs, reqErr := require.SourceRequirements(meta)
-	if reqErr != nil {
-		return fatalf("requires: %v", reqErr)
-	}
-	cfg, err := inv.buildConfig(reqs)
-	if err != nil {
-		return fatalf("config: %v", err)
+		return fatalf("preprocess/config: %v", err)
 	}
 
 	ast, err := compiler.NewParserWithFileOffset(
@@ -326,13 +313,9 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 		ctx = xctx.WithApprovalToken(ctx, approvalToken)
 	}
 
-	directives, err := inv.directiveTable()
+	clean, meta, cfg, err := inv.prepareRequiredSource(ctx, src, name)
 	if err != nil {
-		return fatalf("directives: %v", err)
-	}
-	clean, meta, err := compiler.Preprocess(ctx, directives, src, name)
-	if err != nil {
-		return fatalf("preprocess: %v", err)
+		return fatalf("preprocess/config: %v", err)
 	}
 
 	if !strings.Contains(clean, "io.stdin") {
@@ -342,14 +325,6 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 		}
 	}
 
-	reqs, reqErr := require.SourceRequirements(meta)
-	if reqErr != nil {
-		return fatalf("requires: %v", reqErr)
-	}
-	cfg, err := inv.buildConfig(reqs)
-	if err != nil {
-		return fatalf("config: %v", err)
-	}
 	cfg.CompileOpts = append(cfg.CompileOpts, compiler.WithCLIArgs(flags))
 
 	if hasFlag(flags, "-info") || hasFlag(flags, "--info") {

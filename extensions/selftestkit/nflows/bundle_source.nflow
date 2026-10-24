@@ -1,0 +1,5 @@
+@description "Import an exported source module from a required bundle"
+@require selftestkit
+@include selftestkit:nflows/bundle_source--module.nflow AS reusable
+@assert: result == "from-bundle-source"
+reusable.pipeline.result

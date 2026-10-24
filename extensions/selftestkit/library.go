@@ -28,10 +28,36 @@ func init() {
 
 func Bundle(_ map[string]string) compiler.Bundle {
 	return compiler.Bundle{
-		ID:        ID,
-		Libraries: []action.Library{library()},
-		Fixtures:  fixturesFS,
+		ID:              ID,
+		Libraries:       []action.Library{library()},
+		Fixtures:        fixturesFS,
+		SourceModules:   fixturesFS,
+		ExportedModules: []string{"nflows/bundle_source--module.nflow"},
+		SelfTest:        bundleSourceErrorSelfTests,
 	}
+}
+
+func bundleSourceErrorSelfTests() []compiler.SelfTestSection {
+	cases := []struct {
+		name, file, want string
+	}{
+		{"private source modules are rejected", "nflows/bundle_source--private-test.nflow", "private or not exported"},
+		{"unknown bundle qualifiers are rejected", "nflows/bundle_source--unknown.nflow", "is not loaded"},
+	}
+	features := make([]compiler.SelfTestFeature, 0, len(cases))
+	for _, tc := range cases {
+		source, err := fixturesFS.ReadFile(tc.file)
+		if err != nil {
+			source = []byte("@include selftestkit:missing.nflow AS missing")
+		}
+		features = append(features, compiler.SelfTestFeature{
+			Name:               tc.name,
+			DSL:                string(source),
+			ExpectCompileError: tc.want,
+			Source:             "selftestkit/" + tc.file,
+		})
+	}
+	return []compiler.SelfTestSection{{Name: ID, Features: features}}
 }
 
 func library() action.Library {

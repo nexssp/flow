@@ -114,7 +114,7 @@ Directives are preprocessed declarations, not ordinary action calls. The stock C
 | `@profile` | `@profile reliable` with same-line or indented colon-only modifier lines; reusable policy set, optionally inheriting `:parent=NAME`. Define it before use; unknown/cyclic profiles fail compilation. |
 | `@macro` | `@macro greet(name) { ... }`, invoked as `@greet("value")`; compile-time source substitution. Duplicate names, recursive definitions, bodies above 32 KiB, and expansion nesting beyond 16 are rejected. |
 | `@require` | `@require MODULE [VERSION] as ALIAS` with an optional options block; loads a registered Go extension bundle. Exact module/version/options support depends on the loader and bundle. |
-| `@include` | `@include "relative/path.nflow" [AS namespace]`; recursively imports a source module relative to the including file. |
+| `@include` | `@include "relative/path.nflow" [AS namespace]` imports a local source module; `@include alias:path/in/bundle.nflow [AS namespace]` imports an exported module from an `@require` bundle. |
 | `@config` | `@config:key=value` or a block such as `@config { strict: true }`; compile/runtime configuration strings. `strict=true` enables runtime request validation on typed actions unless overridden by `:lenient`. |
 | `@config.load` | `@config.load:path="settings.json" [:prefix="app"] [:required=false]`; loads configuration at preprocess time and flattens nested keys into the compile-time config map. Relative paths use the source base directory. JSON and a limited TOML subset work in the stock bundle; YAML needs the optional `config_yaml` bundle. |
 | `@const` / `@const.load` | `@const NAME = VALUE` substitutes compile-time constants. `@const.load "settings.json" as settings [:schema=Settings]` loads JSON into a constant namespace and can validate it against a previously declared schema during preprocessing. |
@@ -126,6 +126,8 @@ Directives are preprocessed declarations, not ordinary action calls. The stock C
 | `@on` | `@on event "nats:orders.incoming"`; records an event trigger declaration. This metadata does **not** mean the stock CLI currently starts a listener; see limitations below. |
 | `@approval` | `@approval review { role: reviewer, reason: confirm, expires: 1h }`; declares an approval gate. |
 | `@on_error` | `@on_error TARGET` or a block with `when condition -> target` and optional `else -> target`; routes runtime failures. It does not recover standard caller cancellation. |
+
+For a required source bundle, the qualifier before `:` is its local `@require` alias, while `AS` still controls the included module's namespace. For example, `@require github.com/nexssp/si-ai v1.2.3 as ai` followed by `@include ai:nflows/lib/critic.nflow AS critic` imports the critic pipeline as `critic.pipeline.*`. Bundle modules must be listed explicitly in `compiler.Bundle.ExportedModules`; see [Bundle source modules](bundle-source-modules.md) for the API and privacy rules.
 
 ### Multiline header modifiers
 

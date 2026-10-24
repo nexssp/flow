@@ -1,0 +1,2 @@
+@require selftestkit
+@include selftestkit:nflows/bundle_source--private.nflow AS hidden

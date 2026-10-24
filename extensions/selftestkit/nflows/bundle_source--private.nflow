@@ -1,0 +1,3 @@
+@pipeline secret
+  runtime.const @{ value: "private" }
+@end

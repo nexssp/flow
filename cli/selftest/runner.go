@@ -27,7 +27,7 @@ const (
 
 // Result is one feature's outcome.
 //
-// Elapsed covers the whole runner.Execute or expected compilation call. CompileAllocs and
+// Elapsed covers the whole runner.Execute call. CompileAllocs and
 // RunAllocs split the allocation count by phase: the compile phase is
 // the compiler's cost for parsing and building this DSL fragment, the
 // run phase is the actual runtime cost of the pipeline. In a feature
@@ -129,35 +129,25 @@ func runFeature(ctx context.Context, cfg flowrunner.Config, feature compiler.Sel
 	execCtx = xctx.WithPermissions(execCtx, []string{"*"})
 	execCtx = xctx.WithApprovalToken(execCtx, "all")
 	if feature.ExpectCompileError != "" {
-		capture := captureExecution(func() (any, error) {
-			_, compileErr := flowrunner.Compile(execCtx, cfg, feature.DSL, feature.Name)
-			return nil, compileErr
-		})
+		_, compileErr := flowrunner.Compile(execCtx, cfg, feature.DSL, feature.Name)
 		elapsed := time.Since(started)
-		if capture.err == nil {
+		if compileErr == nil {
 			return Result{
 				SelfTestFeature: feature,
 				Status:          StatusFail,
-				Err:             fmt.Errorf("selftest: compilation succeeded; expected an error containing %q", feature.ExpectCompileError),
+				Err:             fmt.Errorf("selftest: expected compile error containing %q, got none", feature.ExpectCompileError),
 				Elapsed:         elapsed,
-				Captured:        capture.captured,
 			}
 		}
-		if !strings.Contains(capture.err.Error(), feature.ExpectCompileError) {
+		if !strings.Contains(compileErr.Error(), feature.ExpectCompileError) {
 			return Result{
 				SelfTestFeature: feature,
 				Status:          StatusFail,
-				Err:             fmt.Errorf("selftest: compile error %w does not contain expected text %q", capture.err, feature.ExpectCompileError),
+				Err:             fmt.Errorf("selftest: compile error %w does not contain expected text %q", compileErr, feature.ExpectCompileError),
 				Elapsed:         elapsed,
-				Captured:        capture.captured,
 			}
 		}
-		return Result{
-			SelfTestFeature: feature,
-			Status:          StatusPass,
-			Elapsed:         elapsed,
-			Captured:        capture.captured,
-		}
+		return Result{SelfTestFeature: feature, Status: StatusPass, Elapsed: elapsed}
 	}
 
 	capture := captureExecution(func() (any, error) {

@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,6 +40,9 @@ func sourceLoaderFrom(ctx context.Context) SourceLoader {
 type fileSystemLoader struct{}
 
 func (fileSystemLoader) Load(currentFile, target string) (data []byte, resolvedPath string, err error) {
+	if qualifier, _, ok := splitBundleSourceTarget(target); ok {
+		return nil, "", fmt.Errorf("bundle source qualifier %q requires a loaded @require bundle", qualifier)
+	}
 	resolved := target
 	if !filepath.IsAbs(resolved) {
 		resolved = filepath.Join(filepath.Dir(currentFile), target)

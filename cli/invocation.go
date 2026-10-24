@@ -2,9 +2,12 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/nexssp/kernel/xerr"
 
@@ -26,6 +29,7 @@ type invocation struct {
 	selftestFactory func([]compiler.Bundle) []compiler.Bundle
 	selfErr         error
 	selfMade        bool
+	required        map[string]compiler.Bundle
 }
 
 func newInvocation(bundles []compiler.Bundle, targets []string) (*invocation, error) {
@@ -127,6 +131,118 @@ func (inv *invocation) directiveTable() (*compiler.DirectiveTable, error) {
 	return inv.directives, nil
 }
 
+func (inv *invocation) requirementDiscoveryTable() (*compiler.DirectiveTable, error) {
+	bundles, err := inv.nativeBundles()
+	if err != nil {
+		return nil, err
+	}
+	var directives []compiler.Directive
+	for i := range bundles {
+		for _, directive := range bundles[i].Directives {
+			if directive.Name != "include" {
+				directives = append(directives, directive)
+			}
+		}
+	}
+	return compiler.NewDirectiveTable(directives...), nil
+}
+
+func (inv *invocation) discoverRootRequirements(ctx context.Context, source, name string) ([]require.Requirement, error) {
+	discovery, err := inv.requirementDiscoveryTable()
+	if err != nil {
+		return nil, err
+	}
+	_, meta, err := compiler.Preprocess(ctx, discovery, source, name)
+	if err != nil {
+		return nil, err
+	}
+	return require.SourceRequirements(meta)
+}
+
+// requirementsForHarness preserves metadata-only discovery for ordinary files,
+// then falls back to a bundle-aware pass for sources importing bundle modules.
+func (inv *invocation) requirementsForHarness(ctx context.Context, path string) ([]require.Requirement, error) {
+	requirements, err := inv.sourceRequiresFromFile(ctx, path)
+	if err == nil {
+		return requirements, nil
+	}
+	source, readErr := readSourceFile(path)
+	if readErr != nil {
+		return nil, readErr
+	}
+	rootRequirements, discoveryErr := inv.discoverRootRequirements(ctx, string(source), path)
+	if discoveryErr != nil {
+		return nil, err
+	}
+	if requirementsNeedExternalHarness(inv, rootRequirements) {
+		return rootRequirements, nil
+	}
+	cfg, configErr := inv.buildConfig(rootRequirements)
+	if configErr != nil {
+		return nil, configErr
+	}
+	_, meta, preprocessErr := compiler.PreprocessWithOptions(ctx, cfg.Directives, string(source), path, cfg.CompileOpts...)
+	if preprocessErr != nil {
+		return nil, preprocessErr
+	}
+	return require.SourceRequirements(meta)
+}
+
+// prepareRequiredSource first discovers root requirements, then preprocesses
+// with those bundles available so @include can load exported bundle modules.
+// It repeats only when a local include contributes additional requirements.
+func (inv *invocation) prepareRequiredSource(ctx context.Context, source, name string) (cleanSource string, metadata map[string]any, config runner.Config, err error) {
+	requirements, err := inv.discoverRootRequirements(ctx, source, name)
+	if err != nil {
+		return "", nil, runner.Config{}, err
+	}
+	for range 16 {
+		cfg, configErr := inv.buildConfig(requirements)
+		if configErr != nil {
+			return "", nil, runner.Config{}, configErr
+		}
+		clean, meta, preprocessErr := compiler.PreprocessWithOptions(ctx, cfg.Directives, source, name, cfg.CompileOpts...)
+		if preprocessErr != nil {
+			return "", nil, runner.Config{}, preprocessErr
+		}
+		allRequirements, requirementsErr := require.SourceRequirements(meta)
+		if requirementsErr != nil {
+			return "", nil, runner.Config{}, requirementsErr
+		}
+		if sameSourceRequirements(requirements, allRequirements) {
+			return clean, meta, cfg, nil
+		}
+		requirements = allRequirements
+	}
+	return "", nil, runner.Config{}, errors.New("source requirements did not stabilize after 16 compile-time passes")
+}
+
+func sameSourceRequirements(left, right []require.Requirement) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if sourceRequirementKey(left[i]) != sourceRequirementKey(right[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func sourceRequirementKey(r require.Requirement) string {
+	var key strings.Builder
+	fmt.Fprintf(&key, "%q\x00%q\x00%q", r.Import, r.Version, r.Alias)
+	optionNames := make([]string, 0, len(r.Options))
+	for name := range r.Options {
+		optionNames = append(optionNames, name)
+	}
+	sort.Strings(optionNames)
+	for _, name := range optionNames {
+		fmt.Fprintf(&key, "\x00%q=%q", name, r.Options[name])
+	}
+	return key.String()
+}
+
 func (inv *invocation) selftestBundles() ([]compiler.Bundle, error) {
 	if inv.selfMade {
 		return inv.selftest, inv.selfErr
@@ -158,7 +274,7 @@ func (inv *invocation) buildConfig(reqs []require.Requirement) (runner.Config, e
 
 	unresolved := make([]require.Requirement, 0, len(reqs))
 	for i := range reqs {
-		if inv.isAlreadyInjected(reqs[i]) {
+		if inv.isAlreadyInjected(reqs[i]) || inv.hasRequired(reqs[i]) {
 			continue
 		}
 		unresolved = append(unresolved, reqs[i])
@@ -176,6 +292,21 @@ func (inv *invocation) buildConfig(reqs []require.Requirement) (runner.Config, e
 	if ownershipErr != nil {
 		return runner.Config{}, ownershipErr
 	}
+	if inv.required == nil {
+		inv.required = make(map[string]compiler.Bundle, len(reqs))
+	}
+	for i := range required {
+		inv.required[sourceRequirementKey(unresolved[i])] = required[i]
+	}
+	required = required[:0]
+	for i := range reqs {
+		if inv.isAlreadyInjected(reqs[i]) {
+			continue
+		}
+		if bundle, ok := inv.required[sourceRequirementKey(reqs[i])]; ok {
+			required = append(required, bundle)
+		}
+	}
 
 	usesResilience := hasBundleID(required, "resilience") || hasBundleID(inv.injected, "resilience")
 	usesLegacyRetry := hasBundleID(required, "retry") || hasBundleID(inv.injected, "retry")
@@ -192,6 +323,14 @@ func (inv *invocation) buildConfig(reqs []require.Requirement) (runner.Config, e
 	bundles = append(bundles, inv.injected...)
 	bundles = append(bundles, required...)
 	return runner.BuildConfig(bundles)
+}
+
+func (inv *invocation) hasRequired(r require.Requirement) bool {
+	if inv.required == nil {
+		return false
+	}
+	_, ok := inv.required[sourceRequirementKey(r)]
+	return ok
 }
 
 func hasBundleID(bundles []compiler.Bundle, id string) bool {

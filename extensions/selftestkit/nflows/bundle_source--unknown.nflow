@@ -1,0 +1,2 @@
+@require selftestkit
+@include missing:nflows/bundle_source--module.nflow AS missing

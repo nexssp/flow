@@ -104,6 +104,14 @@ func PrepareSource(ctx context.Context, dt *DirectiveTable, source, name string,
 	return prepareSource(ctx, dt, source, name, cfg)
 }
 
+// PreprocessWithOptions preprocesses source with compile-time bundle sources
+// and other options applied. It is useful to inspect metadata before compiling.
+func PreprocessWithOptions(ctx context.Context, dt *DirectiveTable, source, name string, opts ...CompileOption) (clean string, meta map[string]any, err error) {
+	cfg := applyCompileOptions(opts)
+	ctx = applyConfigToCtx(ctx, cfg)
+	return Preprocess(ctx, dt, source, name)
+}
+
 func prepareSource(ctx context.Context, dt *DirectiveTable, source, name string, cfg *compileConfig) (*PreparedSource, error) {
 	ctx = applyConfigToCtx(ctx, cfg)
 	clean, meta, err := Preprocess(ctx, dt, source, name)
@@ -250,6 +258,9 @@ func hasPipelineBody(src string) bool {
 }
 
 func applyConfigToCtx(ctx context.Context, cfg *compileConfig) context.Context {
+	if cfg.bundleSources != nil {
+		ctx = WithSourceLoader(ctx, cfg.bundleSources.withFallback(sourceLoaderFrom(ctx)))
+	}
 	if len(cfg.config) == 0 && len(cfg.cliArgs) == 0 {
 		return ctx
 	}
