@@ -27,7 +27,7 @@ const (
 
 // Result is one feature's outcome.
 //
-// Elapsed covers the whole runner.Execute call. CompileAllocs and
+// Elapsed covers the whole runner.Execute or expected compilation call. CompileAllocs and
 // RunAllocs split the allocation count by phase: the compile phase is
 // the compiler's cost for parsing and building this DSL fragment, the
 // run phase is the actual runtime cost of the pipeline. In a feature
@@ -129,25 +129,35 @@ func runFeature(ctx context.Context, cfg flowrunner.Config, feature compiler.Sel
 	execCtx = xctx.WithPermissions(execCtx, []string{"*"})
 	execCtx = xctx.WithApprovalToken(execCtx, "all")
 	if feature.ExpectCompileError != "" {
-		_, compileErr := flowrunner.Compile(execCtx, cfg, feature.DSL, feature.Name)
+		capture := captureExecution(func() (any, error) {
+			_, compileErr := flowrunner.Compile(execCtx, cfg, feature.DSL, feature.Name)
+			return nil, compileErr
+		})
 		elapsed := time.Since(started)
-		if compileErr == nil {
+		if capture.err == nil {
 			return Result{
 				SelfTestFeature: feature,
 				Status:          StatusFail,
-				Err:             fmt.Errorf("selftest: expected compile error containing %q, got none", feature.ExpectCompileError),
+				Err:             fmt.Errorf("selftest: compilation succeeded; expected an error containing %q", feature.ExpectCompileError),
 				Elapsed:         elapsed,
+				Captured:        capture.captured,
 			}
 		}
-		if !strings.Contains(compileErr.Error(), feature.ExpectCompileError) {
+		if !strings.Contains(capture.err.Error(), feature.ExpectCompileError) {
 			return Result{
 				SelfTestFeature: feature,
 				Status:          StatusFail,
-				Err:             fmt.Errorf("selftest: compile error %w does not contain expected text %q", compileErr, feature.ExpectCompileError),
+				Err:             fmt.Errorf("selftest: compile error %w does not contain expected text %q", capture.err, feature.ExpectCompileError),
 				Elapsed:         elapsed,
+				Captured:        capture.captured,
 			}
 		}
-		return Result{SelfTestFeature: feature, Status: StatusPass, Elapsed: elapsed}
+		return Result{
+			SelfTestFeature: feature,
+			Status:          StatusPass,
+			Elapsed:         elapsed,
+			Captured:        capture.captured,
+		}
 	}
 
 	capture := captureExecution(func() (any, error) {
@@ -181,7 +191,8 @@ func runFeature(ctx context.Context, cfg flowrunner.Config, feature compiler.Sel
 	}
 
 	asserts, _ := ex.Meta["asserts"].([]string)
-	assertErrors := evalAsserts(execCtx, ex.Output, asserts, compiler.SymbolsFromMeta(ex.Meta))
+	assertPositions, _ := ex.Meta["asserts.positions"].([]compiler.Position)
+	assertErrors := evalAsserts(execCtx, ex.Output, asserts, assertPositions, compiler.SymbolsFromMeta(ex.Meta))
 	if len(assertErrors) > 0 {
 		return Result{
 			SelfTestFeature:   feature,
@@ -258,6 +269,6 @@ func prepareFeatureDir(feature compiler.SelfTestFeature) (cleanup func(), err er
 	}, nil
 }
 
-func evalAsserts(ctx context.Context, result any, assertions []string, localSymbols map[string]compiler.SymbolNamespace) []error {
-	return flowrunner.EvaluateAssertionsContext(ctx, result, assertions, localSymbols)
+func evalAsserts(ctx context.Context, result any, assertions []string, positions []compiler.Position, localSymbols map[string]compiler.SymbolNamespace) []error {
+	return flowrunner.EvaluateAssertionsContextWithPositions(ctx, result, assertions, positions, localSymbols)
 }

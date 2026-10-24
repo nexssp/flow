@@ -95,6 +95,8 @@ There are two runtime assertion forms:
 - `assert(condition, message)` is a runtime expression in the pipeline. It checks the current value and fails that execution if the condition is false.
 - `@assert: expression` records a post-run assertion evaluated against the completed result (including `result`, direct result fields, `duration_ms`, and `actions`). The CLI reports failures and exits nonzero. `nflow run --assert=EXPR` adds the same kind of post-run check from the command line.
 
+For frequent checks, `@assert {` starts a multiline block with one assertion per non-empty, non-comment line, and `@assert: { expr1, expr2, ... }` is a compact list. Each expression is evaluated independently in source order; commas inside strings, nested calls, or collections do not split the compact list. Expressions use the existing expr-lang evaluator (for example, `len(result.items) > 0` or `all(result.items, # != "")`). Failure output identifies the assertion's source file and line. The original single-expression form is unchanged.
+
 These are runtime checks; neither is a compile-time input schema. See [`extensions/assert/`](../extensions/assert/), [`runner/assertions.go`](../runner/assertions.go), and [`extensions/assert/nflows/`](../extensions/assert/nflows/).
 
 For recovery, `? on_error ...` wraps one expression and provides an error environment to its handler; `@on_error ...` wraps a whole pipeline and invokes its handler with the original request. Block forms can route by error kind; short forms select one target. Without a matching case/default, the error propagates. Neither form recovers standard caller cancellation. `||` is separate and catches a failing left branch. See [`docs/on-error.md`](on-error.md) and [`extensions/on_error/`](../extensions/on_error/).
@@ -108,7 +110,7 @@ Directives are preprocessed declarations, not ordinary action calls. The stock C
 | Directive | Form and effect |
 |---|---|
 | `@description` | `@description "text"`; descriptive metadata. |
-| `@assert` | `@assert: result.ok == true`; post-run assertion, evaluated after execution. |
+| `@assert` | `@assert: result.ok == true`, `@assert { ... }`, or `@assert: { expr1, expr2 }`; post-run assertions, evaluated after execution in source order. |
 | `@pipeline` / `@end` | `@pipeline NAME` followed by header modifiers and a Flow expression, then `@end`; declares callable `pipeline.NAME`. Header modifiers may be same-line or on indented colon-only lines. `@end` alone is an error. |
 | `@scope` | `@scope :timeout=5s :retry=3 {` newline, scoped source, then `}`; applies inheritable modifiers within its source span. An atom's own modifier wins; nested scopes override by name. |
 | `@profile` | `@profile reliable` with same-line or indented colon-only modifier lines; reusable policy set, optionally inheriting `:parent=NAME`. Define it before use; unknown/cyclic profiles fail compilation. |

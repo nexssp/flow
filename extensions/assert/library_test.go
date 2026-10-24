@@ -48,5 +48,5 @@ func TestFixtures_Discoverable(t *testing.T) {
 		return nil
 	})
 	ktest.RequireNoError(t, walkErr)
-	ktest.RequireEqual(t, found, 2) // keyword.nflow + directive.nflow
+	ktest.RequireEqual(t, found, 4) // keyword and three directive syntax fixtures
 }

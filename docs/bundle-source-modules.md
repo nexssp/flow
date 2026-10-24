@@ -30,10 +30,6 @@ critic.pipeline.si_ai_critic
 
 `AS critic` has the same meaning as for a file include: the module's declarations stay in a separate source scope, and its exported pipeline is available under `critic.pipeline.*`. Without `AS`, the module filename stem remains the include namespace. The `ai` qualifier only selects the required bundle; it does not replace the include namespace.
 
-On the stock CLI, put the `@require` for every bundle that supplies a bundle-qualified source module in the root `.nflow` file. The CLI discovers root requirements before preprocessing local included files, so an `@require` found only inside a child file cannot load a bundle in time for a bundle-qualified `@include` in that same child. A custom host that supplies the bundle directly does not depend on this CLI discovery step.
-
-The `qualifier:path` form is reserved for bundle references when the text before the colon is a non-empty qualifier without path separators. This applies whether or not the target is quoted. To include a local file whose name contains a colon, use an explicit relative path such as `@include ./foo:bar.nflow`.
-
 The imported module is preprocessed and compiled at build/compile time. Its actions are the Go actions from the same resolved bundle instance, so the module and capabilities share one package version. This does not add a runtime source loader or change Kernel behavior.
 
 Ordinary filesystem includes such as `@include "./local/child.nflow"` continue to resolve relative to the including file. Relative includes made by a bundled module resolve within that bundle, including private implementation files; consumers still cannot name those private files directly with `bundle:path`. An unknown or ambiguous qualifier, a missing required bundle, an invalid path, or a direct include of a private module produces a compile-time error.

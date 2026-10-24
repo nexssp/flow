@@ -183,14 +183,15 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 		fmt.Fprintln(stdout, formatOutput(ex.Output))
 	}
 
-	asserts := collectAsserts(ex.Meta, opts.Asserts)
-	return RunAssertionsContext(
+	asserts, positions := collectAsserts(ex.Meta, opts.Asserts)
+	return RunAssertionsContextWithPositions(
 		ctx,
 		stdout,
 		ex.Output,
 		total.Milliseconds(),
 		observer.ActionNames(),
 		asserts,
+		positions,
 		opts.Verbosity,
 		compiler.SymbolsFromMeta(ex.Meta),
 	)
@@ -212,27 +213,31 @@ func printSourceInfo(ctx context.Context, cfg Config, src, name string, stdout, 
 	return PrintInfo(stdout, name, src, meta, ast)
 }
 
-func collectAsserts(meta map[string]any, extra []string) []string {
+func collectAsserts(meta map[string]any, extra []string) ([]string, []compiler.Position) {
 	var out []string
-	seen := make(map[string]bool)
-
-	add := func(s string) {
-		if s == "" || seen[s] {
-			return
-		}
-		seen[s] = true
-		out = append(out, s)
-	}
-
+	var positions []compiler.Position
 	if list, ok := meta["asserts"].([]string); ok {
-		for _, assertion := range list {
-			add(assertion)
+		sourcePositions, _ := meta["asserts.positions"].([]compiler.Position)
+		for i, assertion := range list {
+			if assertion == "" {
+				continue
+			}
+			out = append(out, assertion)
+			if i < len(sourcePositions) {
+				positions = append(positions, sourcePositions[i])
+			} else {
+				positions = append(positions, compiler.Position{})
+			}
 		}
 	}
 	for _, assertion := range extra {
-		add(assertion)
+		if assertion == "" {
+			continue
+		}
+		out = append(out, assertion)
+		positions = append(positions, compiler.Position{})
 	}
-	return out
+	return out, positions
 }
 
 func formatOutput(value any) string {

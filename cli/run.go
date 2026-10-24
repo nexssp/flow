@@ -424,14 +424,15 @@ func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string,
 		renderPrettyOutput(os.Stdout, ex.Output, useColorOut)
 	}
 
-	asserts := collectAsserts(ex.Meta, flagsToAsserts(flags))
-	return runner.RunAssertionsContext(
+	asserts, positions := collectAsserts(ex.Meta, flagsToAsserts(flags))
+	return runner.RunAssertionsContextWithPositions(
 		ctx,
 		os.Stderr,
 		ex.Output,
 		total.Milliseconds(),
 		observer.ActionNames(),
 		asserts,
+		positions,
 		verbosity,
 		compiler.SymbolsFromMeta(ex.Meta),
 	)
@@ -553,33 +554,37 @@ func renderColoredJSON(w io.Writer, value any, useColor bool) {
 		fmt.Fprintf(w, "%v\n", value)
 		return
 	}
-	fmt.Fprintln(w)
 	for line := range strings.SplitSeq(string(encoded), "\n") {
 		fmt.Fprintln(w, colorizeJSONLine(line, useColor))
 	}
 }
 
-func collectAsserts(meta map[string]any, extra []string) []string {
+func collectAsserts(meta map[string]any, extra []string) ([]string, []compiler.Position) {
 	var out []string
-	seen := make(map[string]bool)
-
-	add := func(s string) {
-		if s == "" || seen[s] {
-			return
-		}
-		seen[s] = true
-		out = append(out, s)
-	}
+	var positions []compiler.Position
 
 	if list, ok := meta["asserts"].([]string); ok {
-		for _, assertion := range list {
-			add(assertion)
+		sourcePositions, _ := meta["asserts.positions"].([]compiler.Position)
+		for i, assertion := range list {
+			if assertion == "" {
+				continue
+			}
+			out = append(out, assertion)
+			if i < len(sourcePositions) {
+				positions = append(positions, sourcePositions[i])
+			} else {
+				positions = append(positions, compiler.Position{})
+			}
 		}
 	}
 	for _, assertion := range extra {
-		add(assertion)
+		if assertion == "" {
+			continue
+		}
+		out = append(out, assertion)
+		positions = append(positions, compiler.Position{})
 	}
-	return out
+	return out, positions
 }
 
 func splitArgs(args []string) (target string, payload map[string]any, flags []string, err error) {

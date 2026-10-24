@@ -55,6 +55,13 @@ func RunAssertions(w io.Writer, result any, durationMS int64, actions, asserts [
 
 // RunAssertionsContext evaluates every @assert expression using the caller's execution context.
 func RunAssertionsContext(ctx context.Context, w io.Writer, result any, durationMS int64, actions, asserts []string, verbosity int, localSymbols ...map[string]compiler.SymbolNamespace) int {
+	return RunAssertionsContextWithPositions(ctx, w, result, durationMS, actions, asserts, nil, verbosity, localSymbols...)
+}
+
+// RunAssertionsContextWithPositions evaluates assertions and includes the
+// matching source position in each failure when one is available. Positions
+// are aligned by assertion index; zero positions are treated as unknown.
+func RunAssertionsContextWithPositions(ctx context.Context, w io.Writer, result any, durationMS int64, actions, asserts []string, positions []compiler.Position, verbosity int, localSymbols ...map[string]compiler.SymbolNamespace) int {
 	if len(asserts) == 0 {
 		return 0
 	}
@@ -68,15 +75,16 @@ func RunAssertionsContext(ctx context.Context, w io.Writer, result any, duration
 	}
 
 	failed := 0
-	for _, src := range asserts {
+	for i, src := range asserts {
+		location := assertionSourcePrefix(positions, i)
 		out, phase, err := evaluateAssertion(src, env)
 		if err != nil {
 			if phase == "runtime" {
-				_, _ = fmt.Fprintf(w, "  %s %s  (runtime: %v)\n",
-					paintAssert("✗", assertRed, color), src, err)
+				_, _ = fmt.Fprintf(w, "  %s %s%s  (runtime: %v)\n",
+					paintAssert("✗", assertRed, color), location, src, err)
 			} else {
-				_, _ = fmt.Fprintf(w, "  %s %s  (syntax: %v)\n",
-					paintAssert("✗", assertRed, color), src, err)
+				_, _ = fmt.Fprintf(w, "  %s %s%s  (syntax: %v)\n",
+					paintAssert("✗", assertRed, color), location, src, err)
 			}
 			failed++
 			continue
@@ -88,8 +96,8 @@ func RunAssertionsContext(ctx context.Context, w io.Writer, result any, duration
 			}
 			continue
 		}
-		_, _ = fmt.Fprintf(w, "  %s %s  (got %v)\n",
-			paintAssert("✗", assertRed, color), src, out)
+		_, _ = fmt.Fprintf(w, "  %s %s%s  (got %v)\n",
+			paintAssert("✗", assertRed, color), location, src, out)
 		failed++
 	}
 
@@ -114,23 +122,41 @@ func EvaluateAssertions(result any, asserts []string, localSymbols ...map[string
 
 // EvaluateAssertionsContext evaluates assertions without rendering output and preserves the caller's context.
 func EvaluateAssertionsContext(ctx context.Context, result any, asserts []string, localSymbols ...map[string]compiler.SymbolNamespace) []error {
+	return EvaluateAssertionsContextWithPositions(ctx, result, asserts, nil, localSymbols...)
+}
+
+// EvaluateAssertionsContextWithPositions evaluates assertions without
+// rendering output and prefixes failures with their source position when known.
+func EvaluateAssertionsContextWithPositions(ctx context.Context, result any, asserts []string, positions []compiler.Position, localSymbols ...map[string]compiler.SymbolNamespace) []error {
 	if len(asserts) == 0 {
 		return nil
 	}
 	env := assertionEnvironment(ctx, result, 0, nil, firstSymbolNamespace(localSymbols))
 	var failures []error
-	for _, src := range asserts {
+	for i, src := range asserts {
+		location := assertionSourcePrefix(positions, i)
 		out, phase, err := evaluateAssertion(src, env)
 		if err != nil {
-			failures = append(failures, fmt.Errorf("assert %q %s: %w", src, phase, err))
+			failures = append(failures, fmt.Errorf("%sassert %q %s: %w", location, src, phase, err))
 			continue
 		}
 		passed, ok := out.(bool)
 		if !ok || !passed {
-			failures = append(failures, fmt.Errorf("assert %q failed (got %v)", src, out))
+			failures = append(failures, fmt.Errorf("%sassert %q failed (got %v)", location, src, out))
 		}
 	}
 	return failures
+}
+
+func assertionSourcePrefix(positions []compiler.Position, index int) string {
+	if index >= len(positions) {
+		return ""
+	}
+	position := positions[index]
+	if position.File == "" || position.Line <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d: ", position.File, position.Line)
 }
 
 func assertionEnvironment(ctx context.Context, result any, durationMS int64, actions []string, localSymbols map[string]compiler.SymbolNamespace) map[string]any {

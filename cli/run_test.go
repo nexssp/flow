@@ -74,3 +74,11 @@ pipeline.p
 		ktest.RequireEqual(t, rc, 0)
 	})
 }
+
+func TestRenderColoredJSONStartsImmediately(t *testing.T) {
+	var out bytes.Buffer
+	renderColoredJSON(&out, map[string]any{"tags": []string{"a,b", "green"}}, false)
+
+	want := "{\n  \"tags\": [\n    \"a,b\",\n    \"green\"\n  ]\n}\n"
+	ktest.RequireEqual(t, out.String(), want)
+}

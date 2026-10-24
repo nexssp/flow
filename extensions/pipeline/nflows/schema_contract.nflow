@@ -17,7 +17,9 @@
   }
 @end
 {} -> pipeline.greet
-@assert: result.message == "Guest"
-@assert: result.state.depth == 1
-@assert: result.extra == "kept"
-@assert: result.optional == nil
+@assert {
+  result.message == "Guest"
+  result.state.depth == 1
+  result.extra == "kept"
+  result.optional == nil
+}
