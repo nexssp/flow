@@ -9,19 +9,41 @@ validation rules, and optional defaults:
   Format    string `json:"format"     default:"markdown"`
 }
 
-@pipeline pack:schema=PackInput
+@pipeline pack
+  :request-schema=PackInput
   srcpack.pack
 @end
 
 {} -> pipeline.pack
 ```
 
-The `:schema=PackInput` pipeline-header modifier applies the schema at every
-invocation boundary, before the pipeline's first action. This works for a
+The `:request-schema=PackInput` pipeline-header modifier applies the schema at
+every request boundary, before the pipeline's first action. This works for a
 programmatic call to the compiled `pipeline.pack` action as well as for a
 pipeline invoked by a Flow or CLI listener. The NFlow schema tags remain the
 single source of defaults and validation rules; callers do not need a separate
-defaulting step.
+defaulting step. A `:response-schema=PackOutput` modifier validates the result
+after the pipeline body without applying defaults. Response schemas must not
+declare any `default` tag; the compiler reports a clear error before execution
+if one is present, even when its value is empty.
+
+Response checks accept typed Go structs as well as maps. The boundary validates
+an inspection view produced by `schema.NormalizeObject` and returns the original
+Go value unchanged, so a typed result remains typed for callers and later
+pipeline composition. The helper follows `encoding/json`: exported fields and
+their `json` names are used, `json:"-"` and unexported fields are ignored,
+embedded fields follow Go JSON promotion rules, nested structs become nested
+maps, nil pointer fields become JSON `null` unless omitted by a tag, and
+`omitempty` fields may be absent. A nil top-level value or non-object JSON value
+is rejected. Strict response schemas check every JSON-visible top-level field;
+permissive schemas allow undeclared fields without projecting them away.
+
+By default, fields not listed in a request or response schema are allowed and
+preserved. Prefix a schema name with `!` to make only that boundary reject
+unknown fields, for example `:request-schema=!PackInput` or
+`:response-schema=!PackOutput`. Request and response strictness are independent.
+The former pipeline-header alias `:schema=PackInput` is no longer supported;
+use `:request-schema=PackInput` instead.
 
 A `default` tag supplies a value only when its JSON field is **absent**. An
 explicit value—including `null`, `0`, or an empty slice—is preserved. Defaults

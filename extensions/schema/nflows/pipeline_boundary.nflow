@@ -1,11 +1,12 @@
-@description "spec: declared pipeline :schema applies defaults and validation at entry"
+@description "spec: declared pipeline request schema applies defaults and validation at entry"
 
 @schema Request {
   Name  string `json:"name"  default:"standard" validate:"required"`
   Depth int    `json:"depth" default:"1"        validate:"gte=1"`
 }
 
-@pipeline handle:schema=Request
+@pipeline handle
+  :request-schema=Request
   noop
 @end
 

@@ -1,0 +1,23 @@
+@description "Pipeline request schemas apply defaults; permissive response schemas validate and preserve extra fields"
+@schema ContractRequest {
+  Name  string `json:"name"  default:"Guest" validate:"required"`
+  Depth int    `json:"depth" default:"1"     validate:"gte=1"`
+}
+@schema ContractResponse {
+  Message  string `json:"message"  validate:"required"`
+  Optional string `json:"optional"`
+}
+@pipeline greet
+  :request-schema=ContractRequest
+  :response-schema=ContractResponse
+  {
+    message: .name,
+    state: { depth: .depth },
+    extra: "kept"
+  }
+@end
+{} -> pipeline.greet
+@assert: result.message == "Guest"
+@assert: result.state.depth == 1
+@assert: result.extra == "kept"
+@assert: result.optional == nil

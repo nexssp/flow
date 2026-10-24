@@ -165,7 +165,7 @@ Every pipeline exposed to an external transport or HTTP route must be guarded by
 
 ```nflow
 @pipeline complete_job
-  :schema=CompleteJobRequest
+  :request-schema=CompleteJobRequest
   :nats_request="artifact.jobs.complete"
 
   {
@@ -284,7 +284,7 @@ the [language reference](language-reference.md) for that boundary.
 
 # 1. Reserve job with expiring KV lease
 @pipeline reserve_job
-  :schema=ReserveJobRequest
+  :request-schema=ReserveJobRequest
   :nats_request="artifact.jobs.reserve"
 
   {
@@ -302,7 +302,7 @@ the [language reference](language-reference.md) for that boundary.
 
 # 2. Upload binary payload to ObjectStore (decoded from base64)
 @pipeline store_artifact
-  :schema=StoreArtifactRequest
+  :request-schema=StoreArtifactRequest
   :nats_request="artifact.object.store"
 
   {
@@ -317,7 +317,7 @@ the [language reference](language-reference.md) for that boundary.
 
 # 3. Revision-checked update (optimistic concurrency control)
 @pipeline complete_job
-  :schema=CompleteJobRequest
+  :request-schema=CompleteJobRequest
   :nats_request="artifact.jobs.complete"
 
   {
@@ -339,7 +339,7 @@ the [language reference](language-reference.md) for that boundary.
 
 # 4. Fetch job state
 @pipeline get_job
-  :schema=GetJobRequest
+  :request-schema=GetJobRequest
   :nats_request="artifact.jobs.get"
 
   {
@@ -351,7 +351,7 @@ the [language reference](language-reference.md) for that boundary.
 
 # 5. Fetch raw object
 @pipeline get_artifact
-  :schema=GetArtifactRequest
+  :request-schema=GetArtifactRequest
   :nats_request="artifact.object.get"
 
   {

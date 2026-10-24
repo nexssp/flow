@@ -173,3 +173,31 @@ func includeTestDirectiveTable() *compiler.DirectiveTable {
 	}
 	return compiler.NewDirectiveTable(directives...)
 }
+
+func TestIncludeMaterializesForwardLocalPipelineReferences(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	childFile := filepath.Join(dir, "billing.nflow")
+	rootFile := filepath.Join(dir, "root.nflow")
+	child := `@pipeline local_chain
+  pipeline.local_support
+@end
+
+@pipeline local_support
+  runtime.const @{ value: "included" }
+@end
+`
+	ktest.RequireNoError(t, os.WriteFile(childFile, []byte(child), 0o600))
+
+	cfg, err := runner.BuildConfig([]compiler.Bundle{
+		Bundle(nil),
+		pipelineext.Bundle(nil),
+		runtimeext.Bundle(nil),
+	})
+	ktest.RequireNoError(t, err)
+
+	source := "@include ./billing.nflow\nbilling.pipeline.local_chain"
+	result, err := runner.Execute(t.Context(), cfg, source, rootFile, nil)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, result.Output, "included")
+}

@@ -22,11 +22,12 @@ type PreprocessContributions struct {
 }
 
 type SelfTestFeature struct {
-	Name   string
-	DSL    string
-	Files  map[string]string
-	Skip   string
-	Source string
+	Name               string
+	DSL                string
+	Files              map[string]string
+	Skip               string
+	Source             string
+	ExpectCompileError string
 }
 
 type SelfTestSection struct {

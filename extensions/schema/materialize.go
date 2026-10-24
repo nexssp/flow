@@ -60,15 +60,23 @@ func validatePipelineSchemaModifiers(meta map[string]any, schemas []Schema) erro
 
 	for pipelineName, modifiers := range pipelineMods {
 		for _, raw := range modifiers {
-			if compiler.ModifierName(raw) != "schema" {
+			modifierName := compiler.ModifierName(raw)
+			if modifierName == SchemaModifierName {
+				return fmt.Errorf("@pipeline %q: :schema is no longer supported; use :%s=Name", pipelineName, RequestSchemaModifierName)
+			}
+			if modifierName != RequestSchemaModifierName && modifierName != ResponseSchemaModifierName {
 				continue
 			}
 			_, schemaName, hasValue := strings.Cut(raw, "=")
 			if !hasValue || schemaName == "" {
-				return fmt.Errorf("@pipeline %q: :schema requires a name (use :schema=Name)", pipelineName)
+				return fmt.Errorf("@pipeline %q: :%s requires a name (use :%s=Name)", pipelineName, modifierName, modifierName)
+			}
+			schemaName = strings.TrimPrefix(schemaName, "!")
+			if schemaName == "" {
+				return fmt.Errorf("@pipeline %q: :%s requires a schema name after the strictness marker", pipelineName, modifierName)
 			}
 			if _, ok := declared[schemaName]; !ok {
-				return fmt.Errorf("@pipeline %q: :schema=%s: unknown schema", pipelineName, schemaName)
+				return fmt.Errorf("@pipeline %q: :%s=%s: unknown schema", pipelineName, modifierName, schemaName)
 			}
 		}
 	}

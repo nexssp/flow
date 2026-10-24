@@ -56,7 +56,9 @@
 # ── 7. Reusable Sub-Pipelines (@pipeline) ─────────────────────────────────────
 
 # Pipeline 1: Validates incoming telemetry against @schema and runs projection
-@pipeline validate_and_stage :schema=TelemetryBatch :profile=base_resilience
+@pipeline validate_and_stage
+  :request-schema=TelemetryBatch
+  :profile=base_resilience
   @assert_valid_batch()
   -> {
     ...,

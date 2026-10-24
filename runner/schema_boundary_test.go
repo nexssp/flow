@@ -39,7 +39,8 @@ func TestExecutePreparedPipelineSchemaBoundary(t *testing.T) {
   Labels []string ` + "`json:\"labels\" validate:\"dive,required\"`" + `
 }
 
-@pipeline handle:schema=Request
+@pipeline handle
+  :request-schema=Request
   test.capture
 @end
 `
@@ -99,7 +100,7 @@ func TestExecutePreparedPipelineSchemaBoundary(t *testing.T) {
 	}
 }
 
-func TestExecutePipelineCallSchemaModifierAppliesDefaultsBeforeBody(t *testing.T) {
+func TestExecutePipelineCallRequestSchemaAppliesDefaultsBeforeBody(t *testing.T) {
 	var calls atomic.Int32
 	capture := action.New("test.capture", func(_ context.Context, input any) (any, error) {
 		calls.Add(1)
@@ -123,7 +124,8 @@ func TestExecutePipelineCallSchemaModifierAppliesDefaultsBeforeBody(t *testing.T
   Depth int ` + "`json:\"depth\" default:\"1\" validate:\"gte=1\"`" + `
 }
 
-@pipeline handle:schema=Request
+@pipeline handle
+  :request-schema=Request
   test.capture
 @end
 

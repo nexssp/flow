@@ -102,6 +102,16 @@ func Validate(ctx context.Context, schema Schema, payload any) error {
 	return err
 }
 
+// ValidateWithoutDefaults checks a payload against a schema without adding
+// default values or changing the payload. Unknown fields are left untouched.
+func ValidateWithoutDefaults(ctx context.Context, schema Schema, payload any) error {
+	values, ok := payload.(map[string]any)
+	if !ok {
+		return xerr.Validation(fmt.Sprintf("schema %s: expected object, got %T", schema.Name, payload))
+	}
+	return validateValues(ctx, schema, values)
+}
+
 // ApplyDefaultsAndValidate returns the effective payload after applying
 // missing defaults and validating the declared fields. Explicit input values,
 // including typed slice values, are preserved.

@@ -26,17 +26,18 @@ func schemaRefAdvisor(declared map[string]Schema) compiler.AtomAdviseFunc {
 	known := declaredNames(declared)
 	return func(atom *compiler.Atom, _ *action.Builder[any, any]) error {
 		for _, raw := range atom.Modifiers {
-			if compiler.ModifierName(raw) != "schema" {
+			modifierName := compiler.ModifierName(raw)
+			if modifierName != SchemaModifierName && modifierName != RequestSchemaModifierName && modifierName != ResponseSchemaModifierName {
 				continue
 			}
 			_, name, _ := strings.Cut(raw, "=")
 			if name == "" {
 				return compiler.SourceError(atom.Pos,
-					":schema requires a name (use :schema=Name)")
+					":%s requires a name (use :%s=Name)", modifierName, modifierName)
 			}
 			if _, exists := declared[name]; !exists {
 				return compiler.SourceError(atom.Pos,
-					":schema=%s: unknown schema (declared: %s)", name, known)
+					":%s=%s: unknown schema (declared: %s)", modifierName, name, known)
 			}
 		}
 		return nil

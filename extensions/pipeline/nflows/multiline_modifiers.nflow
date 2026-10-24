@@ -6,7 +6,7 @@
 }
 
 @pipeline process_job
-  :schema=JobPayload
+  :request-schema=JobPayload
   :timeout=3s
   :tag="worker,batch"
   :status=201

@@ -36,9 +36,13 @@ func pipelineErrorEnvironment(ctx context.Context, input any, err error) map[str
 
 func errorMetadata(err error) map[string]any {
 	kind := string(xerr.From(err).Kind)
+	message := err.Error()
 	var cause error
 	var details xerr.ValidationDetails
 	if appErr, ok := errors.AsType[*xerr.AppError](err); ok {
+		if appErr.Message != "" {
+			message = appErr.Message
+		}
 		cause = appErr.Cause
 		details = appErr.ValidationDetails
 	}
@@ -47,7 +51,7 @@ func errorMetadata(err error) map[string]any {
 	}
 	return map[string]any{
 		"kind":     kind,
-		"message":  err.Error(),
+		"message":  message,
 		"original": err,
 		"cause":    cause,
 		"details":  details,

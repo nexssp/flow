@@ -1,0 +1,45 @@
+@description "Outer @on_error routes called-pipeline request validation by error.details[0].Field email"
+
+@schema TaskRequest {
+  Email string `json:"email" validate:"required,email"`
+  Title string `json:"title" validate:"required"`
+}
+@schema TaskResponse {
+  ID string `json:"id" validate:"required"`
+}
+
+@pipeline create_task
+  :request-schema=TaskRequest
+  :response-schema=TaskResponse
+  # This local catch wraps only the body. The entry schema check runs before
+  # it, so the outer field-specific route must recover the invalid email.
+  @on_error {
+    when error.kind == xerr.KindValidation -> pipeline.inner_body_recovery
+  }
+  const @{ id: "task-1" }
+@end
+
+@pipeline inner_body_recovery
+  const @{ route: "inner-body-catch" }
+@end
+@pipeline request_schema_recovery
+  const @{ route: "request-schema", kind: "Validation" }
+@end
+@pipeline email_field_recovery
+  const @{ route: "email-field", kind: "Validation" }
+@end
+@pipeline response_schema_recovery
+  const @{ route: "response-schema", kind: "Validation" }
+@end
+
+@on_error {
+  when error.kind == xerr.KindValidation and error.message startsWith "schema TaskRequest" and error.details[0].Field == "email" -> pipeline.email_field_recovery,
+  when error.kind == xerr.KindValidation and error.message startsWith "schema TaskRequest" -> pipeline.request_schema_recovery,
+  when error.kind == xerr.KindValidation and error.message startsWith "schema TaskResponse" -> pipeline.response_schema_recovery,
+  else -> error.info
+}
+
+{ email: "not-an-email", title: "Boundary test" } -> pipeline.create_task
+
+@assert: result.route == "email-field"
+@assert: result.kind == "Validation"

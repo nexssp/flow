@@ -18,7 +18,7 @@ func TestPipelineMultilineHeaderTriviaAndBodyBoundary(t *testing.T) {
 @pipeline process_order
 
   # Header remains open across trivia.
-  :schema=OrderRequest
+  :request-schema=OrderRequest
   :route="POST /api/v1/orders"
   // Policy continuation.
   :profile=base
@@ -39,7 +39,7 @@ func TestPipelineMultilineHeaderTriviaAndBodyBoundary(t *testing.T) {
 	ktest.RequireNoError(t, err)
 	mods, ok := meta["pipeline_modifiers"].(map[string][]string)
 	ktest.RequireCondition(t, ok, "pipeline modifiers missing")
-	ktest.RequireEqual(t, mods["process_order"], []string{"schema=OrderRequest", "route=POST /api/v1/orders", "retry=2", "rate_limit=100", "idempotent", "timeout=5s"})
+	ktest.RequireEqual(t, mods["process_order"], []string{"request-schema=OrderRequest", "route=POST /api/v1/orders", "retry=2", "rate_limit=100", "idempotent", "timeout=5s"})
 	bodies, ok := meta["pipelines"].(map[string]string)
 	ktest.RequireCondition(t, ok, "pipeline bodies missing")
 	ktest.RequireEqual(t, bodies["process_order"], "\n  order.validate\n    :timeout=1s\n    :dedup\n  -> order.charge\n  -> order.ship")

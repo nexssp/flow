@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,7 +27,7 @@ const (
 
 // Result is one feature's outcome.
 //
-// Elapsed covers the whole runner.Execute call. CompileAllocs and
+// Elapsed covers the whole runner.Execute or expected compilation call. CompileAllocs and
 // RunAllocs split the allocation count by phase: the compile phase is
 // the compiler's cost for parsing and building this DSL fragment, the
 // run phase is the actual runtime cost of the pipeline. In a feature
@@ -127,6 +128,37 @@ func runFeature(ctx context.Context, cfg flowrunner.Config, feature compiler.Sel
 	execCtx = xctx.WithRoles(execCtx, []string{"admin", "system_admin"})
 	execCtx = xctx.WithPermissions(execCtx, []string{"*"})
 	execCtx = xctx.WithApprovalToken(execCtx, "all")
+	if feature.ExpectCompileError != "" {
+		capture := captureExecution(func() (any, error) {
+			_, compileErr := flowrunner.Compile(execCtx, cfg, feature.DSL, feature.Name)
+			return nil, compileErr
+		})
+		elapsed := time.Since(started)
+		if capture.err == nil {
+			return Result{
+				SelfTestFeature: feature,
+				Status:          StatusFail,
+				Err:             fmt.Errorf("selftest: compilation succeeded; expected an error containing %q", feature.ExpectCompileError),
+				Elapsed:         elapsed,
+				Captured:        capture.captured,
+			}
+		}
+		if !strings.Contains(capture.err.Error(), feature.ExpectCompileError) {
+			return Result{
+				SelfTestFeature: feature,
+				Status:          StatusFail,
+				Err:             fmt.Errorf("selftest: compile error %w does not contain expected text %q", capture.err, feature.ExpectCompileError),
+				Elapsed:         elapsed,
+				Captured:        capture.captured,
+			}
+		}
+		return Result{
+			SelfTestFeature: feature,
+			Status:          StatusPass,
+			Elapsed:         elapsed,
+			Captured:        capture.captured,
+		}
+	}
 
 	capture := captureExecution(func() (any, error) {
 		ex, err := flowrunner.Execute(execCtx, cfg, feature.DSL, feature.Name, map[string]any{})

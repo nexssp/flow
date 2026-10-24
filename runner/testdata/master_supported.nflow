@@ -28,7 +28,7 @@
   assert(.batch_id != nil && len(.readings) > 0, "batch needs an ID and readings")
 }
 @pipeline validate_and_stage
-  :schema=TelemetryBatch
+  :request-schema=TelemetryBatch
   :profile=hardened_resilience
   @assert_valid_batch()
   -> {

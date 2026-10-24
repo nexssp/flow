@@ -45,7 +45,7 @@ func TestExecuteCompiledReusesProgramAndExecutionContext(t *testing.T) {
 		t.Fatalf("BuildConfig: %v", err)
 	}
 	cfg.FileResolver = compiledTestFileResolver{}
-	source := "@schema Request {\n  Name string `json:\"name\" default:\"schema-name\" validate:\"required\"`\n}\n\n@pipeline handle:schema=Request\n  test.inspect\n@end\n\npipeline.handle\n"
+	source := "@schema Request {\n  Name string `json:\"name\" default:\"schema-name\" validate:\"required\"`\n}\n\n@pipeline handle\n  :request-schema=Request\n  test.inspect\n@end\n\npipeline.handle\n"
 	name := "execute-compiled.nflow"
 	compiled, err := runner.Compile(t.Context(), cfg, source, name)
 	if err != nil {

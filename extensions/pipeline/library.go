@@ -33,10 +33,28 @@ func init() {
 
 func Bundle(_ map[string]string) compiler.Bundle {
 	return compiler.Bundle{
-		ID:               ID,
-		Libraries:        []action.Library{{Name: ID}},
-		Directives:       []compiler.Directive{Directive, EndDirective},
-		Materialize:      materialize,
+		ID:          ID,
+		Libraries:   []action.Library{{Name: ID}},
+		Directives:  []compiler.Directive{Directive, EndDirective},
+		Materialize: materialize,
+		SelfTest: func() []compiler.SelfTestSection {
+			return []compiler.SelfTestSection{{
+				Name: ID,
+				Features: []compiler.SelfTestFeature{{
+					Name:   "response schema defaults are rejected before execution",
+					Source: "pipeline/selftest/response-schema-default",
+					DSL: `@schema Response {
+						  Value string ` + "`json:\"value\" default:\"\"`" + `
+						}
+						@pipeline invalid
+						  :response-schema=Response
+						  runtime.noop
+						@end
+						`,
+					ExpectCompileError: "response schemas must not declare defaults",
+				}},
+			}}
+		},
 		MaterializePhase: compiler.MaterializeCompositions,
 		Fixtures:         fixturesFS,
 		Build: compiler.BuildExtension{

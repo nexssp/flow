@@ -165,20 +165,21 @@ The compiler-version directive is spelled `@nflow_version` only; the previous sp
   Depth int    `json:"depth" default:"1" validate:"gte=1"`
 }
 
-@pipeline handle:schema=Request
+@pipeline handle
+  :request-schema=Request
   noop
 @end
 ```
 
-This declaration/header pattern is exercised by [`extensions/schema/nflows/pipeline_boundary.nflow`](../extensions/schema/nflows/pipeline_boundary.nflow). At invocation, the pipeline wrapper applies defaults and validates the incoming payload before its first action. The compiler checks the declaration and schema reference; it cannot validate a future request payload at compile time. Runtime boundary behavior and caller-owned payload handling are tested in [`runner/schema_boundary_test.go`](../runner/schema_boundary_test.go) and implemented in [`extensions/pipeline/materialize.go`](../extensions/pipeline/materialize.go#L98-L114).
+This declaration/header pattern is exercised by [`extensions/schema/nflows/pipeline_boundary.nflow`](../extensions/schema/nflows/pipeline_boundary.nflow). At invocation, `:request-schema=NAME` applies defaults and validates the incoming payload before the first action. `:response-schema=NAME` validates the returned value without applying defaults and returns that exact value unchanged; response schemas containing any `default` tag are rejected before execution. Prefix either selected name with `!` to independently reject undeclared JSON-visible fields at that boundary. The compiler checks declarations and schema references; it cannot validate a future request or response payload at compile time. Runtime behavior is tested in [`runner/schema_boundary_test.go`](../runner/schema_boundary_test.go) and implemented in [`extensions/pipeline/materialize.go`](../extensions/pipeline/materialize.go).
 
 Important schema rules:
 
 - Fields are not automatically required just because they appear in a schema. Use a `validate:"required"` rule when requiredness is intended; validator rules such as `email`, `gte=1`, `oneof=...`, and `dive,required` are delegated to the installed validator.
 - `required` uses the validator's non-zero-value semantics for scalar types, so it rejects values such as `0`, `false`, or `""`, not merely an absent key. Account for that when zero/false is a valid business value.
 - Defaults apply only when a key is absent. Explicit `null`, zero, `false`, or an empty string is not replaced; composite defaults replace the whole value rather than deep-merging.
-- Extra input keys are allowed and preserved; a schema is not a closed-object/unknown-key rejection mode.
-- `:schema=NAME` on an `@pipeline` header is the request-boundary form. A direct `NAME.validate` action provides an explicit mid-pipeline validation step.
+- Extra input keys are allowed and preserved unless that request or response boundary uses the `!` strictness marker.
+- Pipeline boundaries use separate `:request-schema=NAME` and `:response-schema=NAME` modifiers; the former pipeline-header alias `:schema=NAME` is removed. A direct `NAME.validate` action provides an explicit mid-pipeline validation step.
 - The atom modifier `:schema=NAME` by itself only adds a `schema:NAME` metadata tag; it does not insert a validation action or validate that atom's request. Do not substitute it for a pipeline header or `NAME.validate`; see [`SchemaModifier`](../extensions/schema/library.go#L73-L79).
 - `@const.load ... :schema=Name` validates loaded compile-time JSON during preprocessing, not a future runtime request.
 
@@ -219,7 +220,7 @@ The standard CLI bundle set includes core syntax/runtime, projections, symbols, 
 | Checked before execution | Checked or performed at execution |
 |---|---|
 | Preprocessing and parse errors; malformed directives; duplicate declarations; macro cycle/size/depth limits; `@nflow_version` comparison and compile-time `@include`/`@config.load` file loading. | Action calls and external effects; projections and conditions against current values; action failures and error routing. |
-| Action, operator, keyword-primary and modifier resolution against active registries; declared capability-reference resolution. | Pipeline `:schema` defaulting and payload validation; `NAME.validate`; `@assert`, `assert(...)`, and command-line `--assert`. |
+| Action, operator, keyword-primary and modifier resolution against active registries; declared capability-reference resolution; response-schema default declarations are rejected. | Pipeline request defaults and validation plus response validation via `:request-schema=NAME` and `:response-schema=NAME`; `!` independently rejects extra fields at either boundary; `NAME.validate`; `@assert`, `assert(...)`, and command-line `--assert`. |
 | Schema declaration/tag/default syntax and declared schema-name references; `@const.load` schema checks and opt-in `@embed` asset/path checks. | Strict typed-request hooks; timeout/retry/concurrency/cache/idempotency policies; approval pause/resume; parallel/race cancellation. |
 | Bundle requirement parsing and extension option validation where the bundle declares its accepted options. | Remote-service availability, credentials, payload semantics beyond the active schema, and host-specific capability behavior. |
 
