@@ -9,6 +9,8 @@ Runnable examples are maintained in the central [Nexss Ecosystem Examples reposi
 
 Nexss Flow is a Go runtime and language for composing `.nflow` programs from registered actions. The `nflow` CLI runs flows and inspects the active compiler surface.
 
+Use `nflow fmt` to format Flow source from the CLI or an editor; use `nflow lint` when you need full preprocessed, registry-aware validation. See the [CLI guide](docs/cli.md#format-flow-source) for formatter modes and safety behavior.
+
 ## Install
 
 Prebuilt CLI downloads are published on [GitHub Releases](https://github.com/nexssp/flow/releases) for Linux, macOS, and Windows (amd64 and arm64), with SHA-256 checksums. See [CLI releases](docs/releases.md) for archive details and publishing instructions.

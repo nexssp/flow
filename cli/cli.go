@@ -42,6 +42,7 @@ var commands = map[string]func(context.Context, *invocation, []string) int{
 	"serve":      runServe,
 	"lint":       runLintInInvocation,
 	"explain":    runExplain,
+	"fmt":        runFmt,
 	"expand":     runExpand,
 	"catalog":    runCatalog,
 	"list":       runList,

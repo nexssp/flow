@@ -44,30 +44,9 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 		)
 	}
 
-	opts := map[string]string{}
-	next := req.I + 1
-
-	if openIdx >= 0 {
-		inline := line[headerStart+openIdx:]
-		parsed, after, err := parseInlineOptions(inline, req.Lines, req.I)
-		if err != nil {
-			return compiler.DirectiveRes{}, compiler.SourceError(
-				compiler.Position{File: req.File, Line: req.I + 1},
-				"@require options: %v", err,
-			)
-		}
-		opts = parsed
-		next = after
-	} else if req.I+1 < len(req.Lines) && strings.HasPrefix(strings.TrimSpace(req.Lines[req.I+1]), "{") {
-		parsed, after, err := parseBlockOptions(req.Lines, req.I+1)
-		if err != nil {
-			return compiler.DirectiveRes{}, compiler.SourceError(
-				compiler.Position{File: req.File, Line: req.I + 2},
-				"@require options: %v", err,
-			)
-		}
-		opts = parsed
-		next = after
+	opts, next, err := ParseDirectiveOptions(req.Lines, req.I, req.File)
+	if err != nil {
+		return compiler.DirectiveRes{}, err
 	}
 
 	r, selectorStart, selectorEnd, err := parseRequirement(spec, req.BaseDir, opts, req.File, req.I+1)
@@ -100,6 +79,55 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	}
 	req.Out["require"] = append(existing, r)
 	return compiler.DirectiveRes{Next: next}, nil
+}
+
+// ParseDirectiveOptions parses the optional object block on an @require line
+// without resolving the requirement. It is shared by the directive handler and
+// syntax-only consumers such as the formatter.
+func ParseDirectiveOptions(lines []string, start int, file string) (options map[string]string, nextLine int, parseErr error) {
+	if start < 0 || start >= len(lines) {
+		return nil, start, compiler.SourceError(
+			compiler.Position{File: file, Line: start + 1},
+			"@require: missing directive line",
+		)
+	}
+	line := lines[start]
+	leading := len(line) - len(strings.TrimLeftFunc(line, unicode.IsSpace))
+	trimmed := line[leading:]
+	if !strings.HasPrefix(trimmed, "@require") {
+		return nil, start + 1, compiler.SourceError(
+			compiler.Position{File: file, Line: start + 1},
+			"@require: missing module path",
+		)
+	}
+	headerStart := leading + len("@require")
+	header := line[headerStart:]
+	header = header[:len(stripRequirementComment(header))]
+	openIdx := firstUnquotedBrace(header)
+	opts := map[string]string{}
+	next := start + 1
+	if openIdx >= 0 {
+		parsed, after, err := parseInlineOptions(line[headerStart+openIdx:], lines, start)
+		if err != nil {
+			return nil, start + 1, compiler.SourceError(
+				compiler.Position{File: file, Line: start + 1},
+				"@require options: %v", err,
+			)
+		}
+		opts = parsed
+		next = after
+	} else if start+1 < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[start+1]), "{") {
+		parsed, after, err := parseBlockOptions(lines, start+1)
+		if err != nil {
+			return nil, start + 1, compiler.SourceError(
+				compiler.Position{File: file, Line: start + 2},
+				"@require options: %v", err,
+			)
+		}
+		opts = parsed
+		next = after
+	}
+	return opts, next, nil
 }
 
 func sourceDeclarationList(meta map[string]any) []SourceDeclaration {

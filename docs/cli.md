@@ -74,6 +74,30 @@ error and, at verbosity ≥ 1, an execution trace:
 
 ---
 
+## Format Flow source
+
+```sh
+nflow fmt flow.nflow
+nflow fmt --write flow.nflow
+nflow fmt --check flow.nflow
+cat flow.nflow | nflow fmt --stdin
+```
+
+`nflow fmt` is the canonical formatter used by editor integrations. With one
+named file and no mode flag it writes formatted source to stdout; with multiple
+files, choose `--write` or `--check`. `--write` atomically replaces valid files
+only. `--check` reports any file that differs and exits non-zero without writing.
+With no file argument, `-`, or `--stdin`, the command reads stdin and writes
+formatted source to stdout. Conflicting or ambiguous modes are rejected.
+
+Parser failures include a file, line, and column when available; invalid files
+are never rewritten. LSP-based editors receive the same source-positioned errors
+as diagnostics. Formatting preserves comments, strings, opaque expression text,
+and modifier order. It is not a substitute for `nflow lint`: use lint to validate
+the fully preprocessed source, active registries, atom names, and modifiers.
+
+---
+
 ## Check a flow without running it
 
 ```sh

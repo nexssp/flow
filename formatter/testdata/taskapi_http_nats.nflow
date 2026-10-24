@@ -1,0 +1,59 @@
+@nflow_version ">=0.38.0"
+@description "Tasks API over HTTP and NATS with explicitly migrated SQLite"
+
+@require github.com/nexssp/storage v0.3.0
+@require github.com/nexssp/transport/thttp/nexssflow v0.7.0 as thttp {
+  addr: "127.0.0.1:8080"
+}
+@require github.com/nexssp/transportnats/nexssflow v0.3.0 as nats {
+  url: "nats://127.0.0.1:4222"
+}
+
+# Run `go run ./cmd/migrate` first, from this directory.
+# Storage.Open only connects; it does NOT create or upgrade tables.
+@storage kv:sqlite as taskstore { path: "./data/tasks.db" }
+
+@schema CreateTask {
+  ID    string `json:"id"    validate:"required"`
+  Title string `json:"title" validate:"required"`
+}
+
+@schema GetTask {
+  ID string `json:"id" validate:"required"`
+}
+
+@pipeline health
+  :route="GET /health"
+  :nats_request="tasks.health"
+
+  { ok: true }
+@end
+
+# This is a KV upsert: repeating an ID replaces the previous task.
+@pipeline create_task
+  :schema=CreateTask
+  :route="POST /tasks"
+  :nats_request="tasks.create"
+
+  {
+    key: "tasks/" + .id,
+    value: { id: .id, title: .title, done: false }
+  }
+  -> taskstore.kv.set @{ key: .key, value: .value }
+@end
+
+@pipeline get_task
+  :schema=GetTask
+  :route="POST /tasks/get"
+  :nats_request="tasks.get"
+
+  { key: "tasks/" + .id }
+  -> taskstore.kv.get @{ key: .key }
+  -> { found: (.).Hit, task: (.).Value }
+@end
+
+# http.request is an outbound client, not a server. These are public listeners.
+parallel {
+  http: thttp.listen,
+  nats: nats.listen
+}
