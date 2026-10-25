@@ -46,14 +46,14 @@ func runLintInInvocation(ctx context.Context, inv *invocation, args []string) in
 		return fatalf("%v", err)
 	}
 
-	allRequirements := inspectLintRequirements(ctx, inv, files)
+	allRequirements, requirementErrors := inspectLintRequirements(ctx, inv, files)
 	needsExternalHarness := requirementsNeedExternalHarness(inv, allRequirements)
 	if os.Getenv(harnessEnv) != "" || !needsExternalHarness {
-		return runLintBatchForInvocation(ctx, inv, files)
+		return runLintBatchForInvocation(ctx, inv, files, requirementErrors)
 	}
 	bin, err := builder.EnsureHarnessContext(ctx, allRequirements, files...)
 	if err != nil {
-		return runLintBatchForInvocationWithHarnessError(ctx, inv, files, err)
+		return runLintBatchForInvocationWithHarnessError(ctx, inv, files, err, requirementErrors)
 	}
 	return builder.ExecHarnessContext(ctx, bin, append([]string{"lint"}, files...))
 }
@@ -69,16 +69,17 @@ func shouldLintSingleTarget(args []string) bool {
 	return false
 }
 
-func inspectLintRequirements(ctx context.Context, inv *invocation, files []string) []require.Requirement {
-	var allRequirements []require.Requirement
+func inspectLintRequirements(ctx context.Context, inv *invocation, files []string) (allRequirements []require.Requirement, requirementErrors map[string]error) {
+	requirementErrors = make(map[string]error)
 	for _, path := range files {
 		reqs, requireErr := inv.sourceRequiresFromFile(ctx, path)
 		if requireErr != nil {
+			requirementErrors[path] = requireErr
 			continue
 		}
 		allRequirements = append(allRequirements, reqs...)
 	}
-	return allRequirements
+	return allRequirements, requirementErrors
 }
 
 var lintDiscoveryExcludedDirs = map[string]struct{}{
@@ -183,7 +184,7 @@ func walkLintSources(root string, add func(string)) (int, error) {
 		if entry.Type()&fs.ModeSymlink != 0 ||
 			!strings.HasSuffix(name, ".nflow") ||
 			strings.HasPrefix(name, "_") ||
-			strings.Contains(name, "--") {
+			isLintFlatFixtureCompanion(path) {
 			return nil
 		}
 		found++
@@ -191,6 +192,22 @@ func walkLintSources(root string, add func(string)) (int, error) {
 		return nil
 	})
 	return found, err
+}
+
+func isLintFlatFixtureCompanion(path string) bool {
+	name := strings.TrimSuffix(filepath.Base(path), ".nflow")
+	for name != "" {
+		separator := strings.Index(name, "--")
+		if separator < 0 {
+			return false
+		}
+		fixture := filepath.Join(filepath.Dir(path), name[:separator]+".nflow")
+		if info, err := os.Stat(fixture); err == nil && !info.IsDir() {
+			return true
+		}
+		name = name[separator+2:]
+	}
+	return false
 }
 
 func runLintInProcess(ctx context.Context, inv *invocation, args []string) int {
@@ -233,15 +250,15 @@ func runLintBatchInProcessWithHarnessError(paths []string, harnessErr error) int
 		return fatalf("flow host: %v", err)
 	}
 	return runInvocation(context.Background(), inv, func(ctx context.Context) int {
-		return runLintBatchForInvocationWithHarnessError(ctx, inv, paths, harnessErr)
+		return runLintBatchForInvocationWithHarnessError(ctx, inv, paths, harnessErr, nil)
 	})
 }
 
-func runLintBatchForInvocation(ctx context.Context, inv *invocation, paths []string) int {
-	return runLintBatchForInvocationWithHarnessError(ctx, inv, paths, nil)
+func runLintBatchForInvocation(ctx context.Context, inv *invocation, paths []string, requirementErrors map[string]error) int {
+	return runLintBatchForInvocationWithHarnessError(ctx, inv, paths, nil, requirementErrors)
 }
 
-func runLintBatchForInvocationWithHarnessError(ctx context.Context, inv *invocation, paths []string, harnessErr error) int {
+func runLintBatchForInvocationWithHarnessError(ctx context.Context, inv *invocation, paths []string, harnessErr error, requirementErrors map[string]error) int {
 	var issues []LintIssue
 	for _, path := range paths {
 		src, err := os.ReadFile(path)
@@ -250,9 +267,14 @@ func runLintBatchForInvocationWithHarnessError(ctx context.Context, inv *invocat
 			continue
 		}
 
+		if reqErr, ok := requirementErrors[path]; ok {
+			issues = append(issues, LintIssue{File: path, Kind: "compile", Message: reqErr.Error()})
+			continue
+		}
 		reqs, reqErr := inv.sourceRequiresFromFile(ctx, path)
 		if reqErr != nil {
-			reqs = nil
+			issues = append(issues, LintIssue{File: path, Kind: "compile", Message: reqErr.Error()})
+			continue
 		}
 		if harnessErr != nil && requirementsNeedExternalHarness(inv, reqs) {
 			issues = append(issues, LintIssue{

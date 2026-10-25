@@ -17,6 +17,9 @@ func TestDiscoverLintFilesRecursiveAndExclusions(t *testing.T) {
 		"root.nflow",
 		"nested/z-last.nflow",
 		"nested/a-first.nflow",
+		"nested/api--v2.nflow",
+		"nested/checkout.nflow",
+		"nested/checkout--backup.nflow",
 		".git/ignored.nflow",
 		".hg/ignored.nflow",
 		".svn/ignored.nflow",
@@ -51,6 +54,8 @@ func TestDiscoverLintFilesRecursiveAndExclusions(t *testing.T) {
 	}
 	want := []string{
 		filepath.Join(root, "nested", "a-first.nflow"),
+		filepath.Join(root, "nested", "api--v2.nflow"),
+		filepath.Join(root, "nested", "checkout.nflow"),
 		filepath.Join(root, "nested", "z-last.nflow"),
 		filepath.Join(root, "root.nflow"),
 	}
@@ -171,6 +176,32 @@ func TestRunLintBatchContinuesWhenExternalHarnessIsUnavailable(t *testing.T) {
 	}
 	if len(issues) != 1 || issues[0].File != needsModule || issues[0].Kind != "config" || !strings.Contains(issues[0].Message, "module download failed") {
 		t.Fatalf("batch diagnostics = %#v, want one registry error for %q", issues, needsModule)
+	}
+}
+
+func TestRunLintBatchReportsMalformedRequireDirective(t *testing.T) {
+	root := t.TempDir()
+	good := filepath.Join(root, "good.nflow")
+	bad := filepath.Join(root, "bad-require.nflow")
+	if err := os.WriteFile(good, []byte("{ ok: true }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bad, []byte("@require\ntrue\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := captureLintOutput(t, func() int {
+		return runLint([]string{root})
+	})
+	if code == 0 {
+		t.Fatalf("batch lint accepted a malformed @require; stdout=%q stderr=%q", stdout, stderr)
+	}
+	var issues []LintIssue
+	if err := json.Unmarshal([]byte(stdout), &issues); err != nil {
+		t.Fatalf("decode batch diagnostics: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if len(issues) != 1 || issues[0].File != bad || issues[0].Kind != "compile" || !strings.Contains(issues[0].Message, "missing module path") {
+		t.Fatalf("batch diagnostics = %#v, want the malformed @require error for %q", issues, bad)
 	}
 }
 

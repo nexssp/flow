@@ -74,6 +74,31 @@ func TestFormatPreservesStringsCommentsAndExpressionText(t *testing.T) {
 	}
 }
 
+func TestHashCommentDetectionMatchesCompilerLexer(t *testing.T) {
+	for _, tt := range []struct {
+		text string
+		want bool
+	}{
+		{text: "foo# bar -> baz", want: true},
+		{text: "  #comment", want: true},
+		{text: "foo #bar", want: false},
+		{text: "foo#", want: false},
+	} {
+		if got := hasSourceComment(tt.text); got != tt.want {
+			t.Errorf("hasSourceComment(%q) = %t, want %t", tt.text, got, tt.want)
+		}
+	}
+
+	input := "foo# bar -> baz\n"
+	got, err := testFormatter().Format(t.Context(), input, "hash-comment.nflow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != input {
+		t.Fatalf("Format() changed source following a hash comment: %q", got)
+	}
+}
+
 func TestFormatPreservesTernarySeparator(t *testing.T) {
 	input := "runtime.const @{ value: condition ? yes : no }\n"
 	got, err := testFormatter().Format(t.Context(), input, "ternary.nflow")

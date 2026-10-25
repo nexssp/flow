@@ -89,7 +89,7 @@ var helpRegistry = map[string]helpText{
 		},
 	},
 	"lint": {
-		Summary: "Check .nflow sources against the live registry, including @nflow_version compiler constraints. Exits 1 and prints JSON issues on failure.",
+		Summary: "Run full compiler validation of .nflow sources, including @nflow_version. Builds or reuses an external harness for unlinked @require bundles when needed. Exits 1 and prints JSON issues on failure.",
 		Usage:   "nflow lint <file.nflow | directory | ./...> [target...]",
 		Examples: []string{
 			`nflow lint flows/client.nflow`,
@@ -188,7 +188,7 @@ Self bench:
 			`nflow completion pwsh | Out-String | Invoke-Expression`,
 		},
 	},
-	"version": {
+	versionCommand: {
 		Summary:  "Print build metadata offline, or check the latest stable GitHub release without updating.",
 		Usage:    "nflow version [check]",
 		Examples: []string{`nflow version`, `nflow version check`},

@@ -29,7 +29,7 @@ type fmtOptions struct {
 }
 
 func runFmt(ctx context.Context, inv *invocation, args []string) int {
-	if hasFmtHelp(args) {
+	if wantsHelp(args) {
 		PrintCommandHelp(os.Stdout, "fmt")
 		return 0
 	}
@@ -45,21 +45,7 @@ func runFmt(ctx context.Context, inv *invocation, args []string) int {
 	if isFmtStdin(options) {
 		return formatStdin(ctx, inv)
 	}
-	formatter, err := formatterFor(inv)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "nflow fmt: %v\n", err)
-		return 1
-	}
-	return formatFiles(ctx, formatter, options.files, options.mode())
-}
-
-func hasFmtHelp(args []string) bool {
-	for _, arg := range args {
-		if arg == "--help" || arg == "-h" {
-			return true
-		}
-	}
-	return false
+	return formatFiles(ctx, inv, options.files, options.mode())
 }
 
 func parseFmtOptions(args []string) (fmtOptions, error) {
@@ -113,10 +99,10 @@ func (options fmtOptions) mode() fmtMode {
 	return fmtToStdout
 }
 
-func formatFiles(ctx context.Context, formatter *flowformatter.Formatter, files []string, mode fmtMode) int {
+func formatFiles(ctx context.Context, inv *invocation, files []string, mode fmtMode) int {
 	code := 0
 	for _, path := range files {
-		if err := formatFile(ctx, formatter, path, mode); err != nil {
+		if err := formatFile(ctx, inv, path, mode); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			code = 1
 		}
@@ -124,10 +110,14 @@ func formatFiles(ctx context.Context, formatter *flowformatter.Formatter, files 
 	return code
 }
 
-func formatFile(ctx context.Context, formatter *flowformatter.Formatter, path string, mode fmtMode) error {
+func formatFile(ctx context.Context, inv *invocation, path string, mode fmtMode) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("nflow fmt: %s: %w", path, err)
+	}
+	formatter, err := formatterFor(ctx, inv, string(data), path)
+	if err != nil {
+		return err
 	}
 	formatted, err := formatter.Format(ctx, string(data), path)
 	if err != nil {
@@ -163,7 +153,7 @@ func formatStdin(ctx context.Context, inv *invocation) int {
 		fmt.Fprintf(os.Stderr, "nflow fmt: stdin: %v\n", err)
 		return 1
 	}
-	formatter, err := formatterFor(inv)
+	formatter, err := formatterFor(ctx, inv, string(data), "<stdin>")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "nflow fmt: %v\n", err)
 		return 1
@@ -180,10 +170,11 @@ func formatStdin(ctx context.Context, inv *invocation) int {
 	return 0
 }
 
-func formatterFor(inv *invocation) (*flowformatter.Formatter, error) {
-	bundles, err := inv.nativeBundles()
+func formatterFor(ctx context.Context, inv *invocation, source, name string) (*flowformatter.Formatter, error) {
+	_, metadata, cfg, err := inv.prepareRequiredSource(ctx, source, name)
 	if err != nil {
 		return nil, err
 	}
-	return flowformatter.New(bundles), nil
+	_, requireEnabled := cfg.Directives.ByName("require")
+	return flowformatter.NewWithParserTables(cfg.Operators, cfg.PrimariesFor(metadata), requireEnabled), nil
 }

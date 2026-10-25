@@ -36,9 +36,30 @@ func New(bundles []compiler.Bundle) *Formatter {
 			}
 		}
 	}
+	return NewWithParserTables(
+		compiler.NewOperatorTable(operators...),
+		compiler.NewPrimaryExtensionTable(primaries...),
+		requireEnabled,
+	)
+}
+
+// NewWithParserTables builds a formatter from the active compiler tables.
+// Hosts that prepare a source with dynamically selected bundles should use
+// these tables so formatting and compilation recognize the same syntax.
+func NewWithParserTables(
+	operators *compiler.OperatorTable,
+	primaries *compiler.PrimaryExtensionTable,
+	requireEnabled bool,
+) *Formatter {
+	if operators == nil {
+		operators = compiler.NewOperatorTable()
+	}
+	if primaries == nil {
+		primaries = compiler.DefaultPrimaryExtensions()
+	}
 	return &Formatter{
-		operators:      compiler.NewOperatorTable(operators...),
-		primaries:      compiler.NewPrimaryExtensionTable(primaries...),
+		operators:      operators,
+		primaries:      primaries,
 		requireEnabled: requireEnabled,
 	}
 }
@@ -674,11 +695,20 @@ func hasSourceComment(text string) bool {
 			quote = c
 			continue
 		}
-		if c == '/' && i+1 < len(text) && text[i+1] == '/' && (i == 0 || isSpace(text[i-1])) {
+		if c == '/' && i+1 < len(text) && text[i+1] == '/' {
 			return true
 		}
-		if c == '#' && (i == 0 || isSpace(text[i-1])) && (i+1 == len(text) || isSpace(text[i+1])) {
-			return true
+		if c == '#' {
+			lineStart := true
+			for j := i - 1; j >= 0 && text[j] != '\n'; j-- {
+				if !isSpace(text[j]) {
+					lineStart = false
+					break
+				}
+			}
+			if lineStart || i+1 < len(text) && isSpace(text[i+1]) {
+				return true
+			}
 		}
 	}
 	return false

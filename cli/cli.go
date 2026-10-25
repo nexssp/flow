@@ -33,6 +33,8 @@ func setupLogger() {
 	slog.SetDefault(slog.New(handler))
 }
 
+const versionCommand = "version"
+
 var commands = map[string]func(context.Context, *invocation, []string) int{
 	"init": func(_ context.Context, _ *invocation, args []string) int { return runInit(args) },
 	"run":  runFlowInInvocation,
@@ -40,6 +42,7 @@ var commands = map[string]func(context.Context, *invocation, []string) int{
 		return builder.RunBuild(ctx, args, inv.sourceRequiresFromFile)
 	},
 	"serve":      runServe,
+	"lsp":        runLSP,
 	"lint":       runLintInInvocation,
 	"explain":    runExplain,
 	"fmt":        runFmt,
@@ -77,7 +80,7 @@ func runCLI(ctx context.Context, inv *invocation, args []string) int {
 		return handleHelp(args[1:])
 	}
 
-	if cmd == "version" {
+	if cmd == versionCommand {
 		return runVersion(ctx, args[1:])
 	}
 	if (cmd == "-v" && len(args) == 1) || cmd == "--version" {

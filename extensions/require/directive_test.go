@@ -101,6 +101,25 @@ func TestDirective_DuplicateCollapsed(t *testing.T) {
 	}
 }
 
+func TestSourceRequirementsSameImportVersionAndAliasKeepsFirstOptions(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "main.nflow")
+	child := filepath.Join(filepath.Dir(root), "child.nflow")
+	ctx := compiler.WithSourceLoader(t.Context(), compiler.SourceMap{
+		child: "@require example.com/foo v1.0.0 as foo { id: child }",
+	})
+	source := "@require example.com/foo v1.0.0 as foo { id: root }\n@include child.nflow"
+	_, meta, err := compiler.Preprocess(ctx, compiler.NewDirectiveTable(Directive, includeext.Directive), source, root)
+	ktest.RequireNoError(t, err)
+
+	collected, err := SourceRequirements(meta)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, len(collected), 1)
+	ktest.RequireEqual(t, collected[0].Import, "example.com/foo")
+	ktest.RequireEqual(t, collected[0].Version, "v1.0.0")
+	ktest.RequireEqual(t, collected[0].Alias, "foo")
+	ktest.RequireEqual(t, collected[0].Options["id"], "root")
+}
+
 func TestDirective_MissingModule(t *testing.T) {
 	t.Parallel()
 	_, err := runDirective(t, `@require`)
