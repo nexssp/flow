@@ -282,6 +282,62 @@ func TestFormatPreservesOpaqueDirectiveBody(t *testing.T) {
 	}
 }
 
+func TestFormatTemplateRenderArgumentBlockWithBlankLines(t *testing.T) {
+	template := `Hi {{.customer}},\n\nYour order {{.order_id}} is confirmed. Estimated delivery: {{.delivery_date}}.\n\nItems:\n{{range .items}}- {{.}}\n{{end}}\nThanks,\n{{.store}}`
+	input := "@description \"Draft an order confirmation\"\n" +
+		"@require template\n\n" +
+		"template.render @{\n" +
+		"  template: \"" + template + "\",\n" +
+		"  variables: {\n" +
+		"    customer: \"Ada Lovelace\",\n\n\n" +
+		"    order_id: \"SO-1042\",\n" +
+		"    delivery_date: \"Tuesday, Oct 28\",\n" +
+		"    items: [\"Notebook\", \"Pen\"],\n" +
+		"    store: \"Northstar\"\n" +
+		"  }\n}\n"
+	want := "@description \"Draft an order confirmation\"\n" +
+		"@require template\n\n" +
+		"template.render @{\n" +
+		"  template: \"" + template + "\",\n" +
+		"  variables: {\n" +
+		"    customer: \"Ada Lovelace\",\n\n" +
+		"    order_id: \"SO-1042\",\n" +
+		"    delivery_date: \"Tuesday, Oct 28\",\n" +
+		"    items: [\"Notebook\", \"Pen\"],\n" +
+		"    store: \"Northstar\"\n" +
+		"  }\n}\n"
+
+	got, err := testFormatter().Format(t.Context(), input, "test-template.nflow")
+	if err != nil {
+		t.Fatalf("Format() rejected a valid multiline argument block: %v", err)
+	}
+	if got != want {
+		t.Fatalf("Format() =\n%s\nwant\n%s", got, want)
+	}
+	if !strings.Contains(got, `template: "`+template+`"`) {
+		t.Fatal("formatter changed the quoted template text")
+	}
+	second, err := testFormatter().Format(t.Context(), got, "test-template.nflow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second != got {
+		t.Fatalf("format is not idempotent:\n%s\n!=\n%s", second, got)
+	}
+}
+
+func TestFormatReindentsNestedArgumentBraces(t *testing.T) {
+	input := "runtime.const @{\nvalue: {\nanswer: 42\n}\n}\n"
+	want := "runtime.const @{\n  value: {\n    answer: 42\n  }\n}\n"
+	got, err := testFormatter().Format(t.Context(), input, "argument-block.nflow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("Format() = %q, want %q", got, want)
+	}
+}
+
 func TestFormatPreservesMultilineProjectionText(t *testing.T) {
 	input := "runtime.const @{ value: `first\n  second->third:keep\nlast` }\n"
 	got, err := testFormatter().Format(t.Context(), input, "multiline.nflow")

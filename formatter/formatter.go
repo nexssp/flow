@@ -81,6 +81,7 @@ func (f *Formatter) Format(ctx context.Context, source, file string) (string, er
 	if err := f.validate(ctx, lines, file); err != nil {
 		return "", err
 	}
+	lines = formatAtBraceBlocks(source, lines)
 	out, err := f.formatLines(lines, file, opaqueSourceLines(source, lines))
 	if err != nil {
 		return "", err
@@ -282,6 +283,27 @@ func (state *validationState) addLine(index int, line string) {
 	state.segment = append(state.segment, line)
 }
 
+func (state *validationState) hasUnterminatedArgumentBlock() bool {
+	lexer := compiler.NewLexer(strings.Join(state.segment, "\n"))
+	for {
+		token := lexer.Next()
+		if token.Type == compiler.TokEOF {
+			return false
+		}
+		if token.Type == compiler.TokAtBrace && token.Unterminated {
+			return true
+		}
+	}
+}
+
+func (f *Formatter) validateBlankLine(ctx context.Context, index int, file, line string, state *validationState) (int, error) {
+	if state.hasUnterminatedArgumentBlock() {
+		state.addLine(index, line)
+		return index + 1, nil
+	}
+	return index + 1, state.flush(ctx, f.operators, f.primaries, file)
+}
+
 func (f *Formatter) validateLine(ctx context.Context, lines []string, index int, file string, state *validationState) (int, error) {
 	line := lines[index]
 	trimmed := strings.TrimSpace(line)
@@ -294,7 +316,7 @@ func (f *Formatter) validateLine(ctx context.Context, lines []string, index int,
 		return index + 1, nil
 	}
 	if trimmed == "" {
-		return index + 1, state.flush(ctx, f.operators, f.primaries, file)
+		return f.validateBlankLine(ctx, index, file, line, state)
 	}
 	if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//") {
 		state.addLine(index, line)
