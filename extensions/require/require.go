@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"go/token"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,32 +41,30 @@ type Requirement struct {
 
 func (r Requirement) IsLocal() bool { return r.LocalPath != "" }
 
-// FromMeta returns requirements in declaration/include order, preserving the
-// first declaration's options. Use SourceRequirements to report alias conflicts.
-func FromMeta(meta map[string]any) []Requirement {
-	requirements, err := SourceRequirements(meta)
-	if err != nil {
-		return nil
-	}
-	return requirements
+// FromMeta returns requirements in declaration/include order and preserves
+// metadata and conflict errors for callers that plan or build from metadata.
+func FromMeta(meta map[string]any) ([]Requirement, error) {
+	return SourceRequirements(meta)
 }
 
 type sourceRequirements struct {
 	values  []Requirement
-	seen    map[string]bool
+	seen    map[string]requirementOrigin
 	aliases map[string]requirementOrigin
 }
 
 type requirementOrigin struct {
-	target   string
-	position compiler.Position
+	target        string
+	position      compiler.Position
+	positionKnown bool
+	options       map[string]string
 }
 
 // SourceRequirements discovers dependencies through parsed source modules.
-// Include does not merge requirement state; the existing @require first-wins
-// and alias-conflict rules apply in the original source order.
+// Identical duplicates are idempotent; conflicting options and alias collisions
+// are reported in source order with source positions.
 func SourceRequirements(meta map[string]any) ([]Requirement, error) {
-	collected := &sourceRequirements{seen: make(map[string]bool), aliases: make(map[string]requirementOrigin)}
+	collected := &sourceRequirements{seen: make(map[string]requirementOrigin), aliases: make(map[string]requirementOrigin)}
 	if err := collected.visit(meta); err != nil {
 		return nil, err
 	}
@@ -73,36 +72,110 @@ func SourceRequirements(meta map[string]any) ([]Requirement, error) {
 }
 
 func (collected *sourceRequirements) visit(meta map[string]any) error {
-	local, _ := meta["require"].([]Requirement)
-	imported := compiler.SourceImports(meta)
+	if meta == nil {
+		return nil
+	}
+	local, imported, err := sourceRequirementsFromMeta(meta)
+	if err != nil {
+		return err
+	}
 	next := 0
 	for i := range local {
 		candidate := &local[i]
+		if candidate.Import == "" {
+			return fmt.Errorf("require metadata entry %d has an empty import target", i+1)
+		}
 		key := requirementKey(candidate)
-		position, _ := compiler.DeclarationPosition(meta, "require", key)
-		for next < len(imported) && imported[next].Position.Line < position.Line {
-			if err := collected.visit(imported[next].Source.Metadata()); err != nil {
-				return err
-			}
-			next++
+		position, positionKnown := compiler.DeclarationPosition(meta, "require", key)
+		if !positionKnown && len(imported) > 0 {
+			return fmt.Errorf("require metadata for %q is missing a source position; include ordering cannot be determined", candidate.Import)
 		}
-		if collected.seen[key] {
-			continue
+		next, err = collected.visitImportsBefore(imported, next, position.Line)
+		if err != nil {
+			return err
 		}
-		if candidate.Alias != "" {
-			if prior, exists := collected.aliases[candidate.Alias]; exists {
-				return compiler.SourceError(position, "@require: namespace qualifier %q is already used for module %q; first declared at %s", candidate.Alias, prior.target, prior.position)
-			}
-			collected.aliases[candidate.Alias] = requirementOrigin{target: candidate.Import, position: position}
-		}
-		collected.seen[key] = true
-		collected.values = append(collected.values, *candidate)
-	}
-	for ; next < len(imported); next++ {
-		if err := collected.visit(imported[next].Source.Metadata()); err != nil {
+		if err := collected.add(candidate, position, positionKnown); err != nil {
 			return err
 		}
 	}
+	return collected.visitImports(imported, next)
+}
+
+func sourceRequirementsFromMeta(meta map[string]any) ([]Requirement, []compiler.SourceImport, error) {
+	var local []Requirement
+	if raw, exists := meta["require"]; exists {
+		var ok bool
+		local, ok = raw.([]Requirement)
+		if !ok {
+			return nil, nil, fmt.Errorf("require metadata has type %T, want []require.Requirement", raw)
+		}
+	}
+	if raw, exists := meta[sourceDeclarationsKey]; exists {
+		if _, ok := raw.([]SourceDeclaration); !ok {
+			return nil, nil, fmt.Errorf("require declaration metadata has type %T, want []require.SourceDeclaration", raw)
+		}
+	}
+	imported := compiler.SourceImports(meta)
+	for i, child := range imported {
+		if child.Source == nil {
+			return nil, nil, fmt.Errorf("require metadata import %d has no prepared source", i+1)
+		}
+		if child.Position.Line < 1 {
+			return nil, nil, fmt.Errorf("require metadata import %d has invalid source position %s", i+1, child.Position)
+		}
+	}
+	return local, imported, nil
+}
+
+func (collected *sourceRequirements) visitImportsBefore(imported []compiler.SourceImport, next, line int) (int, error) {
+	for next < len(imported) && imported[next].Position.Line < line {
+		if err := collected.visit(imported[next].Source.Metadata()); err != nil {
+			return next, err
+		}
+		next++
+	}
+	return next, nil
+}
+
+func (collected *sourceRequirements) visitImports(imported []compiler.SourceImport, start int) error {
+	for i := start; i < len(imported); i++ {
+		if err := collected.visit(imported[i].Source.Metadata()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (collected *sourceRequirements) add(candidate *Requirement, position compiler.Position, positionKnown bool) error {
+	key := requirementKey(candidate)
+	if previous, exists := collected.seen[key]; exists {
+		if !maps.Equal(candidate.Options, previous.options) {
+			if !positionKnown || !previous.positionKnown {
+				return fmt.Errorf("@require: duplicate declaration for %q has conflicting options but source position metadata is missing", candidate.Import)
+			}
+			return compiler.SourceError(
+				position,
+				"@require: duplicate declaration for %q (version %q, alias %q) has conflicting options; first declared at %s",
+				candidate.Import, candidate.Version, candidate.Alias, previous.position,
+			)
+		}
+		return nil
+	}
+	origin := requirementOrigin{
+		target: candidate.Import, position: position, positionKnown: positionKnown,
+		options: maps.Clone(candidate.Options),
+	}
+	if candidate.Alias != "" {
+		if prior, exists := collected.aliases[candidate.Alias]; exists {
+			if !positionKnown || !prior.positionKnown {
+				return fmt.Errorf("@require: namespace qualifier %q is reused but source position metadata is missing", candidate.Alias)
+			}
+			return compiler.SourceError(position, "@require: namespace qualifier %q is already used for module %q; first declared at %s", candidate.Alias, prior.target, prior.position)
+		}
+		collected.aliases[candidate.Alias] = origin
+	}
+	collected.seen[key] = origin
+	collected.values = append(collected.values, *candidate)
 	return nil
 }
 

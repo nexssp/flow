@@ -36,7 +36,11 @@ func PlanBuild(sources []compiler.BuildSource, requirements []requireext.Require
 		}
 		roots = append(roots, selected...)
 	}
-	explicit, err := explicitBuildRoots(descriptors, buildRequirementTargets(sources, requirements))
+	targets, err := buildRequirementTargets(sources, requirements)
+	if err != nil {
+		return nil, err
+	}
+	explicit, err := explicitBuildRoots(descriptors, targets)
 	if err != nil {
 		return nil, err
 	}
@@ -83,24 +87,34 @@ func grammarBuildRoots(bundles []compiler.Bundle) ([]string, error) {
 	return roots, nil
 }
 
-func buildRequirementTargets(sources []compiler.BuildSource, requirements []requireext.Requirement) map[string]bool {
+func buildRequirementTargets(sources []compiler.BuildSource, requirements []requireext.Requirement) (map[string]bool, error) {
 	targets := make(map[string]bool)
-	collect := func(entries []requireext.Requirement) {
+	collect := func(entries []requireext.Requirement) error {
 		for i := range entries {
 			target := entries[i].PackagePath
 			if target == "" {
 				target = entries[i].Import
 			}
-			if target != "" {
-				targets[target] = true
+			if target == "" {
+				return fmt.Errorf("native build: requirement %d has an empty import and package path", i+1)
 			}
+			targets[target] = true
+		}
+		return nil
+	}
+	if err := collect(requirements); err != nil {
+		return nil, err
+	}
+	for i, source := range sources {
+		entries, err := requireext.FromMeta(source.Metadata)
+		if err != nil {
+			return nil, fmt.Errorf("native build: source %d requirement metadata: %w", i+1, err)
+		}
+		if err := collect(entries); err != nil {
+			return nil, err
 		}
 	}
-	collect(requirements)
-	for _, source := range sources {
-		collect(requireext.FromMeta(source.Metadata))
-	}
-	return targets
+	return targets, nil
 }
 
 func explicitBuildRoots(bundles []compiler.Bundle, targets map[string]bool) ([]string, error) {

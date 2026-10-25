@@ -82,14 +82,14 @@ func TestDirective_DuplicateCollapsed(t *testing.T) {
 	ktest.RequireEqual(t, len(requirements), 1)
 
 	for _, tc := range []struct{ name, source, want string }{
-		{"include first", "@include child.nflow\n@require example.com/foo v1.0.0 { id: root }", "child"},
-		{"parent first", "@require example.com/foo v1.0.0 { id: root }\n@include child.nflow", "root"},
+		{"include first", "@include child.nflow\n@require example.com/foo v1.0.0 { id: same }", "same"},
+		{"parent first", "@require example.com/foo v1.0.0 { id: same }\n@include child.nflow", "same"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := filepath.Join(t.TempDir(), "main.nflow")
 			child := filepath.Join(filepath.Dir(root), "child.nflow")
 			ctx := compiler.WithSourceLoader(t.Context(), compiler.SourceMap{
-				child: "@require example.com/foo v1.0.0 { id: child }",
+				child: "@require example.com/foo v1.0.0 { id: same }",
 			})
 			_, meta, preprocessErr := compiler.Preprocess(ctx, compiler.NewDirectiveTable(Directive, includeext.Directive), tc.source, root)
 			ktest.RequireNoError(t, preprocessErr)
@@ -101,7 +101,7 @@ func TestDirective_DuplicateCollapsed(t *testing.T) {
 	}
 }
 
-func TestSourceRequirementsSameImportVersionAndAliasKeepsFirstOptions(t *testing.T) {
+func TestSourceRequirementsSameImportVersionAndAliasRejectsConflictingOptions(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "main.nflow")
 	child := filepath.Join(filepath.Dir(root), "child.nflow")
 	ctx := compiler.WithSourceLoader(t.Context(), compiler.SourceMap{
@@ -112,12 +112,11 @@ func TestSourceRequirementsSameImportVersionAndAliasKeepsFirstOptions(t *testing
 	ktest.RequireNoError(t, err)
 
 	collected, err := SourceRequirements(meta)
-	ktest.RequireNoError(t, err)
-	ktest.RequireEqual(t, len(collected), 1)
-	ktest.RequireEqual(t, collected[0].Import, "example.com/foo")
-	ktest.RequireEqual(t, collected[0].Version, "v1.0.0")
-	ktest.RequireEqual(t, collected[0].Alias, "foo")
-	ktest.RequireEqual(t, collected[0].Options["id"], "root")
+	ktest.RequireCondition(t, err != nil, "conflicting included options must fail")
+	ktest.RequireEqual(t, len(collected), 0)
+	ktest.RequireErrorContains(t, err, "conflicting options")
+	ktest.RequireErrorContains(t, err, root)
+	ktest.RequireErrorContains(t, err, child)
 }
 
 func TestDirective_MissingModule(t *testing.T) {

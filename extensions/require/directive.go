@@ -2,6 +2,7 @@ package require
 
 import (
 	"context"
+	"maps"
 	"strings"
 	"unicode"
 
@@ -60,24 +61,76 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 		SelectorStart: specBase + selectorStart,
 		SelectorEnd:   specBase + selectorEnd,
 	}
-	req.Out[sourceDeclarationsKey] = append(sourceDeclarationList(req.Out), declaration)
-
-	existing, _ := req.Out["require"].([]Requirement)
-	for i := range existing {
-		old := &existing[i]
-		if old.Import == r.Import && old.Version == r.Version && old.Alias == r.Alias {
-			return compiler.DirectiveRes{Next: next}, nil
-		}
-		if r.Alias != "" && old.Alias == r.Alias {
+	if req.Out == nil {
+		return compiler.DirectiveRes{}, compiler.SourceError(
+			compiler.Position{File: req.File, Line: req.I + 1},
+			"@require: requirement metadata output is unavailable",
+		)
+	}
+	var declarations []SourceDeclaration
+	if raw, exists := req.Out[sourceDeclarationsKey]; exists {
+		var ok bool
+		declarations, ok = raw.([]SourceDeclaration)
+		if !ok {
 			return compiler.DirectiveRes{}, compiler.SourceError(
 				compiler.Position{File: req.File, Line: req.I + 1},
-				"@require: namespace qualifier %q is already used for module %q", r.Alias, old.Import)
+				"@require: invalid declaration metadata type %T", raw,
+			)
 		}
 	}
-	if declareErr := req.Declare("require", requirementKey(&r)); declareErr != nil {
-		return compiler.DirectiveRes{}, declareErr
+	var existing []Requirement
+	if raw, exists := req.Out["require"]; exists {
+		var ok bool
+		existing, ok = raw.([]Requirement)
+		if !ok {
+			return compiler.DirectiveRes{}, compiler.SourceError(
+				compiler.Position{File: req.File, Line: req.I + 1},
+				"@require: invalid requirement metadata type %T", raw,
+			)
+		}
 	}
-	req.Out["require"] = append(existing, r)
+	return recordRequirementMetadata(req, r, declaration, declarations, existing, next)
+}
+
+func recordRequirementMetadata(req compiler.DirectiveReq, requirement Requirement, declaration SourceDeclaration, declarations []SourceDeclaration, existing []Requirement, next int) (compiler.DirectiveRes, error) {
+	for i := range existing {
+		old := &existing[i]
+		if old.Import == requirement.Import && old.Version == requirement.Version && old.Alias == requirement.Alias {
+			previous, found := compiler.DeclarationPosition(req.Out, "require", requirementKey(old))
+			if !found {
+				return compiler.DirectiveRes{}, compiler.SourceError(
+					compiler.Position{File: req.File, Line: req.I + 1},
+					"@require: missing source position for existing declaration %q", requirement.Import,
+				)
+			}
+			if !maps.Equal(old.Options, requirement.Options) {
+				return compiler.DirectiveRes{}, compiler.SourceError(
+					compiler.Position{File: req.File, Line: req.I + 1},
+					"@require: duplicate declaration for %q (version %q, alias %q) has conflicting options; first declared at %s",
+					requirement.Import, requirement.Version, requirement.Alias, previous,
+				)
+			}
+			req.Out[sourceDeclarationsKey] = append(declarations, declaration)
+			return compiler.DirectiveRes{Next: next}, nil
+		}
+		if requirement.Alias != "" && old.Alias == requirement.Alias {
+			previous, found := compiler.DeclarationPosition(req.Out, "require", requirementKey(old))
+			if !found {
+				return compiler.DirectiveRes{}, compiler.SourceError(
+					compiler.Position{File: req.File, Line: req.I + 1},
+					"@require: missing source position for existing namespace qualifier %q", requirement.Alias,
+				)
+			}
+			return compiler.DirectiveRes{}, compiler.SourceError(
+				compiler.Position{File: req.File, Line: req.I + 1},
+				"@require: namespace qualifier %q is already used for module %q; first declared at %s", requirement.Alias, old.Import, previous)
+		}
+	}
+	if err := req.Declare("require", requirementKey(&requirement)); err != nil {
+		return compiler.DirectiveRes{}, err
+	}
+	req.Out[sourceDeclarationsKey] = append(declarations, declaration)
+	req.Out["require"] = append(existing, requirement)
 	return compiler.DirectiveRes{Next: next}, nil
 }
 
@@ -128,11 +181,6 @@ func ParseDirectiveOptions(lines []string, start int, file string) (options map[
 		next = after
 	}
 	return opts, next, nil
-}
-
-func sourceDeclarationList(meta map[string]any) []SourceDeclaration {
-	declarations, _ := meta[sourceDeclarationsKey].([]SourceDeclaration)
-	return declarations
 }
 
 func firstUnquotedBrace(text string) int {

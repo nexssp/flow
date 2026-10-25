@@ -113,3 +113,11 @@ func TestPlanBuildIncludesCanonicalGrammarBootProviders(t *testing.T) {
 	_, err = runner.BuildConfig(bundles)
 	ktest.RequireNoError(t, err)
 }
+
+func TestPlanBuildPropagatesRequirementMetadataErrors(t *testing.T) {
+	_, err := native.PlanBuild([]compiler.BuildSource{{Metadata: map[string]any{"require": "invalid"}}}, nil, false)
+	ktest.RequireErrorContains(t, err, "require metadata has type string")
+
+	_, err = native.PlanBuild(nil, []require.Requirement{{}}, false)
+	ktest.RequireErrorContains(t, err, "empty import and package path")
+}

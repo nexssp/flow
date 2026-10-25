@@ -11,8 +11,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf16"
 	"unicode/utf8"
 
@@ -23,29 +25,42 @@ import (
 
 const lspSource = "nflow"
 
+const (
+	maxLSPHeaderBytes  = 16 * 1024
+	maxLSPMessageBytes = 16 * 1024 * 1024
+)
+
 type flowLanguageServer struct {
-	ctx       context.Context
-	inv       *invocation
-	rootPath  string
-	documents map[string]string
-	out       io.Writer
+	ctx             context.Context
+	inv             *invocation
+	rootPath        string
+	documents       map[string]string
+	documentVersion map[string]int
+	initialized     bool
+	shutdown        bool
+	exitCode        int
+	out             io.Writer
+	writeMu         sync.Mutex
 }
 
 type lspMessage struct {
-	ID     json.RawMessage `json:"id"`
-	Method string          `json:"method"`
-	Params json.RawMessage `json:"params"`
-	Result json.RawMessage `json:"result"`
-	Error  json.RawMessage `json:"error"`
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params"`
+	Result  json.RawMessage `json:"result"`
+	Error   json.RawMessage `json:"error"`
 }
 
 type lspTextDocument struct {
-	URI  string `json:"uri"`
-	Text string `json:"text"`
+	URI     string  `json:"uri"`
+	Text    *string `json:"text"`
+	Version *int    `json:"version"`
 }
 
 type lspTextDocumentIdentifier struct {
-	URI string `json:"uri"`
+	URI     string `json:"uri"`
+	Version *int   `json:"version"`
 }
 
 type lspPosition struct {
@@ -101,14 +116,16 @@ func runLSP(ctx context.Context, inv *invocation, args []string) int {
 	if err := server.serve(os.Stdin, os.Stdout); err != nil {
 		return fatalf("nflow lsp: %v", err)
 	}
-	return 0
+	return server.exitCode
 }
 
 func newFlowLanguageServer(ctx context.Context, inv *invocation) *flowLanguageServer {
 	return &flowLanguageServer{
-		ctx:       ctx,
-		inv:       inv,
-		documents: make(map[string]string),
+		ctx:             ctx,
+		inv:             inv,
+		documents:       make(map[string]string),
+		documentVersion: make(map[string]int),
+		exitCode:        1,
 	}
 }
 
@@ -129,9 +146,25 @@ func (s *flowLanguageServer) serve(input io.Reader, output io.Writer) error {
 		if err != nil {
 			return err
 		}
-		var message lspMessage
-		if err := json.Unmarshal(body, &message); err != nil {
-			if writeErr := s.respondError(json.RawMessage("null"), -32700, "parse error: "+err.Error()); writeErr != nil {
+		message, decodeErr := decodeLSPMessage(body)
+		if decodeErr != nil {
+			if errors.Is(decodeErr, errInvalidLSPParams) {
+				if len(message.ID) == 0 {
+					slog.Warn("ignoring malformed LSP notification", "method", message.Method, "error", decodeErr)
+					continue
+				}
+				if writeErr := s.respondError(message.ID, -32602, decodeErr.Error()); writeErr != nil {
+					return writeErr
+				}
+				continue
+			}
+			code := -32700
+			messageText := "parse error: " + decodeErr.Error()
+			if errors.Is(decodeErr, errInvalidLSPRequest) {
+				code = -32600
+				messageText = decodeErr.Error()
+			}
+			if writeErr := s.respondError(json.RawMessage("null"), code, messageText); writeErr != nil {
 				return writeErr
 			}
 			continue
@@ -145,16 +178,139 @@ func (s *flowLanguageServer) serve(input io.Reader, output io.Writer) error {
 	}
 }
 
+var (
+	errInvalidLSPRequest = errors.New("invalid JSON-RPC request")
+	errInvalidLSPParams  = errors.New("invalid JSON-RPC params")
+)
+
+func decodeLSPMessage(body []byte) (lspMessage, error) {
+	var value any
+	if err := json.Unmarshal(body, &value); err != nil {
+		return lspMessage{}, err
+	}
+	if _, ok := value.(map[string]any); !ok {
+		return lspMessage{}, fmt.Errorf("%w: message must be a JSON object", errInvalidLSPRequest)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return lspMessage{}, fmt.Errorf("%w: %w", errInvalidLSPRequest, err)
+	}
+	var message lspMessage
+	if err := json.Unmarshal(body, &message); err != nil {
+		return lspMessage{}, fmt.Errorf("%w: %w", errInvalidLSPRequest, err)
+	}
+	if message.JSONRPC != "2.0" || message.Method == "" {
+		return lspMessage{}, fmt.Errorf("%w: jsonrpc must be \"2.0\" and method must be a non-empty string", errInvalidLSPRequest)
+	}
+	if id, exists := fields["id"]; exists && !validLSPRequestID(id) {
+		return lspMessage{}, fmt.Errorf("%w: id must be a string, number, or null", errInvalidLSPRequest)
+	}
+	if params, exists := fields["params"]; exists {
+		trimmed := strings.TrimSpace(string(params))
+		if trimmed == "" || trimmed[0] != '{' && trimmed[0] != '[' {
+			return message, fmt.Errorf("%w: params must be an object or array", errInvalidLSPParams)
+		}
+	}
+	return message, nil
+}
+
+func validLSPRequestID(raw json.RawMessage) bool {
+	value := strings.TrimSpace(string(raw))
+	if value == "null" {
+		return true
+	}
+	if value == "" {
+		return false
+	}
+	if value[0] == '"' {
+		var id string
+		return json.Unmarshal(raw, &id) == nil
+	}
+	if value[0] == '-' || value[0] >= '0' && value[0] <= '9' {
+		var id json.Number
+		return json.Unmarshal(raw, &id) == nil
+	}
+	return false
+}
+
 func (s *flowLanguageServer) handle(message lspMessage) error {
+	proceed, err := s.validateMethodKind(message)
+	if !proceed || err != nil {
+		return err
+	}
+	if message.Method == "exit" {
+		if s.shutdown {
+			s.exitCode = 0
+		} else {
+			s.exitCode = 1
+		}
+		return nil
+	}
+	proceed, err = s.validateLifecycle(message)
+	if !proceed || err != nil {
+		return err
+	}
+	return s.dispatch(message)
+}
+
+func (s *flowLanguageServer) validateMethodKind(message lspMessage) (bool, error) {
+	switch message.Method {
+	case "initialized", "$/cancelRequest", "exit", "textDocument/didOpen", "textDocument/didChange", "textDocument/didClose":
+		if len(message.ID) != 0 {
+			return false, s.respondError(message.ID, -32600, message.Method+" is a notification and must not have an id")
+		}
+	case "initialize", "shutdown", "textDocument/completion", "textDocument/hover", "textDocument/formatting":
+		if len(message.ID) == 0 {
+			slog.Warn("ignoring LSP request method sent as a notification", "method", message.Method)
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func (s *flowLanguageServer) validateLifecycle(message lspMessage) (bool, error) {
+	if message.Method != "initialize" && message.Method != "$/cancelRequest" && !s.initialized {
+		if len(message.ID) != 0 {
+			return false, s.respondError(message.ID, -32002, "server not initialized")
+		}
+		slog.Warn("ignoring LSP notification before initialize", "method", message.Method)
+		return false, nil
+	}
+	if s.shutdown {
+		if len(message.ID) != 0 {
+			return false, s.respondError(message.ID, -32600, "server has been shut down")
+		}
+		slog.Warn("ignoring LSP notification after shutdown", "method", message.Method)
+		return false, nil
+	}
+	return true, nil
+}
+
+func (s *flowLanguageServer) dispatch(message lspMessage) error {
 	switch message.Method {
 	case "initialize":
+		if s.initialized {
+			if len(message.ID) != 0 {
+				return s.respondError(message.ID, -32600, "initialize may only be requested once")
+			}
+			return nil
+		}
 		return s.handleInitialize(message)
-	case "initialized", "$/cancelRequest", "exit":
+	case "initialized":
+		return nil
+	case "$/cancelRequest":
+		// All current handlers are synchronous; no request work remains in flight
+		// while this notification is read, so there is nothing to cancel.
 		return nil
 	case "shutdown":
-		if len(message.ID) != 0 {
-			return s.respond(message.ID, nil)
+		if len(message.ID) == 0 {
+			return s.invalidParams(message, errors.New("shutdown must be a request with an id"))
 		}
+		if err := s.respond(message.ID, nil); err != nil {
+			return err
+		}
+		s.shutdown = true
+		s.exitCode = 0
 		return nil
 	case "textDocument/didOpen":
 		return s.handleDidOpen(message)
@@ -198,7 +354,7 @@ func (s *flowLanguageServer) handleInitialize(message lspMessage) error {
 			}
 		}
 	}
-	return s.respond(message.ID, map[string]any{
+	err = s.respond(message.ID, map[string]any{
 		"capabilities": map[string]any{
 			"textDocumentSync":           map[string]any{"openClose": true, "change": 1},
 			"documentFormattingProvider": true,
@@ -207,6 +363,10 @@ func (s *flowLanguageServer) handleInitialize(message lspMessage) error {
 		},
 		"serverInfo": map[string]string{"name": "nflow", versionCommand: compiler.Version},
 	})
+	if err == nil {
+		s.initialized = true
+	}
+	return err
 }
 
 func (s *flowLanguageServer) handleDidOpen(message lspMessage) error {
@@ -217,35 +377,58 @@ func (s *flowLanguageServer) handleDidOpen(message lspMessage) error {
 	if err != nil || !valid {
 		return err
 	}
-	if params.TextDocument == nil || params.TextDocument.URI == "" {
-		return s.invalidParams(message, errors.New("textDocument.uri is required"))
+	if params.TextDocument == nil || params.TextDocument.URI == "" || params.TextDocument.Text == nil || params.TextDocument.Version == nil {
+		return s.invalidParams(message, errors.New("textDocument.uri, text, and version are required"))
 	}
 	uri := params.TextDocument.URI
-	s.documents[uri] = params.TextDocument.Text
-	return s.publishDiagnostics(uri, s.compileDiagnostics(uri, params.TextDocument.Text))
+	if _, exists := s.documents[uri]; exists {
+		slog.Warn("ignoring duplicate LSP document open", "uri", uri)
+		return nil
+	}
+	text, version := *params.TextDocument.Text, *params.TextDocument.Version
+	s.documents[uri] = text
+	s.documentVersion[uri] = version
+	return s.publishDiagnostics(uri, s.compileDiagnostics(uri, text), &version)
 }
 
 func (s *flowLanguageServer) handleDidChange(message lspMessage) error {
 	var params struct {
 		TextDocument   *lspTextDocumentIdentifier `json:"textDocument"`
 		ContentChanges []struct {
-			Text string `json:"text"`
+			Text        *string   `json:"text"`
+			Range       *lspRange `json:"range"`
+			RangeLength *int      `json:"rangeLength"`
 		} `json:"contentChanges"`
 	}
 	valid, err := s.decodeParams(message, &params)
 	if err != nil || !valid {
 		return err
 	}
-	if params.TextDocument == nil || params.TextDocument.URI == "" {
-		return s.invalidParams(message, errors.New("textDocument.uri is required"))
+	if params.TextDocument == nil || params.TextDocument.URI == "" || params.TextDocument.Version == nil {
+		return s.invalidParams(message, errors.New("textDocument.uri and version are required"))
 	}
 	if len(params.ContentChanges) == 0 {
-		return nil
+		return s.invalidParams(message, errors.New("contentChanges must contain a full-document text update"))
 	}
 	uri := params.TextDocument.URI
-	text := params.ContentChanges[len(params.ContentChanges)-1].Text
+	if _, exists := s.documents[uri]; !exists {
+		slog.Warn("ignoring change for unopened LSP document", "uri", uri)
+		return nil
+	}
+	for i, change := range params.ContentChanges {
+		if change.Text == nil || change.Range != nil || change.RangeLength != nil {
+			return s.invalidParams(message, fmt.Errorf("contentChanges[%d] must be a full-document text update", i))
+		}
+	}
+	version := *params.TextDocument.Version
+	if version <= s.documentVersion[uri] {
+		slog.Debug("ignoring stale LSP document change", "uri", uri, "version", version, "currentVersion", s.documentVersion[uri])
+		return nil
+	}
+	text := *params.ContentChanges[len(params.ContentChanges)-1].Text
 	s.documents[uri] = text
-	return s.publishDiagnostics(uri, s.compileDiagnostics(uri, text))
+	s.documentVersion[uri] = version
+	return s.publishDiagnostics(uri, s.compileDiagnostics(uri, text), &version)
 }
 
 func (s *flowLanguageServer) handleDidClose(message lspMessage) error {
@@ -259,8 +442,15 @@ func (s *flowLanguageServer) handleDidClose(message lspMessage) error {
 	if params.TextDocument == nil || params.TextDocument.URI == "" {
 		return s.invalidParams(message, errors.New("textDocument.uri is required"))
 	}
-	delete(s.documents, params.TextDocument.URI)
-	return s.publishDiagnostics(params.TextDocument.URI, nil)
+	uri := params.TextDocument.URI
+	version, hadDocument := s.documentVersion[uri]
+	delete(s.documents, uri)
+	delete(s.documentVersion, uri)
+	var versionPtr *int
+	if hadDocument {
+		versionPtr = &version
+	}
+	return s.publishDiagnostics(uri, []lspDiagnostic{}, versionPtr)
 }
 
 func (s *flowLanguageServer) handleCompletion(message lspMessage) error {
@@ -323,14 +513,18 @@ func (s *flowLanguageServer) handleFormatting(message lspMessage) error {
 		return nil
 	}
 	uri := params.TextDocument.URI
-	text := s.documents[uri]
+	text, exists := s.documents[uri]
+	if !exists {
+		return s.invalidParams(message, fmt.Errorf("document %q is not open", uri))
+	}
+	version := s.documentVersion[uri]
 	formatter, err := s.formatterFor(uri, text)
 	if err != nil {
-		return s.formattingError(message.ID, uri, text, err)
+		return s.formattingError(message.ID, uri, text, &version, err)
 	}
 	formatted, err := formatter.Format(s.ctx, text, s.sourceName(uri))
 	if err != nil {
-		return s.formattingError(message.ID, uri, text, err)
+		return s.formattingError(message.ID, uri, text, &version, err)
 	}
 	edit := map[string]any{
 		"range":   lspRange{Start: lspPosition{}, End: lspEndPosition(text)},
@@ -339,15 +533,19 @@ func (s *flowLanguageServer) handleFormatting(message lspMessage) error {
 	return s.respond(message.ID, []any{edit})
 }
 
-func (s *flowLanguageServer) formattingError(id json.RawMessage, uri, text string, err error) error {
+func (s *flowLanguageServer) formattingError(id json.RawMessage, uri, text string, version *int, err error) error {
 	err = lspRequirementError(err)
-	if publishErr := s.publishDiagnostics(uri, []lspDiagnostic{diagnosticFromError(text, err)}); publishErr != nil {
+	if publishErr := s.publishDiagnostics(uri, []lspDiagnostic{diagnosticFromError(text, err)}, version); publishErr != nil {
 		return publishErr
 	}
 	return s.respondError(id, -32603, err.Error())
 }
 
 func (s *flowLanguageServer) decodeParams(message lspMessage, target any) (bool, error) {
+	params := strings.TrimSpace(string(message.Params))
+	if params == "" || params == "null" {
+		return false, s.invalidParams(message, errors.New("params object is required"))
+	}
 	if err := json.Unmarshal(message.Params, target); err != nil {
 		return false, s.invalidParams(message, err)
 	}
@@ -413,11 +611,15 @@ func (s *flowLanguageServer) completions(position lspPosition, triggerKind int, 
 	return map[string]any{"isIncomplete": false, "items": items}
 }
 
-func (s *flowLanguageServer) publishDiagnostics(uri string, diagnostics []lspDiagnostic) error {
-	return s.notify("textDocument/publishDiagnostics", map[string]any{
-		"uri":         uri,
-		"diagnostics": diagnostics,
-	})
+func (s *flowLanguageServer) publishDiagnostics(uri string, diagnostics []lspDiagnostic, version *int) error {
+	if diagnostics == nil {
+		diagnostics = []lspDiagnostic{}
+	}
+	params := map[string]any{"uri": uri, "diagnostics": diagnostics}
+	if version != nil {
+		params["version"] = *version
+	}
+	return s.notify("textDocument/publishDiagnostics", params)
 }
 
 func (s *flowLanguageServer) respond(id json.RawMessage, result any) error {
@@ -441,57 +643,147 @@ func (s *flowLanguageServer) write(message any) error {
 	if err != nil {
 		return err
 	}
-	if _, writeErr := fmt.Fprintf(s.out, "Content-Length: %d\r\n\r\n", len(body)); writeErr != nil {
-		return writeErr
+	if len(body) > maxLSPMessageBytes {
+		return fmt.Errorf("outgoing LSP message exceeds %d-byte limit", maxLSPMessageBytes)
 	}
-	_, err = s.out.Write(body)
-	return err
+	if s.out == nil {
+		return errors.New("nflow lsp: output is unavailable")
+	}
+	frame := make([]byte, 0, len(body)+32)
+	frame = append(frame, []byte(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body)))...)
+	frame = append(frame, body...)
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	return writeLSPAll(s.out, frame)
 }
 
 func readLSPFrame(reader *bufio.Reader) ([]byte, error) {
-	contentLength := -1
-	for {
-		line, err := reader.ReadString('\n')
-		if errors.Is(err, io.EOF) && line == "" {
-			return nil, io.EOF
-		}
-		if err != nil && !errors.Is(err, io.EOF) {
-			return nil, err
-		}
-		line = strings.TrimSpace(line)
-		if line == "" {
-			break
-		}
-		name, value, ok := strings.Cut(line, ":")
-		if ok && strings.EqualFold(strings.TrimSpace(name), "Content-Length") {
-			parsed, parseErr := strconv.Atoi(strings.TrimSpace(value))
-			if parseErr != nil || parsed < 0 {
-				return nil, fmt.Errorf("invalid LSP Content-Length %q", value)
-			}
-			contentLength = parsed
-		}
-		if errors.Is(err, io.EOF) {
-			return nil, io.ErrUnexpectedEOF
-		}
-	}
-	if contentLength < 0 {
-		return nil, errors.New("missing LSP Content-Length header")
+	contentLength, err := readLSPHeader(reader)
+	if err != nil {
+		return nil, err
 	}
 	body := make([]byte, contentLength)
 	if _, err := io.ReadFull(reader, body); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, io.ErrUnexpectedEOF
+		}
 		return nil, err
 	}
 	return body, nil
 }
 
+func readLSPHeader(reader *bufio.Reader) (int, error) {
+	contentLength := -1
+	headerBytes := 0
+	for {
+		line, err := readLSPHeaderLine(reader, maxLSPHeaderBytes-headerBytes)
+		if errors.Is(err, io.EOF) {
+			if headerBytes == 0 {
+				return 0, io.EOF
+			}
+			return 0, io.ErrUnexpectedEOF
+		}
+		if err != nil {
+			return 0, err
+		}
+		headerBytes += len(line)
+		if !strings.HasSuffix(string(line), "\r\n") {
+			return 0, errors.New("LSP headers must use CRLF line endings")
+		}
+		line = line[:len(line)-2]
+		if len(line) == 0 {
+			break
+		}
+		if err := parseLSPHeaderLine(string(line), &contentLength); err != nil {
+			return 0, err
+		}
+	}
+	if contentLength < 0 {
+		return 0, errors.New("missing LSP Content-Length header")
+	}
+	return contentLength, nil
+}
+
+func parseLSPHeaderLine(line string, contentLength *int) error {
+	name, value, ok := strings.Cut(line, ":")
+	if !ok || strings.TrimSpace(name) == "" {
+		return fmt.Errorf("invalid LSP header %q", line)
+	}
+	if !strings.EqualFold(strings.TrimSpace(name), "Content-Length") {
+		return nil
+	}
+	if *contentLength >= 0 {
+		return errors.New("duplicate LSP Content-Length header")
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return errors.New("invalid empty LSP Content-Length")
+	}
+	for _, digit := range value {
+		if digit < '0' || digit > '9' {
+			return fmt.Errorf("invalid LSP Content-Length %q", value)
+		}
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 {
+		return fmt.Errorf("invalid LSP Content-Length %q", value)
+	}
+	if parsed > maxLSPMessageBytes {
+		return fmt.Errorf("LSP message exceeds %d-byte limit", maxLSPMessageBytes)
+	}
+	*contentLength = parsed
+	return nil
+}
+
+func readLSPHeaderLine(reader *bufio.Reader, remaining int) ([]byte, error) {
+	if remaining <= 0 {
+		return nil, fmt.Errorf("LSP headers exceed %d-byte limit", maxLSPHeaderBytes)
+	}
+	var line []byte
+	for {
+		fragment, err := reader.ReadSlice('\n')
+		if len(line)+len(fragment) > remaining {
+			return nil, fmt.Errorf("LSP headers exceed %d-byte limit", maxLSPHeaderBytes)
+		}
+		line = append(line, fragment...)
+		if err == nil {
+			return line, nil
+		}
+		if errors.Is(err, bufio.ErrBufferFull) {
+			continue
+		}
+		if errors.Is(err, io.EOF) {
+			if len(line) == 0 {
+				return nil, io.EOF
+			}
+			return nil, io.ErrUnexpectedEOF
+		}
+		return nil, err
+	}
+}
+
+func writeLSPAll(writer io.Writer, data []byte) error {
+	for len(data) > 0 {
+		written, err := writer.Write(data)
+		if written < 0 || written > len(data) {
+			return fmt.Errorf("invalid LSP writer count %d", written)
+		}
+		data = data[written:]
+		if err != nil {
+			return err
+		}
+		if written == 0 {
+			return io.ErrShortWrite
+		}
+	}
+	return nil
+}
+
 func diagnosticFromError(source string, err error) lspDiagnostic {
 	start := lspPosition{}
-	if position, ok := compiler.PositionOf(err); ok {
-		start = compilerPositionToLSP(source, position)
-	}
 	end := start
-	if start.Character < lspLineLength(source, start.Line) {
-		end.Character++
+	if position, ok := compiler.PositionOf(err); ok {
+		start, end = compilerPositionRangeToLSP(source, position)
 	}
 	return lspDiagnostic{
 		Range:    lspRange{Start: start, End: end},
@@ -501,7 +793,7 @@ func diagnosticFromError(source string, err error) lspDiagnostic {
 	}
 }
 
-func compilerPositionToLSP(source string, position compiler.Position) lspPosition {
+func compilerPositionRangeToLSP(source string, position compiler.Position) (start, end lspPosition) {
 	lines := strings.Split(strings.ReplaceAll(source, "\r\n", "\n"), "\n")
 	line := max(position.Line-1, 0)
 	if line >= len(lines) {
@@ -516,15 +808,16 @@ func compilerPositionToLSP(source string, position compiler.Position) lspPositio
 	for column > 0 && column < len(text) && !utf8.RuneStart(text[column]) {
 		column--
 	}
-	return lspPosition{Line: line, Character: utf16Length(text[:column])}
-}
-
-func lspLineLength(source string, line int) int {
-	lines := strings.Split(strings.ReplaceAll(source, "\r\n", "\n"), "\n")
-	if line < 0 || line >= len(lines) {
-		return 0
+	start = lspPosition{Line: line, Character: utf16Length(text[:column])}
+	end = start
+	if column < len(text) {
+		_, size := utf8.DecodeRuneInString(text[column:])
+		if size < 1 {
+			size = 1
+		}
+		end.Character += utf16Length(text[column:min(column+size, len(text))])
 	}
-	return utf16Length(strings.TrimSuffix(lines[line], "\r"))
+	return start, end
 }
 
 func utf16Length(text string) int {
@@ -569,12 +862,26 @@ func (s *flowLanguageServer) sourceName(uri string) string {
 
 func lspFileURIPath(uri string) string {
 	parsed, err := url.Parse(uri)
-	if err != nil || parsed.Scheme != "file" {
+	if err != nil || parsed.Scheme != "file" || parsed.Opaque != "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return ""
 	}
 	name := parsed.Path
+	if name == "" {
+		return ""
+	}
+	if parsed.Host != "" && !strings.EqualFold(parsed.Host, "localhost") {
+		if runtime.GOOS != "windows" {
+			return ""
+		}
+		return filepath.Join(`\\`+parsed.Host, filepath.FromSlash(name))
+	}
 	if len(name) >= 3 && name[0] == '/' && name[2] == ':' {
+		if runtime.GOOS != "windows" {
+			return ""
+		}
 		name = name[1:]
+	} else if !filepath.IsAbs(filepath.FromSlash(name)) {
+		return ""
 	}
 	return filepath.FromSlash(name)
 }

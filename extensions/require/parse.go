@@ -71,6 +71,9 @@ func splitOptions(raw string) (map[string]string, error) {
 			if key == "" {
 				return nil, xerr.Validation(fmt.Sprintf("empty key in %q", pair))
 			}
+			if _, exists := out[key]; exists {
+				return nil, xerr.Validation(fmt.Sprintf("duplicate option %q", key))
+			}
 			out[key] = compiler.TrimQuotes(strings.TrimSpace(pair[colon+1:]))
 		}
 	}
