@@ -870,7 +870,7 @@ func lspFileURIPath(uri string) string {
 		return ""
 	}
 	if parsed.Host != "" && !strings.EqualFold(parsed.Host, "localhost") {
-		if runtime.GOOS != "windows" {
+		if runtime.GOOS != windowsOS {
 			return ""
 		}
 		return filepath.Join(`\\`+parsed.Host, filepath.FromSlash(name))

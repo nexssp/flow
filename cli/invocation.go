@@ -17,19 +17,20 @@ import (
 )
 
 type invocation struct {
-	host            *runner.Host
-	injected        []compiler.Bundle
-	targets         map[string]struct{}
-	nativeFactory   func() []compiler.Bundle
-	native          []compiler.Bundle
-	nativeErr       error
-	nativeMade      bool
-	directives      *compiler.DirectiveTable
-	selftest        []compiler.Bundle
-	selftestFactory func([]compiler.Bundle) []compiler.Bundle
-	selfErr         error
-	selfMade        bool
-	required        map[string]compiler.Bundle
+	host             *runner.Host
+	toolchainEnabled bool
+	injected         []compiler.Bundle
+	targets          map[string]struct{}
+	nativeFactory    func() []compiler.Bundle
+	native           []compiler.Bundle
+	nativeErr        error
+	nativeMade       bool
+	directives       *compiler.DirectiveTable
+	selftest         []compiler.Bundle
+	selftestFactory  func([]compiler.Bundle) []compiler.Bundle
+	selfErr          error
+	selfMade         bool
+	required         map[string]compiler.Bundle
 }
 
 func newInvocation(bundles []compiler.Bundle, targets []string) (*invocation, error) {

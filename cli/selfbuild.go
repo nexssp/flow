@@ -73,7 +73,7 @@ func goInstallTarget(ctx context.Context, name string) string {
 	if bin == "" {
 		bin = "."
 	}
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windowsOS {
 		name += ".exe"
 	}
 	return filepath.Join(bin, name)

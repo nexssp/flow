@@ -43,7 +43,7 @@ var helpRegistry = map[string]helpText{
 			`nflow run --info flows/client.nflow`,
 		},
 	},
-	"build": {
+	buildCommand: {
 		Summary: "Compile a .nflow file into a standalone executable with embedded source and @require modules.",
 		Usage:   "nflow build <file.nflow> [-o <output>] [--debug] [--no-trimpath] [--all-bundles]",
 		Flags: `  -o, --output FILE   output binary (default: source filename)
@@ -54,7 +54,7 @@ var helpRegistry = map[string]helpText{
 			`nflow build flows/client.nflow -o client.exe`,
 		},
 	},
-	"serve": {
+	serveCommand: {
 		Summary: "Validate a .nflow file for serve mode. The listener is not implemented in this release.",
 		Usage:   "nflow serve <file.nflow> [--allow-exec]",
 		Flags:   `      --allow-exec   acknowledge that external.exec/external.wasm will run host commands`,
@@ -97,7 +97,7 @@ var helpRegistry = map[string]helpText{
 			`nflow lint ./examples/...`,
 		},
 	},
-	"explain": {
+	explainCommand: {
 		Summary: "Show effective modifiers, the resolved AST, the built Kernel action graph, or the AST-derived plan.",
 		Usage:   "nflow explain <file.nflow> [--ast|--actions|--plan] [--json|--dot]",
 		Flags: `      --ast         show the effective AST
@@ -114,7 +114,7 @@ var helpRegistry = map[string]helpText{
 			`nflow explain --actions --dot flows/client.nflow > actions.dot`,
 		},
 	},
-	"expand": {
+	expandCommand: {
 		Summary: "Show what macros in a .nflow file expand to, with definition and invocation lines.",
 		Usage:   "nflow expand <file.nflow> [--macro=NAME[,NAME...]]",
 		Flags:   `      --macro=NAMES   only show expansions of the named macros`,
@@ -124,7 +124,7 @@ var helpRegistry = map[string]helpText{
 			`nflow expand flows/client.nflow --macro=require_id,labeled`,
 		},
 	},
-	"catalog": {
+	catalogCommand: {
 		Summary: "Dump the compiler surface (atoms, modifiers, directives, operators) as JSON.",
 		Usage:   "nflow catalog [--flow FILE]",
 		Flags: `      --flow FILE     load @require bundles from FILE before dumping
@@ -159,7 +159,7 @@ Self bench:
 			`nflow self bench --path ./flows --list`,
 		},
 	},
-	"require": {
+	requireCommand: {
 		Summary: "Generate require glue or manage direct @require selectors in source.",
 		Usage:   "nflow require <file.nflow> [-o out.go] [-pkg main] | nflow require <check|update|pin> <file.nflow> [--package <pattern>] | nflow require reset <file.nflow>",
 		Flags:   `      --package PATTERN  select direct requirements by exact import or glob`,
@@ -180,13 +180,18 @@ Self bench:
 			`nflow pin flows/client.nflow`,
 		},
 	},
-	"completion": {
+	completionCommand: {
 		Summary: "Print a shell completion script.",
 		Usage:   "nflow completion <bash|zsh|pwsh>",
 		Examples: []string{
 			`nflow completion bash > ~/.local/share/bash-completion/completions/nflow`,
 			`nflow completion pwsh | Out-String | Invoke-Expression`,
 		},
+	},
+	toolchainCommand: {
+		Summary:  "Pin an exact NFlow CLI release in nflow.lock.",
+		Usage:    "nflow toolchain pin [version]",
+		Examples: []string{`nflow toolchain pin v0.44.2`, `nflow toolchain pin`},
 	},
 	versionCommand: {
 		Summary:  "Print build metadata offline, or check the latest stable GitHub release without updating.",

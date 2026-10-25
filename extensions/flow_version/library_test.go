@@ -109,6 +109,47 @@ func TestNFlowVersion_RangeBoundaries(t *testing.T) {
 	}
 }
 
+func TestSatisfiesConstraintUsesDirectiveRangeGrammar(t *testing.T) {
+	for _, tc := range []struct {
+		constraint string
+		version    string
+		want       bool
+	}{
+		{">=0.37.0 <0.40.0", "v0.38.0", true},
+		{">= 0.37.0 < 0.40.0", "v0.38.0", true},
+		{"<0.38.0", "v0.38.0", false},
+	} {
+		got, err := SatisfiesConstraint(tc.constraint, tc.version)
+		if err != nil || got != tc.want {
+			t.Fatalf("SatisfiesConstraint(%q, %q) = (%t, %v), want %t", tc.constraint, tc.version, got, err, tc.want)
+		}
+	}
+	if _, err := SatisfiesConstraint(">=0.7.0 || <0.8.0", "v0.7.1"); err == nil {
+		t.Fatal("unsupported OR constraint was accepted")
+	}
+}
+
+func TestDeferredCompatibilityCheckValidatesButDoesNotSelectEngine(t *testing.T) {
+	withCompilerVersion(t, "v0.7.0")
+	req := compiler.DirectiveReq{
+		Lines: []string{`@nflow_version ">=99.0.0"`},
+		I:     0,
+		Out:   map[string]any{},
+		File:  "test.nflow",
+	}
+	_, err := handleDirective(WithDeferredCompatibilityCheck(context.Background()), req)
+	ktest.RequireNoError(t, err)
+
+	bad := compiler.DirectiveReq{
+		Lines: []string{`@nflow_version ">="`},
+		I:     0,
+		Out:   map[string]any{},
+		File:  "test.nflow",
+	}
+	_, err = handleDirective(WithDeferredCompatibilityCheck(context.Background()), bad)
+	ktest.RequireErrorContains(t, err, "invalid constraint")
+}
+
 func TestNFlowVersion_DevCompilerSkipsCheck(t *testing.T) {
 	withCompilerVersion(t, compiler.VersionUnknown)
 

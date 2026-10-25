@@ -33,24 +33,34 @@ func setupLogger() {
 	slog.SetDefault(slog.New(handler))
 }
 
-const versionCommand = "version"
+const (
+	versionCommand    = "version"
+	buildCommand      = "build"
+	serveCommand      = "serve"
+	explainCommand    = "explain"
+	expandCommand     = "expand"
+	catalogCommand    = "catalog"
+	completionCommand = "completion"
+	requireCommand    = "require"
+	toolchainCommand  = "toolchain"
+)
 
 var commands = map[string]func(context.Context, *invocation, []string) int{
 	"init": func(_ context.Context, _ *invocation, args []string) int { return runInit(args) },
 	"run":  runFlowInInvocation,
-	"build": func(ctx context.Context, inv *invocation, args []string) int {
+	buildCommand: func(ctx context.Context, inv *invocation, args []string) int {
 		return builder.RunBuild(ctx, args, inv.sourceRequiresFromFile)
 	},
-	"serve":      runServe,
-	"lsp":        runLSP,
-	"lint":       runLintInInvocation,
-	"explain":    runExplain,
-	"fmt":        runFmt,
-	"expand":     runExpand,
-	"catalog":    runCatalog,
-	"list":       runList,
-	"show":       runShow,
-	"completion": func(_ context.Context, _ *invocation, args []string) int { return runCompletion(args) },
+	serveCommand:      runServe,
+	"lsp":             runLSP,
+	"lint":            runLintInInvocation,
+	explainCommand:    runExplain,
+	"fmt":             runFmt,
+	expandCommand:     runExpand,
+	catalogCommand:    runCatalog,
+	"list":            runList,
+	"show":            runShow,
+	completionCommand: func(_ context.Context, _ *invocation, args []string) int { return runCompletion(args) },
 }
 
 func Run(args []string) int {
@@ -62,12 +72,23 @@ func RunContext(ctx context.Context, args []string) int {
 	if err != nil {
 		return fatalf("flow host: %v", err)
 	}
+	inv.toolchainEnabled = true
 	return runCLIWithSignals(ctx, inv, args, registerProcessSignals)
 }
 
 func runCLI(ctx context.Context, inv *invocation, args []string) int {
 	ctx = builder.WithGoDiagnostics(ctx)
 	setupLogger()
+	if inv != nil && inv.toolchainEnabled {
+		if code, handled := maybeLaunchToolchain(ctx, inv, args); handled {
+			return code
+		}
+		cleanArgs, _, err := stripNFlowVersionFlag(args)
+		if err != nil {
+			return fatalf("%v", err)
+		}
+		args = cleanArgs
+	}
 
 	if len(args) == 0 {
 		PrintTopHelp(os.Stdout)
@@ -98,7 +119,7 @@ func runCLI(ctx context.Context, inv *invocation, args []string) int {
 	if cmd == "self" {
 		return runSelf(ctx, inv, rest)
 	}
-	if cmd == "require" {
+	if cmd == requireCommand {
 		return handleRequire(ctx, inv, rest)
 	}
 	if cmd == "pin" {

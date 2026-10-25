@@ -497,4 +497,22 @@ nflow require reset flows/client.nflow
 
 ### Compiler-version guard
 
-Declare `@nflow_version ">=0.38.0"` in a flow to require a compatible released compiler. `nflow lint` checks this guard as part of compilation; development/unknown builds retain the existing bypass. The previous directive spelling is no longer supported (breaking syntax change). This spelling targets the next release, planned `v0.38.0`; it is not present in the existing `v0.37.0` tag.
+Declare `@nflow_version ">=0.38.0"` in a flow to require a compatible compiler. This is a compatibility range, not an engine selector. The generic `nflow` CLI checks file-based commands before compiling; if its installed release is outside the range, it selects the newest official stable release satisfying the range, downloads the platform archive, verifies its published SHA-256 checksum, and caches the verified core. If the installed release already satisfies the range, no download occurs. A development or unknown build also resolves a declared constraint to a matching stable release because it cannot establish compatibility itself. For equality-only version constraints, a verified cache hit is hash-checked and reused without contacting the release API; range constraints still query online for the newest compatible release. Offline resolution uses only a previously verified compatible cache. With no source constraint, development/unknown builds keep running unchanged; an exact `nflow.lock` or `--nflow-version` selection is honored whether the launcher is a development or release build.
+
+For source-file execution (`nflow file.nflow` or `nflow run file.nflow`), the launcher reports the selected core on `stderr` before execution. A switch reports both the current and selected release; a development launcher selecting a released core reports `NFlow current dev -> selected v<version>`. A compatible core reports `using NFlow <version>`. The message includes `@nflow_version`, `nflow.lock`, or `--nflow-version` details when they determine selection. It does not alter workflow output on `stdout`; formatter, lint, and info commands do not print the runtime notice.
+
+For reproducible projects, explicitly write an exact release pin:
+
+```sh
+nflow toolchain pin v0.44.2
+```
+
+This writes only `nflow.lock` in the current directory, containing the exact tag `v0.44.2`; it does not edit `.nflow` source. Running `nflow toolchain pin` without a version pins the current stable release. A one-off selector also works without changing the lock:
+
+```sh
+nflow --nflow-version v0.44.2 run flows/client.nflow
+```
+
+When a lock or explicit selector is present, the exact official release is used and must still satisfy every declared `@nflow_version` range. The launcher passes command arguments directly (without a shell), preserves standard streams and exit status, and marks the child process to prevent repeated resolution. If offline, it uses only a previously verified compatible cache; otherwise it reports that no verified cache is available. `nflow lsp` and `nflow fmt --stdin` have no source path at startup, so use an explicit selector or `nflow.lock`; editor clients should run them from the project directory.
+
+The previous directive spelling is no longer supported. The constraint grammar remains whitespace-separated comparisons (`=`, `==`, `>=`, `<=`, `>`, `<`) with AND semantics; it does not add OR, wildcard, caret, or tilde ranges.

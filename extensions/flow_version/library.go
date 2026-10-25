@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xctx"
 
 	compiler "github.com/nexssp/flow/compiler"
 )
@@ -57,7 +58,44 @@ var Directive = compiler.Directive{
 	Handler: handleDirective,
 }
 
-func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
+var deferredCompatibilityCheck = xctx.NewKey[bool]("flow.version.deferred_compatibility_check")
+
+// WithDeferredCompatibilityCheck lets the CLI inspect and validate a source's
+// declared range before selecting the engine that will compile it.
+func WithDeferredCompatibilityCheck(ctx context.Context) context.Context {
+	return deferredCompatibilityCheck.With(ctx, true)
+}
+
+// SatisfiesConstraint reports whether version meets the same comparator grammar
+// used by @nflow_version. Version must be an exact MAJOR.MINOR.PATCH release.
+func SatisfiesConstraint(constraint, version string) (bool, error) {
+	got, err := parseSemver(version)
+	if err != nil {
+		return false, fmt.Errorf("invalid release version %q: %w", version, err)
+	}
+	parts := strings.Fields(constraint)
+	if len(parts) == 0 {
+		return false, fmt.Errorf("invalid constraint %q: no version terms", constraint)
+	}
+	for i := 0; i < len(parts); i++ {
+		part := parts[i]
+		if _, version := splitOperator(part); version == "" && i+1 < len(parts) {
+			part += parts[i+1]
+			i++
+		}
+		op, wantRaw := splitOperator(part)
+		want, err := parseSemver(wantRaw)
+		if err != nil {
+			return false, fmt.Errorf("invalid constraint %q: %w", constraint, err)
+		}
+		if !satisfies(op, got.compare(want)) {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func handleDirective(ctx context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 	pos := compiler.Position{File: req.File, Line: req.I + 1}
 
 	if _, exists := req.Out["nflow_version"]; exists {
@@ -71,39 +109,25 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 			`@nflow_version requires a constraint, e.g. @nflow_version ">=0.7.0"`)
 	}
 	req.Out["nflow_version"] = raw
+	if deferred, _ := deferredCompatibilityCheck.From(ctx); deferred {
+		if _, err := SatisfiesConstraint(raw, "0.0.0"); err != nil {
+			return compiler.DirectiveRes{}, compiler.SourceError(pos, "@nflow_version: %v", err)
+		}
+		return compiler.DirectiveRes{Next: req.I + 1}, nil
+	}
 
 	if compiler.Version == "" || compiler.Version == compiler.VersionUnknown {
 		return compiler.DirectiveRes{Next: req.I + 1}, nil
 	}
 
-	got, err := parseSemver(compiler.Version)
+	matched, err := SatisfiesConstraint(raw, compiler.Version)
 	if err != nil {
-		return compiler.DirectiveRes{}, compiler.SourceError(pos,
-			"@nflow_version: running compiler version %q is not parseable: %v",
-			compiler.Version, err)
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@nflow_version: %v", err)
 	}
-	parts := strings.Fields(raw)
-	if len(parts) == 0 {
+	if !matched {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
-			"@nflow_version: invalid constraint %q: no version terms", raw)
-	}
-	for i := 0; i < len(parts); i++ {
-		part := parts[i]
-		if _, version := splitOperator(part); version == "" && i+1 < len(parts) {
-			part += parts[i+1]
-			i++
-		}
-		op, wantRaw := splitOperator(part)
-		want, err := parseSemver(wantRaw)
-		if err != nil {
-			return compiler.DirectiveRes{}, compiler.SourceError(pos,
-				"@nflow_version: invalid constraint %q: %v", raw, err)
-		}
-		if !satisfies(op, got.compare(want)) {
-			return compiler.DirectiveRes{}, compiler.SourceError(pos,
-				"@nflow_version: constraint %q not satisfied by running compiler %q",
-				raw, compiler.Version)
-		}
+			"@nflow_version: constraint %q not satisfied by running compiler %q",
+			raw, compiler.Version)
 	}
 	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }
