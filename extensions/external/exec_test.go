@@ -1,7 +1,10 @@
 package external
 
 import (
+	"encoding/json"
+	"os"
 	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/nexssp/kernel/action"
@@ -32,6 +35,37 @@ func TestExec_SuccessfulCommand(t *testing.T) {
 	ktest.RequireCondition(t, result.OK, "OK should be true")
 	ktest.RequireEqual(t, result.ExitCode, 0)
 	ktest.RequireStringContains(t, result.Stdout, "hello")
+}
+
+func TestExec_ArgvPreservesArguments(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	want := []string{`J:\Temp\nflow lang\typescript.ts`, `single'quote`, `&|<>`}
+	args := []string{"-test.run=^TestExecArgvHelper$", "--", "external-exec-argv-helper"}
+	args = append(args, want...)
+	result, err := runExec(t, map[string]any{"cmd": executable, "args": args})
+	ktest.RequireNoError(t, err)
+
+	var got []string
+	if err := json.Unmarshal([]byte(result.Stdout), &got); err != nil {
+		t.Fatalf("decode child arguments %q: %v", result.Stdout, err)
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("child arguments = %#v; want %#v", got, want)
+	}
+}
+
+func TestExecArgvHelper(_ *testing.T) {
+	marker := slices.Index(os.Args, "external-exec-argv-helper")
+	if marker < 0 {
+		return
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(os.Args[marker+1:]); err != nil {
+		os.Exit(1)
+	}
+	os.Exit(0)
 }
 
 func TestExec_NonZeroExit(t *testing.T) {

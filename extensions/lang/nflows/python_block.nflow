@@ -1,0 +1,10 @@
+@description "Block-form py3 keyword reads JSON and returns a JSON result."
+@require lang
+@assert: result.value == 42
+
+{ "n": 21 } -> py3 {
+import json
+import sys
+request = json.load(sys.stdin)
+print(json.dumps({"value": request["n"] * 2}))
+}

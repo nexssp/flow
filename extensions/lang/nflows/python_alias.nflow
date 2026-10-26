@@ -1,0 +1,8 @@
+@description "The py and python aliases resolve to the Python runner."
+@require lang
+@assert: result == 42
+
+# This is the regression test for the alias-canonicalization rule in
+# alias.go. If anyone breaks the table such that "py" and "python" resolve
+# to different Languages or different Select funcs, this fixture fails.
+{ "n": 42 } -> py"import json, sys; print(json.dumps(json.load(sys.stdin)['n']))" -> python"import json, sys; print(json.dumps(json.load(sys.stdin)))"

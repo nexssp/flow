@@ -277,7 +277,10 @@ func applyPreprocessContributions(
 ) (*compileConfig, context.Context, *PrimaryExtensionTable) {
 	effectiveCfg := cfg
 	if len(contributions.CompileOpts) > 0 {
-		effectiveCfg = applyCompileOptions(append(opts, contributions.CompileOpts...))
+		combinedOpts := make([]CompileOption, 0, len(opts)+len(contributions.CompileOpts))
+		combinedOpts = append(combinedOpts, opts...)
+		combinedOpts = append(combinedOpts, contributions.CompileOpts...)
+		effectiveCfg = applyCompileOptions(combinedOpts)
 		ctx = applyConfigToCtx(ctx, effectiveCfg)
 	}
 

@@ -1,0 +1,5 @@
+@description "Inline py keyword reads JSON and returns a JSON result."
+@require lang
+@assert: result.value == 5
+
+{ "x": 2, "y": 3 } -> py"import json, sys; v=json.load(sys.stdin); print(json.dumps({'value': v['x'] + v['y']}))"

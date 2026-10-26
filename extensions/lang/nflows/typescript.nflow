@@ -1,0 +1,6 @@
+@description "Inline ts keyword reads JSON and returns a JSON result."
+@require lang
+@assert: result.value == 5
+
+# The self-test runner skips this fixture when no TypeScript runner is installed.
+{ "x": 2, "y": 3 } -> ts"let chunks=''; process.stdin.on('data',c=>chunks+=c).on('end',()=>{const v=JSON.parse(chunks); console.log(JSON.stringify({value:v.x+v.y}))})"

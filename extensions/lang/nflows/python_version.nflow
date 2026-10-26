@@ -1,0 +1,7 @@
+@description "Version-pinned aliases: py3 must use Python 3."
+@require lang
+@assert: result == 3
+
+# The preflight report is a self-test skip when Python 3 is not on PATH;
+# ordinary flow execution still fails before running any language block.
+{ "want": 3 } -> py3"import sys; print(sys.version_info[0])"

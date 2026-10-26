@@ -13,13 +13,24 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
+// Exec runs cmd through the platform shell, or executes cmd directly with args
+// when an argument array is supplied.
 var Exec = action.New("external.exec", func(ctx context.Context, in map[string]any) (ExecResult, error) {
 	command := readStringField(in, "cmd", "command")
 	if command == "" {
 		return ExecResult{}, xerr.BadRequest("exec: 'cmd' parameter is required")
 	}
 
-	cmd := shellCommand(ctx, command)
+	var cmd *exec.Cmd
+	if rawArgs, ok := in["args"]; ok {
+		args, ok := readStringArgs(rawArgs)
+		if !ok {
+			return ExecResult{}, xerr.BadRequest("exec: 'args' parameter must be an array of strings")
+		}
+		cmd = exec.CommandContext(ctx, command, args...)
+	} else {
+		cmd = shellCommand(ctx, command)
+	}
 
 	if input, ok := in["input"]; ok && input != nil {
 		cmd.Stdin = bytes.NewReader(inputBytes(input))
@@ -90,6 +101,25 @@ func readStringField(in map[string]any, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func readStringArgs(value any) ([]string, bool) {
+	switch args := value.(type) {
+	case []string:
+		return args, true
+	case []any:
+		out := make([]string, len(args))
+		for i, arg := range args {
+			text, ok := arg.(string)
+			if !ok {
+				return nil, false
+			}
+			out[i] = text
+		}
+		return out, true
+	default:
+		return nil, false
+	}
 }
 
 func asExitError(err error, target **exec.ExitError) bool {

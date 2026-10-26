@@ -1,0 +1,16 @@
+{
+    "_comment": "Python (default). PEP 723 scripts use uv when the marker is present.",
+    "id": "python",
+    "ext": ".py",
+    "aliases": ["py", "python"],
+    "find": ["python3", "python", "py -3"],
+    "stdin": "json",
+    "stdout": "json",
+    "file_template": "import json\nimport sys\n\ninput_value = json.load(sys.stdin)\noutput_value = input_value  # TODO: transform input\njson.dump(output_value, sys.stdout, separators=(\",\", \":\"))\nsys.stdout.write(\"\\n\")\n",
+    "deps": "uv run {file}",
+    "deps_marker": "# /// script",
+    "install": {
+        "windows": ["winget", "install", "Python.Python.3.12"],
+        "darwin": ["brew", "install", "python@3.12"]
+    }
+}

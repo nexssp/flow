@@ -1,0 +1,6 @@
+@description "Run an existing Python analysis script with JSON input and output."
+@require lang
+@assert result.value == 7
+@assert result.count == 3
+
+{ "values": [2, 3, 2] } -> py.file "python_file.py"

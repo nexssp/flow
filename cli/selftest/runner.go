@@ -171,6 +171,15 @@ func runFeature(ctx context.Context, cfg flowrunner.Config, feature compiler.Sel
 	elapsed := time.Since(started)
 
 	if capture.err != nil {
+		if reason := selfTestSkipReason(capture.err); reason != "" {
+			return Result{
+				SelfTestFeature: feature,
+				Status:          StatusSkip,
+				SkipReason:      reason,
+				Elapsed:         elapsed,
+				Captured:        capture.captured,
+			}
+		}
 		return Result{
 			SelfTestFeature: feature,
 			Status:          StatusFail,

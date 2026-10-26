@@ -1,0 +1,15 @@
+{
+    "_comment": "TypeScript. prefers bun (fast, runs .ts directly), then tsx, then ts-node. npm is cross-distro so Linux gets a recipe.",
+    "id": "typescript",
+    "ext": ".ts",
+    "aliases": ["ts", "typescript"],
+    "find": ["bun", "tsx", "ts-node"],
+    "stdin": "json",
+    "stdout": "json",
+    "file_template": "import { readFileSync } from \"node:fs\";\n\nconst input: unknown = JSON.parse(readFileSync(0, \"utf8\"));\nconst output: unknown = input; // TODO: transform input\nconsole.log(JSON.stringify(output));\n",
+    "install": {
+        "windows": ["npm", "install", "-g", "tsx"],
+        "darwin": ["npm", "install", "-g", "tsx"],
+        "linux": ["npm", "install", "-g", "tsx"]
+    }
+}

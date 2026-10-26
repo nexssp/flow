@@ -1,0 +1,5 @@
+@description "Inline go keyword reads JSON and returns a JSON result."
+@require lang
+@assert: result.value == 5
+
+{ "x": 2, "y": 3 } -> go"package main; import (`encoding/json`; `os`); func main() { var in struct{ X, Y int }; json.NewDecoder(os.Stdin).Decode(&in); json.NewEncoder(os.Stdout).Encode(map[string]int{`value`: in.X + in.Y}) }"

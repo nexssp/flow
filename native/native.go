@@ -6,11 +6,9 @@
 // config from Bundles() or SelftestBundles(). No command constructs its
 // own list. No command calls compiler.RegisteredBundles().
 //
-// The two functions exist because exactly one bundle, selftestkit,
-// must be visible to `nflow self test` and invisible to every other
-// command. That is the only sanctioned delta. Everything else — macros,
-// pipeline, scope, include, and the rest — is available to every
-// command, in every .nflow file, without a @require line.
+// SelftestBundles adds the fixture-only helpers and optional extensions
+// needed to exercise repository packages. These are not loaded into ordinary
+// flow runs unless the source explicitly requires the extension.
 //
 // If you find yourself wanting a third list, don't. Either add the
 // bundle to Bundles() so it is always present, or register it and load
@@ -33,6 +31,7 @@ import (
 	"github.com/nexssp/flow/extensions/hook"
 	"github.com/nexssp/flow/extensions/include"
 	"github.com/nexssp/flow/extensions/io"
+	"github.com/nexssp/flow/extensions/lang"
 	"github.com/nexssp/flow/extensions/loop"
 	"github.com/nexssp/flow/extensions/macros"
 	"github.com/nexssp/flow/extensions/match"
@@ -133,11 +132,13 @@ func bundles(retryBundle compiler.Bundle) []compiler.Bundle {
 // fixtures live in other bundles' nflows/ directories and reference
 // those actions. A production pipeline must never see cov.*, so
 // selftestkit is not in Bundles(). A self-test fixture must always find
-// them, so it is here.
+// them, so it is here. Optional bundles such as config_yaml and lang are
+// also included here so their conformance fixtures run without making the
+// capabilities part of the default bundle set.
 //
-// These test-only bundles are not available to ordinary CLI flows unless
-// explicitly required. Keep the set aligned with extension packages so
-// the self-test environment can compile and execute every extension fixture.
+// These bundles are not in the ordinary CLI set unless explicitly required.
+// Keep this set aligned with extension packages so the self-test environment
+// can compile and execute every extension fixture.
 func SelftestBundles() []compiler.Bundle {
 	return SelftestBundlesFrom(Bundles())
 }
@@ -150,6 +151,7 @@ func SelftestBundlesFrom(bundles []compiler.Bundle) []compiler.Bundle {
 	return append(out,
 		selftestkit.Bundle(nil),
 		config_yaml.Bundle(nil),
+		lang.Bundle(nil),
 		decide.Bundle(nil),
 		resilience.Bundle(nil),
 		template.Bundle(nil),

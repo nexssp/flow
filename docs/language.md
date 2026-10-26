@@ -138,6 +138,47 @@ Both forms are valid; prefer the keyword.
 
 ---
 
+## Optional polyglot execution
+
+The opt-in `lang` bundle adds language keywords such as `py`, `go`, and
+`js`. Add `@require lang` to use them; the language tag itself has no `@`
+prefix:
+
+```nflow
+@require lang
+{ "x": 2, "y": 3 } -> py"import json, sys; v=json.load(sys.stdin); print(json.dumps({'value': v['x'] + v['y']}))"
+```
+
+Tags can also take a raw source block, for example `py { ... }`. The bundle
+checks that required interpreters are available before execution. Language
+blocks run arbitrary programs with the host process's permissions and are not
+sandboxed; use them only with trusted flow files. See the
+[`lang` extension guide](../extensions/lang/README.md) for supported runners,
+data formats, and aliases.
+
+To run a Python script you already have, use `py.file` with a path relative to
+the `.nflow` file. The script receives the current value as JSON on stdin and
+returns the next value as JSON on stdout:
+
+```nflow
+@require lang
+{ "samples": [1.2, 1.8, 2.1] } -> py.file "./analysis.py"
+```
+
+If the script does not exist, add `:autocreate` to create it from the language
+runner's declared `file_template`; the generated starter reads JSON from stdin
+and writes JSON to stdout. Existing files are never replaced, and without the
+option a missing script remains an error. For example:
+
+```nflow
+{ "orders": [] } -> go.file "./normalize.go" :autocreate
+```
+
+Use `@include` for other `.nflow` modules; `.py` programs are run with
+`py.file` instead.
+
+---
+
 ## 3. Arguments: `@{ ... }`
 
 `@{ }` binds named values to an action. The values are parsed as data,

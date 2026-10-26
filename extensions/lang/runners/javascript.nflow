@@ -1,0 +1,14 @@
+{
+    "_comment": "JavaScript / Node.js. Uses node or bun directly, then `deno run`.",
+    "id": "javascript",
+    "ext": ".js",
+    "aliases": ["js", "node"],
+    "find": ["node", "bun", "deno run"],
+    "stdin": "json",
+    "stdout": "json",
+    "file_template": "(async () => {\n    let raw;\n    if (typeof Deno !== \"undefined\") {\n        raw = await new Response(Deno.stdin.readable).text();\n    } else {\n        raw = require(\"node:fs\").readFileSync(0, \"utf8\");\n    }\n    const input = JSON.parse(raw);\n    const output = input; // TODO: transform input\n    console.log(JSON.stringify(output));\n})();\n",
+    "install": {
+        "windows": ["winget", "install", "OpenJS.NodeJS.LTS"],
+        "darwin": ["brew", "install", "node"]
+    }
+}

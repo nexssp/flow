@@ -1,0 +1,15 @@
+{
+    "_comment": "Rust single-file scripts via rust-script; source must include a main function.",
+    "id": "rust",
+    "ext": ".rs",
+    "aliases": ["rs", "rust"],
+    "find": ["rust-script"],
+    "stdin": "json",
+    "stdout": "json",
+    "file_template": "//! ```cargo\n//! [dependencies]\n//! serde_json = \"1\"\n//! ```\n\nuse serde_json::Value;\nuse std::io::{self, Read};\n\nfn main() {\n    let mut raw = String::new();\n    io::stdin().read_to_string(&mut raw).expect(\"read JSON stdin\");\n    let input: Value = serde_json::from_str(&raw).expect(\"parse JSON stdin\");\n    let output = input; // TODO: transform input\n    println!(\"{}\", output);\n}\n",
+    "install": {
+        "windows": ["cargo", "install", "rust-script"],
+        "darwin": ["cargo", "install", "rust-script"],
+        "linux": ["cargo", "install", "rust-script"]
+    }
+}
