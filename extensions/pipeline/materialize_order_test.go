@@ -42,6 +42,27 @@ pipeline.a
 	}
 }
 
+func TestMaterializeRetriesDistributeMapForwardPipelineCapability(t *testing.T) {
+	cfg := pipelineTestConfig(t)
+	source := `@pipeline a_process_batch
+  distribute.map @{ action: pipeline.normalize_order, items: [1] }
+@end
+@pipeline normalize_order
+  runtime.const @{ value: "normalized" }
+@end
+pipeline.a_process_batch
+`
+	compiled, err := runner.Compile(t.Context(), cfg, source, "pipeline-capability-forward-reference.nflow")
+	if err != nil {
+		t.Fatalf("compile distribute.map with a forward local pipeline action: %v", err)
+	}
+	for _, name := range []string{"pipeline.a_process_batch", "pipeline.normalize_order"} {
+		if _, ok := compiled.Resolver.Action(name); !ok {
+			t.Errorf("compiled resolver does not contain %q", name)
+		}
+	}
+}
+
 func TestMaterializeNoProgressReportsStableJoinedDiagnostics(t *testing.T) {
 	cfg := pipelineTestConfig(t)
 	source := `@pipeline a

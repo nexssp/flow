@@ -1,27 +1,33 @@
 package lang
 
 import (
+	"context"
+
 	"github.com/nexssp/flow/compiler"
 )
 
-// preflightValidator is the ASTValidateFunc contributed via OnPreprocess →
-// WithASTValidators. It runs after parse, before Analyze/Build — the "no run
-// if anything is missing" gate.
+// preflightValidator is the context-aware AST validator contributed via
+// OnPreprocess. It runs after parse, before Analyze/Build — the "no run if
+// anything is missing" gate.
 //
 // The validator walks the parsed AST, collects every *langBlockExpr, extracts
 // their LangBlock IDs/versions, and runs Preflight.Run. If any interpreter
 // is missing, the Report renders as an error and the flow does not build.
 //
-// Preflight uses Select (find-only) by default — it does NOT auto-install.
-// To enable auto-install during preflight, swap Preflight{}.Installer to
-// installEnsure{} in the Preflight construction below.
-func preflightValidator(ast compiler.Expr, _ map[string]any) error {
+// Preflight uses Select first. Production compilation may invoke the configured
+// installer for a missing interpreter; self-test contexts opt out so missing
+// runtimes are reported immediately rather than installed.
+func preflightValidator(ctx context.Context, ast compiler.Expr, _ map[string]any) error {
 	var blocks []*LangBlock
 	collectLangBlocks(ast, &blocks)
 	if len(blocks) == 0 {
 		return nil // no @lang tags in this flow — nothing to check
 	}
-	report := Preflight{}.Run(blocks)
+	var installer Ensure
+	if !autoInstallDisabled(ctx) {
+		installer = ensureHook
+	}
+	report := Preflight{Installer: installer}.Run(blocks)
 	if report.OK() {
 		return nil
 	}

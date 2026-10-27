@@ -23,7 +23,7 @@ func TestMaterializePipelinesResolvesForwardLocalReferences(t *testing.T) {
 			compileOrder = append(compileOrder, name)
 			if name == "pipeline.local_chain" {
 				if _, ok := resolver.Action("pipeline.local_support"); !ok {
-					return nil, xerr.NotFound("capability pipeline.local_support not registered")
+					return nil, xerr.Validation(`distribute.map.action: unknown capability "pipeline.local_support"`)
 				}
 			}
 			return action.New("pipeline.test_body", func(_ context.Context, input any) (any, error) {

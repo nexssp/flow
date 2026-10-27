@@ -3,10 +3,10 @@
 // binary's own compiler and runtime.
 //
 // The bundle set the suite runs against is native.SelftestBundles() —
-// the shipped set plus selftestkit. This is the only deviation from the
-// production environment, and it is deliberate: fixtures across every
-// bundle rely on cov.* helpers. Any other environment difference is a
-// bug in the CLI, not a feature of self-test.
+// the shipped set plus selftestkit. The extra bundles are deliberate:
+// fixtures across every bundle rely on cov.* helpers. Self-test also
+// deliberately disables language auto-install so missing runtimes are
+// reported as skips rather than installed on the host.
 package selftest
 
 import (
@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/extensions/lang"
 	"github.com/nexssp/flow/native"
 	flowrunner "github.com/nexssp/flow/runner"
 )
@@ -79,6 +80,7 @@ func optionOutput(opts Options) io.Writer {
 }
 
 func runWithBundles(ctx context.Context, opts Options, bundles []compiler.Bundle) int {
+	ctx = lang.WithAutoInstallDisabled(ctx)
 	if opts.Out == nil {
 		opts.Out = os.Stdout
 	}

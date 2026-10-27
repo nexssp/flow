@@ -157,10 +157,11 @@ Preflight checks that `uv` is on `PATH` and reports it if missing; it does not i
 
 ## Preflight — the pre-run gate
 
-Before any `LangBlock` executes, the compiler calls `Preflight.Run(blocks)`.
-Preflight resolves each block (find-only — no install), groups missing
-interpreters, and returns a single `Report`. If the report has any missing
-entries, **the flow does not run.**
+Before any `LangBlock` executes, the compiler checks every interpreter used by
+the flow. It first searches `PATH`; if one is missing, it runs that runner's
+per-OS install recipe and resolves it again. If installation is unavailable or
+fails, the preflight groups the remaining missing interpreters into one report
+and **the flow does not run.**
 
 ```
 lang preflight: missing interpreters — install before running:
@@ -168,14 +169,9 @@ lang preflight: missing interpreters — install before running:
   lang.rust (keyword rs)
 ```
 
-Why find-only here: preflight is a CHECK, not an install trigger. No CLI
-install subcommand is currently exposed. Go hosts can call `lang.Install`
-explicitly or provide their own `Ensure` implementation.
-
-### Auto-install (opt-in)
-
-`Preflight.Installer` is `nil` by default — missing interpreters are
-reported, not fixed. A Go host may provide an installer explicitly:
+The normal `@require lang` compile preflight uses the runner's installer
+automatically. A direct call to `Preflight.Run` remains find-only unless the
+caller supplies an installer explicitly:
 
 ```go
 pf := lang.Preflight{Installer: myInstaller}
@@ -183,9 +179,11 @@ report := pf.Run(blocks)
 // report.OK() is true if every interpreter was either present or installed
 ```
 
-The runner data includes per-OS install recipes, but the package does not
-execute them automatically. On failure, `NotInstalledError` carries the
-install-failure cause.
+Install recipes are data-driven in each runner profile. Python's default and
+`py3` profiles provide Windows, macOS, and Linux recipes. Installation requires
+the relevant package manager and its normal permissions; on failure,
+`NotInstalledError` carries the cause. PEP 723 scripts still require `uv`, which
+is checked separately and is not automatically installed.
 
 ## Stream contract
 

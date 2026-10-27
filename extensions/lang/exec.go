@@ -78,7 +78,7 @@ func runLangBlock(ctx context.Context, b *LangBlock, in any) (any, error) {
 		runBlock = &blockCopy
 	}
 
-	cmd, args, err := resolveRunCmd(lang, runBlock, path)
+	cmd, args, err := resolveRunCmd(ctx, lang, runBlock, path)
 	if err != nil {
 		return nil, err
 	}

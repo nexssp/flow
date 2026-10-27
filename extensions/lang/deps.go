@@ -1,6 +1,7 @@
 package lang
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
@@ -8,12 +9,12 @@ import (
 // resolveRunCmd selects the ordinary interpreter unless the source opts into
 // a runner's dependency tool by containing its configured marker. The file
 // path remains a single argument even when it contains spaces.
-func resolveRunCmd(lang *Language, block *LangBlock, filePath string) (cmd string, args []string, err error) {
+func resolveRunCmd(ctx context.Context, lang *Language, block *LangBlock, filePath string) (cmd string, args []string, err error) {
 	if depCmd, depArgs, handled, depErr := resolveDepsCmd(lang, block.Source, filePath); handled {
 		return depCmd, depArgs, depErr
 	}
 
-	cmd, args, err = Resolve(lang, block.Version)
+	cmd, args, err = resolveContext(ctx, lang, block.Version)
 	if err != nil {
 		return "", nil, err
 	}

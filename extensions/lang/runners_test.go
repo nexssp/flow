@@ -73,6 +73,30 @@ func TestParseRunnerVersioned(t *testing.T) {
 	}
 }
 
+func TestPythonRunnerVariantsHaveInstallRecipes(t *testing.T) {
+	for _, file := range []string{"python.nflow", "python3.nflow"} {
+		t.Run(file, func(t *testing.T) {
+			raw, err := runnersFS.ReadFile("runners/" + file)
+			if err != nil {
+				t.Fatalf("read embedded runner: %v", err)
+			}
+			spec, err := ParseRunner(string(raw))
+			if err != nil {
+				t.Fatalf("ParseRunner: %v", err)
+			}
+			for os, recipe := range map[string][]string{
+				"Windows": spec.Install.Windows,
+				"macOS":   spec.Install.Darwin,
+				"Linux":   spec.Install.Linux,
+			} {
+				if len(recipe) == 0 {
+					t.Errorf("%s runner has no %s installation recipe", file, os)
+				}
+			}
+		})
+	}
+}
+
 // TestParseRunnerErrors exercises the validation paths.
 func TestParseRunnerErrors(t *testing.T) {
 	cases := []struct {

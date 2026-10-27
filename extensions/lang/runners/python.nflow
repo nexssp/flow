@@ -11,6 +11,7 @@
     "deps_marker": "# /// script",
     "install": {
         "windows": ["winget", "install", "Python.Python.3.12"],
-        "darwin": ["brew", "install", "python@3.12"]
+        "darwin": ["brew", "install", "python@3.12"],
+        "linux": ["apt-get", "install", "-y", "python3"]
     }
 }

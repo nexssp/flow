@@ -1,0 +1,3 @@
+# Parsed by the integration test to exercise py3's compiler preflight path.
+# Its Ensure hook is stubbed in Go; no interpreter or package manager runs.
+py3"print('stubbed preflight')"

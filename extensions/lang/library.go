@@ -90,7 +90,7 @@ func Bundle(_ map[string]string) compiler.Bundle {
 			return compiler.PreprocessContributions{
 				Primaries: keywordPrimaries(),
 				CompileOpts: []compiler.CompileOption{
-					compiler.WithASTValidators(preflightValidator),
+					compiler.WithASTContextValidators(preflightValidator),
 				},
 			}
 		},

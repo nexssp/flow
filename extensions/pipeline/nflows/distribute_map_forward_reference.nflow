@@ -1,0 +1,11 @@
+@description "distribute.map resolves a later local pipeline declaration"
+@assert: result.succeeded == 1
+@assert: result.items[0].ok == true
+@assert: result.items[0].result == "normalized"
+@pipeline a_process_batch
+  distribute.map @{ action: pipeline.normalize_order, items: [1] }
+@end
+@pipeline normalize_order
+  runtime.const @{ value: "normalized" }
+@end
+pipeline.a_process_batch

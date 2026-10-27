@@ -16,6 +16,10 @@ type PipelineWrapFunc func(meta map[string]any, inner action.AnyAction) (action.
 // It runs during compilation, before the AST is lowered into runtime actions.
 type ASTValidateFunc func(ast Expr, meta map[string]any) error
 
+// ASTContextValidateFunc validates a parsed tree using the execution context
+// and source compile metadata. It runs during compilation, before lowering.
+type ASTContextValidateFunc func(ctx context.Context, ast Expr, meta map[string]any) error
+
 // OnPreprocessFunc is the compile-time hook fired between Preprocess
 // and Parse. BundleConfig wires it from Bundle.OnPreprocess.
 type OnPreprocessFunc func(meta map[string]any) PreprocessContributions
@@ -24,6 +28,7 @@ type compileConfig struct {
 	advisors            []AtomAdviseFunc
 	wrappers            []PipelineWrapFunc
 	validators          []ASTValidateFunc
+	contextValidators   []ASTContextValidateFunc
 	onPreprocess        []OnPreprocessFunc
 	config              map[string]string
 	cliArgs             []string
@@ -40,6 +45,14 @@ type CompileOption func(*compileConfig)
 func WithASTValidators(fns ...ASTValidateFunc) CompileOption {
 	return func(c *compileConfig) {
 		c.validators = append(c.validators, fns...)
+	}
+}
+
+// WithASTContextValidators installs compile-time validators that need the
+// current execution context. Existing ASTValidateFunc contracts remain intact.
+func WithASTContextValidators(fns ...ASTContextValidateFunc) CompileOption {
+	return func(c *compileConfig) {
+		c.contextValidators = append(c.contextValidators, fns...)
 	}
 }
 

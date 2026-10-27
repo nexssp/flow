@@ -3,4 +3,6 @@
 @assert: result == "ok"
 
 # Requires rust-script; self-test skips this fixture if it is not installed.
-{ "hello" } -> rs"fn main() { println!(\"ok\"); }" -> result
+{ message: "hello" } -> rs {
+    fn main() { println!(r#""ok""#); }
+}

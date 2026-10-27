@@ -1,6 +1,7 @@
 package lang
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -35,7 +36,7 @@ func TestResolveRunCmdUsesDepsTemplateAndFreshFilePath(t *testing.T) {
 	}
 
 	for _, filePath := range []string{"/tmp/first path.py", "/tmp/second path.py"} {
-		cmd, args, err := resolveRunCmd(lang, block, filePath)
+		cmd, args, err := resolveRunCmd(context.Background(), lang, block, filePath)
 		if err != nil {
 			t.Fatalf("resolveRunCmd: %v", err)
 		}
@@ -57,7 +58,7 @@ func TestResolveRunCmdUsesPlainInterpreterWithoutMarker(t *testing.T) {
 		},
 	}
 	block := &LangBlock{ID: "python", Source: "print(1)"}
-	cmd, args, err := resolveRunCmd(lang, block, "/tmp/script.py")
+	cmd, args, err := resolveRunCmd(context.Background(), lang, block, "/tmp/script.py")
 	if err != nil {
 		t.Fatalf("resolveRunCmd: %v", err)
 	}

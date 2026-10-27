@@ -1,6 +1,7 @@
 package lang
 
 import (
+	"context"
 	"errors"
 	"os/exec"
 	"path/filepath"
@@ -11,9 +12,8 @@ import (
 // Ensure is the auto-install seam.
 //
 // Resolve calls Ensure when a language's Select (find-only) fails. The
-// default noEnsure returns a NotInstalledError so the user sees a clear
-// "missing" message in the preflight report. Integration swaps this for
-// installEnsure (see install.go) to run per-OS recipes via os/exec.
+// default installEnsure runs the runner's per-OS recipe and re-resolves the
+// interpreter; tests or hosts can replace the hook when needed.
 //
 // Pure Go: no nexssp/ensure, no Node.js. Recipes call winget/brew/apt/npm
 // directly. See install.go.
@@ -21,9 +21,9 @@ type Ensure interface {
 	Ensure(lang *Language, version string) (cmd string, args []string, err error)
 }
 
-// ensureHook is the package-level seam. Swap in tests; integration
-// replaces it with installEnsure{} at bundle init.
-var ensureHook Ensure = noEnsure{}
+// ensureHook is the package-level seam. Production automatically installs
+// through runner recipes; tests can replace it with a deterministic stub.
+var ensureHook Ensure = installEnsure{}
 
 type noEnsure struct{}
 
@@ -85,15 +85,23 @@ func isWindowsStorePythonAlias(path string) bool {
 
 // Resolve is the single entry point for "give me a runnable command."
 //
-// Tries the language's Select (find-only). On miss, calls ensureHook which
-// may install and re-resolve (installEnsure) or return NotInstalledError
-// (noEnsure, the default).
+// Tries the language's Select (find-only). On miss, calls ensureHook, which
+// installs and re-resolves by default or returns a NotInstalledError if the
+// runner has no recipe or installation fails. Context-scoped internal callers
+// may disable installation without changing this production default.
 //
 // Preflight, runLangBlock, and the CLI all go through here. There is no
 // other call site for lang.Select — Resolve is the gate.
 func Resolve(lang *Language, version string) (cmd string, args []string, err error) {
+	return resolveContext(context.Background(), lang, version)
+}
+
+func resolveContext(ctx context.Context, lang *Language, version string) (cmd string, args []string, err error) {
 	if cmd, args, err := lang.Select(version); err == nil {
 		return cmd, args, nil
+	}
+	if autoInstallDisabled(ctx) {
+		return "", nil, &NotInstalledError{ID: lang.ID, Version: version, Cause: ErrNotFound}
 	}
 	return ensureHook.Ensure(lang, version)
 }

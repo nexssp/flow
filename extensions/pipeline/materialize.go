@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/nexssp/kernel/action"
@@ -189,19 +190,51 @@ func pipelineActionName(name string) string {
 }
 
 func isPendingPipelineDependency(err error, pending map[string]struct{}) bool {
-	if xerr.KindFrom(err) != xerr.KindNotFound {
-		return false
-	}
 	var appErr *xerr.AppError
 	if !errors.As(err, &appErr) {
 		return false
 	}
-	const prefix = "capability "
-	const suffix = " not registered"
-	if !strings.HasPrefix(appErr.Message, prefix) || !strings.HasSuffix(appErr.Message, suffix) {
+	var name string
+	switch xerr.KindFrom(err) {
+	case xerr.KindNotFound:
+		const prefix = "capability "
+		const suffix = " not registered"
+		if !strings.HasPrefix(appErr.Message, prefix) || !strings.HasSuffix(appErr.Message, suffix) {
+			return false
+		}
+		name = strings.TrimSuffix(strings.TrimPrefix(appErr.Message, prefix), suffix)
+	case xerr.KindValidation:
+		// ArgCapabilityRef validation reports an unresolved action as a
+		// validation error (for example, `distribute.map.action: unknown
+		// capability "pipeline.normalize_order"`). Local declarations are
+		// mounted as they materialize, so retry only when that exact target
+		// is still pending.
+		const marker = ": unknown capability "
+		index := strings.LastIndex(appErr.Message, marker)
+		if index < 0 {
+			return false
+		}
+		var err error
+		name, err = strconv.Unquote(appErr.Message[index+len(marker):])
+		if err != nil {
+			return false
+		}
+	case xerr.KindBadRequest,
+		xerr.KindUnauthorized,
+		xerr.KindForbidden,
+		xerr.KindConflict,
+		xerr.KindTooManyRequests,
+		xerr.KindTimeout,
+		xerr.KindUnavailable,
+		xerr.KindInternal,
+		xerr.KindMethodNotAllowed,
+		xerr.KindRateLimit,
+		xerr.KindCanceled,
+		xerr.KindDatabase,
+		xerr.KindShutdown,
+		xerr.KindCircuitBreaker:
 		return false
 	}
-	name := strings.TrimSuffix(strings.TrimPrefix(appErr.Message, prefix), suffix)
 	_, ok := pending[name]
 	return ok
 }
