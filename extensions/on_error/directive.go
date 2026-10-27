@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/extensions/match"
 )
 
 type Rule struct {
@@ -23,7 +24,8 @@ var Directive = compiler.Directive{
   when error.kind == "Timeout" -> cov.recoverable
   else -> runtime.noop
 }`,
-	Handler: handleDirective,
+	Handler:     handleDirective,
+	OpaqueBlock: true,
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
@@ -64,6 +66,7 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	}
 
 	cfg := Config{}
+	lineSearchStart, entrySearchStart := req.I+1, 0
 	for _, raw := range lines {
 		line := strings.TrimSpace(raw)
 		if line == "" {
@@ -87,6 +90,14 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 			}
 			condition = strings.TrimSpace(compiler.StripExprComments(condition))
 			target = strings.TrimSpace(compiler.StripExprComments(target))
+			lineNumber, nextLineSearchStart, nextEntrySearchStart := directiveBodyLine(req.Lines, req.I, next, lineSearchStart, entrySearchStart, raw)
+			if lineNumber > 0 {
+				lineSearchStart, entrySearchStart = nextLineSearchStart, nextEntrySearchStart
+			}
+			conditionPos := compiler.Position{File: req.File, Line: lineNumber}
+			if _, err := match.CompileCondition(condition); err != nil {
+				return compiler.DirectiveRes{}, compiler.SourceError(conditionPos, "@on_error: invalid when condition: %v", err)
+			}
 			cfg.Rules = append(cfg.Rules, Rule{Condition: condition, Target: target})
 			continue
 		}
@@ -97,4 +108,30 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 
 	req.Out["on_error"] = cfg
 	return compiler.DirectiveRes{Next: next}, nil
+}
+
+func directiveBodyLine(source []string, directiveStart, end, searchLine, searchEntry int, body string) (lineNumber, nextSearchLine, nextSearchEntry int) {
+	// Inline blocks have no separate body line; their entries share the header line.
+	if end == directiveStart+1 {
+		return directiveStart + 1, end, 0
+	}
+	body = strings.TrimSpace(body)
+	for line := max(searchLine, directiveStart+1); line < end && line < len(source); line++ {
+		lineText := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(source[line]), "}"))
+		entries := compiler.SplitTopLevel(lineText, ',')
+		firstEntry := 0
+		if line == searchLine {
+			firstEntry = searchEntry
+		}
+		for entry := firstEntry; entry < len(entries); entry++ {
+			if strings.TrimSpace(entries[entry]) == body {
+				if entry+1 < len(entries) {
+					return line + 1, line, entry + 1
+				}
+				return line + 1, line + 1, 0
+			}
+		}
+	}
+	// Zero lets callers distinguish a lookup miss from a valid body/header line.
+	return 0, searchLine, searchEntry
 }

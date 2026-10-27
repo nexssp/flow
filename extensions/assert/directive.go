@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/expr-lang/expr"
+
 	compiler "github.com/nexssp/flow/compiler"
 )
 
@@ -15,12 +17,13 @@ const assertionPositionsKey = "asserts.positions"
 var Directive = compiler.Directive{
 	Name: "assert",
 	Example: `@assert: result != nil
-@assert {
-  result.count > 0
-  result.status == "ok"
-}
-@assert: { result.count > 0, result.status == "ok" }`,
-	Handler: handleDirective,
+	@assert {
+	  result.count > 0
+	  result.status == "ok"
+	}
+	@assert: { result.count > 0, result.status == "ok" }`,
+	Handler:     handleDirective,
+	OpaqueBlock: true,
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
@@ -40,7 +43,9 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	if rest == "" {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@assert: expression is required")
 	}
-	appendAssert(req.Out, rest, pos)
+	if err := appendAssert(req.Out, rest, pos); err != nil {
+		return compiler.DirectiveRes{}, err
+	}
 	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }
 
@@ -111,7 +116,9 @@ func handleBlock(req compiler.DirectiveReq, pos compiler.Position) (compiler.Dir
 		if expression == "" {
 			continue
 		}
-		appendAssert(req.Out, expression, compiler.Position{File: req.File, Line: j + 1})
+		if err := appendAssert(req.Out, expression, compiler.Position{File: req.File, Line: j + 1}); err != nil {
+			return compiler.DirectiveRes{}, err
+		}
 		added++
 	}
 	return compiler.DirectiveRes{}, compiler.SourceError(pos, "@assert: unclosed block, expected '}'")
@@ -134,14 +141,25 @@ func handleCompact(req compiler.DirectiveReq, pos compiler.Position, source stri
 			}
 			return compiler.DirectiveRes{}, compiler.SourceError(pos, "@assert: compact form contains an empty expression")
 		}
-		appendAssert(req.Out, expression, pos)
+		if err := appendAssert(req.Out, expression, pos); err != nil {
+			return compiler.DirectiveRes{}, err
+		}
 	}
 	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }
 
-func appendAssert(out map[string]any, expression string, pos compiler.Position) {
+func appendAssert(out map[string]any, expression string, pos compiler.Position) error {
+	clean := strings.TrimSpace(compiler.StripExprComments(expression))
+	if strings.HasPrefix(clean, ".") {
+		clean = compiler.PreprocessDots(clean)
+	}
+	if _, err := compiler.CompileExpression(clean, expr.AllowUndefinedVariables()); err != nil {
+		return compiler.SourceError(pos, "@assert: invalid expression: %v", err)
+	}
+
 	existing, _ := out["asserts"].([]string)
 	out["asserts"] = append(existing, expression)
 	positions, _ := out[assertionPositionsKey].([]compiler.Position)
 	out[assertionPositionsKey] = append(positions, pos)
+	return nil
 }

@@ -25,9 +25,10 @@ const (
 // time by macroPrimary, not here: it depends on invocation order, not
 // on the declaration order.
 var Directive = compiler.Directive{
-	Name:    "macro",
-	Example: "@macro greet(name) {\n  runtime.const @{ value: $name }\n}",
-	Handler: handleDirective,
+	Name:        "macro",
+	Example:     "@macro greet(name) {\n  runtime.const @{ value: $name }\n}",
+	Handler:     handleDirective,
+	OpaqueBlock: true,
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {

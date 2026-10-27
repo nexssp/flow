@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -89,7 +90,7 @@ func TestLanguageServerFormattingUsesCoreFormatter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := "@pipeline work:timeout=2s:retry=3\n  action.node:retry=2\n@end"
+	source := "@on_error {\n  when error.kind == \"Unavailable\" -> runtime.noop\n  else -> runtime.noop\n}\n@pipeline work:timeout=2s:retry=3\n  action.node:retry=2\n@end"
 	var input bytes.Buffer
 	writeLSPTestMessage(t, &input, map[string]any{
 		"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": map[string]any{},
@@ -323,6 +324,27 @@ func TestLanguageServerUsesRootURIForUntitledDocuments(t *testing.T) {
 		if got, want := server.sourceName("untitled:Untitled-1"), filepath.Join(workspace, "Untitled-1.nflow"); got != want {
 			t.Fatalf("untitled source path = %q, want %q", got, want)
 		}
+	}
+}
+
+func TestLSPFileURIPathHandlesWindowsPaths(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows file URI semantics")
+	}
+	for _, tc := range []struct {
+		name string
+		uri  string
+		want string
+	}{
+		{name: "drive in authority", uri: "file://j:/Temp/project/main.nflow", want: `j:\Temp\project\main.nflow`},
+		{name: "drive in path", uri: "file:///j:/Temp/project/main.nflow", want: `j:\Temp\project\main.nflow`},
+		{name: "UNC host", uri: "file://server/share/project/main.nflow", want: `\\server\share\project\main.nflow`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := lspFileURIPath(tc.uri); got != tc.want {
+				t.Fatalf("lspFileURIPath(%q) = %q, want %q", tc.uri, got, tc.want)
+			}
+		})
 	}
 }
 

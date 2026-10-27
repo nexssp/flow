@@ -16,6 +16,11 @@ and defaults. An explicitly empty value appears as `set ""`, not `unset`.
 Quoting prevents embedded newlines and terminal escapes from altering the report.
 The inventory and descriptions live together in `cli/env.go`.
 
+`LOG_LEVEL` accepts `debug`, `warn`, or `error` (case-insensitive); empty, unset,
+or unrecognized values use `info`. At `debug`, a `using NFlow <version>` notice
+also appears when the current core is selected. Actual toolchain switches are
+reported at every log level.
+
 The report excludes Go toolchain settings merely inherited by subprocesses,
 HTTP proxy settings, indirect standard-library directory/tool-lookup defaults,
 and arbitrary application keys selected by `runtime.env`. No environment dump,

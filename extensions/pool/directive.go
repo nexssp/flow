@@ -10,9 +10,10 @@ import (
 // Directive parses `@pool NAME [members] { options }` and appends a
 // Declaration to meta["pools"].
 var Directive = compiler.Directive{
-	Name:    "pool",
-	Example: `@pool fast [cheap, mid] { strategy: "round_robin" }`,
-	Handler: handleDirective,
+	Name:        "pool",
+	Example:     `@pool fast [cheap, mid] { strategy: "round_robin" }`,
+	Handler:     handleDirective,
+	OpaqueBlock: true,
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {

@@ -1,0 +1,466 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  NFlow v0.46.0 — Master Showcase
+#  One file. Every feature. What nflow saves you: boilerplate, glue code,
+#  retry logic, timeout plumbing, error classification, config wiring,
+#  polyglot orchestration, and the integration tax of N microservices.
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#  HOW TO READ THIS FILE
+#  ─────────────────────
+#  Each section demonstrates one capability. The comments above each
+#  block explain WHAT it does and WHY a client would want it. The code
+#  is the actual nflow syntax — no pseudocode.
+#
+#  Run it:
+#    nflow lint master.nflow    # parses the flow and validates assertion syntax
+#    nflow run  master.nflow    # executes the pipeline
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 1. METADATA & VERSIONING
+# ───────────────────────────────────────────────────────────────────────────
+# @description — human-readable flow purpose. Shows in `nflow info`, `nflow list`.
+# @nflow_version — pins the compiler version range. The CLI auto-downloads
+#   a compatible core if the installed version is outside the range.
+#   This is how flows stay reproducible across machines and CI runs
+#   without a separate "install nflow v0.46" step.
+
+@description "NFlow v0.46.0 master showcase: every directive, keyword, operator, and modifier in one file"
+# @nflow_version ">=0.46.0"  # uncomment after v0.46.0 is released and tagged
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 2. CONFIGURATION
+# ───────────────────────────────────────────────────────────────────────────
+# @config — declares tunable parameters with CLI flags and defaults.
+#   The values interpolate into the flow via @config.KEY.
+#   :cli="r,retries" exposes --retries / -r on the nflow command line.
+#   :desc= adds help text. No flag-parsing boilerplate; nflow generates it.
+
+@config {
+  retries: 3        :cli="r,retries" :desc="Max retry attempts per action"
+  timeout: "500ms"   :cli="t"
+  currency: "USD"    :cli="c"
+}
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 3. CONSTANTS
+# ───────────────────────────────────────────────────────────────────────────
+# @const — compile-time named values. Inlined at parse time, zero runtime cost.
+#   Use for magic numbers, feature flags, environment names.
+
+@const SUPPORT_EMAIL = "support@example.com"
+@const MAX_ITEMS = 100
+@const ENVIRONMENT = "production"
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 4. SCHEMAS
+# ───────────────────────────────────────────────────────────────────────────
+# @schema — declares a typed struct with validation tags. The validate
+#   action checks input against the schema before the pipeline runs,
+#   returning xerr.BadRequest on violations. This replaces hundreds of
+#   lines of hand-written validation in every service.
+
+@schema Order struct {
+  OrderID   string  `json:"order_id"   validate:"required"`
+  Email     string  `json:"email"      validate:"required,email"`
+  Amount    float64 `json:"amount"     validate:"required,gt=0"`
+  Currency  string  `json:"currency"   validate:"required,len=3"`
+}
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 5. SYMBOLS (domain enumerations)
+# ───────────────────────────────────────────────────────────────────────────
+# @symbols — a named set of constants. Acts as a type-safe enum: match
+#   branches can reference status.pending, status.approved, etc. The
+#   compiler catches typos at parse time — no runtime "unknown status"
+#   bugs.
+
+@symbols status {
+  pending:   "PENDING"
+  approved:  "APPROVED"
+  rejected:  "REJECTED"
+  completed:  "COMPLETED"
+}
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 6. MACROS (reusable inline functions)
+# ───────────────────────────────────────────────────────────────────────────
+# @macro — a parameterized block of flow logic invoked by name. Macros
+#   are inlined at parse time (zero runtime cost) and can take arguments.
+#   This is how you DRY up repeated pipeline patterns without writing Go.
+
+@macro assert_positive_amount() {
+  assert(.amount > 0, "amount must be positive")
+}
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 7. PROFILES (modifier bundles)
+# ───────────────────────────────────────────────────────────────────────────
+# @profile — a named set of modifiers applied to a pipeline. Define once,
+#   apply to many. This is how you standardize retry/timeout/concurrency
+#   policies across services without copy-pasting :retry=3 :timeout=500ms
+#   onto every single action.
+
+@profile production_resilience
+  :retry=3
+  :timeout=500ms
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 8. ERROR HANDLING
+# ───────────────────────────────────────────────────────────────────────────
+# @on_error — a catch-all error router at the flow level. Maps error
+#   kinds (Internal, Unavailable, BadRequest, etc.) to recovery pipelines.
+#   One place to declare every error-recovery path, not scattered
+#   try/catch blocks.
+
+@on_error {
+  when error.kind == "Unavailable" -> error.info
+  when error.kind == "BadRequest"   -> error.info
+  else                              -> error.info
+}
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 9. PIPELINE DEFINITION
+# ───────────────────────────────────────────────────────────────────────────
+# @pipeline — a named, reusable sub-flow. Called via pipeline.NAME.
+#   Pipelines are the unit of composition: a flow is a tree of pipelines.
+#   This is how you break a 500-line flow into readable, testable pieces.
+
+@pipeline validate_order
+  Order.validate
+  -> @assert_positive_amount()
+  -> {
+    order_id:  .order_id,
+    email:     .email,
+    amount:    .amount,
+    currency:  .currency,
+    valid:     true
+  }
+@end
+
+@pipeline price_order
+  {
+    order_id:  .order_id,
+    email:     .email,
+    amount:    .amount,
+    subtotal:  .amount,
+    tax:       round(.amount * 0.08 * 100) / 100,
+    total:     .amount + round(.amount * 0.08 * 100) / 100,
+    currency:  .currency
+  }
+@end
+
+@pipeline route_order
+  # match — pattern-match on a value. Like a switch statement, but
+  # declarative and composable with the pipeline. The projection keeps the
+  # current order fields while the match computes only the routing value.
+  {
+    order_id: .order_id,
+    email:    .email,
+    amount:   .amount,
+    subtotal: .subtotal,
+    tax:      .tax,
+    total:    .total,
+    currency: .currency,
+    routing: match(.amount) {
+      > 1000 -> "enterprise_sales",
+      > 100  -> "standard_sales",
+      _      -> "self_service"
+    }
+  }
+@end
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 10. PARALLEL EXECUTION
+# ───────────────────────────────────────────────────────────────────────────
+# The & operator runs two branches concurrently and joins results into a map.
+# This is fan-out without goroutines, channels, or WaitGroup boilerplate.
+# The kernel handles scheduling, cancellation, and result merging.
+
+@pipeline enrich_order
+  # Run two independent lookups in parallel while carrying the order fields.
+  {
+    order_id: .order_id,
+    email: .email,
+    amount: .amount,
+    subtotal: .subtotal,
+    tax: .tax,
+    total: .total,
+    currency: .currency,
+    routing: .routing,
+    lookups: parallel {
+      auth: { status: "verified" },
+      inventory: { status: "in_stock" }
+    }
+  }
+@end
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 11. RESILIENCE MODIFIERS
+# ───────────────────────────────────────────────────────────────────────────
+# These attach to any action with :key=value syntax. They compose:
+#   :retry=3 :timeout=500ms :concurrency=10 :cache=1m :rate_limit=100
+# The kernel implements the actual retry/backoff/timeout/cache logic;
+# nflow just parses the policy. No middleware code to write.
+#
+# :retry=N        — retry up to N times on transient errors (xerr.Unavailable,
+#                   xerr.Timeout). Exponential backoff with jitter.
+# :timeout=500ms  — bounds EACH attempt. Backoff can extend total elapsed.
+# :concurrency=N  — limits concurrent executions; holds the slot across retries.
+# :cache=1m       — caches the result for 1 minute. Subsequent calls hit cache.
+# :rate_limit=100 — max 100 calls per second. Token bucket, shared per action name.
+# :strict         — enforces typed payload validation at runtime.
+# :lenient        — disables strict validation for this action.
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 12. FALLBACK OPERATOR (||)
+# ───────────────────────────────────────────────────────────────────────────
+# A || B means "try A; if it fails, use B." The failure is recorded but
+# doesn't propagate. This is graceful degradation in one operator — no
+# try/catch, no error-return plumbing.
+
+@pipeline notify_customer
+  # Simulate an unavailable email transport; const returns its value directly,
+  # and the fallback object deliberately preserves the order context.
+  (
+    runtime.fail @{ kind: "Unavailable", message: "email transport unavailable" }
+    || const @{ value: {
+      order_id: .order_id,
+      email: .email,
+      amount: .amount,
+      subtotal: .subtotal,
+      tax: .tax,
+      total: .total,
+      currency: .currency,
+      routing: .routing,
+      lookups: .lookups,
+      notification: { queued: true }
+    } }
+  )
+@end
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 13. TERNARY EXPRESSION
+# ───────────────────────────────────────────────────────────────────────────
+# cond ? then : else — inline conditional. Evaluates lazily: the branch
+# not taken is never executed. Useful for feature flags and routing.
+
+@pipeline classify_order
+  {
+    tier:    .amount > 1000 ? "enterprise" : "standard",
+    routing: .amount > 500 ? "priority_queue" : "standard_queue"
+  }
+@end
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 14. LOOP
+# ───────────────────────────────────────────────────────────────────────────
+# loop(body) until(condition) — iterate until a condition is met.
+# The body is an expression; the condition is an expr-lang string.
+# Replaces while/for loops with manual accumulator variables.
+
+@pipeline process_count
+  { idx: 0 }
+  -> loop( { idx: .idx + 1 } ) until( .idx >= 3 )
+  -> { count: .idx }
+@end
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 15. INLINE POLYGLOT EXECUTION (requires @require lang)
+# ───────────────────────────────────────────────────────────────────────────
+# Run Python, Rust, Go, TypeScript, JavaScript, or shell directly in
+# the pipeline. Each language is a keyword: py"...", rs"...", go"...", etc.
+# The runtime materializes the source to a temp file, resolves the
+# interpreter, and executes it. JSON stdin/stdout by default.
+#
+# This eliminates the "write a microservice, deploy it, call it via HTTP"
+# tax for any logic that's more naturally expressed in another language.
+
+@require lang
+
+@pipeline data_science_step
+  # PEP 723 inline deps: uv reads the metadata, installs deps, runs.
+  py {
+  # /// script
+  # dependencies = ["numpy"]
+  # ///
+  import numpy as np
+  data = np.array([1, 2, 3, 4, 5])
+  print(__import__('json').dumps({"mean": float(np.mean(data)), "std": float(np.std(data))}))
+  }
+@end
+
+@pipeline shell_snippet
+  # Shell — for when you just need a one-liner.
+  sh"echo processed"
+@end
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 16. ASSERTIONS (compile-time + post-run)
+# ───────────────────────────────────────────────────────────────────────────
+# @assert expressions are syntax-checked by lint and evaluated after execution.
+#   On failure, the flow exits non-zero with the assertion message.
+#   This is your test suite embedded in the flow — no separate test file.
+
+@assert: result.order_id != ""
+@assert: result.total > 0
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 17. SCOPE (modifier inheritance)
+# ───────────────────────────────────────────────────────────────────────────
+# @scope — wraps a block with modifiers that apply to every action inside.
+#   Nested scopes inherit and can override. This is how you apply a
+#   "everything in this section gets :retry=5 :timeout=10s" policy
+#   without repeating it on every line.
+#
+# Demonstrated as a pipeline so the scope wraps a real expression:
+
+@pipeline scoped_example
+  @scope :retry=3 :timeout=1s {
+    const @{ value: "scoped_action_ran" }
+  }
+@end
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 18. HOOKS (cross-cutting concerns)
+# ───────────────────────────────────────────────────────────────────────────
+# @hook:name — attaches a named hook to every action in the flow.
+#   Hooks see every action invocation: useful for tracing, metrics,
+#   audit logging, or custom middleware. Defined in Go; applied here.
+
+# @hook:tracing.span   # (requires a host that registers the hook)
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 19. POOL (dispatch to a set of actions)
+# ───────────────────────────────────────────────────────────────────────────
+# @pool — declares a set of actions that dispatch.run can route to.
+#   Useful for sharding, A/B testing, or failover pools.
+
+# @pool payment_providers [stripe, adyen, braintree]
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 20. APPROVAL GATES
+# ───────────────────────────────────────────────────────────────────────────
+# @approval — declares a human approval gate. The pipeline pauses until
+#   an approver with the required role approves. Built-in for compliance
+#   workflows — no separate approval service to build.
+
+@approval finance_review {
+  role: reviewer
+  reason: "Orders over $10,000 require finance approval"
+  expires: 30m
+}
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 21. EMBED (typed asset references)
+# ───────────────────────────────────────────────────────────────────────────
+# @embed — makes a file (terms.txt, template.html, etc.) available as a
+#   typed reference in the flow. The host configures the resolver; the
+#   flow references it by name.
+
+# @embed terms_of_service "terms.txt"
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 22. INCLUDE (modular flows)
+# ───────────────────────────────────────────────────────────────────────────
+# @include — imports another .nflow file as a namespace. Pipelines,
+#   schemas, and constants from the included file are available via
+#   namespace.name. This is how you split a monolithic flow into modules.
+
+# @include "shared/schemas.nflow" AS shared
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 23. EVENT SUBSCRIPTION
+# ───────────────────────────────────────────────────────────────────────────
+# @on event — subscribes the flow to an external event source. The host
+#   provides the transport (HTTP, NATS, Kafka, etc.); the flow declares
+#   what events it cares about. This is how nflow becomes an event
+#   processor, not just a batch runner.
+
+# @on event "http::8080"
+# @on event "nats:orders.incoming"
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 24. THE MAIN PIPELINE — composing everything
+# ───────────────────────────────────────────────────────────────────────────
+# This is the entry point. The input flows through validation, pricing,
+# routing, and enrichment — each a separate pipeline, each with its own
+# resilience profile.
+
+@pipeline checkout
+  pipeline.validate_order
+  -> pipeline.price_order
+  -> pipeline.route_order
+  -> pipeline.enrich_order
+  -> pipeline.notify_customer
+  -> {
+    order_id:    .order_id,
+    tax:         .tax,
+    total:       .total,
+    currency:    .currency,
+    routing:     .routing,
+    auth_result: .lookups.auth.status,
+    inventory:   .lookups.inventory.status,
+    notification: .notification,
+    status:      status.completed
+  }
+@end
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# INPUT + EXECUTION
+# ═══════════════════════════════════════════════════════════════════════════
+# The flow ends with a data literal piped into the entry pipeline.
+# This is the "main function" — the rest are declarations.
+
+{
+  order_id: "SO-2026-DEMO",
+  email: "client@example.com",
+  amount: 249.99,
+  currency: "USD"
+}
+-> pipeline.checkout
+
+# ═══════════════════════════════════════════════════════════════════════════
+# WHAT THIS FILE REPLACES (for the client)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#  • ~2000 lines of Go/Python/Java service code
+#  • A config parser + CLI flag library
+#  • A retry/backoff/timeout middleware framework
+#  • A circuit breaker library
+#  • A validation/schema library
+#  • An error-classification taxonomy
+#  • A workflow/pipeline orchestration engine
+#  • A polyglot FFI layer (gRPC/REST glue for each language)
+#  • An approval/sign-off service
+#  • A tracing/metrics instrumentation layer
+#  • A test harness for the above
+#
+#  Total nflow code above: ~250 lines. Declarative. Auditable. Diff-able.
+# ═══════════════════════════════════════════════════════════════════════════

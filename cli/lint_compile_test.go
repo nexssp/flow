@@ -38,6 +38,36 @@ func TestLintCompilesPipelineMaterializer(t *testing.T) {
 	}
 }
 
+func TestLintValidatesPostRunAssertionSyntax(t *testing.T) {
+	valid := lintOne(t, "@assert: result.total > 0\nruntime.noop")
+	if len(valid) != 0 {
+		t.Fatalf("lint issues for valid assertion = %#v", valid)
+	}
+
+	invalid := lintOne(t, "@assert: result.total >\nruntime.noop")
+	if len(invalid) != 1 || invalid[0].Kind != "compile" {
+		t.Fatalf("lint issues for invalid assertion = %#v, want one compile error", invalid)
+	}
+	if !strings.Contains(invalid[0].Message, "invalid expression") {
+		t.Fatalf("compile diagnostic = %q, want invalid assertion expression", invalid[0].Message)
+	}
+}
+
+func TestLintValidatesOnErrorConditionSyntax(t *testing.T) {
+	valid := lintOne(t, "@on_error {\n  when error.kind == \"Unavailable\" -> runtime.noop\n  else -> runtime.noop\n}\nruntime.noop")
+	if len(valid) != 0 {
+		t.Fatalf("lint issues for valid @on_error condition = %#v", valid)
+	}
+
+	invalid := lintOne(t, "@on_error {\n  when error.kind == -> runtime.noop\n}\nruntime.noop")
+	if len(invalid) != 1 || invalid[0].Kind != "compile" {
+		t.Fatalf("lint issues for invalid @on_error condition = %#v, want one compile error", invalid)
+	}
+	if !strings.Contains(invalid[0].Message, "invalid when condition") {
+		t.Fatalf("compile diagnostic = %q, want invalid condition", invalid[0].Message)
+	}
+}
+
 func TestLintDoesNotInvokeWorkflowActions(t *testing.T) {
 	cfg, err := buildConfig(nil)
 	if err != nil {

@@ -17,6 +17,7 @@ type Formatter struct {
 	operators      *compiler.OperatorTable
 	primaries      *compiler.PrimaryExtensionTable
 	requireEnabled bool
+	opaqueBlocks   map[string]struct{}
 }
 
 // New builds a formatter from the active Flow bundles. The same bundles should
@@ -25,12 +26,14 @@ type Formatter struct {
 func New(bundles []compiler.Bundle) *Formatter {
 	var operators []compiler.Operator
 	var primaries []compiler.PrimaryExtension
+	var directives []compiler.Directive
 	requireEnabled := false
 	for index := range bundles {
 		bundle := &bundles[index]
 		operators = append(operators, bundle.Operators...)
 		primaries = append(primaries, bundle.Primaries...)
 		for _, directive := range bundle.Directives {
+			directives = append(directives, directive)
 			if directive.Name == "require" {
 				requireEnabled = true
 			}
@@ -40,6 +43,7 @@ func New(bundles []compiler.Bundle) *Formatter {
 		compiler.NewOperatorTable(operators...),
 		compiler.NewPrimaryExtensionTable(primaries...),
 		requireEnabled,
+		directives...,
 	)
 }
 
@@ -50,6 +54,7 @@ func NewWithParserTables(
 	operators *compiler.OperatorTable,
 	primaries *compiler.PrimaryExtensionTable,
 	requireEnabled bool,
+	directives ...compiler.Directive,
 ) *Formatter {
 	if operators == nil {
 		operators = compiler.NewOperatorTable()
@@ -57,10 +62,17 @@ func NewWithParserTables(
 	if primaries == nil {
 		primaries = compiler.DefaultPrimaryExtensions()
 	}
+	opaqueBlocks := make(map[string]struct{})
+	for _, directive := range directives {
+		if directive.OpaqueBlock {
+			opaqueBlocks[directive.Name] = struct{}{}
+		}
+	}
 	return &Formatter{
 		operators:      operators,
 		primaries:      primaries,
 		requireEnabled: requireEnabled,
+		opaqueBlocks:   opaqueBlocks,
 	}
 }
 
@@ -175,7 +187,7 @@ func (f *Formatter) formatDirectiveLine(lines []string, index int, file, trimmed
 		}
 		return lines[index:nextLine], nextLine, nil
 	}
-	if isRawBlockDirective(trimmed) {
+	if f.isRawBlockDirective(trimmed) {
 		state.rawDepth = max(braceDelta(line), 0)
 	}
 	return []string{line}, index + 1, nil
@@ -247,6 +259,8 @@ func (f *Formatter) validate(ctx context.Context, lines []string, file string) e
 		return compiler.SourceError(compiler.Position{File: file, Line: len(lines)}, "@pipeline is missing @end")
 	case state.rawDepth > 0:
 		return compiler.SourceError(compiler.Position{File: file, Line: len(lines)}, "@%s block is not closed", state.rawDirective)
+	case state.pipelineScopeDepth > 0:
+		return compiler.SourceError(compiler.Position{File: file, Line: len(lines)}, "@scope block is not closed")
 	case state.scopeDepth > 0:
 		return compiler.SourceError(compiler.Position{File: file, Line: len(lines)}, "@scope block is not closed")
 	default:
@@ -255,12 +269,13 @@ func (f *Formatter) validate(ctx context.Context, lines []string, file string) e
 }
 
 type validationState struct {
-	segment      []string
-	segmentLine  int
-	pipeline     bool
-	scopeDepth   int
-	rawDepth     int
-	rawDirective string
+	segment            []string
+	segmentLine        int
+	pipeline           bool
+	scopeDepth         int
+	pipelineScopeDepth int
+	rawDepth           int
+	rawDirective       string
 }
 
 func (state *validationState) flush(ctx context.Context, operators *compiler.OperatorTable, primaries *compiler.PrimaryExtensionTable, file string) error {
@@ -308,12 +323,10 @@ func (f *Formatter) validateLine(ctx context.Context, lines []string, index int,
 	line := lines[index]
 	trimmed := strings.TrimSpace(line)
 	if state.rawDepth > 0 {
-		state.rawDepth += braceDelta(line)
-		if state.rawDepth <= 0 {
-			state.rawDepth = 0
-			state.rawDirective = ""
-		}
-		return index + 1, nil
+		return f.validateRawBlockLine(index, line, state)
+	}
+	if state.pipelineScopeDepth > 0 {
+		return f.validatePipelineScopeLine(index, line, trimmed, state)
 	}
 	if trimmed == "" {
 		return f.validateBlankLine(ctx, index, file, line, state)
@@ -323,17 +336,21 @@ func (f *Formatter) validateLine(ctx context.Context, lines []string, index int,
 		return index + 1, nil
 	}
 	if trimmed == "@end" {
-		if err := state.flush(ctx, f.operators, f.primaries, file); err != nil {
-			return index + 1, err
-		}
-		state.pipeline = false
-		return index + 1, nil
+		return f.validateEndLine(ctx, index, file, state)
 	}
 	if strings.HasPrefix(trimmed, "@pipeline") {
 		return f.validateDeclaration(ctx, lines, index, file, "pipeline", state)
 	}
 	if strings.HasPrefix(trimmed, "@profile") {
 		return f.validateDeclaration(ctx, lines, index, file, "profile", state)
+	}
+	if state.pipeline && strings.HasPrefix(trimmed, "@scope") {
+		state.pipelineScopeDepth = braceDelta(line)
+		if state.pipelineScopeDepth <= 0 {
+			state.pipelineScopeDepth = 0
+			state.addLine(index, line)
+		}
+		return index + 1, nil
 	}
 	if strings.HasPrefix(trimmed, "@scope") {
 		if err := state.flush(ctx, f.operators, f.primaries, file); err != nil {
@@ -354,11 +371,46 @@ func (f *Formatter) validateLine(ctx context.Context, lines []string, index int,
 	if isDirectiveLine(trimmed) {
 		return f.validateDirective(ctx, lines, index, file, line, trimmed, state)
 	}
-	if !state.pipeline && state.scopeDepth == 0 && isMacroInvocation(trimmed) {
+	if isTopLevelMacroInvocation(trimmed, state) {
 		return index + 1, state.flush(ctx, f.operators, f.primaries, file)
 	}
 	state.addLine(index, line)
 	return index + 1, nil
+}
+
+func (f *Formatter) validateEndLine(ctx context.Context, index int, file string, state *validationState) (int, error) {
+	if err := state.flush(ctx, f.operators, f.primaries, file); err != nil {
+		return index + 1, err
+	}
+	state.pipeline = false
+	return index + 1, nil
+}
+
+func (f *Formatter) validateRawBlockLine(index int, line string, state *validationState) (int, error) {
+	state.rawDepth += braceDelta(line)
+	if state.rawDepth <= 0 {
+		state.rawDepth = 0
+		state.rawDirective = ""
+	}
+	return index + 1, nil
+}
+
+func (f *Formatter) validatePipelineScopeLine(index int, line, trimmed string, state *validationState) (int, error) {
+	if trimmed == "" {
+		state.addLine(index, line)
+		return index + 1, nil
+	}
+	state.pipelineScopeDepth += braceDelta(line)
+	if state.pipelineScopeDepth <= 0 {
+		state.pipelineScopeDepth = 0
+		return index + 1, nil
+	}
+	state.addLine(index, line)
+	return index + 1, nil
+}
+
+func isTopLevelMacroInvocation(trimmed string, state *validationState) bool {
+	return !state.pipeline && state.scopeDepth == 0 && isMacroInvocation(trimmed)
 }
 
 func (f *Formatter) validateDeclaration(ctx context.Context, lines []string, index int, file, directive string, state *validationState) (int, error) {
@@ -392,7 +444,7 @@ func (f *Formatter) validateDirective(ctx context.Context, lines []string, index
 			return index + 1, err
 		}
 	}
-	if isRawBlockDirective(trimmed) {
+	if f.isRawBlockDirective(trimmed) {
 		state.rawDepth = braceDelta(line)
 		if state.rawDepth > 0 {
 			state.rawDirective = directiveName(trimmed)
@@ -779,14 +831,12 @@ func directiveName(line string) string {
 	return name
 }
 
-func isRawBlockDirective(line string) bool {
-	name := directiveName(line)
-	switch name {
-	case "macro", "schema", "symbols", "approval", "pool", "assert", "config":
-		return strings.Contains(line, "{")
-	default:
+func (f *Formatter) isRawBlockDirective(line string) bool {
+	if !strings.Contains(line, "{") {
 		return false
 	}
+	_, ok := f.opaqueBlocks[directiveName(line)]
+	return ok
 }
 
 func braceDelta(line string) int {

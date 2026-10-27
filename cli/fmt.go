@@ -176,5 +176,5 @@ func formatterFor(ctx context.Context, inv *invocation, source, name string) (*f
 		return nil, err
 	}
 	_, requireEnabled := cfg.Directives.ByName("require")
-	return flowformatter.NewWithParserTables(cfg.Operators, cfg.PrimariesFor(metadata), requireEnabled), nil
+	return flowformatter.NewWithParserTables(cfg.Operators, cfg.PrimariesFor(metadata), requireEnabled, cfg.Directives.All()...), nil
 }

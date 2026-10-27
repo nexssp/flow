@@ -1,6 +1,7 @@
 package runner_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,6 +74,40 @@ func TestOriginalMasterExecutesAllAssertions(t *testing.T) {
 	ktest.RequireCondition(t, ok && len(asserts) == 11, "want all eleven original master assertions, got %#v", execution.Meta["asserts"])
 	if failures := runner.EvaluateAssertions(execution.Output, asserts); len(failures) != 0 {
 		t.Fatalf("original master assertions failed (output %#v): %v", execution.Output, failures)
+	}
+}
+
+func TestAttachedMasterShowcasePreservesPipelineData(t *testing.T) {
+	cfg, err := runner.BuildConfig(native.SelftestBundles())
+	ktest.RequireNoError(t, err)
+	source, err := os.ReadFile(filepath.Join("testdata", "master_attached.nflow"))
+	ktest.RequireNoError(t, err)
+	execution, err := runner.Execute(t.Context(), cfg, string(source), "master_attached.nflow", nil)
+	if err != nil {
+		var skippable interface{ SelfTestSkipReason() string }
+		if errors.As(err, &skippable) {
+			if reason := skippable.SelfTestSkipReason(); reason != "" {
+				t.Skipf("showcase requires unavailable language tooling: %s", reason)
+			}
+		}
+	}
+	ktest.RequireNoError(t, err)
+
+	asserts, ok := execution.Meta["asserts"].([]string)
+	ktest.RequireCondition(t, ok && len(asserts) == 2, "want both attached-flow assertions, got %#v", execution.Meta["asserts"])
+	checks := append([]string(nil), asserts...)
+	checks = append(checks,
+		`result.order_id == "SO-2026-DEMO"`,
+		`result.tax == 20`,
+		`result.total == 269.99`,
+		`result.routing == "standard_sales"`,
+		`result.auth_result == "verified"`,
+		`result.inventory == "in_stock"`,
+		`result.notification.queued == true`,
+		`result.status == "COMPLETED"`,
+	)
+	if failures := runner.EvaluateAssertions(execution.Output, checks); len(failures) != 0 {
+		t.Fatalf("attached master assertions failed (output %#v): %v", execution.Output, failures)
 	}
 }
 

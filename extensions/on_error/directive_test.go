@@ -74,6 +74,39 @@ func TestDirective_WhenWithoutArrow(t *testing.T) {
 	ktest.RequireErrorContains(t, err, "invalid when clause")
 }
 
+func TestDirective_RejectsInvalidWhenConditionAtBodyLine(t *testing.T) {
+	t.Parallel()
+	_, err := runDirective(t,
+		`@on_error {`,
+		`  when error.kind == -> runtime.noop`,
+		`}`,
+	)
+	ktest.RequireErrorContains(t, err, "invalid when condition")
+	position, ok := compiler.PositionOf(err)
+	ktest.RequireCondition(t, ok, "error has no source position: %v", err)
+	ktest.RequireEqual(t, position.File, "<test>")
+	ktest.RequireEqual(t, position.Line, 2)
+}
+
+func TestDirectiveBodyLineTracksRepeatedEntriesAndReportsLookupMiss(t *testing.T) {
+	t.Parallel()
+	source := []string{
+		`@on_error {`,
+		`  when error.kind == -> runtime.noop,`,
+		`  when error.kind == -> runtime.noop`,
+		`}`,
+	}
+	body := `when error.kind == -> runtime.noop`
+
+	first, nextLine, nextEntry := directiveBodyLine(source, 0, 3, 1, 0, body)
+	ktest.RequireEqual(t, first, 2)
+	second, _, _ := directiveBodyLine(source, 0, 3, nextLine, nextEntry, body)
+	ktest.RequireEqual(t, second, 3)
+
+	missing, _, _ := directiveBodyLine(source, 0, 3, 1, 0, `when missing -> runtime.noop`)
+	ktest.RequireEqual(t, missing, 0)
+}
+
 func TestResolveTarget(t *testing.T) {
 	t.Parallel()
 	cfg := Config{

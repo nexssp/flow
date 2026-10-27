@@ -121,6 +121,13 @@ func TestRootBundleRejectsSymlinkEscape(t *testing.T) {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 	bundle := Bundle(map[string]string{"root": root})
+	for _, shutdown := range bundle.Shutdowns {
+		t.Cleanup(func() {
+			if err := shutdown(context.Background()); err != nil {
+				t.Errorf("close embed bundle root: %v", err)
+			}
+		})
+	}
 	_, _, err := compiler.Preprocess(t.Context(), compiler.NewDirectiveTable(bundle.Directives...), "@embed secret \"escape.txt\"", "test.nflow")
 	if err == nil {
 		t.Fatal("escaping symlink unexpectedly succeeded")

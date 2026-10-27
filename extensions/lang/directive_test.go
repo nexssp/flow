@@ -3,6 +3,7 @@ package lang
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -171,11 +172,17 @@ func TestRunLangBlockSubprocessFailure(t *testing.T) {
 func TestRegisterDefineValid(t *testing.T) {
 	const id = "testlang-define"
 	defer delete(Registry, id)
+	testCommand, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	t.Setenv("PATH", filepath.Dir(testCommand)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	testCommandName := filepath.Base(testCommand)
 
-	err := RegisterDefine(Define{
+	err = RegisterDefine(Define{
 		ID:           id,
 		Ext:          ".txt",
-		Find:         []string{"cat"},
+		Find:         []string{testCommandName},
 		Stdin:        "json",
 		Stdout:       "json",
 		FileTemplate: "starter source",
@@ -195,8 +202,8 @@ func TestRegisterDefineValid(t *testing.T) {
 		t.Fatalf("Select: %v", err)
 	}
 	// lookPathCmd returns an absolute path; assert on basename.
-	if got := filepath.Base(cmd); got != "cat" {
-		t.Errorf("Select basename = %q; want cat", got)
+	if got, want := filepath.Base(cmd), filepath.Base(testCommand); !strings.EqualFold(got, want) {
+		t.Errorf("Select basename = %q; want %q", got, want)
 	}
 	if len(args) != 0 {
 		t.Errorf("Select args = %v; want empty", args)

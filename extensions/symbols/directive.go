@@ -14,10 +14,11 @@ import (
 var Directive = compiler.Directive{
 	Name: "symbols",
 	Example: `@symbols routing {
-  primary_queue: "billing-operations"
-  max_retries:   "3"
-}`,
-	Handler: handleDirective,
+	  primary_queue: "billing-operations"
+	  max_retries:   "3"
+	}`,
+	Handler:     handleDirective,
+	OpaqueBlock: true,
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {

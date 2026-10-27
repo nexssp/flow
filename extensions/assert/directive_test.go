@@ -136,13 +136,13 @@ func TestDirective_BlockFormSkipsCommentsAndBlanks(t *testing.T) {
 
 func TestDirective_CompactFormSplitsOnlyTopLevelCommas(t *testing.T) {
 	t.Parallel()
-	out, err := runDirective(t, `@assert: { result.text == "a,b", contains(["a,b", "c"], result.text), all([1, 2], # > 0), }`)
+	out, err := runDirective(t, `@assert: { result.text == "a,b", all(["a,b", "c"], # != ""), all([1, 2], # > 0), }`)
 	ktest.RequireNoError(t, err)
 
 	asserts, _ := out["asserts"].([]string)
 	ktest.RequireEqual(t, asserts, []string{
 		`result.text == "a,b"`,
-		`contains(["a,b", "c"], result.text)`,
+		`all(["a,b", "c"], # != "")`,
 		`all([1, 2], # > 0)`,
 	})
 	positions, _ := out[assertionPositionsKey].([]compiler.Position)
@@ -191,4 +191,35 @@ func TestDirective_BlockErrors(t *testing.T) {
 		_, err := runDirective(t, `@assert {`, `a == 1`)
 		ktest.RequireErrorContains(t, err, "unclosed block")
 	})
+}
+
+func TestDirective_ValidatesExpressionSyntaxAndSourceLine(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		lines []string
+		line  int
+	}{
+		{name: "single", lines: []string{`@assert: result.value >`}, line: 1},
+		{name: "compact", lines: []string{`@assert: { result.value > 0, result.other == }`}, line: 1},
+		{name: "block", lines: []string{`@assert {`, `result.value > 0`, `result.other ==`, `}`}, line: 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := runDirective(t, tc.lines...)
+			if err == nil {
+				t.Fatal("directive accepted invalid expression syntax")
+			}
+			position, ok := compiler.PositionOf(err)
+			if !ok || position.File != "<test>" || position.Line != tc.line {
+				t.Fatalf("PositionOf(error) = %+v, %t; want <test>:%d (error: %v)", position, ok, tc.line, err)
+			}
+		})
+	}
+}
+
+func TestDirective_ValidatesDotShorthandWithoutRuntimePayload(t *testing.T) {
+	t.Parallel()
+	_, err := runDirective(t, `@assert: .value > 0`)
+	ktest.RequireNoError(t, err)
 }

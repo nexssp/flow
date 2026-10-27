@@ -96,7 +96,9 @@ func TestBuiltinScenarios(t *testing.T) {
 			xtest.RequireEqual(t, r.Warm.Iterations, 3)
 			xtest.RequireEqual(t, r.Warm.Warmup, 1)
 			xtest.RequireEqual(t, r.Warm.Errors, 0)
-			xtest.RequireCondition(t, r.CompileMs > 0 && r.FirstRunMs > 0 && r.Warm.RPS > 0, "phase timings and throughput must be measured")
+			// Very short phases can fall below the platform clock's resolution.
+			xtest.RequireCondition(t, r.CompileMs >= 0 && r.FirstRunMs >= 0 && r.Warm.RPS > 0,
+				"phase timings must be non-negative and throughput positive (compile=%vms first-run=%vms rps=%v)", r.CompileMs, r.FirstRunMs, r.Warm.RPS)
 		}
 	})
 }

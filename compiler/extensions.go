@@ -38,9 +38,10 @@ type DirectiveRes struct {
 }
 
 type Directive struct {
-	Name    string
-	Example string
-	Handler func(context.Context, DirectiveReq) (DirectiveRes, error)
+	Name        string
+	Example     string
+	Handler     func(context.Context, DirectiveReq) (DirectiveRes, error)
+	OpaqueBlock bool // The directive owns a `{ ... }` body that formatters must preserve verbatim.
 }
 
 func (d Directive) Action() *action.BuiltAction[DirectiveReq, DirectiveRes] {

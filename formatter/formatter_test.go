@@ -282,6 +282,49 @@ func TestFormatPreservesOpaqueDirectiveBody(t *testing.T) {
 	}
 }
 
+func TestFormatPreservesOnErrorDirectiveBlock(t *testing.T) {
+	input := "@on_error {\n" +
+		"  when error.kind == \"Unavailable\" -> error.info\n" +
+		"  when error.kind == \"BadRequest\" -> error.info\n" +
+		"  else -> error.info\n" +
+		"}\n\n" +
+		"runtime.noop\n"
+	got, err := testFormatter().Format(t.Context(), input, "on-error.nflow")
+	if err != nil {
+		t.Fatalf("Format() rejected a valid @on_error block: %v", err)
+	}
+	if !strings.Contains(got, "when error.kind") {
+		t.Fatalf("Format() dropped extension-owned clauses: %q", got)
+	}
+	second, err := testFormatter().Format(t.Context(), got, "on-error.nflow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second != got {
+		t.Fatalf("format is not idempotent:\n%s\n!=\n%s", second, got)
+	}
+}
+
+func TestFormatValidatesScopeExpressionInsidePipeline(t *testing.T) {
+	input := "@pipeline scoped_example\n" +
+		"  @scope :retry=3 :timeout=1s {\n" +
+		"    const @{ value: \"scoped\" }\n" +
+		"  }\n" +
+		"  -> { scoped: .value }\n" +
+		"@end\n"
+	got, err := testFormatter().Format(t.Context(), input, "scope-expression.nflow")
+	if err != nil {
+		t.Fatalf("Format() rejected a valid scoped pipeline expression: %v", err)
+	}
+	second, err := testFormatter().Format(t.Context(), got, "scope-expression.nflow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second != got {
+		t.Fatalf("format is not idempotent:\n%s\n!=\n%s", second, got)
+	}
+}
+
 func TestFormatTemplateRenderArgumentBlockWithBlankLines(t *testing.T) {
 	template := `Hi {{.customer}},\n\nYour order {{.order_id}} is confirmed. Estimated delivery: {{.delivery_date}}.\n\nItems:\n{{range .items}}- {{.}}\n{{end}}\nThanks,\n{{.store}}`
 	input := "@description \"Draft an order confirmation\"\n" +

@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -882,7 +883,7 @@ func maybeLaunchToolchainWithIO(ctx context.Context, inv *invocation, args []str
 	}
 	fileRun := isFileBasedRuntimeInvocation(cleanArgs)
 	if !selection.launch {
-		if fileRun {
+		if fileRun && slog.Default().Enabled(ctx, slog.LevelDebug) {
 			writeToolchainRuntimeNotice(stderr, selection, selection.exactVersion)
 		}
 		return 0, false

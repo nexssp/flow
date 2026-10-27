@@ -1,6 +1,7 @@
 package require
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -19,9 +20,10 @@ func TestDirectDeclarationsCaptureOriginalSourceAndOnlyDirectHandlers(t *testing
 		"@require\tgithub.com/nexssp/bare as bare # comment\r\n" +
 		"@include child.nflow\r\n"
 	child := "@require github.com/nexssp/from-child v2.0.0\r\n"
-	file := "/project/main.nflow"
+	dir := t.TempDir()
+	file := filepath.Join(dir, "main.nflow")
 	ctx := compiler.WithSourceLoader(t.Context(), compiler.SourceMap{
-		"/project/child.nflow": child,
+		filepath.Join(dir, "child.nflow"): child,
 	})
 	_, meta, err := compiler.Preprocess(ctx, compiler.NewDirectiveTable(Directive, includeext.Directive), root, file)
 	ktest.RequireNoError(t, err)

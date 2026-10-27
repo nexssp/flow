@@ -579,7 +579,7 @@ func (s *flowLanguageServer) formatterFor(uri, source string) (*flowformatter.Fo
 		return nil, err
 	}
 	_, requireEnabled := cfg.Directives.ByName("require")
-	return flowformatter.NewWithParserTables(cfg.Operators, cfg.PrimariesFor(metadata), requireEnabled), nil
+	return flowformatter.NewWithParserTables(cfg.Operators, cfg.PrimariesFor(metadata), requireEnabled, cfg.Directives.All()...), nil
 }
 
 func lspRequirementError(err error) error {
@@ -862,7 +862,7 @@ func (s *flowLanguageServer) sourceName(uri string) string {
 
 func lspFileURIPath(uri string) string {
 	parsed, err := url.Parse(uri)
-	if err != nil || parsed.Scheme != "file" || parsed.Opaque != "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+	if err != nil || !lspValidFileURI(parsed) {
 		return ""
 	}
 	name := parsed.Path
@@ -870,13 +870,10 @@ func lspFileURIPath(uri string) string {
 		return ""
 	}
 	if parsed.Host != "" && !strings.EqualFold(parsed.Host, "localhost") {
-		if runtime.GOOS != windowsOS {
-			return ""
-		}
-		return filepath.Join(`\\`+parsed.Host, filepath.FromSlash(name))
+		return lspFileURIHostPath(parsed.Host, name)
 	}
-	if len(name) >= 3 && name[0] == '/' && name[2] == ':' {
-		if runtime.GOOS != "windows" {
+	if lspIsWindowsDrivePath(name) {
+		if runtime.GOOS != windowsOS {
 			return ""
 		}
 		name = name[1:]
@@ -884,4 +881,27 @@ func lspFileURIPath(uri string) string {
 		return ""
 	}
 	return filepath.FromSlash(name)
+}
+
+func lspValidFileURI(parsed *url.URL) bool {
+	return parsed.Scheme == "file" && parsed.Opaque == "" && parsed.User == nil && parsed.RawQuery == "" && parsed.Fragment == ""
+}
+
+func lspFileURIHostPath(host, name string) string {
+	if runtime.GOOS != windowsOS {
+		return ""
+	}
+	if lspIsWindowsDrive(host) {
+		return filepath.FromSlash(host + "/" + strings.TrimLeft(name, "/"))
+	}
+	return filepath.Join(`\\`+host, filepath.FromSlash(name))
+}
+
+func lspIsWindowsDrive(path string) bool {
+	return len(path) == 2 && path[1] == ':' &&
+		((path[0] >= 'a' && path[0] <= 'z') || (path[0] >= 'A' && path[0] <= 'Z'))
+}
+
+func lspIsWindowsDrivePath(path string) bool {
+	return len(path) >= 3 && path[0] == '/' && path[2] == ':'
 }

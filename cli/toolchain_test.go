@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -501,16 +502,19 @@ func TestToolchainCurrentCompatibleFmtLintRunDoNotDownloadOrModifyFiles(t *testi
 }
 
 func TestToolchainRuntimeVersionNoticeCurrentMatchAndSwitch(t *testing.T) {
+	previousLogger := slog.Default()
+	t.Setenv("LOG_LEVEL", "info")
+	setupLogger()
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
 	tests := []struct {
 		name, current, declared, selected, wantNotice string
 		wantChild                                     bool
 	}{
 		{
-			name:       "current version satisfies pinned source",
-			current:    "v0.44.2",
-			declared:   "=0.44.2",
-			selected:   "v0.44.2",
-			wantNotice: "using NFlow v0.44.2 (@nflow_version \"=0.44.2\")\n",
+			name:     "current version satisfies pinned source",
+			current:  "v0.44.2",
+			declared: "=0.44.2",
+			selected: "v0.44.2",
 		},
 		{
 			name:       "bare file switches to declared version",
@@ -679,6 +683,10 @@ func TestToolchainDevBuildDispatchesDeclaredStableCore(t *testing.T) {
 }
 
 func TestToolchainDevBuildWithoutSelectorStaysDev(t *testing.T) {
+	previousLogger := slog.Default()
+	t.Setenv("LOG_LEVEL", "info")
+	setupLogger()
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
 	oldVersion := compiler.Version
 	compiler.Version = "dev"
 	t.Cleanup(func() { compiler.Version = oldVersion })
@@ -716,8 +724,16 @@ func TestToolchainDevBuildWithoutSelectorStaysDev(t *testing.T) {
 	if code != 0 || handled || resolverCalls != 0 || runnerCalls != 0 {
 		t.Fatalf("unselected dev run = (code %d, handled %t, resolver calls %d, child calls %d)", code, handled, resolverCalls, runnerCalls)
 	}
-	if stderr.String() != "using NFlow dev\n" {
-		t.Fatalf("unselected dev notice = %q, want %q", stderr.String(), "using NFlow dev\n")
+	if stderr.Len() != 0 {
+		t.Fatalf("unselected dev notice at info level = %q, want no notice", stderr.String())
+	}
+
+	t.Setenv("LOG_LEVEL", "debug")
+	setupLogger()
+	var debugStderr bytes.Buffer
+	code, handled = maybeLaunchToolchainWithIO(t.Context(), inv, []string{path}, &debugStderr)
+	if code != 0 || handled || debugStderr.String() != "using NFlow dev\n" {
+		t.Fatalf("unselected dev notice at debug level = (code %d, handled %t, notice %q), want (0, false, %q)", code, handled, debugStderr.String(), "using NFlow dev\n")
 	}
 }
 

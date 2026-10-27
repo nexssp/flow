@@ -186,7 +186,7 @@ func evaluateAssertion(src string, env map[string]any) (value any, phase string,
 	if strings.HasPrefix(trimmed, ".") {
 		cleanExpr = compiler.PreprocessDots(trimmed)
 	}
-	program, err := expr.Compile(cleanExpr, expr.Env(env))
+	program, err := compiler.CompileExpression(cleanExpr, expr.Env(env))
 	if err != nil {
 		return nil, "syntax", err
 	}

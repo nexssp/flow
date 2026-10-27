@@ -2,6 +2,7 @@ package native_test
 
 import (
 	"bytes"
+	"errors"
 	"io/fs"
 	"os"
 	"path"
@@ -12,6 +13,7 @@ import (
 	"github.com/nexssp/kernel/xtest/ktest"
 
 	"github.com/nexssp/flow/native"
+	"github.com/nexssp/flow/runner"
 )
 
 // Compare every file, including sidecars, rather than only checking bundles
@@ -91,5 +93,76 @@ func TestSelftest_RepositoryFixturesMatchEmbeddedFiles(t *testing.T) {
 	}
 	for key := range embedded {
 		t.Errorf("embedded fixture %s has no matching repository file", key)
+	}
+}
+
+func TestSelftest_EmbeddedNFlowFixturesCompile(t *testing.T) {
+	bundles := native.SelftestBundles()
+	cfg, err := runner.BuildConfig(bundles)
+	if err != nil {
+		t.Fatalf("BuildConfig: %v", err)
+	}
+
+	compiled := 0
+	for _, bundle := range bundles {
+		if bundle.Fixtures == nil {
+			continue
+		}
+		for _, section := range bundle.AllSelfTests() {
+			for _, feature := range section.Features {
+				prefix := bundle.ID + "/"
+				if !strings.HasPrefix(feature.Source, prefix) {
+					continue
+				}
+				relativeSource := strings.TrimPrefix(feature.Source, prefix)
+				if !strings.HasSuffix(relativeSource, ".nflow") || feature.Skip != "" {
+					continue
+				}
+				directory := t.TempDir()
+				file := filepath.Join(directory, filepath.FromSlash(relativeSource))
+				if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+					t.Errorf("create fixture directory for %s: %v", feature.Source, err)
+					continue
+				}
+				if err := os.WriteFile(file, []byte(feature.DSL), 0o600); err != nil {
+					t.Errorf("write fixture %s: %v", feature.Source, err)
+					continue
+				}
+				for name, content := range feature.Files {
+					if !fs.ValidPath(name) {
+						t.Errorf("fixture %s has invalid sidecar path %q", feature.Source, name)
+						continue
+					}
+					target := filepath.Join(filepath.Dir(file), filepath.FromSlash(name))
+					if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+						t.Errorf("create sidecar directory for %s: %v", feature.Source, err)
+						continue
+					}
+					if err := os.WriteFile(target, []byte(content), 0o600); err != nil {
+						t.Errorf("write sidecar %s for %s: %v", name, feature.Source, err)
+					}
+				}
+				_, compileErr := runner.Compile(t.Context(), cfg, feature.DSL, file)
+				if feature.ExpectCompileError != "" {
+					if compileErr == nil || !strings.Contains(compileErr.Error(), feature.ExpectCompileError) {
+						t.Errorf("compile %s: got %v, want error containing %q", feature.Source, compileErr, feature.ExpectCompileError)
+					}
+					compiled++
+					continue
+				}
+				if compileErr != nil {
+					var skippable interface{ SelfTestSkipReason() string }
+					if errors.As(compileErr, &skippable) && skippable.SelfTestSkipReason() != "" {
+						t.Logf("skip %s: %s", feature.Source, skippable.SelfTestSkipReason())
+						continue
+					}
+					t.Errorf("compile %s: %v", feature.Source, compileErr)
+				}
+				compiled++
+			}
+		}
+	}
+	if compiled == 0 {
+		t.Fatal("no embedded .nflow fixtures were compiled")
 	}
 }
