@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"strings"
 
 	"github.com/nexssp/kernel/action"
@@ -15,6 +16,7 @@ type CompileReq struct {
 	Name               string
 	Line               int
 	InheritedPrimaries []PrimaryExtension
+	InheritedMeta      map[string]any
 	Prepared           *PreparedSource
 }
 
@@ -101,7 +103,7 @@ func PreprocessContributionsFromMeta(meta map[string]any, opts ...CompileOption)
 // source is compiled, such as runner materialization.
 func PrepareSource(ctx context.Context, dt *DirectiveTable, source, name string, opts ...CompileOption) (*PreparedSource, error) {
 	cfg := applyCompileOptions(opts)
-	return prepareSource(ctx, dt, source, name, cfg)
+	return prepareSource(ctx, dt, source, name, cfg, nil)
 }
 
 // PreprocessWithOptions preprocesses source with compile-time bundle sources
@@ -112,9 +114,20 @@ func PreprocessWithOptions(ctx context.Context, dt *DirectiveTable, source, name
 	return Preprocess(ctx, dt, source, name)
 }
 
-func prepareSource(ctx context.Context, dt *DirectiveTable, source, name string, cfg *compileConfig) (*PreparedSource, error) {
+func prepareSource(ctx context.Context, dt *DirectiveTable, source, name string, cfg *compileConfig, inheritedMeta map[string]any) (*PreparedSource, error) {
 	ctx = applyConfigToCtx(ctx, cfg)
-	clean, meta, err := Preprocess(ctx, dt, source, name)
+	meta := make(map[string]any)
+	if inheritedMeta != nil {
+		for _, inherit := range cfg.scopeInheritors {
+			if inherit == nil {
+				continue
+			}
+			if err := inherit(inheritedMeta, meta); err != nil {
+				return nil, fmt.Errorf("inherit compile scope: %w", err)
+			}
+		}
+	}
+	clean, meta, err := preprocessWithMeta(ctx, dt, source, name, meta)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +189,7 @@ func runCompile(
 	prepared := req.Prepared
 	if prepared == nil {
 		var err error
-		prepared, err = prepareSource(ctx, dt, req.Source, req.Name, cfg)
+		prepared, err = prepareSource(ctx, dt, req.Source, req.Name, cfg, req.InheritedMeta)
 		if err != nil {
 			return CompileRes{}, err
 		}

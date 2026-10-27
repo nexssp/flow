@@ -30,6 +30,7 @@ type compileConfig struct {
 	validators          []ASTValidateFunc
 	contextValidators   []ASTContextValidateFunc
 	onPreprocess        []OnPreprocessFunc
+	scopeInheritors     []ScopeInheritFunc
 	config              map[string]string
 	cliArgs             []string
 	argSchemas          map[string][]ArgFieldSpec
@@ -104,6 +105,14 @@ func WithOnPreprocess(fns ...OnPreprocessFunc) CompileOption {
 	}
 }
 
+// WithScopeInheritors installs extension callbacks used to seed child
+// compilation metadata before child directives are preprocessed.
+func WithScopeInheritors(fns ...ScopeInheritFunc) CompileOption {
+	return func(c *compileConfig) {
+		c.scopeInheritors = append(c.scopeInheritors, fns...)
+	}
+}
+
 // WithConfigMap carries the @config key→value map into the compile
 // context. It is called by the config bundle's OnPreprocess hook after
 // preprocessing has collected the source's @config directives. A nil
@@ -156,10 +165,11 @@ func withBundleSources(loader *bundleSourceLoader) CompileOption {
 // into a single set of CompileOptions. Called once at startup.
 func BundleConfig(bundles ...Bundle) []CompileOption {
 	var (
-		advisors []AtomAdviseFunc
-		wrappers []PipelineWrapFunc
-		onPre    []OnPreprocessFunc
-		schemas  = map[string][]ArgFieldSpec{}
+		advisors   []AtomAdviseFunc
+		wrappers   []PipelineWrapFunc
+		onPre      []OnPreprocessFunc
+		inheritors []ScopeInheritFunc
+		schemas    = map[string][]ArgFieldSpec{}
 	)
 	for i := range bundles {
 		b := &bundles[i]
@@ -175,6 +185,9 @@ func BundleConfig(bundles ...Bundle) []CompileOption {
 		if b.OnPreprocess != nil {
 			onPre = append(onPre, b.OnPreprocess)
 		}
+		if b.InheritScope != nil {
+			inheritors = append(inheritors, b.InheritScope)
+		}
 		maps.Copy(schemas, b.ArgSchemas)
 	}
 
@@ -187,6 +200,9 @@ func BundleConfig(bundles ...Bundle) []CompileOption {
 	}
 	if len(onPre) > 0 {
 		opts = append(opts, WithOnPreprocess(onPre...))
+	}
+	if len(inheritors) > 0 {
+		opts = append(opts, WithScopeInheritors(inheritors...))
 	}
 	if len(schemas) > 0 {
 		opts = append(opts, WithArgSchemas(schemas))

@@ -23,6 +23,7 @@ import (
 	"github.com/nexssp/flow/extensions/config"
 	"github.com/nexssp/flow/extensions/config_yaml"
 	"github.com/nexssp/flow/extensions/constants"
+	"github.com/nexssp/flow/extensions/data"
 	"github.com/nexssp/flow/extensions/decide"
 	"github.com/nexssp/flow/extensions/description"
 	"github.com/nexssp/flow/extensions/external"
@@ -108,6 +109,7 @@ func bundles(retryBundle compiler.Bundle) []compiler.Bundle {
 		approval.Bundle(nil),
 		external.Bundle(nil),
 		fs.Bundle(nil),
+		data.Bundle(nil),
 		io.Bundle(nil),
 		render.Bundle(nil),
 		on_error.Bundle(nil),

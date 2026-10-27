@@ -39,6 +39,11 @@ type SelfTestSection struct {
 // Implementations must honor ctx so host shutdown remains bounded.
 type ShutdownFunc func(context.Context) error
 
+// ScopeInheritFunc copies extension-owned declarations from a parent
+// compilation scope into a child scope before the child's directives run.
+// The parent metadata is read-only; the callback should copy values it keeps.
+type ScopeInheritFunc func(parentMeta, childMeta map[string]any) error
+
 // FileResolverBinding routes references from one provider to its resolver.
 type FileResolverBinding struct {
 	Provider xfile.Provider
@@ -69,10 +74,16 @@ type Bundle struct {
 	// MaterializePhase defaults to MaterializeDeclarations; see materializer-lifecycle.md.
 	MaterializePhase MaterializePhase
 	OnPreprocess     func(meta map[string]any) PreprocessContributions
-	AtomAdvise       func(atom *Atom, builder *action.Builder[any, any]) error
-	WrapPipeline     func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error)
-	Hooks            []action.AnyHook
-	FileResolvers    []FileResolverBinding
+	// InheritScope copies extension-owned compile metadata into a child scope
+	// before child directives run. Implement it when child preprocessing depends
+	// on parent declarations; propagation is opt-in per bundle, and this callback
+	// must merge into child metadata rather than replacing other extensions' data.
+	// Treat parentMeta as read-only and copy values retained by the child.
+	InheritScope  ScopeInheritFunc
+	AtomAdvise    func(atom *Atom, builder *action.Builder[any, any]) error
+	WrapPipeline  func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error)
+	Hooks         []action.AnyHook
+	FileResolvers []FileResolverBinding
 
 	ArgSchemas map[string][]ArgFieldSpec
 

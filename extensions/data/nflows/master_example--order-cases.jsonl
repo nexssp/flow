@@ -1,0 +1,10 @@
+{"id":"case-001","text":"Refund requested for a duplicate charge","label":"refund","is_refund":true,"amount":19.95}
+{"id":"case-002","text":"Package arrived later than promised","label":"delivery","is_refund":false,"amount":7.50}
+{"id":"case-003","text":"Customer asks to reverse a damaged-item payment","label":"refund","is_refund":true,"amount":42.00}
+{"id":"case-004","text":"Tracking page has not updated","label":"delivery","is_refund":false,"amount":0.00}
+{"id":"case-005","text":"Charge appears twice on the statement","label":"refund","is_refund":true,"amount":11.25}
+{"id":"case-006","text":"Parcel was left at the wrong address","label":"delivery","is_refund":false,"amount":0.00}
+{"id":"case-007","text":"Return accepted but the refund is missing","label":"refund","is_refund":true,"amount":64.00}
+{"id":"case-008","text":"The order contains the wrong size","label":"return","is_refund":false,"amount":0.00}
+{"id":"case-009","text":"Please refund the second item in the order","label":"refund","is_refund":true,"amount":23.40}
+{"id":"case-010","text":"One item from the shipment is missing","label":"delivery","is_refund":false,"amount":0.00}

@@ -38,6 +38,8 @@ go.work.sum
 .env.*
 *.local
 data/
+!extensions/data/
+!extensions/data/**
 *.db
 *.sqlite
 

@@ -45,9 +45,9 @@ func readMemStats(dst *runtime.MemStats) {
 
 var defaultRunAction = compiler.RunAction()
 
-func withExecutionContext(ctx context.Context, cfg Config, resolver compiler.CapabilityResolver) context.Context {
+func withExecutionContext(ctx context.Context, cfg Config, resolver compiler.CapabilityResolver, meta map[string]any) context.Context {
 	cfg.Resolver = resolver
-	ctx = contracts.WithCompiler(ctx, compilerAdapter{cfg: cfg})
+	ctx = contracts.WithCompiler(ctx, compilerAdapter{cfg: cfg, inheritedMeta: meta})
 	ctx = contracts.WithActionResolver(ctx, resolver)
 	return contracts.WithFileResolver(ctx, cfg.FileResolver)
 }
@@ -119,7 +119,7 @@ func ExecutePrepared(
 		ctx = compiler.WithLocalSymbols(ctx, syms)
 	}
 
-	ctx = withExecutionContext(ctx, cfg, compiled.Resolver)
+	ctx = withExecutionContext(ctx, cfg, compiled.Resolver, compiled.Meta)
 
 	runStart := time.Now()
 	preparedName, preparedSourceHash := prepared.SourceIdentity()
@@ -131,7 +131,11 @@ func ExecutePrepared(
 		preparedName,
 		entry.Payload,
 		prepared.Metadata(),
-		func() (any, error) { return action.InvokeAny(ctx, entryAction, entry.Payload) },
+		func() (any, error) {
+			return invokeWithRunScope(ctx, func(runCtx context.Context) (any, error) {
+				return action.InvokeAny(runCtx, entryAction, entry.Payload)
+			})
+		},
 	)
 	runDuration := time.Since(runStart)
 	if cfg.MeasureAllocs {
@@ -208,6 +212,7 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 			Source:             subSource,
 			Name:               subName,
 			InheritedPrimaries: topContribs.Primaries,
+			InheritedMeta:      meta,
 		})
 		if subErr != nil {
 			return nil, subErr
@@ -249,7 +254,7 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 		}
 	}
 
-	ctx = withExecutionContext(ctx, cfg, resolver)
+	ctx = withExecutionContext(ctx, cfg, resolver, meta)
 
 	compileAct := compiler.CompileAction(
 		resolver, cfg.Directives, cfg.Modifiers,
@@ -334,7 +339,7 @@ func executeCompiled(
 		ctx = compiler.WithLocalSymbols(ctx, syms)
 	}
 
-	ctx = withExecutionContext(ctx, cfg, compiled.Resolver)
+	ctx = withExecutionContext(ctx, cfg, compiled.Resolver, compiled.Meta)
 	runStart := time.Now()
 	output, suspension, err := runApprovalAware(
 		ctx,
@@ -345,11 +350,13 @@ func executeCompiled(
 		payload,
 		compiled.Meta,
 		func() (any, error) {
-			runRes, runErr := defaultRunAction.Do(ctx, compiler.RunReq{
-				Program: compiled.Program,
-				Payload: payload,
+			return invokeWithRunScope(ctx, func(runCtx context.Context) (any, error) {
+				runRes, runErr := defaultRunAction.Do(runCtx, compiler.RunReq{
+					Program: compiled.Program,
+					Payload: payload,
+				})
+				return runRes.Output, runErr
 			})
-			return runRes.Output, runErr
 		},
 	)
 	runDuration := time.Since(runStart)
@@ -379,6 +386,18 @@ func executeCompiled(
 	return result, nil
 }
 
+func invokeWithRunScope(ctx context.Context, invoke func(context.Context) (any, error)) (output any, err error) {
+	runCtx, scope := compiler.NewRunScope(ctx)
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			_ = scope.Close(runCtx)
+			panic(recovered)
+		}
+	}()
+	output, err = invoke(runCtx)
+	return output, errors.Join(err, scope.Close(runCtx))
+}
+
 func fillCompileAllocs(dst *Execution, enabled bool, before, after *runtime.MemStats) {
 	if !enabled {
 		return
@@ -396,14 +415,15 @@ func fillRunAllocs(dst *Execution, enabled bool, before, after *runtime.MemStats
 }
 
 type compilerAdapter struct {
-	cfg Config
+	cfg           Config
+	inheritedMeta map[string]any
 }
 
 func (a compilerAdapter) CompilePipeline(expr string) (action.Executable, error) {
 	res, err := compiler.CompileAction(
 		a.cfg.Resolver, a.cfg.Directives, a.cfg.Modifiers,
 		a.cfg.Operators, a.cfg.Primaries, a.cfg.CompileOpts...,
-	).Do(context.Background(), compiler.CompileReq{Source: expr, Name: "<child>"})
+	).Do(context.Background(), compiler.CompileReq{Source: expr, Name: "<child>", InheritedMeta: a.inheritedMeta})
 	if err != nil {
 		return nil, err
 	}

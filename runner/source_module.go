@@ -25,7 +25,7 @@ func mountSourceModule(cfg Config, parent compiler.CapabilityResolver, imported 
 	symbols := compiler.SymbolsFromMeta(child.Meta)
 	bind := func(ctx context.Context) context.Context {
 		ctx = compiler.WithLocalSymbols(ctx, symbols)
-		return withExecutionContext(ctx, cfg, child.Resolver)
+		return withExecutionContext(ctx, cfg, child.Resolver, child.Meta)
 	}
 	root, ok := parent.(*executionResolver)
 	if !ok {

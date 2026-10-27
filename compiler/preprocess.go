@@ -70,7 +70,13 @@ func (fileSystemLoader) Load(currentFile, target string) (data []byte, resolvedP
 // loader installed with WithSourceLoader; the default reads from the
 // filesystem.
 func Preprocess(ctx context.Context, dt *DirectiveTable, source, file string) (clean string, meta map[string]any, err error) {
-	meta = make(map[string]any)
+	return preprocessWithMeta(ctx, dt, source, file, nil)
+}
+
+func preprocessWithMeta(ctx context.Context, dt *DirectiveTable, source, file string, meta map[string]any) (clean string, out map[string]any, err error) {
+	if meta == nil {
+		meta = make(map[string]any)
+	}
 	if err := ctx.Err(); err != nil {
 		return "", nil, err
 	}
@@ -82,7 +88,7 @@ func Preprocess(ctx context.Context, dt *DirectiveTable, source, file string) (c
 	if file != "" {
 		stack.push(file)
 	}
-	return preprocess(ctx, dt, source, file, stack)
+	return preprocess(ctx, dt, source, file, stack, meta)
 }
 
 type includeStack struct {
@@ -120,8 +126,12 @@ func preprocess(
 	dt *DirectiveTable,
 	source, file string,
 	stack *includeStack,
+	initialMeta map[string]any,
 ) (clean string, meta map[string]any, err error) {
-	meta = make(map[string]any)
+	meta = initialMeta
+	if meta == nil {
+		meta = make(map[string]any)
+	}
 	if dt == nil {
 		return source, meta, nil
 	}
@@ -184,7 +194,7 @@ func preprocess(
 						"@include cycle detected: %s", stack.chain(resolvedPath))
 				}
 				defer stack.pop()
-				return preprocess(ctx, dt, string(data), resolvedPath, stack)
+				return preprocess(ctx, dt, string(data), resolvedPath, stack, nil)
 			},
 		}
 		req.Import = func(target, namespace string) error {

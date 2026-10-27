@@ -1,0 +1,13 @@
+@description "Master example: deterministic training-data preparation from JSONL"
+@data order_cases :from="order-cases.jsonl"
+@assert: len(result) == 4
+@assert: result[0].id == "case-001" && result[1].id == "case-003" && result[2].id == "case-005" && result[3].id == "case-007"
+@assert: result[0].amount == nil
+
+# Split the complete dataset before filtering to prevent the validation/test
+# membership from influencing a training-only filter or feature selection.
+@datause order_cases
+-> data.split:partition="train" :key="id" :train=80 :validation=10 :test=10 :seed=42
+-> data.where:expression="is_refund == true"
+-> data.select:fields="id,text,label"
+-> collect

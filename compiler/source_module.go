@@ -94,7 +94,7 @@ func importSource(ctx context.Context, dt *DirectiveTable, loader SourceLoader, 
 		return SourceError(pos, "@include cycle detected: %s", stack.chain(resolvedPath))
 	}
 	defer stack.pop()
-	childClean, childOut, childErr := preprocess(ctx, dt, string(data), resolvedPath, stack)
+	childClean, childOut, childErr := preprocess(ctx, dt, string(data), resolvedPath, stack, nil)
 	if childErr != nil {
 		return childErr
 	}
