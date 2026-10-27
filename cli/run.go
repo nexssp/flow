@@ -73,11 +73,66 @@ func withHarnessRequirements(ctx context.Context, inv *invocation, subcommand, f
 		return inProcess(ctx, inv, args)
 	}
 
-	bin, err := builder.EnsureHarnessContext(ctx, reqs, flowPath)
+	thinSelected := thinHarnessArgsSupported(subcommand, flowPath, args) && isTerminal(os.Stdin) && !isTerminal(os.Stdout)
+	ensureHarness := builder.EnsureHarnessCLIContext
+	if thinSelected {
+		ensureHarness = builder.EnsureThinHarnessContext
+	}
+	bin, err := ensureHarness(ctx, reqs, flowPath)
 	if err != nil {
 		return fatalf("%v", err)
 	}
-	return builder.ExecHarnessContext(ctx, bin, append([]string{subcommand}, args...))
+	commandArgs := append([]string{subcommand}, args...)
+	return runHarnessWithFallback(ctx, bin, commandArgs, thinSelected, reqs, flowPath,
+		builder.EnsureHarnessCLIContext, builder.ExecHarnessContext)
+}
+
+func runHarnessWithFallback(
+	ctx context.Context,
+	bin string,
+	commandArgs []string,
+	allowFallback bool,
+	reqs []require.Requirement,
+	flowPath string,
+	ensureCLI func(context.Context, []require.Requirement, ...string) (string, error),
+	execute func(context.Context, string, []string) int,
+) int {
+	code := execute(ctx, bin, commandArgs)
+	if !allowFallback || code != builder.HarnessFallbackExitCode {
+		return code
+	}
+
+	legacyBin, err := ensureCLI(ctx, reqs, flowPath)
+	if err != nil {
+		return fatalf("%v", err)
+	}
+	return execute(ctx, legacyBin, commandArgs)
+}
+
+// thinHarnessArgsSupported is deliberately stricter than the CLI parser: the
+// generated runner only preserves a plain file run, one object payload, and
+// --json. Anything else stays on the CLI harness rather than approximating
+// flags or input behavior.
+func thinHarnessArgsSupported(subcommand, flowPath string, args []string) bool {
+	if subcommand != "run" || len(args) == 0 || args[0] != flowPath {
+		return false
+	}
+
+	payloadSeen := false
+	for _, arg := range args[1:] {
+		if arg == "--json" {
+			continue
+		}
+		if !strings.HasPrefix(arg, "{") || payloadSeen {
+			return false
+		}
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(arg), &payload); err != nil {
+			return false
+		}
+		payloadSeen = true
+	}
+	return true
 }
 
 func requirementsNeedExternalHarness(inv *invocation, reqs []require.Requirement) bool {
@@ -401,7 +456,7 @@ func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string,
 			return 3
 		}
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", paint("✗ Pipeline Execution Failed", ansiRed, useColorErr))
-		fmt.Fprintf(os.Stderr, "  %s\n\n", formatCleanError(execErr, useColorErr))
+		fmt.Fprintf(os.Stderr, "  %s\n\n", runner.FormatErrorDetail(execErr, src, name, useColorErr))
 		if verbosity >= 1 {
 			observer.PrintSummary(os.Stderr)
 		}
@@ -648,76 +703,5 @@ func flagsToAsserts(flags []string) []string {
 }
 
 func formatCleanError(err error, useColor bool) string {
-	if err == nil {
-		return ""
-	}
-
-	msg := err.Error()
-	for {
-		if idx := strings.Index(msg, "execution failed: "); idx >= 0 {
-			msg = msg[idx+len("execution failed: "):]
-		} else {
-			break
-		}
-	}
-	msg = strings.TrimSpace(msg)
-
-	pos, ok := compiler.PositionOf(err)
-	if !ok || pos.File == "" || strings.HasPrefix(pos.File, "<") {
-		return msg
-	}
-	snippet := renderSnippet(pos, useColor)
-	if snippet == "" {
-		return msg
-	}
-	return msg + "\n" + snippet
-}
-
-func renderSnippet(pos compiler.Position, useColor bool) string {
-	data, err := os.ReadFile(pos.File)
-	if err != nil {
-		return ""
-	}
-	lines := strings.Split(string(data), "\n")
-	if pos.Line < 1 || pos.Line > len(lines) {
-		return ""
-	}
-
-	target := lines[pos.Line-1]
-	var b strings.Builder
-	b.WriteString("\n")
-
-	if pos.Line > 1 {
-		fmt.Fprintf(&b, "  %4d │ %s\n", pos.Line-1, lines[pos.Line-2])
-	}
-	fmt.Fprintf(&b, "  %4d │ %s\n", pos.Line, target)
-	b.WriteString("       │ ")
-
-	col := pos.Col
-	if col < 1 {
-		col = leadingWhitespace(target) + 1
-	}
-	for i := 0; i < col-1 && i < len(target); i++ {
-		if target[i] == '\t' {
-			b.WriteByte('\t')
-		} else {
-			b.WriteByte(' ')
-		}
-	}
-	b.WriteString(paint("^", ansiYellow, useColor))
-
-	if pos.Line < len(lines) && strings.TrimSpace(lines[pos.Line]) != "" {
-		fmt.Fprintf(&b, "\n  %4d │ %s", pos.Line+1, lines[pos.Line])
-	}
-
-	return b.String()
-}
-
-func leadingWhitespace(s string) int {
-	for i := range len(s) {
-		if s[i] != ' ' && s[i] != '\t' {
-			return i
-		}
-	}
-	return 0
+	return runner.FormatErrorDetail(err, "", "", useColor)
 }

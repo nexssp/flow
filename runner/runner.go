@@ -67,8 +67,10 @@ type Config struct {
 // Opts controls execution options for a single runner invocation.
 type Opts struct {
 	Verbosity int
-	Info      bool
-	Asserts   []string
+	// Info describes the source without executing it. Direct RunSource callers
+	// receive human-readable info on Stdout; the CLI handles --info separately.
+	Info    bool
+	Asserts []string
 	// ApprovalToken grants the named @approval gates, or all gates when set to
 	// "all". The caller is responsible for authenticating the approver.
 	ApprovalToken string
@@ -167,9 +169,11 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 			}
 			return 3
 		}
-		fmt.Fprintf(stdout, "✗ %v\n", err)
+		useColor := outputColorEnabled(stderr)
+		heading := diagnosticPaint("✗ Pipeline Execution Failed", diagnosticANSIRed, useColor)
+		fmt.Fprintf(stderr, "\n%s\n\n  %s\n\n", heading, FormatErrorDetail(err, src, name, useColor))
 		if opts.Verbosity >= 1 {
-			observer.PrintSummary(stdout)
+			observer.PrintSummary(stderr)
 		}
 		return 1
 	}
@@ -186,7 +190,7 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 	asserts, positions := collectAsserts(ex.Meta, opts.Asserts)
 	return RunAssertionsContextWithPositions(
 		ctx,
-		stdout,
+		stderr,
 		ex.Output,
 		total.Milliseconds(),
 		observer.ActionNames(),

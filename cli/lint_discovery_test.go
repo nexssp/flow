@@ -140,6 +140,51 @@ func TestRunLintWildcardReportsMixedTreeFailures(t *testing.T) {
 	}
 }
 
+func TestRunLintBatchUsesCLIHarnessForExternalModules(t *testing.T) {
+	root := t.TempDir()
+	helperDir := filepath.Join(root, "helpers")
+	if err := os.MkdirAll(helperDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	helperSource := `package helpers
+import (
+"context"
+"github.com/nexssp/flow/compiler"
+"github.com/nexssp/kernel/action"
+)
+const ID = "helpers"
+func init() { compiler.Register(ID, Bundle) }
+func Bundle(_ map[string]string) compiler.Bundle {
+return compiler.Bundle{
+ID: ID,
+Libraries: []action.Library{{
+Name: ID,
+Actions: []action.AnyAction{
+action.New("helpers.echo", func(context.Context, any) (map[string]any, error) {
+return map[string]any{"value": "ok"}, nil
+}).Build(),
+},
+}},
+}
+}
+`
+	if err := os.WriteFile(filepath.Join(helperDir, "library.go"), []byte(helperSource), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	flow := filepath.Join(root, "main.nflow")
+	if err := os.WriteFile(flow, []byte("@require ./helpers\n{} -> helpers.echo\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NFLOW_HARNESS_CACHE", t.TempDir())
+
+	stdout, stderr, code := captureLintOutput(t, func() int {
+		return runLint([]string{root})
+	})
+	if code != 0 || strings.TrimSpace(stdout) != "ok" {
+		t.Fatalf("batch lint with external module returned code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+}
+
 func TestRunLintExplicitFileKeepsSingleFileSuccessOutput(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "valid.nflow")
 	if err := os.WriteFile(path, []byte("{ ok: true }\n"), 0o600); err != nil {

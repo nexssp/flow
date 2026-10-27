@@ -26,6 +26,12 @@ tasks:
   test:cover:        { desc: "{{.GOTEST}} -coverprofile=coverage.out [./...]",  cmds: ['{{.GOTEST}} -coverprofile=coverage.out -short {{.CLI_ARGS | default "./..."}}', go tool cover -func=coverage.out] }
   bench:             { desc: "{{.GOTEST}} -run='^$' -bench=. -benchmem [./...]",cmds: ["{{.GOTEST}} -run='^$' -bench=. -benchmem {{.CLI_ARGS | default \"./...\"}}"] }
 
+  bench:harness:
+    desc: Compare thin and CLI harness build time, binary size, and cached-run startup
+    cmds:
+      - go test ./builder -run '^$' -bench '^BenchmarkHarnessBuildModes$' -benchtime=1x -count=1 -v
+      - go test ./builder -run '^$' -bench '^BenchmarkHarnessWarmRuns$' -benchtime=50x -count=1 -v
+
   test:smoke:        { desc: "{{.GOTEST}} ./cli/... -race -count=1 -v -run TestSmoke", cmds: ['{{.GOTEST}} ./cli/... -race -count=1 -v -run TestSmoke'] }
 
   self: {desc: '{{.NFLOW}} self test', cmds: ['{{.NFLOW}} self test']}

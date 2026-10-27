@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/format"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -43,7 +44,17 @@ const harnessLockStaleAfter = 5 * time.Minute
 // HarnessEnv marks a process as running inside an external-module harness.
 const (
 	HarnessEnv = "NFLOW_HARNESS"
-	harnessEnv = HarnessEnv
+	// HarnessFallbackExitCode is reserved for thin-harness refusal; workflow
+	// execution must not return it because the CLI treats it as a retry request.
+	HarnessFallbackExitCode = 125
+	harnessEnv              = HarnessEnv
+)
+
+type harnessMode string
+
+const (
+	harnessModeThin harnessMode = "thin"
+	harnessModeCLI  harnessMode = "cli"
 )
 
 func EnsureHarness(reqs []require.Requirement, flowPath ...string) (string, error) {
@@ -51,6 +62,22 @@ func EnsureHarness(reqs []require.Requirement, flowPath ...string) (string, erro
 }
 
 func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowPath ...string) (string, error) {
+	return ensureHarnessContext(ctx, harnessModeCLI, reqs, flowPath...)
+}
+
+// EnsureThinHarnessContext builds the optimized runner for supported run invocations only.
+func EnsureThinHarnessContext(ctx context.Context, reqs []require.Requirement, flowPath ...string) (string, error) {
+	return ensureHarnessContext(ctx, harnessModeThin, reqs, flowPath...)
+}
+
+// EnsureHarnessCLIContext builds the compatibility harness that delegates to
+// the full CLI. It is used when the thin runner cannot preserve CLI semantics.
+func EnsureHarnessCLIContext(ctx context.Context, reqs []require.Requirement, flowPath ...string) (string, error) {
+	return ensureHarnessContext(ctx, harnessModeCLI, reqs, flowPath...)
+}
+
+func ensureHarnessContext(ctx context.Context, mode harnessMode, reqs []require.Requirement, flowPath ...string) (string, error) {
+	prepareStart := time.Now()
 	external := filterExternalRequires(reqs)
 	if len(external) == 0 {
 		return "", errors.New("harness: no external modules to link")
@@ -84,7 +111,8 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 	if err != nil {
 		return "", fmt.Errorf("harness: bundle plan: %w", err)
 	}
-	key := harnessKey(external, goworkPath, usedNative...)
+	key := harnessKey(external, goworkPath, usedNative...) + "-" + string(mode)
+	prepareDuration := time.Since(prepareStart)
 
 	dir, err := harnessCacheDir(key)
 	if err != nil {
@@ -93,7 +121,8 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 
 	bin := filepath.Join(dir, "runner"+exeSuffix())
 	if _, statErr := os.Stat(bin); statErr == nil {
-		fmt.Fprintf(os.Stderr, "⚡ nflow: using cached runner [%s]\n", key[:8])
+		fmt.Fprint(os.Stderr, cachedHarnessMessage(key, mode))
+		reportHarnessTiming(mode, key, prepareDuration, 0, true)
 		return bin, nil
 	}
 
@@ -104,7 +133,8 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 	defer unlock()
 
 	if _, statErr := os.Stat(bin); statErr == nil {
-		fmt.Fprintf(os.Stderr, "⚡ nflow: using cached runner [%s]\n", key[:8])
+		fmt.Fprint(os.Stderr, cachedHarnessMessage(key, mode))
+		reportHarnessTiming(mode, key, prepareDuration, 0, true)
 		return bin, nil
 	}
 
@@ -116,24 +146,18 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 	}
 	defer func() { _ = os.RemoveAll(buildDir) }()
 
-	if err := writeHarness(buildDir, driverRoot, driverVersion, goworkPath, usedNative, external, flowDir); err != nil {
+	buildStart := time.Now()
+	if err := writeHarnessWithMode(buildDir, driverRoot, driverVersion, goworkPath, usedNative, external, mode, flowDir); err != nil {
 		return "", err
 	}
 
-	tidyStep := startProgress("⚙️  nflow: resolving dependencies (go mod tidy -e)")
-	tidyErr := runGoContext(ctx, buildDir, "mod", "tidy", "-e")
-	if tidyErr != nil {
-		tidyStep.Complete("failed")
-		return "", explainBuildError(tidyErr, external)
-	}
-	tidyStep.Complete("done")
-
-	if err := retainDriverRequirements(ctx, buildDir, driverRoot); err != nil {
-		return "", err
-	}
 	tmp := bin + ".tmp." + strconv.Itoa(os.Getpid())
-	buildStep := startProgress(fmt.Sprintf("🔨 nflow: compiling runner binary [%s]", key[:8]))
-	buildErr := runGoContext(ctx, buildDir, "build", "-mod=readonly", "-trimpath", "-o", tmp, ".")
+	buildStep := startProgress(fmt.Sprintf("🔨 nflow: resolving dependencies and compiling runner binary [%s]", key[:8]))
+	if err := retainDriverRequirements(ctx, buildDir, driverRoot); err != nil {
+		buildStep.Complete("failed")
+		return "", err
+	}
+	buildErr := runGoContext(ctx, buildDir, "build", "-mod=mod", "-trimpath", "-o", tmp, ".")
 	if buildErr != nil {
 		buildStep.Complete("failed")
 		return "", explainBuildError(buildErr, external)
@@ -145,7 +169,22 @@ func EnsureHarnessContext(ctx context.Context, reqs []require.Requirement, flowP
 		return "", fmt.Errorf("harness: install: %w", err)
 	}
 	fmt.Fprintf(os.Stderr, "✓ nflow: runner ready\n")
+	reportHarnessTiming(mode, key, prepareDuration, time.Since(buildStart), false)
 	return bin, nil
+}
+
+func cachedHarnessMessage(key string, mode harnessMode) string {
+	return fmt.Sprintf("⚡ nflow: using cached runner [%s:%s]\n", key[:8], mode)
+}
+
+func reportHarnessTiming(mode harnessMode, key string, prepare, build time.Duration, cacheHit bool) {
+	if os.Getenv("NFLOW_HARNESS_TIMINGS") != "1" {
+		return
+	}
+	fmt.Fprintf(os.Stderr,
+		"nflow_harness_timing mode=%s key=%s prepare_and_resolve=%s build=%s phase_sum=%s cache_hit=%t\n",
+		mode, key, prepare, build, prepare+build, cacheHit,
+	)
 }
 
 func logHarnessPreparation(external []require.Requirement) {
@@ -177,7 +216,13 @@ func retainDriverRequirements(ctx context.Context, buildDir, driverRoot string) 
 	if err != nil {
 		return fmt.Errorf("harness: read generated go.mod: %w", err)
 	}
-	for _, requirement := range requirementsToRetain(driverRequirements, harnessRequirements) {
+	retained := requirementsToRetain(driverRequirements, harnessRequirements)
+	if len(retained) == 0 {
+		// writeRequires already places the driver's requirements in the generated
+		// go.mod. Without a tidy pass there is nothing to restore or download.
+		return nil
+	}
+	for _, requirement := range retained {
 		arg := "-require=" + requirement.path + "@" + requirement.version
 		if err := runGoContext(ctx, buildDir, "mod", "edit", arg); err != nil {
 			return fmt.Errorf("harness: retain driver module dependency %s: %w", requirement.path, err)
@@ -829,10 +874,11 @@ func writeBundleTargets(mainBuilder *strings.Builder, imports []bundleImport) {
 	mainBuilder.WriteString("\t}\n")
 }
 
-func writeHarness(
+func writeHarnessWithMode(
 	directory, driverRoot, driverVersion, goworkPath string,
 	usedNative []nativeBundleInfo,
 	requirements []require.Requirement,
+	mode harnessMode,
 	sourceDirs ...string,
 ) error {
 	imports, err := prepareBundleImports(directory, requirements)
@@ -841,45 +887,56 @@ func writeHarness(
 	}
 
 	var mainBuilder strings.Builder
-	mainBuilder.WriteString("package main\n\n")
-	mainBuilder.WriteString("import (\n")
-	mainBuilder.WriteString("\t\"os\"\n\n")
-	mainBuilder.WriteString("\t\"github.com/nexssp/flow/cli\"\n")
-	mainBuilder.WriteString("\tcompiler \"github.com/nexssp/flow/compiler\"\n")
+	if mode == harnessModeThin {
+		writeThinHarnessMain(&mainBuilder, usedNative, imports)
+	} else {
+		mainBuilder.WriteString("package main\n\n")
+		mainBuilder.WriteString("import (\n")
+		mainBuilder.WriteString("\t\"os\"\n\n")
+		mainBuilder.WriteString("\t\"github.com/nexssp/flow/cli\"\n")
+		mainBuilder.WriteString("\tcompiler \"github.com/nexssp/flow/compiler\"\n")
 
-	for i := range usedNative {
-		fmt.Fprintf(&mainBuilder, "\tnative%d %q\n", i, usedNative[i].pkg)
+		for i := range usedNative {
+			fmt.Fprintf(&mainBuilder, "\tnative%d %q\n", i, usedNative[i].pkg)
+		}
+
+		writeBundleImports(&mainBuilder, imports)
+
+		mainBuilder.WriteString(")\n\n")
+		mainBuilder.WriteString("func main() {\n")
+
+		writeBundleTargets(&mainBuilder, imports)
+
+		mainBuilder.WriteString("\tos.Exit(cli.RunWithBundleFactoriesAndNative(\n")
+		mainBuilder.WriteString("\t\tos.Args[1:],\n")
+		mainBuilder.WriteString("\t\ttargets,\n")
+		mainBuilder.WriteString("\t\tfunc() []compiler.Bundle {\n")
+		mainBuilder.WriteString("\t\t\treturn []compiler.Bundle{\n")
+
+		for i := range usedNative {
+			fmt.Fprintf(&mainBuilder, "\t\t\t\tnative%d.Bundle(nil),\n", i)
+		}
+
+		mainBuilder.WriteString("\t\t\t}\n")
+		mainBuilder.WriteString("\t\t},\n")
+		mainBuilder.WriteString("\t\tfunc(adopt func(compiler.Bundle) error) error {\n")
+
+		writeBundleConstruction(&mainBuilder, imports)
+
+		mainBuilder.WriteString("\t\t\treturn nil\n")
+		mainBuilder.WriteString("\t\t},\n")
+		mainBuilder.WriteString("\t))\n")
+		mainBuilder.WriteString("}\n")
 	}
 
-	writeBundleImports(&mainBuilder, imports)
-
-	mainBuilder.WriteString(")\n\n")
-	mainBuilder.WriteString("func main() {\n")
-
-	writeBundleTargets(&mainBuilder, imports)
-
-	mainBuilder.WriteString("\tos.Exit(cli.RunWithBundleFactoriesAndNative(\n")
-	mainBuilder.WriteString("\t\tos.Args[1:],\n")
-	mainBuilder.WriteString("\t\ttargets,\n")
-	mainBuilder.WriteString("\t\tfunc() []compiler.Bundle {\n")
-	mainBuilder.WriteString("\t\t\treturn []compiler.Bundle{\n")
-
-	for i := range usedNative {
-		fmt.Fprintf(&mainBuilder, "\t\t\t\tnative%d.Bundle(nil),\n", i)
+	mainSource := []byte(mainBuilder.String())
+	if mode == harnessModeThin {
+		mainSource, err = format.Source(mainSource)
+		if err != nil {
+			return fmt.Errorf("harness: format thin main.go: %w", err)
+		}
 	}
-
-	mainBuilder.WriteString("\t\t\t}\n")
-	mainBuilder.WriteString("\t\t},\n")
-	mainBuilder.WriteString("\t\tfunc(adopt func(compiler.Bundle) error) error {\n")
-
-	writeBundleConstruction(&mainBuilder, imports)
-
-	mainBuilder.WriteString("\t\t\treturn nil\n")
-	mainBuilder.WriteString("\t\t},\n")
-	mainBuilder.WriteString("\t))\n")
-	mainBuilder.WriteString("}\n")
-
-	if err := os.WriteFile(filepath.Join(directory, "main.go"), []byte(mainBuilder.String()), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "main.go"), mainSource, 0o600); err != nil {
 		return fmt.Errorf("harness: write main.go: %w", err)
 	}
 
@@ -888,6 +945,106 @@ func writeHarness(
 		return fmt.Errorf("harness: write go.mod: %w", err)
 	}
 	return nil
+}
+
+func writeThinHarnessMain(mainBuilder *strings.Builder, usedNative []nativeBundleInfo, imports []bundleImport) {
+	mainBuilder.WriteString(`package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+
+	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/runner"
+`)
+	for i := range usedNative {
+		fmt.Fprintf(mainBuilder, "\tnative%d %q\n", i, usedNative[i].pkg)
+	}
+	writeBundleImports(mainBuilder, imports)
+	fmt.Fprintf(mainBuilder, ")\n\nconst fallbackExitCode = %d\n\nfunc main() { os.Exit(run()) }\n\nfunc run() int {\n", HarnessFallbackExitCode)
+	mainBuilder.WriteString(`	args := os.Args[1:]
+	if len(args) < 2 || args[0] != "run" {
+		return fallbackExitCode
+	}
+	payload := map[string]any{}
+	payloadSeen := false
+	for _, arg := range args[2:] {
+		if arg == "--json" {
+			continue
+		}
+		if !strings.HasPrefix(arg, "{") || payloadSeen {
+			return fallbackExitCode
+		}
+		if err := json.Unmarshal([]byte(arg), &payload); err != nil {
+			return fallbackExitCode
+		}
+		payloadSeen = true
+	}
+	stdin, err := os.Stdin.Stat()
+	if err == nil && stdin.Mode()&os.ModeCharDevice == 0 {
+		return fallbackExitCode
+	}
+	stdout, err := os.Stdout.Stat()
+	if err == nil && stdout.Mode()&os.ModeCharDevice != 0 {
+		return fallbackExitCode
+	}
+	source, err := os.ReadFile(args[1])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "read: %v\n", err)
+		return 1
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		host := runner.NewHost()
+	code := 1
+	err = host.Run(ctx, func(ctx context.Context) error {
+`)
+	fmt.Fprintf(mainBuilder, "\t\tbundles := make([]compiler.Bundle, 0, %d)\n", len(imports)+len(usedNative))
+	if len(imports)+len(usedNative) > 0 {
+		mainBuilder.WriteString(`		adopt := func(bundle compiler.Bundle) error {
+			if err := host.Own(bundle); err != nil {
+				return err
+			}
+			bundles = append(bundles, bundle)
+			return nil
+		}
+		if err := func() error {
+`)
+		writeBundleConstruction(mainBuilder, imports)
+		mainBuilder.WriteString(`			return nil
+		}(); err != nil {
+			return err
+		}
+`)
+		for i := range usedNative {
+			fmt.Fprintf(mainBuilder, "\t\tif err := adopt(native%d.Bundle(nil)); err != nil { return err }\n", i)
+		}
+	}
+	mainBuilder.WriteString(`		cfg, err := runner.BuildConfig(bundles)
+		if err != nil {
+			return err
+		}
+		code = runner.RunSource(ctx, cfg, string(source), args[1], payload, runner.Opts{
+			Stdout: os.Stdout,
+			Stderr: os.Stderr,
+		})
+		return nil
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "thin runner: %v\n", err)
+		if code == 0 {
+			return 1
+		}
+	}
+	return code
+}
+`)
 }
 
 func copyLoosePackage(r require.Requirement, dstDir string) error {

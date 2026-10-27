@@ -469,6 +469,50 @@ hash: identical module sets with identical source reuse the same
 binary. Change the source of a local module and the cache entry is
 invalidated on the next run.
 
+For external-module `nflow run` calls, the CLI may use a thin runner when
+the command is exactly `nflow run FILE [JSON_OBJECT] [--json]`, stdin is a
+terminal, and stdout is redirected. It does not select this fast path for
+piped stdin, terminal stdout, other subcommands, or additional flags such
+as `--assert`, `--info`, `--journal-dir`, `--execution-id`, `--approval`,
+or verbosity options; those use the full CLI harness. This conservative
+stdin check intentionally sends even an empty pipe to the CLI harness so
+input is never silently ignored. If a thin runner detects unsupported
+conditions, it exits with the fallback sentinel and the CLI retries through
+the full harness.
+Even `--json` with terminal stdout stays on the full harness; this is a
+deliberately conservative optimization boundary, not a difference in JSON
+semantics.
+
+The fast path uses the same execution-failure heading and positioned source
+snippet as the CLI. Verbosity flags are outside the fast-path boundary and use
+the full CLI harness; as with a normal CLI run, `-v` or higher enables the
+execution trace.
+
+To repeat the thin-versus-CLI harness measurements, run `task bench:harness`.
+The cold-build benchmark uses the same tiny `@require ./helpers` flow for
+both modes, gives each mode a fresh runner cache and a separate empty Go
+build cache, and reports binary size. The warm-run benchmark starts each
+already-built harness 50 times and reports per-process latency. The module
+download cache is shared, so first-time network downloads are not part of
+the cold-build comparison. `NFLOW_HARNESS_TIMINGS=1` reports preparation
+and resolution separately from generated-module setup and Go build; the
+reported phase sum excludes cache lookup/locking and process execution.
+
+Previously measured on the `nexssflow` adapter (with module downloads
+excluded): a cold Go cache and fresh runner cache took 62.914 s for the CLI
+harness and 29.946 s for the thin harness; with a matched warm Go cache and
+fresh runner cache, builds took 7.401 s and 5.206 s; warm run medians were
+7.707 ms and 5.966 ms, respectively. The parent CLI was prebuilt for those
+measurements. The benchmark command reports current binary sizes for its
+own repeatable helper fixture.
+
+On the current helper fixture, one isolated cold build measured 28.409 s
+for thin (15,953,262-byte binary) and 73.234 s for CLI (43,476,371-byte
+binary). Across 50 warm launches, the mean process startup was 7.049 ms for
+thin and 9.074 ms for CLI. Treat these as machine- and fixture-specific
+baselines; compare modes from the same run rather than comparing absolute
+times across hosts.
+
 Bundle options declared in `{ ... }` are validated by the bundle. An
 unrecognized key is a compile error:
 

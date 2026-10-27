@@ -12,7 +12,7 @@ import (
 // operation executes.
 //
 // On a TTY it overwrites a single line with a spinner and elapsed time,
-// so a 2-minute cold `go mod tidy` or a blocked harness does not look
+// so slow dependency resolution or a cold harness build does not look
 // like a hang.
 //
 // When stderr is redirected (CI, piped logs), startProgress is a no-op

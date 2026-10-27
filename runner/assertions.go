@@ -20,9 +20,9 @@ const (
 	assertReset = "\x1b[0m"
 )
 
-// assertColorEnabled mirrors cli.colorEnabled without importing cli.
+// outputColorEnabled mirrors cli.colorEnabled without importing cli.
 // Color is enabled only when w is a terminal-backed *os.File.
-func assertColorEnabled(w io.Writer) bool {
+func outputColorEnabled(w io.Writer) bool {
 	f, ok := w.(*os.File)
 	if !ok {
 		return false
@@ -66,7 +66,7 @@ func RunAssertionsContextWithPositions(ctx context.Context, w io.Writer, result 
 		return 0
 	}
 
-	color := assertColorEnabled(w)
+	color := outputColorEnabled(w)
 
 	env := assertionEnvironment(ctx, result, durationMS, actions, firstSymbolNamespace(localSymbols))
 

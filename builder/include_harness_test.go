@@ -58,7 +58,9 @@ func Bundle(_ map[string]string) compiler.Bundle {
 		ktest.RequireNoError(t, err)
 		ktest.RequireEqual(t, cached, bin)
 		ktest.RequireEqual(t, ExecHarnessContext(t.Context(), bin, []string{"run", flow}), 0)
-		ktest.RequireEqual(t, ExecHarnessContext(t.Context(), bin, []string{"lint", flow}), 0)
+		lintBin, err := EnsureHarnessCLIContext(t.Context(), reqs, flow)
+		ktest.RequireNoError(t, err)
+		ktest.RequireEqual(t, ExecHarnessContext(t.Context(), lintBin, []string{"lint", flow}), 0)
 		previous = bin
 	}
 }

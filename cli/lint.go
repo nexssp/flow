@@ -51,7 +51,7 @@ func runLintInInvocation(ctx context.Context, inv *invocation, args []string) in
 	if os.Getenv(harnessEnv) != "" || !needsExternalHarness {
 		return runLintBatchForInvocation(ctx, inv, files, requirementErrors)
 	}
-	bin, err := builder.EnsureHarnessContext(ctx, allRequirements, files...)
+	bin, err := builder.EnsureHarnessCLIContext(ctx, allRequirements, files...)
 	if err != nil {
 		return runLintBatchForInvocationWithHarnessError(ctx, inv, files, err, requirementErrors)
 	}
