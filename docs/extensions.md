@@ -438,11 +438,11 @@ recommended shape for options with more than two fields.
 
 ## 9. Fixtures vs SelfTest
 
-Every extension must embed at least one runnable `.nflow` fixture. These
-are executable conformance cases, not snippets: `nflow self test` runs
-the fixtures contributed by `native.SelftestBundles()` through the real
-compiler and runtime, and every fixture should have
-an `@description` and assert meaningful behavior where possible. Keep every
+See [AGENTS.md §3](../AGENTS.md#3-extension-rule) for the per-feature fixture
+requirement and the allowed Go-test exceptions. Fixtures are executable
+conformance cases, not snippets: `nflow self test` runs the fixtures contributed
+by `native.SelftestBundles()` through the real compiler and runtime. Give each
+fixture an `@description` and assert meaningful behavior. Keep every
 `.nflow` directly in `nflows/`; use descriptive filenames instead of
 `happy/`, `errors/`, or `edge/` subdirectories. For example:
 
@@ -470,12 +470,6 @@ embedded and executed by a dedicated Go test rather than the native CLI
 self-test. Run `go test ./extensions/embed -run '^TestHostRootNFlowFixture$' -count=1`.
 The shared `files` package is not a DSL bundle.
 
-Keep DSL behavior in NFlow fixtures whenever it can be expressed and
-asserted there. Inline `SelfTest()` is reserved for behavior that cannot
-be exercised deterministically from a `.nflow` file, such as a truly live
-external resource. Do not keep duplicate inline DSL strings alongside
-fixture files. Unique Go tests for parser output, modifier translation,
-action behavior, and bundle wiring remain in `*_test.go`.
 
 ### Extension fixtures vs integrated specs
 

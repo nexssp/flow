@@ -67,10 +67,11 @@ func TestFormatFileBlock(t *testing.T) {
 func TestMarkdown_IdentityOfMeta(t *testing.T) {
 	t.Parallel()
 	in := fs.FileContent{
-		FileMeta: fs.FileMeta{Path: "a.go", RelPath: "a.go", Lang: "go"},
-		Content:  []byte("package a"),
+		Path:    "a.go",
+		RelPath: "a.go",
+		Lang:    "go",
+		Content: []byte("package a"),
 	}
-
 	var result fs.FileContent
 	for item, err := range Markdown(Config{})(singleSeq(in)) {
 		ktest.RequireNoError(t, err)

@@ -1,0 +1,9 @@
+@description "supervisor.serve skips disabled services"
+@assert: result == 1
+
+cov.reset
+-> supervisor.serve @{ services: [
+    { id: "http", action: cov.increment },
+    { id: "worker", action: cov.increment, enabled: false }
+] }:timeout=100ms
+-> cov.count

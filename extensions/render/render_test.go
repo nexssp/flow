@@ -15,10 +15,8 @@ func TestRenderMarkdown_Standard(t *testing.T) {
 
 	input := []fs.FileContent{
 		{
-			FileMeta: fs.FileMeta{
-				RelPath: "service/auth.go",
-				Lang:    "go",
-			},
+			RelPath: "service/auth.go",
+			Lang:    "go",
 			Content: []byte("func Login() bool { return true }"),
 		},
 	}
@@ -52,10 +50,8 @@ func TestRenderMarkdown_Zed(t *testing.T) {
 
 	input := []fs.FileContent{
 		{
-			FileMeta: fs.FileMeta{
-				RelPath: "main.py",
-				Lang:    "python",
-			},
+			RelPath: "main.py",
+			Lang:    "python",
 			Content: []byte("print('hello')"),
 		},
 	}

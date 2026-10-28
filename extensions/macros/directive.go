@@ -270,9 +270,9 @@ func readBody(lines []string, start, openBrace int) (body string, bodyLine, next
 
 	// Inline: closing brace on the same line, body is what's between
 	// the braces.
-	if closeIdx := strings.LastIndexByte(after, '}'); closeIdx >= 0 {
-		if strings.TrimSpace(after[closeIdx+1:]) == "" {
-			return strings.TrimSpace(after[:closeIdx]), start + 1, start + 1, nil
+	if content, trailing, found := strings.CutLast(after, "}"); found {
+		if strings.TrimSpace(trailing) == "" {
+			return strings.TrimSpace(content), start + 1, start + 1, nil
 		}
 	}
 

@@ -46,7 +46,7 @@ Projection composition preserves Flow expressions as registered AST children. Th
 
 ## Run the checks
 
-Use Go 1.26.9, as required by this checkout:
+Use Go 1.27.3, as required by this checkout:
 
 ```sh
 go test ./compiler ./extensions/scope ./extensions/pipeline -race -count=1

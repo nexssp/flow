@@ -291,11 +291,11 @@ type typedSchemaResult struct {
 func TestPipelineResponseSchemaPreservesTypedResultAndChecksJSONFields(t *testing.T) {
 	var responseCalls atomic.Int32
 	original := &typedSchemaResult{
-		typedSchemaEmbedded: typedSchemaEmbedded{Embedded: "promoted"},
-		Message:             "typed result",
-		Details:             typedSchemaDetails{Count: 7},
-		Extra:               "must remain visible to strict checking",
-		Ignored:             "not part of JSON",
+		Embedded: "promoted",
+		Message:  "typed result",
+		Details:  typedSchemaDetails{Count: 7},
+		Extra:    "must remain visible to strict checking",
+		Ignored:  "not part of JSON",
 	}
 	produce := action.New("test.typed_response", func(context.Context, any) (any, error) {
 		responseCalls.Add(1)

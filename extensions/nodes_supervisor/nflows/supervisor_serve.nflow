@@ -1,0 +1,9 @@
+@description "supervisor.serve starts dependent services after readiness and shuts them down cleanly"
+@assert: result == 2
+
+cov.reset
+-> supervisor.serve @{ services: [
+    { id: "http", action: cov.increment },
+    { id: "worker", action: cov.increment, depends_on: ["http"] }
+] }:timeout=100ms
+-> cov.count

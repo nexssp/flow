@@ -1,0 +1,11 @@
+@description "supervisor.serve propagates a sibling failure and cancels the running service"
+@assert: result == "recovered"
+
+cov.reset
+-> supervisor.serve @{ services: [
+    { id: "listener", action: cov.increment },
+    { id: "crasher", action: cov.boom, payload: { wait_for_increment: true } }
+] }:timeout=3s ? on_error {
+    xerr.KindInternal -> "recovered",
+    else -> error.reraise
+}

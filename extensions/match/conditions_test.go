@@ -96,7 +96,6 @@ func TestInitRegistersXerrNamespace(t *testing.T) {
 }
 
 func TestWithSymbolEnvironment_BindsRegisteredNamespaces(t *testing.T) {
-	t.Parallel()
 	compiler.RegisterNamespace(compiler.SymbolNamespace{
 		Name:    "symenv_test",
 		Symbols: map[string]any{"role": "billing.refund"},
@@ -130,7 +129,6 @@ func TestWithSymbolEnvironment_BindsXerrString(t *testing.T) {
 }
 
 func TestWithSymbolEnvironment_CallerKeyWins(t *testing.T) {
-	t.Parallel()
 	compiler.RegisterNamespace(compiler.SymbolNamespace{
 		Name:    "symenv_caller",
 		Symbols: map[string]any{"role": "from_registry"},

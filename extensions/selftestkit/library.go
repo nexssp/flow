@@ -8,6 +8,7 @@ import (
 	"embed"
 	"iter"
 	"maps"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/nexssp/kernel/xerr"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler/contracts"
 )
 
 const ID = "selftestkit"
@@ -66,7 +68,7 @@ func library() action.Library {
 		Actions: []action.AnyAction{
 			covEcho(), covDouble(), covFast(), covSlow(), covFlaky(),
 			covBoom(), covRecoverable(), covFailTimeout(), covFailUnavailable(),
-			covStubAction(),
+			covStubAction(), covReset(), covIncrement(), covCount(),
 		},
 		Sources: []action.AnyStreamAction{covItems()},
 	}
@@ -131,8 +133,61 @@ func covFlaky() action.AnyAction {
 	}).Build()
 }
 
+// Self-test fixtures run sequentially, so reset occurs only between pipelines.
+// Atomic increments and reads keep concurrent service actions race-free.
+var covCounter atomic.Int64
+
+var covIncrementStarted = struct {
+	sync.Mutex
+	channel chan struct{}
+	closed  bool
+}{channel: make(chan struct{})}
+
+func covReset() action.AnyAction {
+	return action.New("cov.reset", func(_ context.Context, in any) (any, error) {
+		covCounter.Store(0)
+		covIncrementStarted.Lock()
+		covIncrementStarted.channel = make(chan struct{})
+		covIncrementStarted.closed = false
+		covIncrementStarted.Unlock()
+		return in, nil
+	}).Description("Reset the self-test service counter").Build()
+}
+
+func covIncrement() action.AnyAction {
+	return action.New("cov.increment", func(ctx context.Context, in any) (any, error) {
+		if covCounter.Add(1) == 1 {
+			covIncrementStarted.Lock()
+			if !covIncrementStarted.closed {
+				close(covIncrementStarted.channel)
+				covIncrementStarted.closed = true
+			}
+			covIncrementStarted.Unlock()
+		}
+		contracts.SignalReady(ctx)
+		<-ctx.Done()
+		return in, ctx.Err()
+	}).Description("Count, signal readiness, and wait for cancellation").Build()
+}
+
+func covCount() action.AnyAction {
+	return action.New("cov.count", func(_ context.Context, _ any) (int64, error) {
+		return covCounter.Load(), nil
+	}).Description("Read the self-test service counter").Build()
+}
+
 func covBoom() action.AnyAction {
-	return action.New("cov.boom", func(_ context.Context, _ any) (any, error) {
+	return action.New("cov.boom", func(ctx context.Context, in any) (any, error) {
+		if options, ok := in.(map[string]any); ok && options["wait_for_increment"] == true {
+			covIncrementStarted.Lock()
+			started := covIncrementStarted.channel
+			covIncrementStarted.Unlock()
+			select {
+			case <-started:
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
 		return nil, xerr.Internal("boom")
 	}).Build()
 }

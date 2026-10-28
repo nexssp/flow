@@ -11,8 +11,10 @@ func TestBundle_WiresSupervisor(t *testing.T) {
 	b := Bundle(nil)
 	ktest.RequireEqual(t, b.ID, ID)
 	ktest.RequireEqual(t, len(b.Libraries), 1)
-	ktest.RequireEqual(t, len(b.Libraries[0].Actions), 1)
+	ktest.RequireEqual(t, len(b.Libraries[0].Actions), 2)
 	ktest.RequireEqual(t, b.Libraries[0].Actions[0].Describe().Name, "supervisor.run")
+	ktest.RequireEqual(t, b.Libraries[0].Actions[1].Describe().Name, "supervisor.serve")
+	ktest.RequireCondition(t, b.AtomAdvise != nil, "service graph AtomAdvise is nil")
 	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
 	ktest.RequireCondition(t, b.SelfTest == nil, "duplicate inline SelfTest remains")
 }

@@ -56,7 +56,15 @@ Every new DSL feature must use the existing extension/bundle mechanism. Use the 
 - pipeline behavior: existing wrapper/materializer contract;
 - external capability: `@require` and a bundle package.
 
-A new extension must include wiring tests and a real `.nflow` fixture where possible. Do not create a second registry, parser, runner, or hook system.
+A new extension must include wiring tests and a runnable `.nflow` fixture for
+every DSL feature it contributes: action, source, operator, directive, modifier,
+or keyword primary. `nflows/` is the single source of truth for DSL correctness.
+Any feature expressible as a `.nflow` program and assertable with `@assert:` must
+be tested there, not only through Go code. `SelfTest()` and direct-action tests
+cover parser internals, wiring, and behavior a fixture cannot express (live
+network, subprocess isolation, host filesystem root); each such case must
+document why it cannot be a fixture. Do not create a second registry, parser,
+runner, or hook system.
 
 ## 4. Duplicate and overwrite policy
 

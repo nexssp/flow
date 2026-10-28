@@ -1,0 +1,9 @@
+@description "supervisor.serve treats a service's nil-error return as unexpected exit"
+@assert: result == "recovered"
+
+supervisor.serve @{ services: [
+    { id: "service", action: cov.echo, payload: {} }
+] } ? on_error {
+    xerr.KindInternal -> "recovered",
+    else -> error.reraise
+}

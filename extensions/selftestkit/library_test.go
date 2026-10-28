@@ -20,7 +20,7 @@ func TestLibrary_ActionNames(t *testing.T) {
 	want := []string{
 		"cov.echo", "cov.double", "cov.fast", "cov.slow", "cov.flaky",
 		"cov.boom", "cov.recoverable", "cov.fail.timeout", "cov.fail.unavailable",
-		"cov.stub",
+		"cov.stub", "cov.reset", "cov.increment", "cov.count",
 	}
 	got := make(map[string]bool, len(lib.Actions))
 	for _, a := range lib.Actions {

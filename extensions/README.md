@@ -44,9 +44,10 @@ with the same ID panic at `init()`.
 
 ## Fixtures vs SelfTest
 
-Every extension must embed at least one runnable `.nflow` fixture directly
-in `nflows/`. Keep behavior-specific names in the filenames rather than
-creating `happy/`, `errors/`, or `edge/` subdirectories. Bundles in
+See [AGENTS.md §3](../AGENTS.md#3-extension-rule) for the per-feature fixture
+rule and its documented exceptions. Keep behavior-specific names in the
+filenames rather than creating `happy/`, `errors/`, or `edge/`
+subdirectories. Bundles in
 `native.SelftestBundles()` run their fixtures through `nflow self test`.
 The host-configured `embed` bundle instead embeds its fixture in
 [`host_fixture_test.go`](embed/host_fixture_test.go), which supplies the
@@ -70,10 +71,6 @@ keeps file-reading scenarios local and deterministic without nested folders.
 The fixture grows with the DSL — no inline Go DSL string to update when the
 feature evolves.
 
-Keep behavior in the `.nflow` fixture whenever it can be expressed and
-asserted there. Use inline `SelfTest()` only when a deterministic NFlow
-cannot exercise the behavior, such as an unavoidable live external
-resource; do not keep duplicate inline DSL cases alongside fixtures.
 
 ## Integrated specifications
 

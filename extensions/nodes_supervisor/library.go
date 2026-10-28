@@ -1,13 +1,15 @@
-// Package nodes_supervisor provides the supervisor action: it compiles
-// and runs a set of named child pipelines concurrently, isolating each
-// child's panic, error, and timeout.
+// Package nodes_supervisor provides finite child-pipeline fan-out through
+// supervisor.run and long-lived service orchestration through supervisor.serve.
 //
-// Typical use:
+// Finite fan-out:
 //
 //	{ tasks: [
 //	    { id: "a", dsl: "noop", payload: { x: 1 } },
 //	    { id: "b", dsl: "log.info", timeout_ms: 500 }
 //	]} -> supervisor.run
+//
+// Long-lived services are declared directly in NFlow and signal readiness
+// through compiler/contracts when transport-specific startup completes.
 package nodes_supervisor
 
 import (
@@ -29,8 +31,9 @@ func init() {
 
 func Bundle(_ map[string]string) compiler.Bundle {
 	return compiler.Bundle{
-		ID:        ID,
-		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{Supervisor}}},
-		Fixtures:  fixturesFS,
+		ID:         ID,
+		Libraries:  []action.Library{{Name: ID, Actions: []action.AnyAction{Supervisor, Serve}}},
+		Fixtures:   fixturesFS,
+		AtomAdvise: adviseServe,
 	}
 }

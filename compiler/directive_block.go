@@ -33,8 +33,8 @@ func ReadBlock(lines []string, start int) (body []string, next int, err error) {
 	afterOpen := after
 
 	// Inline: closing brace on the same line.
-	if closeIndex := strings.LastIndexByte(afterOpen, '}'); closeIndex >= 0 {
-		return splitEntries(afterOpen[:closeIndex]), start + 1, nil
+	if content, _, found := strings.CutLast(afterOpen, "}"); found {
+		return splitEntries(content), start + 1, nil
 	}
 
 	body = splitEntries(afterOpen)

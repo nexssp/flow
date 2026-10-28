@@ -827,8 +827,8 @@ func utf16Length(text string) int {
 func lspEndPosition(source string) lspPosition {
 	line := strings.Count(source, "\n")
 	lastLine := source
-	if index := strings.LastIndexByte(source, '\n'); index >= 0 {
-		lastLine = source[index+1:]
+	if _, suffix, ok := strings.CutLast(source, "\n"); ok {
+		lastLine = suffix
 	}
 	lastLine = strings.TrimSuffix(lastLine, "\r")
 	return lspPosition{Line: line, Character: utf16Length(lastLine)}

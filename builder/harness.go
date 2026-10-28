@@ -1150,8 +1150,8 @@ func bundleImportPath(r require.Requirement) string {
 func hasAdapterFolderSuffix(importPath string) bool {
 	clean := strings.TrimSuffix(strings.ReplaceAll(importPath, `\`, "/"), "/")
 	segment := clean
-	if slash := strings.LastIndexByte(clean, '/'); slash >= 0 {
-		segment = clean[slash+1:]
+	if _, suffix, ok := strings.CutLast(clean, "/"); ok {
+		segment = suffix
 	}
 	return segment == defaultAdapterDirectory || strings.HasPrefix(segment, defaultAdapterDirectory+"_")
 }
