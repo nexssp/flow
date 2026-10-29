@@ -130,6 +130,65 @@ func TestParse_PostfixModifiersOnAtom(t *testing.T) {
 	ktest.RequireEqual(t, atom.Modifiers, []string{"timeout=5s", "retry=3"})
 }
 
+func TestLineModifiersApplyToPrimaryExtensions(t *testing.T) {
+	t.Parallel()
+
+	primaries := NewPrimaryExtensionTable(testLoopPrimary{})
+	lineModifiers := []LineLookup{{
+		Source: ModifierSource{Kind: "pipeline", Label: "child"},
+		Fn:     func(int) []string { return []string{"timeout=@config.pipeline_timeout"} },
+	}}
+
+	tests := []struct {
+		name string
+		src  string
+		want []string
+	}{
+		{
+			name: "inherited modifier reaches primary action",
+			src:  "loop(noop)",
+			want: []string{"timeout=@config.pipeline_timeout"},
+		},
+		{
+			name: "explicit primary modifier overrides inherited value",
+			src:  "loop(noop):timeout=5s",
+			want: []string{"timeout=5s"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			parsed, err := NewParserWithPrimaries(
+				context.Background(), NewOperatorTable(), primaries, test.src,
+			).WithLineModifiers(lineModifiers...).Parse()
+			ktest.RequireNoError(t, err)
+
+			decorated, ok := parsed.(*DecoratedExpr)
+			ktest.RequireCondition(t, ok, "got %T, want *DecoratedExpr", parsed)
+			ktest.RequireEqual(t, decorated.Modifiers, test.want)
+			if _, ok := decorated.Inner.(*testLoopExpr); !ok {
+				t.Fatalf("Inner = %T, want *testLoopExpr", decorated.Inner)
+			}
+		})
+	}
+}
+
+func TestQuotedConfigReferenceOnPrimaryModifier(t *testing.T) {
+	t.Parallel()
+
+	parsed, err := NewParserWithPrimaries(
+		context.Background(), NewOperatorTable(),
+		NewPrimaryExtensionTable(testLoopPrimary{}),
+		`loop(noop):timeout="@config.action_timeout"`,
+	).Parse()
+	ktest.RequireNoError(t, err)
+
+	decorated, ok := parsed.(*DecoratedExpr)
+	ktest.RequireCondition(t, ok, "got %T, want *DecoratedExpr", parsed)
+	ktest.RequireEqual(t, decorated.Modifiers, []string{"timeout=@config.action_timeout"})
+}
+
 // testLoopExpr is a minimal *LoopExpr shim used by parser tests to
 // exercise postfix-modifier absorption on a keyword primary without
 // importing extensions/loop (which would create an import cycle).

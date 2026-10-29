@@ -388,6 +388,33 @@ func TestHarnessGoModIncludesDriverRequirements(t *testing.T) {
 	}
 }
 
+func TestHarnessGoModUsesBuildToolchainWithoutDriverSource(t *testing.T) {
+	mod := harnessGoMod("", "", "", nil)
+	want := defaultHarnessGoDirective()
+	if !strings.Contains(mod, "\n"+want+"\n") {
+		t.Fatalf("generated harness go.mod omitted build toolchain minimum %q:\n%s", want, mod)
+	}
+}
+
+func TestGoDirectiveForToolchainTracksVersionChanges(t *testing.T) {
+	tests := []struct {
+		name      string
+		toolchain string
+		want      string
+	}{
+		{name: "release", toolchain: "go9.8.7", want: "go 9.8.7"},
+		{name: "newer release", toolchain: "go10.11.12", want: "go 10.11.12"},
+		{name: "development toolchain", toolchain: "devel go11.12.13-abc123", want: "go 11.12.13"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := goDirectiveForToolchain(tt.toolchain); got != tt.want {
+				t.Fatalf("goDirectiveForToolchain(%q) = %q, want %q", tt.toolchain, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestHarness_RemoteModulePathIdentity(t *testing.T) {
 	cases := []struct {
 		name string

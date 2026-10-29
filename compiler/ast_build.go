@@ -1165,7 +1165,9 @@ func (d *DecoratedExpr) Build(ctx context.Context, bCtx *BuildContext) (action.A
 	if bCtx.Modifiers == nil || len(d.Modifiers) == 0 {
 		return inner, nil
 	}
-	modified, err := bCtx.Modifiers.ApplyAll(inner, d.Modifiers)
+	cfg, cliArgs := compileConfigFromCtx(ctx)
+	modifiers := resolveConfigRefsInModifiers(cfg, cliArgs, d.Modifiers)
+	modified, err := bCtx.Modifiers.ApplyAll(inner, modifiers)
 	if err != nil {
 		return nil, err
 	}

@@ -45,6 +45,7 @@ func bundleSourceErrorSelfTests() []compiler.SelfTestSection {
 	}{
 		{"private source modules are rejected", "nflows/bundle_source--private-test.nflow", "private or not exported"},
 		{"unknown bundle qualifiers are rejected", "nflows/bundle_source--unknown.nflow", "is not loaded"},
+		{"private source module body compiles without import", "nflows/bundle_source--private.nflow", ""},
 	}
 	features := make([]compiler.SelfTestFeature, 0, len(cases))
 	for _, tc := range cases {
@@ -55,6 +56,7 @@ func bundleSourceErrorSelfTests() []compiler.SelfTestSection {
 		features = append(features, compiler.SelfTestFeature{
 			Name:               tc.name,
 			DSL:                string(source),
+			SyntaxOnly:         tc.want == "",
 			ExpectCompileError: tc.want,
 			Source:             "selftestkit/" + tc.file,
 		})

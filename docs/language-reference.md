@@ -195,11 +195,12 @@ A separate runtime strict mode is also available: `@config:strict=true` or `:str
 
 An atom can carry modifiers as `action:flag` or `action:key=value`; multiple modifiers may be written together: `service.call:timeout=5s:retry=3`. They can decorate atoms, parenthesized expressions, projections, or supported keyword expressions. Each modifier name/value is interpreted by the active modifier table and extension advisors. Unknown names, invalid value types, and invalid registered values are compile-time errors; runtime effects belong to the Kernel action builder or extension.
 
-Flags and valued modifiers may be mixed on one line, for example `runtime.const :rate_limit=50 :idempotent :dedup :coalesce @{ value: "ok" }`. A colon immediately followed by a modifier name starts the next modifier whether or not that name has `=value`; it is not part of the preceding value. Quoted strings preserve spaces, commas and colons, for example `:desc="Maks: ingest, Julia: verify"`. The existing ternary convention is unchanged: a separator colon followed by whitespace belongs to `condition ? yes : no`, not to a modifier. This is a boundary fix, not a new atomic-scalar-only grammar; existing comma-valued modifiers remain supported. See [`compiler/parser_modifier_boundary_test.go`](../compiler/parser_modifier_boundary_test.go).
+Flags and valued modifiers may be mixed on one line, for example `const :rate_limit=50 :idempotent :dedup :coalesce @{ value: "ok" }`. A colon immediately followed by a modifier name starts the next modifier whether or not that name has `=value`; it is not part of the preceding value. Quoted strings preserve spaces, commas and colons, for example `:desc="Maks: ingest, Julia: verify"`. The existing ternary convention is unchanged: a separator colon followed by whitespace belongs to `condition ? yes : no`, not to a modifier. This is a boundary fix, not a new atomic-scalar-only grammar; existing comma-valued modifiers remain supported. See [`compiler/parser_modifier_boundary_test.go`](../compiler/parser_modifier_boundary_test.go).
 
 The stock CLI includes these principal groups:
 
 - Kernel policy: `timeout`, `retry`, `concurrency`, `cache`, `coalesce`, `dedup`, `idempotent`, `rate_limit`.
+- Userland policy: `circuit_breaker`.
 - Identity guards: `auth`, `role`, `perm`, `feature`.
 - Metadata: `name`, `desc`/`description`, `status`, `tag`, `scope`, `read_only`, `audit`, `debug`, `deprecated`, `strict`, `lenient`.
 - Schema extension: `schema` (see the distinction above).

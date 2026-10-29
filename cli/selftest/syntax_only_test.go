@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/runtime"
 	"github.com/nexssp/flow/native"
+	flowrunner "github.com/nexssp/flow/runner"
 )
 
 func TestSyntaxOnlyCompilesWithoutExecutingActions(t *testing.T) {
@@ -96,6 +98,34 @@ func TestSyntaxOnlySyntaxGapFixturesCompile(t *testing.T) {
 	if report.Passed != 4 || report.Failed != 0 {
 		t.Fatalf("syntax-gap results: passed=%d failed=%d\n%s", report.Passed, report.Failed, output.String())
 	}
+}
+
+func TestAllEmbeddedExtensionNFlowsCompileWithoutExecution(t *testing.T) {
+	bundles := native.SelftestBundles()
+	cfg, err := flowrunner.BuildConfig(bundles)
+	if err != nil {
+		t.Fatalf("build self-test config: %v", err)
+	}
+
+	fixtureCount := 0
+	for _, section := range SectionsFromBundles(bundles) {
+		for _, feature := range section.Features {
+			if !strings.Contains(feature.Source, "nflows/") {
+				continue
+			}
+			fixtureCount++
+			t.Run(feature.Source, func(t *testing.T) {
+				result := runSyntaxFeature(t.Context(), cfg, feature)
+				if result.Status != StatusPass {
+					t.Fatalf("compile-only fixture failed: %v", result.Err)
+				}
+			})
+		}
+	}
+	if fixtureCount == 0 {
+		t.Fatal("native self-test bundles exposed no embedded extension NFlow fixtures")
+	}
+	t.Logf("compiled %d embedded extension NFlow fixtures without execution", fixtureCount)
 }
 
 func TestMarkedFixtureCompilesInsteadOfExecutingInOrdinaryMode(t *testing.T) {

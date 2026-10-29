@@ -239,6 +239,13 @@ func (p *Parser) parseExpr(minPrec int) (Expr, error) {
 }
 
 func (p *Parser) parsePrimary() (Expr, error) {
+	startPos := p.currentPos()
+	startLine := p.Cur().Line
+	_, isExtensionPrimary := p.primaries.ByToken(p.Cur().Type)
+	if !isExtensionPrimary && p.Cur().Type == TokIdent {
+		_, isExtensionPrimary = p.primaries.ByKeyword(p.Cur().Lit)
+	}
+
 	expr, err := p.parsePrimaryInner()
 	if err != nil {
 		return nil, err
@@ -252,6 +259,11 @@ func (p *Parser) parsePrimary() (Expr, error) {
 	}
 	if expr == nil {
 		return nil, p.errorf(p.Cur().Line, "postfix extension returned a nil expression")
+	}
+	if isExtensionPrimary {
+		expr = p.prependInheritedToExpr(expr, startLine, startPos)
+	} else if _, isAtom := expr.(*Atom); isAtom {
+		expr = p.prependInheritedToExpr(expr, startLine, startPos)
 	}
 	return expr, nil
 }
@@ -428,7 +440,6 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 
 func (p *Parser) parseAtom() (Expr, error) {
 	pos := p.currentPos()
-	startLine := p.Cur().Line
 	expr, err := p.parseAtomInner()
 	if err != nil {
 		return nil, err
@@ -443,59 +454,89 @@ func (p *Parser) parseAtom() (Expr, error) {
 	for i := range a.ModifierSources {
 		a.ModifierSources[i] = ModifierSource{Kind: "atom"}
 	}
-	p.prependInherited(a, startLine)
 	return expr, nil
 }
 
 func (p *Parser) prependInherited(a *Atom, line int) {
-	if len(p.lineModifiers) == 0 {
-		return
-	}
-
-	type sourced struct {
-		raw    string
-		source ModifierSource
-	}
-	var inherited []sourced
-	for _, lk := range p.lineModifiers {
-		if lk.Fn == nil {
-			continue
-		}
-		for _, raw := range lk.Fn(line) {
-			inherited = append(inherited, sourced{raw: raw, source: lk.Source})
-		}
-	}
+	inherited := p.inheritedForLine(line, a.Modifiers)
 	if len(inherited) == 0 {
 		return
 	}
-
-	atomNames := make(map[string]bool, len(a.Modifiers))
-	for _, raw := range a.Modifiers {
-		atomNames[ModifierName(raw)] = true
-	}
-
-	index := make(map[string]int, len(inherited))
-	var appliedRaw []string
-	var appliedSrc []ModifierSource
-	for _, s := range inherited {
-		n := ModifierName(s.raw)
-		if atomNames[n] {
-			continue
-		}
-		if i, ok := index[n]; ok {
-			appliedRaw[i] = s.raw
-			appliedSrc[i] = s.source
-		} else {
-			index[n] = len(appliedRaw)
-			appliedRaw = append(appliedRaw, s.raw)
-			appliedSrc = append(appliedSrc, s.source)
-		}
-	}
-	if len(appliedRaw) == 0 {
-		return
+	appliedRaw := make([]string, 0, len(inherited))
+	appliedSrc := make([]ModifierSource, 0, len(inherited))
+	for _, modifier := range inherited {
+		appliedRaw = append(appliedRaw, modifier.raw)
+		appliedSrc = append(appliedSrc, modifier.source)
 	}
 	a.Modifiers = append(appliedRaw, a.Modifiers...)
 	a.ModifierSources = append(appliedSrc, a.ModifierSources...)
+}
+
+func (p *Parser) prependInheritedToExpr(expr Expr, line int, pos Position) Expr {
+	switch node := expr.(type) {
+	case *Atom:
+		p.prependInherited(node, line)
+		return node
+	case *DecoratedExpr:
+		inherited := p.inheritedForLine(line, node.Modifiers)
+		if len(inherited) == 0 {
+			return node
+		}
+		applied := make([]string, 0, len(inherited))
+		for _, modifier := range inherited {
+			applied = append(applied, modifier.raw)
+		}
+		node.Modifiers = append(applied, node.Modifiers...)
+		return node
+	default:
+		inherited := p.inheritedForLine(line, nil)
+		if len(inherited) == 0 {
+			return expr
+		}
+		modifiers := make([]string, len(inherited))
+		for i, modifier := range inherited {
+			modifiers[i] = modifier.raw
+		}
+		return &DecoratedExpr{Inner: expr, Modifiers: modifiers, Pos: pos}
+	}
+}
+
+type sourcedLineModifier struct {
+	raw    string
+	source ModifierSource
+}
+
+func (p *Parser) inheritedForLine(line int, localModifiers []string) []sourcedLineModifier {
+	if len(p.lineModifiers) == 0 {
+		return nil
+	}
+
+	localNames := make(map[string]bool, len(localModifiers))
+	for _, raw := range localModifiers {
+		localNames[ModifierName(raw)] = true
+	}
+
+	index := make(map[string]int)
+	var applied []sourcedLineModifier
+	for _, lookup := range p.lineModifiers {
+		if lookup.Fn == nil {
+			continue
+		}
+		for _, raw := range lookup.Fn(line) {
+			name := ModifierName(raw)
+			if localNames[name] {
+				continue
+			}
+			modifier := sourcedLineModifier{raw: raw, source: lookup.Source}
+			if i, ok := index[name]; ok {
+				applied[i] = modifier
+			} else {
+				index[name] = len(applied)
+				applied = append(applied, modifier)
+			}
+		}
+	}
+	return applied
 }
 
 func (p *Parser) parseLegacyParams(a *Atom) error {

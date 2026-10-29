@@ -33,11 +33,7 @@ func validateAllConfigRefs(ast Expr, cfg map[string]string) error {
 		if firstErr != nil {
 			return
 		}
-		atom, ok := node.(*Atom)
-		if !ok {
-			return
-		}
-		firstErr = walkAtomValues(atom, func(raw, where string) error {
+		firstErr = walkExprValues(node, func(atom *Atom, raw, where string) error {
 			return checkConfigRef(atom, raw, where, cfg)
 		})
 	})
@@ -59,11 +55,7 @@ func validateAllFlagAndArgRefs(ast Expr, cliArgs []string) error {
 		if firstErr != nil {
 			return
 		}
-		atom, ok := node.(*Atom)
-		if !ok {
-			return
-		}
-		firstErr = walkAtomValues(atom, func(raw, where string) error {
+		firstErr = walkExprValues(node, func(atom *Atom, raw, where string) error {
 			if err := checkFlagRef(atom, raw, where, knownFlags); err != nil {
 				return err
 			}
@@ -196,7 +188,27 @@ func walkAtomValues(atom *Atom, visit func(raw, where string) error) error {
 			return err
 		}
 	}
-	for _, raw := range atom.Modifiers {
+	return walkModifierValues(atom.Modifiers, visit)
+}
+
+func walkExprValues(expr Expr, visit func(atom *Atom, raw, where string) error) error {
+	switch node := expr.(type) {
+	case *Atom:
+		return walkAtomValues(node, func(raw, where string) error {
+			return visit(node, raw, where)
+		})
+	case *DecoratedExpr:
+		atom := &Atom{Pos: node.Pos}
+		return walkModifierValues(node.Modifiers, func(raw, where string) error {
+			return visit(atom, raw, where)
+		})
+	default:
+		return nil
+	}
+}
+
+func walkModifierValues(modifiers []string, visit func(raw, where string) error) error {
+	for _, raw := range modifiers {
 		name, value, ok := strings.Cut(raw, "=")
 		if !ok {
 			continue
@@ -206,6 +218,14 @@ func walkAtomValues(atom *Atom, visit func(raw, where string) error) error {
 		}
 	}
 	return nil
+}
+
+func resolveConfigRefsInModifiers(cfg map[string]string, cliArgs, modifiers []string) []string {
+	resolved := make([]string, len(modifiers))
+	for i, raw := range modifiers {
+		resolved[i] = resolveConfigRefsInModifier(cfg, cliArgs, raw)
+	}
+	return resolved
 }
 
 func walkValueStrings(v *Value, where string, visit func(raw, where string) error) error {

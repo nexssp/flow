@@ -22,6 +22,8 @@ type LintIssue struct {
 	Message string `json:"message"`
 }
 
+const lintIssueCompile = "compile"
+
 func runLint(args []string) int {
 	inv, err := newNativeInvocation(nil, nil)
 	if err != nil {
@@ -72,7 +74,7 @@ func shouldLintSingleTarget(args []string) bool {
 func inspectLintRequirements(ctx context.Context, inv *invocation, files []string) (allRequirements []require.Requirement, requirementErrors map[string]error) {
 	requirementErrors = make(map[string]error)
 	for _, path := range files {
-		reqs, requireErr := inv.sourceRequiresFromFile(ctx, path)
+		reqs, requireErr := inv.requirementsForHarness(ctx, path)
 		if requireErr != nil {
 			requirementErrors[path] = requireErr
 			continue
@@ -221,14 +223,9 @@ func runLintInProcess(ctx context.Context, inv *invocation, args []string) int {
 		return fatalf("%v", err)
 	}
 
-	reqs, err := inv.sourceRequiresFromFile(ctx, path)
+	_, _, cfg, err := inv.prepareRequiredSource(ctx, string(src), path)
 	if err != nil {
 		return fatalf("requires: %v", err)
-	}
-
-	cfg, err := inv.buildConfig(reqs)
-	if err != nil {
-		return fatalf("config: %v", err)
 	}
 
 	issues := lintFileWithContext(ctx, path, string(src), cfg)
@@ -268,12 +265,12 @@ func runLintBatchForInvocationWithHarnessError(ctx context.Context, inv *invocat
 		}
 
 		if reqErr, ok := requirementErrors[path]; ok {
-			issues = append(issues, LintIssue{File: path, Kind: "compile", Message: reqErr.Error()})
+			issues = append(issues, LintIssue{File: path, Kind: lintIssueCompile, Message: reqErr.Error()})
 			continue
 		}
-		reqs, reqErr := inv.sourceRequiresFromFile(ctx, path)
+		reqs, reqErr := inv.requirementsForHarness(ctx, path)
 		if reqErr != nil {
-			issues = append(issues, LintIssue{File: path, Kind: "compile", Message: reqErr.Error()})
+			issues = append(issues, LintIssue{File: path, Kind: lintIssueCompile, Message: reqErr.Error()})
 			continue
 		}
 		if harnessErr != nil && requirementsNeedExternalHarness(inv, reqs) {
@@ -284,9 +281,13 @@ func runLintBatchForInvocationWithHarnessError(ctx context.Context, inv *invocat
 			})
 			continue
 		}
-		cfg, err := inv.buildConfig(reqs)
+		if _, configErr := inv.buildConfig(reqs); configErr != nil {
+			issues = append(issues, LintIssue{File: path, Kind: "config", Message: configErr.Error()})
+			continue
+		}
+		_, _, cfg, err := inv.prepareRequiredSource(ctx, string(src), path)
 		if err != nil {
-			issues = append(issues, LintIssue{File: path, Kind: "config", Message: err.Error()})
+			issues = append(issues, LintIssue{File: path, Kind: lintIssueCompile, Message: err.Error()})
 			continue
 		}
 		issues = append(issues, lintFileWithContext(ctx, path, string(src), cfg)...)
@@ -317,7 +318,7 @@ func lintFileWithContext(ctx context.Context, path, src string, cfg runner.Confi
 	if _, err := runner.Compile(ctx, cfg, src, path); err != nil {
 		return []LintIssue{{
 			File:    path,
-			Kind:    "compile",
+			Kind:    lintIssueCompile,
 			Message: err.Error(),
 		}}
 	}

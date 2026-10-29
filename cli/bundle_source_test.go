@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -77,5 +78,43 @@ critic.pipeline.review`
 	}
 	if importName != "bundle://bundle-source-cli-test/workflows/critic.nflow" {
 		t.Fatalf("import source identity = %q, want required bundle module URI", importName)
+	}
+}
+
+func TestRunLintLoadsRequiredExportedBundleModule(t *testing.T) {
+	factory, ok := compiler.Lookup("bundle-source-cli-test")
+	if !ok {
+		t.Fatal("test bundle factory is not registered")
+	}
+	bundle := factory(nil)
+	bundle.Alias = "ai"
+
+	const source = `@require example.invalid/bundle-source-cli-test v1.0.0 as ai
+@include ai:workflows/critic.nflow AS critic
+
+critic.pipeline.review
+`
+	path := filepath.Join(t.TempDir(), "bundle-source-lint.nflow")
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "single file", args: []string{"lint", path}, want: "ok"},
+		{name: "directory", args: []string{"lint", filepath.Dir(path)}, want: "ok (1 files)"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stdout, stderr, code := captureLintOutput(t, func() int {
+				return RunWithBundles(test.args, []compiler.Bundle{bundle})
+			})
+			if code != 0 || strings.TrimSpace(stdout) != test.want || stderr != "" {
+				t.Fatalf("lint returned code=%d stdout=%q stderr=%q", code, stdout, stderr)
+			}
+		})
 	}
 }

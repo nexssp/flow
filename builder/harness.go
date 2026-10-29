@@ -1281,11 +1281,26 @@ func optionsLiteral(opts map[string]string) string {
 	return b.String()
 }
 
+func defaultHarnessGoDirective() string {
+	// NFlow cannot be built with a toolchain below its module's Go minimum, so
+	// the toolchain embedded in this binary is a safe harness minimum as well.
+	return goDirectiveForToolchain(runtime.Version())
+}
+
+func goDirectiveForToolchain(version string) string {
+	version = strings.TrimPrefix(version, "devel ")
+	version = strings.TrimPrefix(version, "go")
+	if end := strings.IndexAny(version, "-+ "); end >= 0 {
+		version = version[:end]
+	}
+	return "go " + version
+}
+
 func harnessGoMod(driverRoot, driverVersion, goworkPath string, reqs []require.Requirement, sourceDirs ...string) string {
 	var b strings.Builder
 	b.WriteString("module nflow-harness\n\n")
 
-	goVersion := "go 1.23"
+	goVersion := defaultHarnessGoDirective()
 	if driverRoot != "" {
 		if driverMod, err := os.ReadFile(filepath.Join(driverRoot, "go.mod")); err == nil {
 			for line := range strings.SplitSeq(string(driverMod), "\n") {

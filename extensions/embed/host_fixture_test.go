@@ -20,6 +20,22 @@ import (
 //go:embed nflows
 var hostFixtures embed.FS
 
+func TestHostRootNFlowFixtureCompilesWithoutExecution(t *testing.T) {
+	fixtures, err := fs.Sub(hostFixtures, "nflows")
+	ktest.RequireNoError(t, err)
+	source, err := fs.ReadFile(fixtures, "host_root.nflow")
+	ktest.RequireNoError(t, err)
+	terms, err := fs.ReadFile(fixtures, "host_root--terms.txt")
+	ktest.RequireNoError(t, err)
+	root := fstest.MapFS{"terms.txt": &fstest.MapFile{Data: terms}}
+
+	embedBundle, _ := BundleWithFileResolver(root, "test.static", 128)
+	cfg, err := runner.BuildConfig([]compiler.Bundle{embedBundle, descriptionext.Bundle(nil), runtimeext.Bundle(nil)})
+	ktest.RequireNoError(t, err)
+	_, err = runner.Compile(t.Context(), cfg, string(source), "host_root.nflow")
+	ktest.RequireNoError(t, err)
+}
+
 func TestHostRootNFlowFixture(t *testing.T) {
 	fixtures, err := fs.Sub(hostFixtures, "nflows")
 	ktest.RequireNoError(t, err)

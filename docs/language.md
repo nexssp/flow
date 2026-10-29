@@ -70,8 +70,8 @@ action-name-derived keys:
 
 ```nflow
 parallel {
-  profile: runtime.const @{ value: "profile-ready" },
-  metrics: runtime.const @{ value: "metrics-ready" },
+  profile: const @{ value: "profile-ready" },
+  metrics: const @{ value: "metrics-ready" },
 }
 ```
 
@@ -131,10 +131,29 @@ Both forms are valid; prefer the keyword.
 { user_id: 42 } -> pick @{ field: "user_id" } -> wrap @{ key: "data" }
 ```
 
-**Keywords are grammar, not aliases.** The canonical form
+**Keywords are grammar, not aliases.** The canonical action name
 (`runtime.const`) remains valid and is what you'll see in
 `nflow explain` output, but a bundle cannot register an action named
 `const` — the mount rejects it.
+
+`const` takes named arguments; `@{ ... }` has no positional-value shorthand.
+Use `value` when the result should be a scalar or array:
+
+```nflow
+const @{ value: "hello" }
+```
+
+For an object result, its fields can usually be written directly, without the
+extra `value` wrapper:
+
+```nflow
+const @{ name: "Ada", active: true }
+```
+
+The runtime unwraps a top-level `value` field (and currently accepts `val` as
+an alias), and direct-object mode omits `__root__`. If the object you want
+returned has one of those top-level fields, wrap the whole object under
+`value` instead.
 
 ---
 
@@ -294,7 +313,7 @@ Flow control—the control receives the projection root.
     first: { peak: .peak, keep: .keep },
     second: race {
       runtime.fail @{ kind: "Unavailable", message: "try next" },
-      runtime.const @{ value: { peak: .peak, keep: .keep } }
+      const @{ value: { peak: .peak, keep: .keep } }
     }
   },
   category: match(.peak) {
