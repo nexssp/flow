@@ -140,12 +140,13 @@ Both forms are valid; prefer the keyword.
 
 ## Optional polyglot execution
 
-The opt-in `lang` bundle adds language keywords such as `py`, `go`, and
-`js`. Add `@require lang` to use them; the language tag itself has no `@`
-prefix:
+The optional `github.com/nexssp/lang` module provides a Flow adapter with
+language keywords such as `py`, `go`, and `js`. Load its adapter through the
+existing external `@require` harness, pinning a published version (replace
+`vX.Y.Z` with the tag you use); the language tag itself has no `@` prefix:
 
 ```nflow
-@require lang
+@require github.com/nexssp/lang/nexssflow vX.Y.Z
 { "x": 2, "y": 3 } -> py"import json, sys; v=json.load(sys.stdin); print(json.dumps({'value': v['x'] + v['y']}))"
 ```
 
@@ -153,15 +154,17 @@ Tags can also take a raw source block, for example `py { ... }`. The bundle
 checks that required interpreters are available before execution. Language
 blocks run arbitrary programs with the host process's permissions and are not
 sandboxed; use them only with trusted flow files. See the
-[`lang` extension guide](../extensions/lang/README.md) for supported runners,
-data formats, and aliases.
+standalone `github.com/nexssp/lang` repository for supported runners, data
+formats, and aliases. During local development, a `.nflow` file can require the
+repository root directly, for example `@require ../nexssp-lang`; Flow resolves
+that root to its `nexssflow/` adapter package.
 
 To run a Python script you already have, use `py.file` with a path relative to
 the `.nflow` file. The script receives the current value as JSON on stdin and
 returns the next value as JSON on stdout:
 
 ```nflow
-@require lang
+@require github.com/nexssp/lang/nexssflow vX.Y.Z
 { "samples": [1.2, 1.8, 2.1] } -> py.file "./analysis.py"
 ```
 
@@ -171,6 +174,7 @@ and writes JSON to stdout. Existing files are never replaced, and without the
 option a missing script remains an error. For example:
 
 ```nflow
+@require github.com/nexssp/lang/nexssflow vX.Y.Z
 { "orders": [] } -> go.file "./normalize.go" :autocreate
 ```
 

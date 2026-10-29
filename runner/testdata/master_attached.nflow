@@ -282,34 +282,10 @@
 
 
 # ───────────────────────────────────────────────────────────────────────────
-# 15. INLINE POLYGLOT EXECUTION (requires @require lang)
+# 15. OPTIONAL LANGUAGE ADAPTER
 # ───────────────────────────────────────────────────────────────────────────
-# Run Python, Rust, Go, TypeScript, JavaScript, or shell directly in
-# the pipeline. Each language is a keyword: py"...", rs"...", go"...", etc.
-# The runtime materializes the source to a temp file, resolves the
-# interpreter, and executes it. JSON stdin/stdout by default.
-#
-# This eliminates the "write a microservice, deploy it, call it via HTTP"
-# tax for any logic that's more naturally expressed in another language.
-
-@require lang
-
-@pipeline data_science_step
-  # PEP 723 inline deps: uv reads the metadata, installs deps, runs.
-  py {
-  # /// script
-  # dependencies = ["numpy"]
-  # ///
-  import numpy as np
-  data = np.array([1, 2, 3, 4, 5])
-  print(__import__('json').dumps({"mean": float(np.mean(data)), "std": float(np.std(data))}))
-  }
-@end
-
-@pipeline shell_snippet
-  # Shell — for when you just need a one-liner.
-  sh"echo processed"
-@end
+# Polyglot keywords are provided by github.com/nexssp/lang/nexssflow and are
+# exercised through the external @require harness, not this in-process fixture.
 
 
 # ───────────────────────────────────────────────────────────────────────────

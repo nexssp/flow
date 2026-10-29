@@ -110,6 +110,57 @@ func captureExecution(runFunc func() (any, error)) (result captureResult) {
 	}
 }
 
+func runSelectedFeature(ctx context.Context, cfg flowrunner.Config, feature compiler.SelfTestFeature, syntaxOnly bool) Result {
+	if syntaxOnly || feature.SyntaxOnly {
+		return runSyntaxFeature(ctx, cfg, feature)
+	}
+	return runFeature(ctx, cfg, feature)
+}
+
+// runSyntaxFeature validates preprocessing, parsing, imports, and compilation
+// without invoking the compiled Flow program.
+func runSyntaxFeature(ctx context.Context, cfg flowrunner.Config, feature compiler.SelfTestFeature) Result {
+	started := time.Now()
+	name, cleanup, err := prepareSyntaxFeatureDir(feature)
+	if err != nil {
+		return Result{SelfTestFeature: feature, Status: StatusFail, Err: err, Elapsed: time.Since(started)}
+	}
+	defer cleanup()
+
+	execCtx := selfTestContext(ctx)
+	capture := captureExecution(func() (any, error) {
+		compiled, compileErr := flowrunner.Compile(execCtx, cfg, feature.DSL, name)
+		return compiled, compileErr
+	})
+	elapsed := time.Since(started)
+
+	if feature.ExpectCompileError != "" {
+		if capture.err == nil {
+			return Result{
+				SelfTestFeature: feature,
+				Status:          StatusFail,
+				Err:             fmt.Errorf("selftest: compilation succeeded; expected an error containing %q", feature.ExpectCompileError),
+				Elapsed:         elapsed,
+				Captured:        capture.captured,
+			}
+		}
+		if !strings.Contains(capture.err.Error(), feature.ExpectCompileError) {
+			return Result{
+				SelfTestFeature: feature,
+				Status:          StatusFail,
+				Err:             fmt.Errorf("selftest: compile error %w does not contain expected text %q", capture.err, feature.ExpectCompileError),
+				Elapsed:         elapsed,
+				Captured:        capture.captured,
+			}
+		}
+		return Result{SelfTestFeature: feature, Status: StatusPass, Elapsed: elapsed, Captured: capture.captured}
+	}
+	if capture.err != nil {
+		return Result{SelfTestFeature: feature, Status: StatusFail, Err: capture.err, Elapsed: elapsed, Captured: capture.captured}
+	}
+	return Result{SelfTestFeature: feature, Status: StatusPass, Elapsed: elapsed, Captured: capture.captured}
+}
+
 // runFeature executes one feature through the production runner with
 // allocation measurement enabled. The config is built once per Run and
 // passed in; the phase boundaries for allocation measurement live
@@ -123,11 +174,7 @@ func runFeature(ctx context.Context, cfg flowrunner.Config, feature compiler.Sel
 	}
 	defer cleanup()
 
-	execCtx := xctx.WithUserID(ctx, "selftest")
-	execCtx = xctx.WithTenantID(execCtx, "selftest-tenant")
-	execCtx = xctx.WithRoles(execCtx, []string{"admin", "system_admin"})
-	execCtx = xctx.WithPermissions(execCtx, []string{"*"})
-	execCtx = xctx.WithApprovalToken(execCtx, "all")
+	execCtx := selfTestContext(ctx)
 	if feature.ExpectCompileError != "" {
 		capture := captureExecution(func() (any, error) {
 			_, compileErr := flowrunner.Compile(execCtx, cfg, feature.DSL, feature.Name)
@@ -228,6 +275,16 @@ func runFeature(ctx context.Context, cfg flowrunner.Config, feature compiler.Sel
 	}
 }
 
+// selfTestContext adds the identity and authorization context expected by
+// self-test features without changing the caller's context.
+func selfTestContext(ctx context.Context) context.Context {
+	ctx = xctx.WithUserID(ctx, "selftest")
+	ctx = xctx.WithTenantID(ctx, "selftest-tenant")
+	ctx = xctx.WithRoles(ctx, []string{"admin", "system_admin"})
+	ctx = xctx.WithPermissions(ctx, []string{"*"})
+	return xctx.WithApprovalToken(ctx, "all")
+}
+
 // prepareFeatureDir materializes feature.Files into a temp directory
 // and chdirs there so relative paths in the DSL resolve as written.
 // Returns a no-op cleanup for features without Files.
@@ -235,10 +292,30 @@ func prepareFeatureDir(feature compiler.SelfTestFeature) (cleanup func(), err er
 	if len(feature.Files) == 0 {
 		return func() {}, nil
 	}
+	_, cleanup, err = prepareFeatureDirMode(feature, false)
+	return cleanup, err
+}
 
-	tempDir, err := os.MkdirTemp("", "nflow-selftest-")
+func prepareSyntaxFeatureDir(feature compiler.SelfTestFeature) (name string, cleanup func(), err error) {
+	dir, cleanup, err := prepareFeatureDirMode(feature, true)
 	if err != nil {
-		return nil, err
+		return "", nil, err
+	}
+	base := filepath.Base(filepath.FromSlash(feature.Source))
+	if base == "." || base == string(filepath.Separator) || base == "" {
+		base = "syntax-only.nflow"
+	}
+	return filepath.Join(dir, base), cleanup, nil
+}
+
+func prepareFeatureDirMode(feature compiler.SelfTestFeature, forceTempDir bool) (tempDir string, cleanup func(), err error) {
+	if !forceTempDir && len(feature.Files) == 0 {
+		return "", func() {}, nil
+	}
+
+	tempDir, err = os.MkdirTemp("", "nflow-selftest-")
+	if err != nil {
+		return "", nil, err
 	}
 
 	removeAll := func() { _ = os.RemoveAll(tempDir) }
@@ -246,31 +323,31 @@ func prepareFeatureDir(feature compiler.SelfTestFeature) (cleanup func(), err er
 	for name, content := range feature.Files {
 		if !filepath.IsLocal(name) {
 			removeAll()
-			return nil, fmt.Errorf("selftest: fixture path %q must stay within the temporary directory", name)
+			return "", nil, fmt.Errorf("selftest: fixture path %q must stay within the temporary directory", name)
 		}
 		target := filepath.Join(tempDir, name)
 		if mkErr := os.MkdirAll(filepath.Dir(target), 0o755); mkErr != nil {
 			removeAll()
-			return nil, mkErr
+			return "", nil, mkErr
 		}
 		writeErr := os.WriteFile(target, []byte(content), 0o600)
 		if writeErr != nil {
 			removeAll()
-			return nil, writeErr
+			return "", nil, writeErr
 		}
 	}
 
 	prevDir, err := os.Getwd()
 	if err != nil {
 		removeAll()
-		return nil, err
+		return "", nil, err
 	}
 	if err := os.Chdir(tempDir); err != nil {
 		removeAll()
-		return nil, err
+		return "", nil, err
 	}
 
-	return func() {
+	return tempDir, func() {
 		if chErr := os.Chdir(prevDir); chErr != nil {
 			slog.Warn("selftest: chdir back failed", "err", chErr)
 		}

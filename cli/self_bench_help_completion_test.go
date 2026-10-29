@@ -31,7 +31,7 @@ func TestSelfBenchCompletionFlagsDoNotCompleteScenarioValues(t *testing.T) {
 				t.Fatalf("Completion(%q): %v", shell, err)
 			}
 			text := script.String()
-			for _, flag := range []string{"--path", "--iterations", "--warmup", "--json", "--list"} {
+			for _, flag := range []string{"--path", "--iterations", "--warmup", "--json", "--list", "--syntax-only"} {
 				if !strings.Contains(text, flag) {
 					t.Errorf("%s completion does not contain %s", shell, flag)
 				}

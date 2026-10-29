@@ -1,0 +1,2950 @@
+{
+  "last_run": "2026-10-29T14:19:55.9249845Z",
+  "files": {
+    ".gitattributes": {
+      "hash": "d60f352d0db1404c70afb4bb8b2ca3fd1c610572aa40720e8a0b7baa7885418c",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 19
+    },
+    ".github/workflows/ci.yml": {
+      "hash": "178bb79a7a7a6237af64fc482b50ed15b98e926da80c047c9a78a955229478b6",
+      "mod_time": "2026-10-23T08:33:31.686822+02:00",
+      "size": 1422
+    },
+    ".github/workflows/release.yml": {
+      "hash": "a2e70a49e614c22058ee7522860aaa39b2da25cb11eeabee155c0fdffbdfc8dc",
+      "mod_time": "2026-10-17T22:36:36+02:00",
+      "size": 2067
+    },
+    ".gitignore": {
+      "hash": "066228e421f970940d773bdf26fdd3614db57ed8886f079bb04913d371c76fde",
+      "mod_time": "2026-10-27T17:27:14+01:00",
+      "size": 546
+    },
+    ".golangci.yml": {
+      "hash": "f4747c87f779f0ef9aba79af4a0400e8f7404dced21d7836099566bc75ed0a36",
+      "mod_time": "2026-10-11T23:54:07.0144203+02:00",
+      "size": 4504
+    },
+    ".goreleaser.yaml": {
+      "hash": "4566cd34de89f9ee4bbdf505054971757d693321acf30194dbda76a342b96c25",
+      "mod_time": "2026-10-18T11:52:39.748198+02:00",
+      "size": 930
+    },
+    ".pre-commit-config.yaml": {
+      "hash": "11305a35e6752e3eaf245c70f305899caf865df4a7aa1bed26f4910929406d2f",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 635
+    },
+    "AGENTS.md": {
+      "hash": "61492be4a45eb9776dfee5618c21006242470b031df1e29eb2b3428aaf4788fe",
+      "mod_time": "2026-10-28T16:11:36+01:00",
+      "size": 7800
+    },
+    "CONTRIBUTING.md": {
+      "hash": "6b3a9d508079ca63a2374e13e1f6019a6049cf58a0b387aa35c48e90d02663f5",
+      "mod_time": "2026-10-22T13:49:00+02:00",
+      "size": 3663
+    },
+    "LICENSE": {
+      "hash": "9fe9da3ed59bad41170926c2fd151348214483669155b1a783b3ad612a41f800",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 11279
+    },
+    "NOTICE": {
+      "hash": "707856ae77f6cf9a873a9b3dfb4f3552c8bfb8cc97850d728f14a7267f75082a",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 126
+    },
+    "README.md": {
+      "hash": "cd10cea0e70399c71b61fbab6f57d3982b1e31b5842dc7410a592c59c6a60daf",
+      "mod_time": "1980-01-01T00:00:00+01:00",
+      "size": 6719
+    },
+    "SECURITY.md": {
+      "hash": "7038a34010ec59d88b1cc583928bd40156467d30a9e4441df57f8c3fe6c6d4e1",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 846
+    },
+    "Taskfile.yml": {
+      "hash": "4389fdc1414053f883620d034f32df2a266322fca1007d494ca6f41e88352d08",
+      "mod_time": "2026-10-27T12:54:54.7338342+01:00",
+      "size": 5368
+    },
+    "builder/build.go": {
+      "hash": "00231284b43e02240ecf6154ec926af635f39a0c0aefd4d1a7ec628b4c7bc97a",
+      "mod_time": "2026-10-24T15:44:41.6034968+02:00",
+      "size": 18572
+    },
+    "builder/buildinfo.go": {
+      "hash": "503522c13605921b74181e6248f224b04c7f69bb247560dcb4ab5b84bf6f3459",
+      "mod_time": "2026-10-12T22:14:27.6488654+02:00",
+      "size": 2367
+    },
+    "builder/errors.go": {
+      "hash": "545741f62a7ee940236edd680cb9f763f77a40c3d166af737c8b739fd6037df4",
+      "mod_time": "2026-10-11T05:55:22+02:00",
+      "size": 146
+    },
+    "builder/flags.go": {
+      "hash": "635c09b813c14471a47de4aa63d0d265db34efc311e9b5d2f009e5bddb6406d2",
+      "mod_time": "2026-10-11T05:56:04+02:00",
+      "size": 75
+    },
+    "builder/git.go": {
+      "hash": "e676aecc6bd72c17e3cea742a8984638e4b82bffd07fc85500c72465882f246e",
+      "mod_time": "2026-10-11T05:56:04+02:00",
+      "size": 1271
+    },
+    "builder/go_diagnostics.go": {
+      "hash": "9bbc62d950dc034b7662004825eed7f772c21566c4900cbbec9d8bb2f712241e",
+      "mod_time": "2026-10-23T12:34:12+02:00",
+      "size": 1954
+    },
+    "builder/harness.go": {
+      "hash": "f30591faff96be663acbcfa594ab267c3ada99f3418366000beca486e20f0f2b",
+      "mod_time": "2026-10-28T17:56:42+01:00",
+      "size": 50452
+    },
+    "builder/module.go": {
+      "hash": "a40750ce1e48ed91759bf9739e2df55546134405d15d69c80242a49f21b3571d",
+      "mod_time": "2026-10-11T08:03:42+02:00",
+      "size": 1656
+    },
+    "builder/progress.go": {
+      "hash": "e9abc2b0c58a3799934ca71d140f6ebb43629c33259d388da07b1b1e1e617d1c",
+      "mod_time": "2026-10-27T12:54:54.7363448+01:00",
+      "size": 2365
+    },
+    "builder/require_source.go": {
+      "hash": "ecce3988039449be4b6223f771f41bf0bff1db0c8cb42178b8a9f89c9845fcbd",
+      "mod_time": "2026-10-22T22:35:12+02:00",
+      "size": 10704
+    },
+    "builder/source.go": {
+      "hash": "e555ec87c8bb8bae84fe38a5056c1a3846b4b162d2b2ad9574986a28d879fabf",
+      "mod_time": "2026-10-21T19:54:52+02:00",
+      "size": 772
+    },
+    "builder/source_graph.go": {
+      "hash": "8272ccfe3e222039edec15c50cedcbc436eba531cda14ec2b1805ebd1cc30627",
+      "mod_time": "2026-10-21T12:54:18+02:00",
+      "size": 1673
+    },
+    "builder/source_package.go": {
+      "hash": "728c0ae3baf7abbbbdbaf06aa845d3dd5d44195773eb92d8ea82b0bf6de5ec51",
+      "mod_time": "2026-10-21T13:12:12+02:00",
+      "size": 1312
+    },
+    "builder/testdata/include-package/main.nflow": {
+      "hash": "df047cfc2b9bdfa3b14d249459dc936f067ff2b54caade68f4b645246ba9362e",
+      "mod_time": "2026-10-21T19:56:38+02:00",
+      "size": 61
+    },
+    "builder/testdata/include-package/parts/deep/leaf.nflow": {
+      "hash": "49b50ee99a13f375bf5c3f54cb5f4d3404ccd2ed3384e023471af0ff936bf45a",
+      "mod_time": "2026-10-21T13:00:40+02:00",
+      "size": 139
+    },
+    "builder/testdata/include-package/parts/pipelines.nflow": {
+      "hash": "2f68a47553d3fc11306028dc33699715af14f9e9a30b303af7f3e403db220edd",
+      "mod_time": "2026-10-21T13:00:40+02:00",
+      "size": 86
+    },
+    "cli/approval.go": {
+      "hash": "15d0c950fd2e7611f3e3314a6deffb0ef70f301325d2c15faac79e8013535433",
+      "mod_time": "2026-10-14T21:40:30+02:00",
+      "size": 1603
+    },
+    "cli/buildinfo.go": {
+      "hash": "99a92fc687d1e5be1ad54f8b7645ba706ef266ee338f725e6eb7641a1effcefc",
+      "mod_time": "2026-10-12T22:16:07.5000014+02:00",
+      "size": 479
+    },
+    "cli/catalog.go": {
+      "hash": "748887863209f5f7588fb21e2ef812f022ce18ce11334bc3dc57806b26a0c0da",
+      "mod_time": "2026-10-12T22:16:18.4097127+02:00",
+      "size": 1434
+    },
+    "cli/cli.go": {
+      "hash": "62265eaf61606adaf4f8da4025ad6f1e8370962f3a2ccb1dab6ee19017477f5a",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 5685
+    },
+    "cli/color.go": {
+      "hash": "a4e825180171f28d913b9e209b70b52954bd47d3fd0b1fd8aba7a2ee54eb665c",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1132
+    },
+    "cli/completion.go": {
+      "hash": "3565c8fc80628edec3226040a7a371c760a487df8dd05220fffdf6efc36525d4",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 11169
+    },
+    "cli/env.go": {
+      "hash": "b6640f19f15ae9fdda7096934785acc86e0f4d90bee64e5cfd7a1cec02e3651d",
+      "mod_time": "2026-10-27T11:24:46.1675203+01:00",
+      "size": 3599
+    },
+    "cli/expand.go": {
+      "hash": "9483baf3d2f2f40958dc0d344cc19832f43cdc4962385d6f43a277e5cff2d148",
+      "mod_time": "2026-10-12T22:16:52.5718531+02:00",
+      "size": 5676
+    },
+    "cli/explain.go": {
+      "hash": "ecbb0c7f2b142ae0b4d4802d53110973a7b72eb707cb2c69a3b7d38799da7a50",
+      "mod_time": "2026-10-12T22:17:00.5705709+02:00",
+      "size": 12246
+    },
+    "cli/explain_actions.go": {
+      "hash": "f17a11305b5cbbff94a0f9c1143e75229d2d5dd7318ad2bd1652ac4e882c98e8",
+      "mod_time": "2026-10-12T22:17:11.5303317+02:00",
+      "size": 7541
+    },
+    "cli/explain_ast.go": {
+      "hash": "c6b4c774f2bb8075b5106b2f4316c03a25a73a3a64e398a79a816323c39c3e5d",
+      "mod_time": "2026-10-13T10:35:33+02:00",
+      "size": 12807
+    },
+    "cli/explain_plan.go": {
+      "hash": "4c5cbdb41501d22356218b96301ca89514b0d2712636f4627d94973317090113",
+      "mod_time": "2026-10-12T22:18:11.4404898+02:00",
+      "size": 5768
+    },
+    "cli/flags.go": {
+      "hash": "42794bc3dce4f15576c77cca62edb852b1a8d52671d407004de51e80201a4dae",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 435
+    },
+    "cli/fmt.go": {
+      "hash": "740295d28f5134385729f0db4437ce506b75dba922eda4a2676281da1c19f3d1",
+      "mod_time": "2026-10-27T09:18:36.4049326+01:00",
+      "size": 4668
+    },
+    "cli/fmt_help.go": {
+      "hash": "248ba88bdc3f054767a2449788e9b84e0023d36ee20fa768343d0d8b8835fa8a",
+      "mod_time": "2026-10-25T14:02:22+01:00",
+      "size": 777
+    },
+    "cli/help.go": {
+      "hash": "c31bf63d6de20d7269b84d440b4c91bc652739ea9c59ea7caf603bf970b277bb",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 10390
+    },
+    "cli/init.go": {
+      "hash": "b8abd4612f2db8671b0c30897b4a4646d1c22d73d590b3d40b5f6a5f5fbc5dca",
+      "mod_time": "2026-10-22T13:50:18+02:00",
+      "size": 5139
+    },
+    "cli/internal/termstyle/style.go": {
+      "hash": "7e8117b328992040555787cc653fcba0004740cd6bfdfd69afef9f3e6f432b45",
+      "mod_time": "2026-10-23T12:13:26+02:00",
+      "size": 1754
+    },
+    "cli/invocation.go": {
+      "hash": "ea63710dd396083f271a29096118ccd710e18f111cfa5fd704ea6ab56a8eefb9",
+      "mod_time": "1980-01-01T00:00:00+01:00",
+      "size": 11958
+    },
+    "cli/json.go": {
+      "hash": "1a2b9e26b5c1dcb4ef9402b39ddae03e52ac7eae7942280917e7d05000d34deb",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 830
+    },
+    "cli/json_colorize.go": {
+      "hash": "8707eb7959c87b649abee85fdb31d6bc60562f01d85145d37d21706d118c2d95",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 3488
+    },
+    "cli/lint.go": {
+      "hash": "f4aa175cc9b0b159d537ad35c9b36b90dce2c2f1b02cc7361489e4187eb0baaf",
+      "mod_time": "2026-10-27T12:54:54.7373501+01:00",
+      "size": 9036
+    },
+    "cli/list.go": {
+      "hash": "311e0808e8bfa7944a7444ad3e45f9cd0f1e35d7070e6c4e23128d8657d4ddbf",
+      "mod_time": "2026-10-12T22:19:56.3485693+02:00",
+      "size": 5789
+    },
+    "cli/lsp.go": {
+      "hash": "c7e7ef837eac80d441ae3b2a14c0ac97782ec37406597778edda22584f919120",
+      "mod_time": "2026-10-28T19:04:18+01:00",
+      "size": 28024
+    },
+    "cli/lsp_help.go": {
+      "hash": "b034fb414296877a8288d24bf1dffc6f684485b6dd133682d41409aceb72d261",
+      "mod_time": "2026-10-25T12:31:00+01:00",
+      "size": 285
+    },
+    "cli/native_bundles.go": {
+      "hash": "48962f37f87df158ec2ec365d58ee1e9290c92dca01f05cf063c5d14938c4a81",
+      "mod_time": "2026-10-12T22:20:06.2875615+02:00",
+      "size": 474
+    },
+    "cli/require.go": {
+      "hash": "67ccb76f5b893a6a7f2829eaa20a2d9465ada80604541efc1324712a5ff8d21c",
+      "mod_time": "2026-10-22T22:30:04+02:00",
+      "size": 3203
+    },
+    "cli/require_source.go": {
+      "hash": "432f8b6abb7afea7e01bf231026917660db7ccaf0c6985779e6365ccadb904b7",
+      "mod_time": "2026-10-22T22:34:18+02:00",
+      "size": 3775
+    },
+    "cli/run.go": {
+      "hash": "6e4a60816c2d363e1cd8a479bfbb65d4e87fa754066e1145121802a4e1a61a6e",
+      "mod_time": "2026-10-27T12:54:54.7383451+01:00",
+      "size": 20341
+    },
+    "cli/selfbench.go": {
+      "hash": "161f315fc78533cb1f0b20e8f599c071412b512a27d7103b28dbdaf29f9d2e17",
+      "mod_time": "2026-10-23T08:17:12+02:00",
+      "size": 3033
+    },
+    "cli/selfbench/bench.go": {
+      "hash": "2bd1a18d18c2bff0485bb80c7acc2c2db0df4971dc0160797bbca23d0db5b2a4",
+      "mod_time": "2026-10-23T12:14:02+02:00",
+      "size": 4577
+    },
+    "cli/selfbench/render.go": {
+      "hash": "1ccfe7bc4550308b07f5e581817467976b31c94071a8b5ed1cff797364464f9e",
+      "mod_time": "2026-10-23T12:16:52+02:00",
+      "size": 2371
+    },
+    "cli/selfbench/scenarios.go": {
+      "hash": "8e8a63475338403f2141af2e22da649ee94b2cf469838f957d85128ff1c403f9",
+      "mod_time": "2026-10-23T08:16:00+02:00",
+      "size": 3021
+    },
+    "cli/selfbench/scenarios/README.md": {
+      "hash": "cd7f96ad15eaa42a75b8b214d9eeffe2c45ae2232b661fee9f6c570ca4034dac",
+      "mod_time": "2026-10-23T08:03:18+02:00",
+      "size": 1540
+    },
+    "cli/selfbench/scenarios/api/json_normalize.nflow": {
+      "hash": "a6d71c5c88393491c4a1727b5a7fd7f585c225befb270ca8417190251bf5520c",
+      "mod_time": "2026-10-23T08:03:12+02:00",
+      "size": 661
+    },
+    "cli/selfbench/scenarios/batch/transform.nflow": {
+      "hash": "6cbaf802f7b6281fd114bd566110b6a7939c8d0f852b60d797be4f733563f0e7",
+      "mod_time": "2026-10-23T08:01:46+02:00",
+      "size": 1421
+    },
+    "cli/selfbench/scenarios/parallel/fan_out_gather.nflow": {
+      "hash": "7de1cc30a43d446f13d4ef778de221a65bba9ebc1403b1bb1dc2a0bb398a3f0d",
+      "mod_time": "2026-10-23T08:01:30+02:00",
+      "size": 530
+    },
+    "cli/selfbench/scenarios/pipeline/multi_step.nflow": {
+      "hash": "a9cb76ac203272227a090b0c41f5461efa7bf5d9c0dce7d1e8b8252b38f381a3",
+      "mod_time": "2026-10-23T07:57:44+02:00",
+      "size": 571
+    },
+    "cli/selfbuild.go": {
+      "hash": "8e65e19fe70fdec4137e16b7120776b3eb6286c47a5c0897fd7259fdcd7d61d5",
+      "mod_time": "1980-01-01T00:00:00+01:00",
+      "size": 2219
+    },
+    "cli/selftest/helpers.go": {
+      "hash": "6021527d99225ca28316292b79af395549dabf710aca2994f9fbd9a6065c2d6b",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 830
+    },
+    "cli/selftest/hostinfo.go": {
+      "hash": "efa94f4fda919908e0c3b9f87e310cecb846ec34c88b271b0768bf35ecdc92fb",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1107
+    },
+    "cli/selftest/hostinfo_darwin.go": {
+      "hash": "97834f72560e3901ad7870d19e29a1a524cc5d40e2a842f85dd17bbf68ba242d",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 203
+    },
+    "cli/selftest/hostinfo_linux.go": {
+      "hash": "3e6dedaf81e5b491ace673c13d0d98cfe74b0fdeed59c5c4d9a51a9d1282d5bc",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 446
+    },
+    "cli/selftest/hostinfo_stub.go": {
+      "hash": "71f3090a6f91b1f3abbe30c550a79af04cc5c38d03da3c7409a7ec8adf18556a",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 103
+    },
+    "cli/selftest/hostinfo_windows.go": {
+      "hash": "a07489696ad4c4fa637a28c5032a1ef60cc9bcccfaa3331f8ad8b5fac7cece5d",
+      "mod_time": "2026-10-26T16:01:13.1514543+01:00",
+      "size": 426
+    },
+    "cli/selftest/render.go": {
+      "hash": "175c7751d5b8a151bd20ac731fea54bac6912fb29dd2c7652b07a8de1e9879fb",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 15363
+    },
+    "cli/selftest/runner.go": {
+      "hash": "44c9db42047bd5e65f7f23ff804accc7a696fccd41377d57221a3ae697d958ef",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 11071
+    },
+    "cli/selftest/score.go": {
+      "hash": "334ce7aae66a680512012246b8c05896821a6bfb28ef819783b1a0a5f9c94251",
+      "mod_time": "2026-10-11T06:21:00+02:00",
+      "size": 11920
+    },
+    "cli/selftest/sections.go": {
+      "hash": "8e42b45208aea894737fbe0d241a66ae9516910ea2f8ed1ec2072f91bf6ea047",
+      "mod_time": "2026-10-12T22:21:21.7001484+02:00",
+      "size": 1565
+    },
+    "cli/selftest/selftest.go": {
+      "hash": "2cc0bbaee799231a95493258c4608dd5f53ba335618cc4d4ca91780a6801b752",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 6043
+    },
+    "cli/selftest/skip.go": {
+      "hash": "010e2ec0b7aa173158eb6dc38038b88ad855c0466dddefed8e934b672e8a7eac",
+      "mod_time": "2026-10-26T13:28:10+01:00",
+      "size": 262
+    },
+    "cli/serve.go": {
+      "hash": "76e9e9aff6d9a011501e826077483ac343661ab3d4515265435bd5873eecaa6c",
+      "mod_time": "2026-10-12T22:21:46.5982323+02:00",
+      "size": 2855
+    },
+    "cli/show.go": {
+      "hash": "06b42faccfec3d9bac367d63d50cc4f3ce199b993f888a4969206969c64a66cf",
+      "mod_time": "2026-10-12T22:21:53.7782689+02:00",
+      "size": 5107
+    },
+    "cli/signals.go": {
+      "hash": "10727af546bfabe8e63a7e3771d17c02a64849827f6f3a0ed2c8f387be705309",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1957
+    },
+    "cli/signals_unix.go": {
+      "hash": "da1f4f113c50de856debd76102713e90f56d4a8de0574ae91eb5588fc6ad6fd3",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 148
+    },
+    "cli/signals_windows.go": {
+      "hash": "2d26155fcbe0eda62019c93910a37b206a9185dc596c1693741e0b11d5a18ec6",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 309
+    },
+    "cli/source.go": {
+      "hash": "76a938c5d5ed1a6f8e72f74adb6198b50d8266e26cf3ccf84362538f45ca2864",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1406
+    },
+    "cli/steplog.go": {
+      "hash": "3d4da4fe1976bf11d7e6f6d197048e19a2d120fc0ef39e3aa06b126b45db2211",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 3162
+    },
+    "cli/toolchain.go": {
+      "hash": "ced6db69d977cc5806143fcc63d004bc982faeb68b9d7ba2107b6d1d895d5a22",
+      "mod_time": "2026-10-27T11:24:46.168528+01:00",
+      "size": 30597
+    },
+    "cli/version.go": {
+      "hash": "def52329266041d2244fe3fe6f55ce18e1675c2ca6b077d6d47f09e44ae75e05",
+      "mod_time": "2026-10-23T09:56:12+02:00",
+      "size": 3744
+    },
+    "cmd/nflow/imports.go": {
+      "hash": "593bad48a082dd529de9b580dac0d32fe98326d762a4d77d246277590f9f6f1c",
+      "mod_time": "2026-10-11T19:59:18.0799453+02:00",
+      "size": 525
+    },
+    "cmd/nflow/main.go": {
+      "hash": "2398b6cc63fcb1d7a447a1f0e6802d40fbefcbae7dce7ce3a3eea49a34f5382b",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 233
+    },
+    "compiler/action_graph.go": {
+      "hash": "73bd743bce525bfe9847e66465c51b451373784cc39cb5f3f05dd2d7cbb30887",
+      "mod_time": "2026-10-12T11:13:37.6456118+02:00",
+      "size": 11752
+    },
+    "compiler/analyze.go": {
+      "hash": "3b01fafcafc87ba18c2756177e583829c16bc063532851cb781eb7233fa8c7a2",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 5038
+    },
+    "compiler/arg_schema.go": {
+      "hash": "38b84b54b9eb87927829da57ed3605256792850e42ef215dc3d545ec4db8e642",
+      "mod_time": "2026-10-13T10:35:33+02:00",
+      "size": 5302
+    },
+    "compiler/ast.go": {
+      "hash": "41227a23a35822f11cbd5180dcc59f8f36f5269a2944e7178f5b12bc2b48d31d",
+      "mod_time": "2026-10-14T07:48:16+02:00",
+      "size": 5097
+    },
+    "compiler/ast_build.go": {
+      "hash": "6a0053b918ba08d52dc74db6e78d4ec421b488659a294365d202e09c3c1ee5f4",
+      "mod_time": "2026-10-21T19:41:42+02:00",
+      "size": 33265
+    },
+    "compiler/at_brace.go": {
+      "hash": "03963f9b5cd10f681c0d3826f4f7d5324e23a08dfb786d1ecbfcce3c0b60aa10",
+      "mod_time": "2026-10-22T14:05:54+02:00",
+      "size": 5762
+    },
+    "compiler/boundary.go": {
+      "hash": "78599e19b56a3850b57ba68ad033e5656de36fb33f86f822c9c8204f063940df",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 2052
+    },
+    "compiler/build.go": {
+      "hash": "7aa8df907ba8b8b504487575543e09a48919d8f93cedaf64fc30c1a4730f40ef",
+      "mod_time": "2026-10-11T16:25:16.3043663+02:00",
+      "size": 3423
+    },
+    "compiler/build_usage.go": {
+      "hash": "5a319cdd014c6d7432793f4f133e15234a885e40a79b8a8916da4de3aeeae733",
+      "mod_time": "2026-10-21T13:12:32+02:00",
+      "size": 9198
+    },
+    "compiler/bundle.go": {
+      "hash": "32bd75c7136c79ebb5740befc6a0add0ae01211b2f8f25f6f48bada8767a5216",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 12305
+    },
+    "compiler/bundle_source.go": {
+      "hash": "ea857bcf9b2da053fe2b79dc502a39c1515f2a29da5b014e6af068542a6f6de9",
+      "mod_time": "2026-10-24T16:58:42+02:00",
+      "size": 5243
+    },
+    "compiler/capability_ref.go": {
+      "hash": "ea9315b846d1d1e751f1d1cb2ee21f2a1c6b919cb44344d9f12f9a06de1c1205",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 1587
+    },
+    "compiler/catalog.go": {
+      "hash": "399b26125113c579f6daab466d8653d5d3c3fe4fd8ed935bd129a24e6e60536d",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 8796
+    },
+    "compiler/compile.go": {
+      "hash": "9e482aa6b635731fef78e434f20bcf1230ec52b174f8dab0dd32585dee64a66c",
+      "mod_time": "2026-10-27T17:27:54+01:00",
+      "size": 11751
+    },
+    "compiler/compile_options.go": {
+      "hash": "c28a2daf1bc9a80283411845cb19e8722e0d5d2770c9463d679c3c25413fdc76",
+      "mod_time": "2026-10-27T17:27:14+01:00",
+      "size": 8285
+    },
+    "compiler/config_refs.go": {
+      "hash": "97fde4645acd18cc3f9c58769dcb533102b9365a02e63375d4f3954c2bf1830b",
+      "mod_time": "2026-10-22T13:52:04+02:00",
+      "size": 7819
+    },
+    "compiler/constants.go": {
+      "hash": "866cc4f7a3e1e13f78b5b04e1dd40f08677bb2736780defdccd483518b6dd99f",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 1122
+    },
+    "compiler/contracts/pool.go": {
+      "hash": "2ec9746135cbb364e0fc1f189b9f257200f4c296c9d723f3199b1f046d7e683c",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 400
+    },
+    "compiler/contracts/recovery.go": {
+      "hash": "2677d86e5d36e9d8554c4007af3fd560f7f7f7e08adeb482b910f171e389f3df",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 500
+    },
+    "compiler/contracts/registry.go": {
+      "hash": "95ae0256dd17d7108c9184d5c7a99eddb09587824da5bf3bb0f9c6033b97cb30",
+      "mod_time": "2026-10-13T10:52:01+02:00",
+      "size": 1473
+    },
+    "compiler/contracts/service.go": {
+      "hash": "b30d02adcba9d05acc2912d0805dc53384cbb7d92de9139bd72c200c5f2636e0",
+      "mod_time": "2026-10-28T12:31:42+01:00",
+      "size": 1791
+    },
+    "compiler/declaration_header.go": {
+      "hash": "efa55780535a8bf1c688ca20a9293c7c0bfa49f607c520ccae683d884db01c54",
+      "mod_time": "2026-10-17T18:41:08+02:00",
+      "size": 3826
+    },
+    "compiler/decode.go": {
+      "hash": "3f7d1a57ff0fde0806c4fb4edae34480e42cf8bc6d8f2866a3eb297571b6d6a0",
+      "mod_time": "2026-10-22T13:52:00+02:00",
+      "size": 2783
+    },
+    "compiler/detect.go": {
+      "hash": "0e9981e30d0b276b548d2dda660ee3249a6aa05ec12883ca4c95f7556bb39ae8",
+      "mod_time": "2026-10-22T13:52:06+02:00",
+      "size": 863
+    },
+    "compiler/directive_block.go": {
+      "hash": "c12c4afc5758ee1e2388d5f64987e88e4382d2c8dcb9271819a0d4353bf21294",
+      "mod_time": "2026-10-28T17:56:44+01:00",
+      "size": 5344
+    },
+    "compiler/errors.go": {
+      "hash": "b21dedbd65dee874aa3f8e7e4e98bbe25779ca7381a5644c2f197b3a800fb129",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 1770
+    },
+    "compiler/expr.go": {
+      "hash": "e5714786f9cfa62be220fca6acdbb8a3f789705dc0a40b77df6c482742719c15",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 1989
+    },
+    "compiler/expression_compile.go": {
+      "hash": "791895b95756e20b54b5fd3776a01470613d6fed3422d21b596f5ecf6ace9ef4",
+      "mod_time": "2026-10-17T20:59:44+02:00",
+      "size": 2170
+    },
+    "compiler/extensions.go": {
+      "hash": "36a2b08016e19dfbfe6ffef36a085eeb7b0b18dd563d06255f43ed377528924b",
+      "mod_time": "2026-10-27T09:18:36.4059334+01:00",
+      "size": 2595
+    },
+    "compiler/introspection_constants.go": {
+      "hash": "66c720c2ee4004347c2a41cf1126efe653f35ee7d2d020eb16c84cb3c62521de",
+      "mod_time": "2026-10-11T16:20:24.8887174+02:00",
+      "size": 181
+    },
+    "compiler/lexer.go": {
+      "hash": "b1a013bd5e19ad2ac4ee53f37c265ba037fda7e581c8095114800f64182577bf",
+      "mod_time": "2026-10-22T14:13:40+02:00",
+      "size": 5966
+    },
+    "compiler/materialize.go": {
+      "hash": "3358b32c469c66e4dd0be69bc37012a04a61eb2ef8ee9c4b3fe28beafe6e6c82",
+      "mod_time": "2026-10-21T14:35:52+02:00",
+      "size": 1112
+    },
+    "compiler/modifier.go": {
+      "hash": "4a84892e87545273e85d4db94c5fec16f1b17c61915539a80f16d0c286c27496",
+      "mod_time": "2026-10-11T06:21:00+02:00",
+      "size": 13022
+    },
+    "compiler/modifier_hint.go": {
+      "hash": "c2c4078fec4b4717935bd771f42e55854cba591075d2297600648822f6aa95c1",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 2462
+    },
+    "compiler/operator.go": {
+      "hash": "c9b8f250e77008162b4678bdd0cdf6b9899dc029070b22c7994628f77b87ab69",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 2483
+    },
+    "compiler/parser.go": {
+      "hash": "eefd245e243c41ffc25915edc6c75e12c643a6630da5823e0bf96327503a7822",
+      "mod_time": "2026-10-22T13:54:46+02:00",
+      "size": 14650
+    },
+    "compiler/preprocess.go": {
+      "hash": "5463764c2152f2468590b3f7ed2e6c82a47bf83662e3b2e5a95ec9b936312722",
+      "mod_time": "2026-10-27T17:28:00+01:00",
+      "size": 6391
+    },
+    "compiler/preprocess_observer.go": {
+      "hash": "2593848793a77a40e688459791c0ab3c2a378901958285a639102c4b8c308678",
+      "mod_time": "2026-10-21T12:41:58+02:00",
+      "size": 1841
+    },
+    "compiler/primary.go": {
+      "hash": "63b8420d2737b759fa2a90c40cbd35098fea42da23051e1c7a03ab8d18323660",
+      "mod_time": "2026-10-11T06:21:00+02:00",
+      "size": 4547
+    },
+    "compiler/redact/redact.go": {
+      "hash": "b95086f7161675f40b81261c4fcdd91a0c06159086dafe50a941bc2815b7ee0d",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 2091
+    },
+    "compiler/reserved.go": {
+      "hash": "81b3cdc9af7a685f9cdbabe56e06602073b3459f0014a8e709dd407df7ac09de",
+      "mod_time": "2026-10-14T21:26:54+02:00",
+      "size": 4331
+    },
+    "compiler/resolver.go": {
+      "hash": "01d225e78a8877989b761346abb5069b707c10747967033541097e359ebb6832",
+      "mod_time": "2026-10-11T06:21:00+02:00",
+      "size": 3432
+    },
+    "compiler/resolver_mount.go": {
+      "hash": "9fb69b4e8630a002b5f24bf510faf3258cd4331ed839fdbfe6cae8b6380ccfea",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 8464
+    },
+    "compiler/run.go": {
+      "hash": "66212225d8f3939d07689269d84b72d5df0e6c45b9ce9458ea800b593836d6c8",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 1397
+    },
+    "compiler/run_scope.go": {
+      "hash": "bf1ffeeece9f1db8c022ed0ae0ede79029280dc490ab718fb8bd1be21be826b0",
+      "mod_time": "2026-10-27T17:27:14+01:00",
+      "size": 3975
+    },
+    "compiler/source_exports.go": {
+      "hash": "83fe42f1848d9fafdb6dc140aa2d0991d803c254e9131de881deec54bc7220be",
+      "mod_time": "2026-10-21T19:40:54+02:00",
+      "size": 2002
+    },
+    "compiler/source_lines.go": {
+      "hash": "f8533c4267340d702c215a3aa60907ecc07deaa43b5ca16f11987247c282c439",
+      "mod_time": "2026-10-21T13:03:04+02:00",
+      "size": 1720
+    },
+    "compiler/source_map.go": {
+      "hash": "bd2098ef216c4401657df76b333597bf87ca9f468b5954f0db6cf2709d99cff4",
+      "mod_time": "2026-10-21T12:54:32+02:00",
+      "size": 1209
+    },
+    "compiler/source_module.go": {
+      "hash": "a23f05f2ed21c0200945cef3ccb7c0d6f6f271eb7e7a60e001c86bc31167cda3",
+      "mod_time": "2026-10-27T17:29:04+01:00",
+      "size": 4008
+    },
+    "compiler/strict.go": {
+      "hash": "44ba3fa503c9733aaf04c69a088240aa1220a32d4956fcdf71ddb8b6b8cef4e0",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 1695
+    },
+    "compiler/symbols.go": {
+      "hash": "1532ac4635497907fea33966f841a025b847a878033f58cb9f571f023f137cde",
+      "mod_time": "2026-10-21T19:41:42+02:00",
+      "size": 4673
+    },
+    "compiler/token.go": {
+      "hash": "1f14247b26bff7d994101bfae220aa0288205e2772f974ba14808c486e2eb6b3",
+      "mod_time": "2026-10-22T13:51:22+02:00",
+      "size": 964
+    },
+    "compiler/version.go": {
+      "hash": "20268155ccc42e63c85ea7b9a1dd1b9a0795616354058532484760ebf443737f",
+      "mod_time": "2026-10-23T10:59:42+02:00",
+      "size": 622
+    },
+    "docs/REUSE_INDEX.md": {
+      "hash": "81a96c4e1f163f2024dd825973fb14b4f63ebce43fd9bb4b9617eb08bfe649a9",
+      "mod_time": "2026-10-22T13:49:06+02:00",
+      "size": 15889
+    },
+    "docs/approval-resume.md": {
+      "hash": "6b7556d6334551db6d44563cc2c2b6f8e27bdb3f59ef95efdfd1ae151132126c",
+      "mod_time": "2026-10-16T08:29:41+02:00",
+      "size": 3487
+    },
+    "docs/bundle-source-modules.md": {
+      "hash": "bd52d0321f8d0ab51becba98658e3455d70a3baf1df9ab0aea246bf0e1c8f2e3",
+      "mod_time": "2026-10-24T19:36:32+02:00",
+      "size": 2290
+    },
+    "docs/cli-signals.md": {
+      "hash": "ac54f14ea0a9395505f23aeb93008c0731c06a589435bce8d743d6178b22fccc",
+      "mod_time": "2026-10-16T08:29:41+02:00",
+      "size": 1654
+    },
+    "docs/cli.md": {
+      "hash": "7c7171499e0fa106764dbd807b674ec4682b7050abd8707e00f23c7431df7f3d",
+      "mod_time": "2026-10-27T12:54:54.7393821+01:00",
+      "size": 24435
+    },
+    "docs/constants-compile-runtime.md": {
+      "hash": "a299e49eabed55a60f2ec2bc516cce7c251ee22c712bc37f4a7ff3659562e2eb",
+      "mod_time": "2026-10-22T13:06:00+02:00",
+      "size": 3009
+    },
+    "docs/editors.md": {
+      "hash": "2625cb9cf9feef338e1fcd9e74d054a512cf67065929246e4af9bb7ef0f8706c",
+      "mod_time": "2026-10-16T10:40:27+02:00",
+      "size": 2635
+    },
+    "docs/environment.md": {
+      "hash": "3d02934702c87111f36a7b6d2f69e30961c1bffeedbf702d31973ca01525e1c4",
+      "mod_time": "2026-10-27T11:24:46.1695251+01:00",
+      "size": 3199
+    },
+    "docs/extension-build-contract.md": {
+      "hash": "a56ed4b0522418f84c87c449d88c249347247c8d347c02abdbaec3899768e5a5",
+      "mod_time": "2026-10-21T19:43:40+02:00",
+      "size": 3785
+    },
+    "docs/extensions.md": {
+      "hash": "216f2c6d4a90ccd822a0b75c5f3334c7eaca463509d5ee53ccd57b719debeb75",
+      "mod_time": "2026-10-28T16:20:24+01:00",
+      "size": 24275
+    },
+    "docs/language-reference.md": {
+      "hash": "63d4c852839715ee70daefa0f4a9278d04ddae60ea8a2063d3bf2a258a53fe5f",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 36357
+    },
+    "docs/language.md": {
+      "hash": "007d7da03f27b6522055d127788ab7fac881f7016308934ea194a433b794652d",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 22314
+    },
+    "docs/long-lived-services.md": {
+      "hash": "3eee76fcc7e9800d8b3cd811f2e4f6eda2931de1253264d408e83bc3881aae9a",
+      "mod_time": "2026-10-28T16:11:54+01:00",
+      "size": 3610
+    },
+    "docs/master-conformance.md": {
+      "hash": "25239e76dae364084d40f317664cdfada7e23f148bec0a602811ce753e6a731b",
+      "mod_time": "2026-10-27T22:30:28+01:00",
+      "size": 10299
+    },
+    "docs/materializer-lifecycle.md": {
+      "hash": "cb4c3d87227f21a183dfbc8b075d2529ed6e8bc2ab2ffb63e7b9a28b10ad7e8f",
+      "mod_time": "2026-10-22T13:09:12+02:00",
+      "size": 2876
+    },
+    "docs/modifiers.md": {
+      "hash": "2461f828c7b1a062f3c854ead06b6c1c99f8a3787a639be61e8bd88bc393f244",
+      "mod_time": "2026-10-22T13:10:16+02:00",
+      "size": 5011
+    },
+    "docs/nflow-developer-guide.md": {
+      "hash": "35f634d41d2437f8464ab231365cff2c5f79815092b98513878c0280dd0bb59e",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 12782
+    },
+    "docs/on-error.md": {
+      "hash": "ea24f60cb85afdaab8bec71dace101708cf933301e305bf9224f8cbba70f2f86",
+      "mod_time": "2026-10-16T08:29:41+02:00",
+      "size": 4701
+    },
+    "docs/releases.md": {
+      "hash": "1781b3e6959f15ec1a4c55ab04acafa0d44ae93889fe5a993594c3b38cb94d47",
+      "mod_time": "2026-10-27T12:54:54.7403826+01:00",
+      "size": 6162
+    },
+    "docs/requirements.md": {
+      "hash": "120a08e6a0e4a3f98b71f478ea99ae1e01fd1cbc9469ff18ad21dd4c39a42c3a",
+      "mod_time": "2026-10-22T22:35:12+02:00",
+      "size": 3914
+    },
+    "docs/resilience.md": {
+      "hash": "07d8f5400139c11c3447295bb539a79d5b8525be6697dd6dd46486a6e8b2032e",
+      "mod_time": "2026-10-16T08:29:41+02:00",
+      "size": 5164
+    },
+    "docs/retry.md": {
+      "hash": "9e9410b715d64087852ae7141f08c084eb2498b510e80929cba98f2fb761bd25",
+      "mod_time": "2026-10-16T08:29:41+02:00",
+      "size": 2927
+    },
+    "docs/runner-durability.md": {
+      "hash": "aa58831f05bd54b375aba0948155f3dc69e5886c7f31e6c81ee247f04cd1a542",
+      "mod_time": "2026-10-22T14:02:28+02:00",
+      "size": 3948
+    },
+    "docs/schema.md": {
+      "hash": "f3bbbbb2229dc1e498f64c872280076508887c9f54a134bbe07ded78f0ca82fb",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 4677
+    },
+    "docs/static-embed.md": {
+      "hash": "51abb98d2785e4118e0941ba85db18e0e3410cefc8157a198aed442a8c2a8956",
+      "mod_time": "2026-10-16T08:29:41+02:00",
+      "size": 2874
+    },
+    "docs/stream-fold.md": {
+      "hash": "27ea315a2361ffe4818a0db27279b17c1d07db631fb8869958c3f7da1e9e3c6d",
+      "mod_time": "2026-10-16T08:29:41+02:00",
+      "size": 1245
+    },
+    "docs/symbols.md": {
+      "hash": "8379a802687e5cc9bf82a16ae6084495325f055d7aa239b486e64e9419130baf",
+      "mod_time": "2026-10-21T19:42:46+02:00",
+      "size": 3320
+    },
+    "docs/template.md": {
+      "hash": "3b5a1868da615dd3e0353b9ab959065d1d4e9b78682684b7b2814ea945ebfb93",
+      "mod_time": "2026-10-16T08:29:41+02:00",
+      "size": 1397
+    },
+    "docs/validation.md": {
+      "hash": "a1b5d7f4402ce9e6d3cf5e04042b3a67abaf56a9bba693edccf5ac3747caf85c",
+      "mod_time": "2026-10-22T13:07:16+02:00",
+      "size": 4733
+    },
+    "extensions/README.md": {
+      "hash": "a717c3e94fcbb3c0119581a98e92221e6ba4d13c004fff50dc39e599170910b1",
+      "mod_time": "2026-10-28T16:20:24+01:00",
+      "size": 6550
+    },
+    "extensions/approval/directive.go": {
+      "hash": "c647919644a74d65c18817b988fcb3570f00967a244c401d759ffe82f6da888b",
+      "mod_time": "2026-10-27T09:18:36.4069342+01:00",
+      "size": 6947
+    },
+    "extensions/approval/library.go": {
+      "hash": "b97dc44e6ae2d4b7d28cdf4902c752179a4de2958f4006fdfa36d00c46ee90a2",
+      "mod_time": "2026-10-21T19:48:10+02:00",
+      "size": 2377
+    },
+    "extensions/approval/nflows/declaration.nflow": {
+      "hash": "46557baacc5b67b3d13b1958659965f9b0a032c2d6a82317581430e5f02e6636",
+      "mod_time": "2026-10-22T13:05:02+02:00",
+      "size": 231
+    },
+    "extensions/assert/directive.go": {
+      "hash": "5f8434618f16a141bfe2125b074c38bfad0d5fd719f7be140186a48224f5c6ad",
+      "mod_time": "2026-10-27T09:18:36.4069342+01:00",
+      "size": 4953
+    },
+    "extensions/assert/keyword.go": {
+      "hash": "219fe37d697bd268cbccd81a91fb12ae9d2e8aed893c36823ce7d4aaab84fa18",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 2438
+    },
+    "extensions/assert/library.go": {
+      "hash": "99e61cddcc142d0e8575e415afe3d037e6757861ccea712c3018bdc39a74b667",
+      "mod_time": "2026-10-24T19:32:28+02:00",
+      "size": 1156
+    },
+    "extensions/assert/nflows/directive.nflow": {
+      "hash": "f4596b6d570766b6fa051a118709168d518881ae734063abff2343a47a6bf5df",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 101
+    },
+    "extensions/assert/nflows/directive_block.nflow": {
+      "hash": "e9d6b9f620a3b8c1ba87a6a71615233d275e8d45fa4ae1603db943528f00ed9e",
+      "mod_time": "2026-10-24T20:12:08+02:00",
+      "size": 231
+    },
+    "extensions/assert/nflows/directive_compact.nflow": {
+      "hash": "74c202b9fbde56730ba97e1fc8dbf847ee152df4a2ae5e57aed9da2a5f7963e0",
+      "mod_time": "2026-10-26T07:11:07.505985+01:00",
+      "size": 189
+    },
+    "extensions/assert/nflows/keyword.nflow": {
+      "hash": "89de60e6a98654c153140d6697cfa51ffbab446efef1352b14c73b1509f342f5",
+      "mod_time": "2026-10-11T08:58:54+02:00",
+      "size": 137
+    },
+    "extensions/config/directive.go": {
+      "hash": "86358698ccf1c363e2945b93bc90f461ce08e92e52ebb84e8a2fc71702749162",
+      "mod_time": "2026-10-27T09:18:36.4079324+01:00",
+      "size": 2770
+    },
+    "extensions/config/library.go": {
+      "hash": "8e66b0196d147cb09236dcec334abf941f387321dc64c7b14ef8c7079d7abf5c",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 2149
+    },
+    "extensions/config/load.go": {
+      "hash": "c8f92a8f7b04ffea9be622b56aec82bd9156bf791d51541008bbbffa2faef4b2",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 5801
+    },
+    "extensions/config/nflows/block_interpolation.nflow": {
+      "hash": "5c9519988f929a51f097939e2f1550fef9bc77a50fe120ada78a744f0c6b07bf",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 304
+    },
+    "extensions/config/nflows/single_line.nflow": {
+      "hash": "5ef30414aed61b922ef8ab4adfd89601da53be28055f8e9b72c130d0073ec4cb",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 141
+    },
+    "extensions/config_yaml/library.go": {
+      "hash": "1f90c75f28343b30ba4b74597d3940283bda4a854bbb4c0f4710dd3fe885e409",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 899
+    },
+    "extensions/config_yaml/nflows/load_yaml--settings.yml": {
+      "hash": "a3a83049fba21701f077f1949b67ab62398056a05b8afa5afc097413a997821c",
+      "mod_time": "2026-10-11T07:30:06+02:00",
+      "size": 34
+    },
+    "extensions/config_yaml/nflows/load_yaml.nflow": {
+      "hash": "f0c0da0d838787a5d9b21715f45f1fae1d9483c4cce7d37c0348eb40592d1a7d",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 237
+    },
+    "extensions/constants/directive.go": {
+      "hash": "709a56f0c61f59be09bb78468e6074fa146099463f70c5f36f5b54075968cb09",
+      "mod_time": "2026-10-21T19:39:50+02:00",
+      "size": 5214
+    },
+    "extensions/constants/flatten.go": {
+      "hash": "1b605f917e48d6fc681cac0a868db0ff9b402814c02aa4b3eadb347fb9e56cf9",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 470
+    },
+    "extensions/constants/library.go": {
+      "hash": "8fb7782e4430c39fd860e67f8ba514cc371be1dfcb4654e5d95d4ff8c261b8f8",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 565
+    },
+    "extensions/constants/nflows/constants_load--load_json--settings.json": {
+      "hash": "854b4b243d9a53c3343dcbd500893f599dc6899b022f8e2a871da87bbf59ad3a",
+      "mod_time": "2026-10-11T07:30:08+02:00",
+      "size": 43
+    },
+    "extensions/constants/nflows/constants_load--load_json.nflow": {
+      "hash": "293261f740ec3304ad4d64f1c7c20cc933636992218e7328a5cc01b85b3a8601",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 162
+    },
+    "extensions/constants/nflows/substitution.nflow": {
+      "hash": "396a779c9dcc95a9b6182e913d10e4cb36737144ecad52e1e9ddced69e4a5970",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 181
+    },
+    "extensions/data/README.md": {
+      "hash": "329cebb2f9f90561bee9d5d2f5a823f0fe680c88c7197f37b0800aeeac822672",
+      "mod_time": "2026-10-27T17:27:14+01:00",
+      "size": 2484
+    },
+    "extensions/data/dataset.go": {
+      "hash": "16b83e583316ac04267f1f66130988bbc2a3b2bbec949b2935333cdb26774c86",
+      "mod_time": "2026-10-27T17:27:14+01:00",
+      "size": 4911
+    },
+    "extensions/data/directive.go": {
+      "hash": "534b513b0726ce79298bc672e10d8c72d4c050eb19edc7a54bbe3dc5fff42352",
+      "mod_time": "2026-10-27T17:27:14+01:00",
+      "size": 5767
+    },
+    "extensions/data/library.go": {
+      "hash": "e733c630b4e22c66fccfbbdbe3b9fea3d2a10dffc4d3c13805d16615badb2766",
+      "mod_time": "2026-10-27T17:27:14+01:00",
+      "size": 1123
+    },
+    "extensions/data/nflows/master_example--order-cases.jsonl": {
+      "hash": "cf0b9ee35397f8ce4fa40be7827ec17db1b94ba4ed1131923640616f6a5d048e",
+      "mod_time": "2026-10-27T17:27:14+01:00",
+      "size": 1154
+    },
+    "extensions/data/nflows/master_example.nflow": {
+      "hash": "09c5545f486d37d99b8c798ec9e2ec6bf48b33d7de54029b0f342d67da5757ce",
+      "mod_time": "2026-10-27T17:27:14+01:00",
+      "size": 664
+    },
+    "extensions/data/operators.go": {
+      "hash": "dfab079ef19013b7c04c420fac13251ee1625ed49a9dd364aceb08266db4a1fb",
+      "mod_time": "2026-10-27T17:27:14+01:00",
+      "size": 4493
+    },
+    "extensions/data/split.go": {
+      "hash": "768d2587a7eaa4c454598dfdbe2ab56d21f7c061f6287ff6e0cfeb64ff0501f2",
+      "mod_time": "2026-10-27T17:27:14+01:00",
+      "size": 3523
+    },
+    "extensions/decide/action.go": {
+      "hash": "0254fde3541157b794e18d97bdc00d46818b0b493846f0d6e689fa288f1e9503",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1055
+    },
+    "extensions/decide/backend.go": {
+      "hash": "a41ed597caced5d6d52fe5b43463819e9a778322f503cd4f8155660ad1a3837e",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1590
+    },
+    "extensions/decide/config.go": {
+      "hash": "348e815f35fb2eee54e5e8280af11359c127af08339d36c7938da33886632814",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1321
+    },
+    "extensions/decide/http.go": {
+      "hash": "0da7dbe907bdf33a4df57db633c2003665aa3be4f68e3f7e032ff664ce0d3c3f",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 3535
+    },
+    "extensions/decide/library.go": {
+      "hash": "98ccede5ec95721460945e21bae198efd3023eee633befcd02bec2994982080e",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 841
+    },
+    "extensions/decide/nflows/missing_backend_fallback.nflow": {
+      "hash": "be6dabbd0140db8ed78214dacff631069a1ff321641a67bf8d926b062e081351",
+      "mod_time": "2026-10-11T07:30:04+02:00",
+      "size": 227
+    },
+    "extensions/decide/registry.go": {
+      "hash": "a16740785964ecccd61d82af96caaaa8e5146e82dfc5b7e515d45e8585513270",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1756
+    },
+    "extensions/description/library.go": {
+      "hash": "e25328e2e21753eb371954ef094d1f80411cc5fc1f2d909708bfca4f24a02bcf",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 1307
+    },
+    "extensions/description/nflows/metadata.nflow": {
+      "hash": "21e8e1f1d1ab0e9fab570d8f3cc0075d57ae3d5c1ffb50a23be1c917e189d45d",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 178
+    },
+    "extensions/embed/library.go": {
+      "hash": "2b75b3b4dd60c1e925beffb3f53ff4570f6b63f96f9f9d5850c446f2f4234dd7",
+      "mod_time": "2026-10-13T11:03:37+02:00",
+      "size": 20140
+    },
+    "extensions/embed/nflows/host_root--terms.txt": {
+      "hash": "cee2b527a43920eceb24dbf15618381e358c70f6ffece539cd4971184f6c5b29",
+      "mod_time": "2026-10-22T13:08:14+02:00",
+      "size": 18
+    },
+    "extensions/embed/nflows/host_root.nflow": {
+      "hash": "f15e37fe3def24be1a6e9a7a83e6ce28cb45783e9b071e17c4c7b086eaae538b",
+      "mod_time": "2026-10-22T13:08:10+02:00",
+      "size": 140
+    },
+    "extensions/external/exec.go": {
+      "hash": "eb693345440b2a9b89a8da142862a33e5798358fb528509359e73cde3cc10335",
+      "mod_time": "2026-10-26T16:51:28+01:00",
+      "size": 2880
+    },
+    "extensions/external/http.go": {
+      "hash": "833ae9a8b55044fb952e8ee9f3819b8180b75f7e7b1472d99463f982fd821568",
+      "mod_time": "2026-10-22T14:02:42+02:00",
+      "size": 3907
+    },
+    "extensions/external/library.go": {
+      "hash": "dbbca034cdc2a0840b73c1f521115b3bfbf4f7610d0662a73ac2df2faf8e4acd",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 1468
+    },
+    "extensions/external/nflows/exec_echo.nflow": {
+      "hash": "a08fbacddbbf1b0a93d98588119bd35af459b739cade526f96227a9874d105af",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 142
+    },
+    "extensions/external/shell.go": {
+      "hash": "69394fe8a2e3188b4c50f62eb3c6a513244cf64c7bbd5df74e1c185806f94545",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 196
+    },
+    "extensions/external/shell_windows.go": {
+      "hash": "a6924f93a6b87be39aa0070ccab88d6673ab42b1e2c22a8cd248510cfc049e63",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 300
+    },
+    "extensions/external/wasm.go": {
+      "hash": "ab7ce982341ad674b4eb92dc6c6e948e4f57905430fa0d9fda7f91f0fddceb8a",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 2897
+    },
+    "extensions/files/files.go": {
+      "hash": "ed6f30620c07400e9974164129d85ea539f1d25f2bb64800bf8f5d0b95dc1b63",
+      "mod_time": "2026-10-13T10:35:33+02:00",
+      "size": 2461
+    },
+    "extensions/flow_version/library.go": {
+      "hash": "2e359282e5db1ea394a7107dcddc63614ccbc26e17d655428a5704b9d5479eb7",
+      "mod_time": "1980-01-01T00:00:00+01:00",
+      "size": 6728
+    },
+    "extensions/flow_version/nflows/lower_bound.nflow": {
+      "hash": "cb58aba2e230d98eca93155feeffbfa1bcda095d091a81e828cd4be74e75dc1a",
+      "mod_time": "2026-10-23T10:59:42+02:00",
+      "size": 170
+    },
+    "extensions/flow_version/nflows/range.nflow": {
+      "hash": "e8ff05b81a9f98d417a595f1fee375f4329a859f4285b35e7d707df6eb1fb164",
+      "mod_time": "2026-10-23T10:59:42+02:00",
+      "size": 169
+    },
+    "extensions/flow_version/nflows/upper_bound.nflow": {
+      "hash": "07b1bc813bb17051a2ae1ef813cd10364620662fc8654623b482f711eb8c54ae",
+      "mod_time": "2026-10-23T10:59:42+02:00",
+      "size": 162
+    },
+    "extensions/flow_version/nflows/versioning_contract.nflow": {
+      "hash": "34dd152c63622ce45765d7059adf4c9070a9ee0ca348a83111d44d2ed8bcb704",
+      "mod_time": "2026-10-23T10:59:42+02:00",
+      "size": 451
+    },
+    "extensions/fs/filemeta.go": {
+      "hash": "a831b44f7d1c02ef11c864b498f736d2cb8d132b40c69c2267f829a3a8b8a234",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1366
+    },
+    "extensions/fs/filter.go": {
+      "hash": "665e6fd222dc01f6662bd6f54522bfdc72a56430c91858011f3da2cc8022d9c1",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 3981
+    },
+    "extensions/fs/library.go": {
+      "hash": "9bd93d8c3ed0709ba4e7615354aea935b672a4d5168ae0f53eb413b00c39a7cf",
+      "mod_time": "2026-10-21T11:14:19.0666459+02:00",
+      "size": 1172
+    },
+    "extensions/fs/nflows/file--source.txt": {
+      "hash": "61bcae172a3af3efbc3e052e4ec1e150bcc41238106d70d1b520bb6f97e67f84",
+      "mod_time": "2026-10-11T07:30:38+02:00",
+      "size": 14
+    },
+    "extensions/fs/nflows/file.nflow": {
+      "hash": "7db9909084eca3f854f7765c3c9872c909fb2d1b96fe0e6e056ec6773843e1c1",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 156
+    },
+    "extensions/fs/nflows/filter--a.txt": {
+      "hash": "f660a7996deacfbc7560e4240054a8ad82eb02fe25a95064257e07084bcacb85",
+      "mod_time": "2026-10-11T07:30:20+02:00",
+      "size": 5
+    },
+    "extensions/fs/nflows/filter--b.md": {
+      "hash": "db9dc4bd098da25c7346f0cede9c8388a5651ee46977616dc343268cac7bb21b",
+      "mod_time": "2026-10-11T07:30:22+02:00",
+      "size": 7
+    },
+    "extensions/fs/nflows/filter.nflow": {
+      "hash": "d3c24e5c460ef58ed86ea0f7a6766b2de837c77fa85457faf010d43ad4f00782",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 120
+    },
+    "extensions/fs/nflows/read--input.txt": {
+      "hash": "68c11e4cff9e72eceb5918456651f526f872a141a8d1d045e735922007ae25d5",
+      "mod_time": "2026-10-11T07:30:26+02:00",
+      "size": 17
+    },
+    "extensions/fs/nflows/read.nflow": {
+      "hash": "32978f83e8c3acff08a08595f95a0db15b0d60d8520768156284f7350fce2876",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 136
+    },
+    "extensions/fs/nflows/sort--a.txt": {
+      "hash": "b640e840b19d378660b32fb51ae18d67dccb4a8596a29e7bd72c1b2ae5928f41",
+      "mod_time": "2026-10-11T07:30:28+02:00",
+      "size": 6
+    },
+    "extensions/fs/nflows/sort--b.txt": {
+      "hash": "480c2336b410f1ad5f8bf1b28944490255804b65350c527787e74ebdd511e3a4",
+      "mod_time": "2026-10-11T07:30:34+02:00",
+      "size": 7
+    },
+    "extensions/fs/nflows/sort.nflow": {
+      "hash": "5c342930432c7cbff64dc8081015b370d5f6223e65ce8fefeafde8774d5764c8",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 175
+    },
+    "extensions/fs/nflows/stdout--input.txt": {
+      "hash": "a28daedc398f1b43026e4754db5072674b288e7a3d2ef97eb62f6e47578efdab",
+      "mod_time": "2026-10-11T07:30:36+02:00",
+      "size": 13
+    },
+    "extensions/fs/nflows/stdout.nflow": {
+      "hash": "b1087c946e3cda678044020d50f28e11ca07168baec4a00dc22fb8002ba9b64c",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 95
+    },
+    "extensions/fs/nflows/walk--a.txt": {
+      "hash": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+      "mod_time": "2026-10-11T07:30:18+02:00",
+      "size": 6
+    },
+    "extensions/fs/nflows/walk--sub--b.txt": {
+      "hash": "e258d248fda94c63753607f7c4494ee0fcbe92f1a76bfdac795c9d84101eb317",
+      "mod_time": "2026-10-11T07:30:18+02:00",
+      "size": 6
+    },
+    "extensions/fs/nflows/walk.nflow": {
+      "hash": "fdf23e238c3a114c9e1d28419727227b46807424a7c40dc92afaeb19ccdca8f9",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 100
+    },
+    "extensions/fs/out_file.go": {
+      "hash": "dc26491a106e4ad85b2062fd76588580ec2c9725b7e3201ba39c1f86b51fb15e",
+      "mod_time": "2026-10-21T23:59:52+02:00",
+      "size": 3059
+    },
+    "extensions/fs/read.go": {
+      "hash": "292cad9a477b24486db761d053e9b4b4d073609d249127efd26511522715c5e8",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 4617
+    },
+    "extensions/fs/sort.go": {
+      "hash": "ce0d00d85e1ff4972424df81819e498a504884c1586e63028a55e4437bb27e1c",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1808
+    },
+    "extensions/fs/stats.go": {
+      "hash": "f8fd03080eed237930d5f03b93b56ff71f2ea306cec08c918a26551455df206a",
+      "mod_time": "2026-10-11T06:21:00+02:00",
+      "size": 4673
+    },
+    "extensions/fs/stdout.go": {
+      "hash": "f3056af586d0060feb32c4eab677e5552a293ec63aa2c827fb48f6c0d573992e",
+      "mod_time": "2026-10-21T23:59:54+02:00",
+      "size": 1008
+    },
+    "extensions/fs/walk.go": {
+      "hash": "9e11b9afc3172274dd374107078fb8281c34b4a54294b03da6b7866aa802b1ee",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 4844
+    },
+    "extensions/fs/write.go": {
+      "hash": "b07839312776a1058a985218fbc8ca98ce3427339d45b18367f6374f8b2d84b2",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 2332
+    },
+    "extensions/hook/directive.go": {
+      "hash": "13505a7bc1ba1e0ea01b7260eb83d2ed5525ad8233e064e7e8ee2e6d5a6e1d59",
+      "mod_time": "2026-10-21T19:39:50+02:00",
+      "size": 1152
+    },
+    "extensions/hook/library.go": {
+      "hash": "e8d4ee5dad12eda66227ee16d5f6e5c3cbe0f73e988fb5a27ff301485bccb711",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 2060
+    },
+    "extensions/hook/nflows/basic.nflow": {
+      "hash": "104d9cf808d24e896866a731439f445743d6ee2545de301710f12e5254022079",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 146
+    },
+    "extensions/hook/nflows/extension_pattern.nflow": {
+      "hash": "3fe832d964ce790a41da4693ca68bda7a4b98089b77733efa2dff282d74b898d",
+      "mod_time": "2026-10-12T20:47:08+02:00",
+      "size": 2289
+    },
+    "extensions/hook/prove.go": {
+      "hash": "231ca99210b33aa266376c000907f1be2543dc5798378b2e16098ad3b21626d4",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 950
+    },
+    "extensions/include/directive.go": {
+      "hash": "76ae193dc826e4d7e62faf145ba8cfde06269b4dfc226930d42871f3c4d3d9c3",
+      "mod_time": "2026-10-21T19:40:22+02:00",
+      "size": 2523
+    },
+    "extensions/include/library.go": {
+      "hash": "8593129cde3fe96b488ae5e168d544fb3d7d373080f1937837cd4e34bf2af5a3",
+      "mod_time": "2026-10-21T19:46:12+02:00",
+      "size": 1025
+    },
+    "extensions/include/nflows/pipeline_include--child.nflow": {
+      "hash": "a40e28b8cf410c92d906b472afcd26fe37a7706c0750e602ec004a06580377a0",
+      "mod_time": "2026-10-21T19:41:58+02:00",
+      "size": 379
+    },
+    "extensions/include/nflows/pipeline_include--nested.nflow": {
+      "hash": "6d7f753a8ade029d71ec86e3eda28cbeac944b902411ca657a87eeb032aff32b",
+      "mod_time": "2026-10-21T19:42:00+02:00",
+      "size": 73
+    },
+    "extensions/include/nflows/pipeline_include.nflow": {
+      "hash": "293ad95221565887a9970b5b1d19f1162629fd2190460b1569c3ad6e2b0282a3",
+      "mod_time": "2026-10-21T19:44:18+02:00",
+      "size": 807
+    },
+    "extensions/include/nflows/symbols_include--child.nflow": {
+      "hash": "ba5acc8b0628c08c91272663ce1142c77711e3abb450da82b1652b65329db558",
+      "mod_time": "2026-10-12T20:45:26+02:00",
+      "size": 46
+    },
+    "extensions/include/nflows/symbols_include.nflow": {
+      "hash": "2e0b16e2ef2b1bbeaed5ec726e754dc7d3d755f57edd6956ea34609ae394c421",
+      "mod_time": "2026-10-21T19:42:02+02:00",
+      "size": 459
+    },
+    "extensions/io/library.go": {
+      "hash": "b5f47d8da26b3e29c19f640d4aa7a978f77491474dd251266000f65f11a6f7cd",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 878
+    },
+    "extensions/io/nflows/stderr.nflow": {
+      "hash": "ad64e467e645d023730ea7a803216c2b7c1e28886d7cfa3f1324c8073aaa670f",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 134
+    },
+    "extensions/io/nflows/stdout.nflow": {
+      "hash": "04eead3579dabcec183bef650abc21bd84bf8b2890fd425595abe37a37dbdea0",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 134
+    },
+    "extensions/io/sinks.go": {
+      "hash": "3a2cf596d4ad40292a259a367008e636d4fe9bcea90fb25824a189a9123391f8",
+      "mod_time": "2026-10-22T00:01:42+02:00",
+      "size": 2248
+    },
+    "extensions/io/stdin.go": {
+      "hash": "dde352d936e32e9c0f4cd5e5d1673471f5469ab767ad75122e7f00c20c9e21a0",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 2407
+    },
+    "extensions/loop/keyword.go": {
+      "hash": "ff95b2f1f94b9558dcf26c09caf020866281884ebd0d0b337030b24ef7fb7612",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 2272
+    },
+    "extensions/loop/library.go": {
+      "hash": "0a1260fb9940a80ba16364748f5145ba0df120b1d1cfec53b2427065731c638c",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 819
+    },
+    "extensions/loop/nflows/accumulator.nflow": {
+      "hash": "58a29de492e97004b1654af6b0ae5c15c6a87f215a6304bcaf97d4eac6dced8b",
+      "mod_time": "2026-10-17T20:40:58+02:00",
+      "size": 285
+    },
+    "extensions/loop/nflows/basic.nflow": {
+      "hash": "9a9df2cce82256ba8179e27c8d6e70ead87cc617c946b522d370197e1a2fd971",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 115
+    },
+    "extensions/macros/directive.go": {
+      "hash": "efc98e6e1f2504bb225c9af0380b3956c7cfcdbcaf79378fcfb9a658a5e07ece",
+      "mod_time": "2026-10-28T17:56:46+01:00",
+      "size": 9235
+    },
+    "extensions/macros/library.go": {
+      "hash": "de56bcf03c81f53375cc38f81ea24c12d3f9dd92d140915be1333ad0e8c2fae3",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 2830
+    },
+    "extensions/macros/macros_test.nflow": {
+      "hash": "ec024b6a0f89a5466ab9ad47563440f9f74cbf51a7c9d4320c0270b1a531c834",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1696
+    },
+    "extensions/macros/nflows/argument.nflow": {
+      "hash": "66514e48205af53f5a8f50d70e7cd2470ee0ca6a012f0cef23d1936b5b8b48f8",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 229
+    },
+    "extensions/macros/nflows/basic.nflow": {
+      "hash": "f867fec74b646cc767b4cb52d22293a78e77b3f8066ab0c93bba27d41880a2c8",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 129
+    },
+    "extensions/macros/nflows/comma_argument.nflow": {
+      "hash": "51ad7324787ac931e41387415ce0eea2ca7833c18bc9e05978fb9d8ada98beaa",
+      "mod_time": "2026-10-11T07:10:40+02:00",
+      "size": 141
+    },
+    "extensions/macros/nflows/compose_atoms.nflow": {
+      "hash": "d90fe57fbec9dffe680d6a09fc5eed536040d1641e475ef4d82a80fcd65ec367",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 212
+    },
+    "extensions/macros/nflows/dry.nflow": {
+      "hash": "2b4abe6b6c6eac995311e6b007c00078c279b702cc3ab43fb202e8e05f97051d",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 357
+    },
+    "extensions/macros/nflows/guard_field.nflow": {
+      "hash": "aa6c5901353f17315023923d2eec3be67f7ba7176de3d6612ae4cd889c858daa",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 203
+    },
+    "extensions/macros/nflows/hygiene.nflow": {
+      "hash": "c7a8f94eb8aa0ead958d90f150abb03c340453cf2875c42916bf2bb2e491be68",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 441
+    },
+    "extensions/macros/nflows/inside_pipeline.nflow": {
+      "hash": "1ae92be675854631aa9afd581267e9817d635c1b63c6590d7d1998a93e832f29",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 202
+    },
+    "extensions/macros/nflows/nested_call.nflow": {
+      "hash": "fd66bd5c39280918e6a92d476a078286dc4d741fd18e348c47b0de66d343ce21",
+      "mod_time": "2026-10-11T07:10:40+02:00",
+      "size": 176
+    },
+    "extensions/macros/predefined.go": {
+      "hash": "59c0ad8be28ad44e03d6861e50d29c843979a33c0c7328264fe1d2a5c2915767",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 773
+    },
+    "extensions/macros/primary.go": {
+      "hash": "6bb12b125ba56294ea3f3af34d4ee4a66c361464fe4b7c2525e9298f84d73940",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 10142
+    },
+    "extensions/macros/trace.go": {
+      "hash": "746c6d2a7addd31c53410b5024b25beee22a1526cd2b24ee47246ba2f6078c8c",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1650
+    },
+    "extensions/match/ast.go": {
+      "hash": "3f9edd3d4b3d745b673ce0c0cb97ccbc251d8f790865c7fcb6915e6cedd2eb53",
+      "mod_time": "2026-10-17T19:20:10+02:00",
+      "size": 4095
+    },
+    "extensions/match/conditions.go": {
+      "hash": "c8109f83b4e1e52ac86c4a79f57e134a3a40f26e5585f941d94b41a9213a3c65",
+      "mod_time": "2026-10-17T20:44:00+02:00",
+      "size": 4308
+    },
+    "extensions/match/keyword.go": {
+      "hash": "8474e7d037144405af44757b1f87b53744785828b3d493b8f85abedea1d112be",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 2211
+    },
+    "extensions/match/library.go": {
+      "hash": "e2df5461d62f8a2644a28ece6e5e291d91aefa626d89095a35b95f982e2efd1e",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 452
+    },
+    "extensions/match/nflows/match_predicates.nflow": {
+      "hash": "8eb34d3396ea4d7b10f3e3c47579dced1e453f909618006a927309e5c56c358a",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 295
+    },
+    "extensions/match/nflows/match_subject.nflow": {
+      "hash": "ab3bb1464bfab5938359947ab4c078339922cfe0aa4f36308b150eee65c928be",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 281
+    },
+    "extensions/modifiers_auth/library.go": {
+      "hash": "7ae66dd184b72ee061a04fa43ff5875c2e84ffb7b94aff2f17c2b6b6942427ae",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 721
+    },
+    "extensions/modifiers_auth/modifiers.go": {
+      "hash": "4e4d18b0453deb87cf83b203c5d897c27653238030912733c83f139197b1757c",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 990
+    },
+    "extensions/modifiers_auth/nflows/auth.nflow": {
+      "hash": "066b3b4bf25fccaa6de6e454fefee1f245792df1832132a0aa3323a420390e7d",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 105
+    },
+    "extensions/modifiers_auth/nflows/feature.nflow": {
+      "hash": "0b91dfd99794d7ceb0b975c48a480efec89db73ed31c4fa78422f924d3c0d512",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 139
+    },
+    "extensions/modifiers_auth/nflows/permission.nflow": {
+      "hash": "3d47c1ddc44354c226658e5396539272f97d486b56f68e382488ae785afaca84",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 120
+    },
+    "extensions/modifiers_auth/nflows/role.nflow": {
+      "hash": "05b90f604b0f9c6ad8eb8a12614e30dcad50d5f1123b902325ca628565bd9a95",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 115
+    },
+    "extensions/modifiers_core/keys.go": {
+      "hash": "95f345f9d3bde53194804631e28a1c04190f0aae8169b3a4ec1fa441e479d0ff",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 603
+    },
+    "extensions/modifiers_core/library.go": {
+      "hash": "44741d7bd6e28a1e94a966a7b8e659d8cb13b60beeeac850001c64861a747dff",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 759
+    },
+    "extensions/modifiers_core/modifiers.go": {
+      "hash": "f5a860525ecad8403a975a6b8b6a267c234a534b99e3a601872c0202e7cc49bd",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 1916
+    },
+    "extensions/modifiers_core/nflows/cache.nflow": {
+      "hash": "1c0ef384a70e3787599546d96e859d6c1ab9f0c09a0e0004a288e5bb1f4d3a9c",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 109
+    },
+    "extensions/modifiers_core/nflows/coalesce.nflow": {
+      "hash": "1990030b652421c877c87f972c9cbf45afcb09b3ebeed19b7191ba3213cc141a",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 110
+    },
+    "extensions/modifiers_core/nflows/concurrency.nflow": {
+      "hash": "5e535e564e9082f0ba709b373cc0a0a334abb8ea7ad67aa9d68d48d73362c5cd",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 120
+    },
+    "extensions/modifiers_core/nflows/dedup.nflow": {
+      "hash": "95d477485f546dedc9e93f8dc321195cfcc7b771c779f7d2b99036ad68ba1639",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 110
+    },
+    "extensions/modifiers_core/nflows/idempotent.nflow": {
+      "hash": "54f12598644bde3981a9f84baa18dc02eacb98a4bd631476cfc8051e9ebf534b",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 110
+    },
+    "extensions/modifiers_core/nflows/mixed_flags_and_values.nflow": {
+      "hash": "49ce5efcd8b0befa62311db90d4ded03850ca2f86587cc354c36fa070f593ff4",
+      "mod_time": "2026-10-17T20:40:58+02:00",
+      "size": 369
+    },
+    "extensions/modifiers_core/nflows/rate_limit.nflow": {
+      "hash": "7e62a27a7531fa98ae9e5f12f1720df47c9a02f8007bcf83828dec2601911e88",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 120
+    },
+    "extensions/modifiers_core/nflows/resilience_chain.nflow": {
+      "hash": "b8b30786129af578e37a1c3fc798626ce9c28ec10bdfd0e6d7aa251de37cff0b",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 617
+    },
+    "extensions/modifiers_meta/library.go": {
+      "hash": "adfc94a89e8a86cab050d93247e69e12a3811b313d4a6415b047fef4732675fb",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 989
+    },
+    "extensions/modifiers_meta/modifiers.go": {
+      "hash": "1537d0939a783a89d70c1ae65fc5f6299cde30fe2f91071b0ec44fa77d77c485",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 1567
+    },
+    "extensions/modifiers_meta/nflows/desc.nflow": {
+      "hash": "cb8e619d2e5741540b28e66bc19cf58e1bc4c2d1b7926b260bae1315bc49b7a3",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 135
+    },
+    "extensions/modifiers_meta/nflows/description.nflow": {
+      "hash": "740c50294b13e294ffa55f7582d2ed6b21fa0db69dd3089fb1e39bfa4f73e395",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 147
+    },
+    "extensions/modifiers_meta/nflows/flags.nflow": {
+      "hash": "39e1e6d14879ff8467fda430b34bdc1af2a0b015898c3393cc627b68fddb70cc",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 139
+    },
+    "extensions/modifiers_meta/nflows/lenient.nflow": {
+      "hash": "c7089a31d9d14b3fd1e3f96ef5b63c3c36c0190e4d7086e2c2aecebe1a88e7a2",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 113
+    },
+    "extensions/modifiers_meta/nflows/name.nflow": {
+      "hash": "4b851859657bb61ffbc578e3f81d839646c640e77452251b74fea25396a8480a",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 133
+    },
+    "extensions/modifiers_meta/nflows/scope.nflow": {
+      "hash": "435d7cfac160378ac13304f9b1486399c25defd77df2b21e6f2bfdf9c0cf8b5c",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 119
+    },
+    "extensions/modifiers_meta/nflows/status.nflow": {
+      "hash": "985d5734bc3f36900f4512274bfa6c8b30290bb742aa72ec89ae3a84397faf7c",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 120
+    },
+    "extensions/modifiers_meta/nflows/strict.nflow": {
+      "hash": "bb3c76be604bf2a81f14706a4309ade175decfe982271bf78b82ee2b700c13f6",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 111
+    },
+    "extensions/modifiers_meta/nflows/tag.nflow": {
+      "hash": "3a9043823df85d106907b07198609eaaf3fe9d1a927e71e59dce6024fc251b5a",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 127
+    },
+    "extensions/nodes_bench/compare.go": {
+      "hash": "cc57c1e0cf6e55d2197a5c84d934e41d90d76121bd6425cb8814364b815c5ffb",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 3856
+    },
+    "extensions/nodes_bench/library.go": {
+      "hash": "f63caefea47d34864402a9e2697090bd9e61db8298c75c50ba24d6338b56f830",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 1093
+    },
+    "extensions/nodes_bench/nflows/run.nflow": {
+      "hash": "79b95ba58d3b53791749cd7935b2d14cc858d2b3ea3db76f4e81310aaba592dd",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 191
+    },
+    "extensions/nodes_bench/nflows/save--placeholder.txt": {
+      "hash": "fb10699dbbaa605dfe13bd4fc307b60a21f8d62a9aba5a0b40b895eebcc3a6e0",
+      "mod_time": "2026-10-11T07:31:24+02:00",
+      "size": 26
+    },
+    "extensions/nodes_bench/nflows/save.nflow": {
+      "hash": "2a1fccbfc49567962b18fa6aa0aeb1977797f42f4f879bce56c2149b9084720a",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 167
+    },
+    "extensions/nodes_bench/run.go": {
+      "hash": "551a0b46dd20dc8badac94ed06db505ac045a205cd28aeae9dee895ba4eb34a6",
+      "mod_time": "2026-10-23T07:57:02+02:00",
+      "size": 4630
+    },
+    "extensions/nodes_bench/save.go": {
+      "hash": "55be512b3500c433afd1b221a780eec8c7980b3a20a46d434d231641d38973ae",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1598
+    },
+    "extensions/nodes_dispatch/dispatch.go": {
+      "hash": "a739d0972f6651f5ca2d42966dc9e3447036aa464c6a49330497923a80c8bdc0",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 1051
+    },
+    "extensions/nodes_dispatch/library.go": {
+      "hash": "ae7b1f5b1f3ff4bd453513570d6aefd8744a91675a48faf9ff5232569ff17386",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 852
+    },
+    "extensions/nodes_dispatch/nflows/dispatch.nflow": {
+      "hash": "bd343bc5ac9aa10c7a0d2ad16e2c5a0560b363b8ae16add2f1307adbd32cd415",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 146
+    },
+    "extensions/nodes_dispatch/nflows/dynamic_dispatch.nflow": {
+      "hash": "d9afc2a714e6de7993b3e27c3b80a2f882eded8400d83a159008ccc59d6ea66f",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 204
+    },
+    "extensions/nodes_distribute/library.go": {
+      "hash": "879415b47a093f2c65cdbca4eaec5e21c6494abae0a71dc09fa9d591b25c4c16",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 1270
+    },
+    "extensions/nodes_distribute/map.go": {
+      "hash": "b5b31ecf39242e8d738f09a51f1e68a9f89c2110753647504dd1dfa2102067db",
+      "mod_time": "2026-10-15T12:58:30+02:00",
+      "size": 4155
+    },
+    "extensions/nodes_distribute/nflows/fanout_reduce.nflow": {
+      "hash": "6d63ca2c9c3a3f82eb81446c196cf999f8d45aa320b7299bf67bd078f234dc8a",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 546
+    },
+    "extensions/nodes_distribute/nflows/map.nflow": {
+      "hash": "ccddee9f4868d0126e8ed98be92864b2da1d188f719acf652656962bb8ac3861",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 128
+    },
+    "extensions/nodes_distribute/nflows/production_etl.nflow": {
+      "hash": "3fc0a3079f76a1c82e3d4461d31b0aa9d4b1ae6d5b7283b9ced71f849af0172d",
+      "mod_time": "2026-10-10T23:15:04+02:00",
+      "size": 1730
+    },
+    "extensions/nodes_distribute/nflows/reduce.nflow": {
+      "hash": "f3b6e96006ba8b79abb5e4238f19c6f47284c0fcc3b0bc88364b77dcb4d3cc4d",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 185
+    },
+    "extensions/nodes_distribute/reduce.go": {
+      "hash": "bcb50d0bbca88679536c51b7332756c2a210a86132d664990f8498b729b49682",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 2175
+    },
+    "extensions/nodes_log/library.go": {
+      "hash": "47ce6136dec4e2f560c37d22133a2bd9a9f1d8aee6d6f61a27bfdbce3eb180e0",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 875
+    },
+    "extensions/nodes_log/log.go": {
+      "hash": "cda046c69525df32b7a2a6cc3f25d88611a4155478d68e32fdbd16264db6f87e",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 1461
+    },
+    "extensions/nodes_log/nflows/log.nflow": {
+      "hash": "c84597cbe2d970b927465fbd2e1d9aa49867baa94e38c1efeac398d3e2d63b10",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 104
+    },
+    "extensions/nodes_supervisor/library.go": {
+      "hash": "bfaee7a52fc5618527315eeb62b9d71375d370fddffcc209835c3d8fa2c0f264",
+      "mod_time": "2026-10-28T12:32:22+01:00",
+      "size": 969
+    },
+    "extensions/nodes_supervisor/nflows/supervisor_children.nflow": {
+      "hash": "08d8cf2ae237741396ff2d56fdb7719fbeaf842f84ecace60f120691bdf93f5d",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 972
+    },
+    "extensions/nodes_supervisor/nflows/supervisor_serve.nflow": {
+      "hash": "bfec04a07954aacf2998a0851999de81796177f76208f07ffb5eac1958dc5ac4",
+      "mod_time": "2026-10-28T16:13:06+01:00",
+      "size": 309
+    },
+    "extensions/nodes_supervisor/nflows/supervisor_serve_disabled.nflow": {
+      "hash": "6123aae23cfdfa50fa8c5cc693a7c6a27389a72064d7ae4cd8fcfb0954dff03b",
+      "mod_time": "2026-10-28T16:13:10+01:00",
+      "size": 257
+    },
+    "extensions/nodes_supervisor/nflows/supervisor_serve_nil_return.nflow": {
+      "hash": "d30fa94db98a0145e1a121a48a6b10b855f1684645f4fba1b701f123bdd825f1",
+      "mod_time": "2026-10-28T16:13:08+01:00",
+      "size": 287
+    },
+    "extensions/nodes_supervisor/nflows/supervisor_serve_sibling_failure.nflow": {
+      "hash": "31ddfba6b2df285b9b85bf8f7f3f130f2d1063396718f5e9469dc28c0940bbde",
+      "mod_time": "2026-10-28T16:13:08+01:00",
+      "size": 390
+    },
+    "extensions/nodes_supervisor/serve.go": {
+      "hash": "a84551445de62c87bb2d0f8ae363cc379655f68cc2740275c5f8f85a56024757",
+      "mod_time": "2026-10-28T16:22:24+01:00",
+      "size": 6269
+    },
+    "extensions/nodes_supervisor/serve_advise.go": {
+      "hash": "d1fc7b7c3f8f152dd77710ec648201130884e668354f3495f2adc331ca0c32fa",
+      "mod_time": "2026-10-28T16:23:00+01:00",
+      "size": 4210
+    },
+    "extensions/nodes_supervisor/supervisor.go": {
+      "hash": "8a6c3c8bb0fe6eedfb576adc47265b7b4300d51cea12c07c94e519a8d4fe78bc",
+      "mod_time": "2026-10-12T09:52:22.4811206+02:00",
+      "size": 3610
+    },
+    "extensions/on/library.go": {
+      "hash": "1b16bfe88081b1d2c876778298cf0aecf547794c072ff8b004b5f0c85f8c9e2a",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 1645
+    },
+    "extensions/on/nflows/http_listener.nflow": {
+      "hash": "7d53dae0c9e4e702b6a57d59635323796135ce1c912ea0173f020268418a98f1",
+      "mod_time": "2026-10-11T07:31:28+02:00",
+      "size": 164
+    },
+    "extensions/on/nflows/nats_event.nflow": {
+      "hash": "1cccba72f32042330f7f65be1b59b3a0d4e55d33cb7a735085ebef47f34fd4c7",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 153
+    },
+    "extensions/on_error/directive.go": {
+      "hash": "7d70185886030477892413c4b16a74909d92510afdebb4336f3874d85a9e083c",
+      "mod_time": "2026-10-27T10:10:11.7872478+01:00",
+      "size": 4538
+    },
+    "extensions/on_error/error_env.go": {
+      "hash": "2e11870e14fbb85f1d5560d839183b724bbb9ccd717fe8303fc529490bb3e769",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 1399
+    },
+    "extensions/on_error/error_info.go": {
+      "hash": "235ed28f6dbd1f38fdac0238ec871895c9d9817cbca53c60421c7d5638aa9c38",
+      "mod_time": "2026-10-11T21:18:14.6126854+02:00",
+      "size": 3064
+    },
+    "extensions/on_error/expression.go": {
+      "hash": "d5e407b432d8fd3997fc35fb388d5b593e605680516922aa58ea761c4f622490",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 8884
+    },
+    "extensions/on_error/library.go": {
+      "hash": "bce9fe60c65298f1b8eeb3ebbbbf0f4f40374da8a32be03f2fe3f34600ea1e3d",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 1292
+    },
+    "extensions/on_error/nflows/error_routing_table.nflow": {
+      "hash": "e9e28e4d1e7f095cf2eeeedd145b271c3759e83cf303c0172a6b463bd8e00326",
+      "mod_time": "2026-10-11T21:26:50.324235+02:00",
+      "size": 840
+    },
+    "extensions/on_error/nflows/expression_guard.nflow": {
+      "hash": "209b9c862055b231d3a2485aab3980417969a599b65b13c5ce6cc3cbc0d36458",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 440
+    },
+    "extensions/on_error/nflows/passthrough_unwraps_input.nflow": {
+      "hash": "45141a30d5d8996231f2b108d50954301b486bb81a343b4d8c734644a173e1f5",
+      "mod_time": "2026-10-11T21:14:44.3162857+02:00",
+      "size": 324
+    },
+    "extensions/on_error/nflows/recovery.nflow": {
+      "hash": "4cca76bcddff9db0442ceb1a1f8fc80a76b5bfaaa2a87feaa00fd77449b1e911",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 311
+    },
+    "extensions/on_error/nflows/reraise_to_fallback.nflow": {
+      "hash": "4fbb7ec9b2c7a9eb09f814c67cc0ad43f5c6ad76f2a9c4943c259d67ac8f500a",
+      "mod_time": "2026-10-11T21:14:33.6562301+02:00",
+      "size": 227
+    },
+    "extensions/on_error/nflows/route.nflow": {
+      "hash": "b09a7865b0ea6b1685bb7f05814e6fae4657880ce81cdde043a8340758233cc0",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 197
+    },
+    "extensions/on_error/nflows/short_form_directive.nflow": {
+      "hash": "ac0865d4836e767846c142a1d9a599986e8f0a041cc19ebe025661920f35b12b",
+      "mod_time": "2026-10-11T21:14:23.010577+02:00",
+      "size": 247
+    },
+    "extensions/on_error/nflows/short_form_expression.nflow": {
+      "hash": "7c593b548afed6a7efc1896dc5e41b4fdacc506756e2c7ec5d5b9d9a3c763eba",
+      "mod_time": "2026-10-11T21:14:12.9762548+02:00",
+      "size": 248
+    },
+    "extensions/on_error/nflows/typed_recovery.nflow": {
+      "hash": "5297e48f695f8506052018ee8e6bc8a6ede2a1bc6cedb427fac4623aca730f8a",
+      "mod_time": "2026-10-17T20:40:58+02:00",
+      "size": 477
+    },
+    "extensions/on_error/wrap.go": {
+      "hash": "d77be4e817cb702e4923b771b5dad722e911fe9c719bef5fc45268f5a8736378",
+      "mod_time": "2026-10-11T22:46:06.527601+02:00",
+      "size": 2532
+    },
+    "extensions/pipeline/directive.go": {
+      "hash": "11af2997e09b4b8e09ca372181666d559f1bcadeee413bf2c6b7d9cc490c1fd0",
+      "mod_time": "2026-10-21T19:46:12+02:00",
+      "size": 5722
+    },
+    "extensions/pipeline/library.go": {
+      "hash": "089ba85bad2db549f6d99618050a8df735815b14107da2a21d739911a0b988e7",
+      "mod_time": "2026-10-24T15:21:48+02:00",
+      "size": 2024
+    },
+    "extensions/pipeline/materialize.go": {
+      "hash": "e6524443a63c5c2c459bb8472079525a7594edb42370f064125a902ed6d84a4d",
+      "mod_time": "2026-10-27T16:07:50+01:00",
+      "size": 11725
+    },
+    "extensions/pipeline/nflows/basic.nflow": {
+      "hash": "b61500c4ce41462c557a7a12be50a6bd6d9e1a5352a4311711e5c5099e26de0e",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 151
+    },
+    "extensions/pipeline/nflows/distribute_map_forward_reference.nflow": {
+      "hash": "633c68b63fe0a005083971d0eacc20cd27cbd9e7a7e484458ceb96d2f3f5e3fa",
+      "mod_time": "2026-10-27T16:07:50+01:00",
+      "size": 384
+    },
+    "extensions/pipeline/nflows/modifiers_schema_recovery.nflow": {
+      "hash": "ea24f1f9b1a0089da0f8a47f84de067faf082c712e6a53eb010f5ca84741e8c4",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 683
+    },
+    "extensions/pipeline/nflows/multiline_modifiers.nflow": {
+      "hash": "64ec86d8ef2c57ea791a21b367f6854f230508c39e78d782f1070da872a96984",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 561
+    },
+    "extensions/pipeline/nflows/reusable_pipelines.nflow": {
+      "hash": "0dcf5ef3159176baf9b25207c1906f1bddf369981a091ce14727e13db3c11df1",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 304
+    },
+    "extensions/pipeline/nflows/schema_contract.nflow": {
+      "hash": "90ec3a7f9cd7eb53f5c0be0493b912ddaecebed6225d8761f927d5f7d52371af",
+      "mod_time": "2026-10-24T19:36:32+02:00",
+      "size": 701
+    },
+    "extensions/pipeline/nflows/schema_field_error_route.nflow": {
+      "hash": "bd7ff0e24a6431f93e7ac0e3bd6fd24c847ffded3e969a33acc1651483a37d29",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 1633
+    },
+    "extensions/pipeline/nflows/schema_request_error_route.nflow": {
+      "hash": "7c7b89d73048880d0d2d10070ba7c70a534017ba2919bea283c155ec25b3aaab",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 1618
+    },
+    "extensions/pipeline/nflows/schema_response_error_route.nflow": {
+      "hash": "9fa1588754b69c454c5773c11f3093feafeb92e038e8fde678c07bde06bc4489",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 1656
+    },
+    "extensions/pipeline/nflows/strict_schema_contract.nflow": {
+      "hash": "23dea3317f0d6f4dd5eab1e9f2626975485ca74b61a598496d8f442d91cf9e1a",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 443
+    },
+    "extensions/pool/build.go": {
+      "hash": "fbbe85860b72c6c465db3c4b8eb4dbf0ee372a5038894434bb69b7db3b081d52",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 1841
+    },
+    "extensions/pool/declaration.go": {
+      "hash": "b241d4d250304e23ba54ac5a9c2aef884ff069999bb5d83616c7270f7a077b1b",
+      "mod_time": "2026-10-12T20:43:58+02:00",
+      "size": 1155
+    },
+    "extensions/pool/directive.go": {
+      "hash": "7699f067a8811efebb3877151089f5860a1a01640ab95989f807f736d12458bf",
+      "mod_time": "2026-10-27T09:18:36.4089327+01:00",
+      "size": 1993
+    },
+    "extensions/pool/library.go": {
+      "hash": "dabc1b6df03026ceb2a0f394d739314f28268ae48fd5272e1dac8dd044fa9dc3",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 759
+    },
+    "extensions/pool/materialize.go": {
+      "hash": "12a0d7d56558786fa3e5a9a83144d4f112671afad4c07ed9472f8d5c76cc4752",
+      "mod_time": "2026-10-21T19:48:10+02:00",
+      "size": 1826
+    },
+    "extensions/pool/nflows/dispatch.nflow": {
+      "hash": "b4c0413ebc76d5c7889a7ba654415bffd15baa8d30d640da74d0a3b52f6c03c9",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 175
+    },
+    "extensions/pool/nflows/pool_action.nflow": {
+      "hash": "896247092d11dfaf1c2451054145f36b3f870ac88ebfedc2edc543e99ea1ab2c",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 148
+    },
+    "extensions/progress/action.go": {
+      "hash": "8431e69799eb4961c79b355d854527728404c6c6438b6e4536371b9661d13903",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 3910
+    },
+    "extensions/progress/library.go": {
+      "hash": "2651e3bd3c9f67817b2e33d898315268a9c5410726fb7e8b6e89f0b928d26f1b",
+      "mod_time": "2026-10-21T12:44:58+02:00",
+      "size": 2434
+    },
+    "extensions/progress/nflows/basic.nflow": {
+      "hash": "5ed3cd28523a607436a3b21b120f109345e81d6ba25d96835bf3a5a7b6cbd625",
+      "mod_time": "2026-10-11T07:10:38+02:00",
+      "size": 258
+    },
+    "extensions/progress/reporter.go": {
+      "hash": "4e57616e613be2e6043a7ded1b37ee5b6f86657b4d5f2d6170fde4b909e5bc12",
+      "mod_time": "2026-10-11T06:21:00+02:00",
+      "size": 4225
+    },
+    "extensions/projection/composition.go": {
+      "hash": "5ddf031b00949681436adba52f388d6e107bfe5582481ab4128e833642d2bcf4",
+      "mod_time": "2026-10-17T19:20:10+02:00",
+      "size": 5323
+    },
+    "extensions/projection/evaluator.go": {
+      "hash": "d65775a742038ed1af8cf30b2596faaa2c0cf789dd0420e2656a63ba475bfa07",
+      "mod_time": "2026-10-17T20:44:02+02:00",
+      "size": 2517
+    },
+    "extensions/projection/expression.go": {
+      "hash": "7c71397b7a5ef582d66a0f631f10b33a0c27fd09b99d5e403de78d95d0561cd1",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 1270
+    },
+    "extensions/projection/library.go": {
+      "hash": "e6069f8dc846ed3ca1799bfb1a09ff442c2b6e6bf738d1eccfdf45d11ca472b4",
+      "mod_time": "2026-10-17T20:45:54+02:00",
+      "size": 1928
+    },
+    "extensions/projection/nflows/array_funcs.nflow": {
+      "hash": "947f4689836a115102c06812daf82e6ebebc652f1329c7eadf2dad8e46909ae9",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 299
+    },
+    "extensions/projection/nflows/bare_spread.nflow": {
+      "hash": "046c808e1fb894afccd8298a774bc2e6dcf10a1327db4c543f1b40986a850a40",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 83
+    },
+    "extensions/projection/nflows/comments.nflow": {
+      "hash": "1aa63bce3d21742534f555755a22dcf352b35c8fd307936025f62a544db74518",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 263
+    },
+    "extensions/projection/nflows/control_values.nflow": {
+      "hash": "c9a020c6bae9a93edadc6c772acda52aff786ed9aaf70b1b824a6697ee5343e1",
+      "mod_time": "2026-10-17T19:20:10+02:00",
+      "size": 790
+    },
+    "extensions/projection/nflows/etl_per_region.nflow": {
+      "hash": "1406f1ab5e2d2a52d3417c17a0cfc5a2e5f91c9a67801481d961ba488bed0db0",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1137
+    },
+    "extensions/projection/nflows/reserved_fields.nflow": {
+      "hash": "764953e0724588e15ac3e5e82437071374fe40c37f46eb2752350b6623bd8ad5",
+      "mod_time": "2026-10-17T20:47:20+02:00",
+      "size": 744
+    },
+    "extensions/projection/nflows/rojection.nflow": {
+      "hash": "0571596bf5761d7f07673b8806b36e5d3916d20f549c264b88f8d98660f6a641",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 146
+    },
+    "extensions/projection/nflows/spread.nflow": {
+      "hash": "00f2a3b1fdc44886d0b8d72fb1c7686a023300015e20119a5bc73f8d7547db3a",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 218
+    },
+    "extensions/projection/nflows/tips_and_tricks.nflow": {
+      "hash": "8c85c5af6b97de89b8f0cdb66c2eb3e6b7b54f411d34d45c5f96170b32e5c716",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 2154
+    },
+    "extensions/projection/primary.go": {
+      "hash": "95ea7544c83b48682ce2bccec6998628e034e8a2a6b6015084af7ea66038e089",
+      "mod_time": "2026-10-17T19:20:10+02:00",
+      "size": 3703
+    },
+    "extensions/projection/runtime.go": {
+      "hash": "717d78a315c5b00174fafb75da4703f058367fff2aa1ec5bc416e98a74c74e8a",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1426
+    },
+    "extensions/realtime/actions.go": {
+      "hash": "9638a0a569fd61790d4dd75a72440fb014fc45d92d29ce2e16bc455716585800",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 2955
+    },
+    "extensions/realtime/library.go": {
+      "hash": "c9e9b63695c4bdce55a0de17d60ec0ece2ddeb1f5647efd9cb6c634b9d64c149",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 798
+    },
+    "extensions/realtime/nflows/realtime_game.nflow": {
+      "hash": "fc5ed5e49de11ca4bb79b4b816af61d41121cb976a0250b268540f4f4a089bf7",
+      "mod_time": "2026-10-10T23:14:30+02:00",
+      "size": 955
+    },
+    "extensions/realtime/nflows/streams.nflow": {
+      "hash": "b082a92deade67d7a59b1f33c68b1f53c2462b35a5c7d1e517418b1d9fff10cc",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 794
+    },
+    "extensions/realtime/ticker.go": {
+      "hash": "801b43fdd4516eae254311955a9585487bd3908c5ef2aefb93def5d2c496ab9b",
+      "mod_time": "2026-10-11T08:12:20+02:00",
+      "size": 1069
+    },
+    "extensions/render/library.go": {
+      "hash": "a375596c15858acea6ebf06637ed871b79b0b5bccee683e48d3637f22be7ec5d",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 859
+    },
+    "extensions/render/nflows/markdown--fixtures--brief.txt": {
+      "hash": "99c6d62e24d546fb461716a3860f745d884d97170c4c0757187b8c7b22cd721c",
+      "mod_time": "2026-10-11T07:31:54+02:00",
+      "size": 80
+    },
+    "extensions/render/nflows/markdown.nflow": {
+      "hash": "90834eb2a358fcf11e7c123ca0b81ca01b20ca884281eea50a1c9a37f92a0cf1",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 173
+    },
+    "extensions/render/render.go": {
+      "hash": "716237317c4edcf0e2e051befa90a7633ba73f77d6739a8b1b685643c1b82221",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 3885
+    },
+    "extensions/require/directive.go": {
+      "hash": "da4832a3afcc5ad2e972108b29126f12705dbbffb85e4e445eebe543d0677eae",
+      "mod_time": "2026-10-25T15:10:50+01:00",
+      "size": 6919
+    },
+    "extensions/require/generate.go": {
+      "hash": "b62125917eb452be4ddecabe6f77e74e303c8e9c8de09124d6a3f28c742ca3ca",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 2384
+    },
+    "extensions/require/library.go": {
+      "hash": "df96f62808f4462134a083f38277ea81d0a4985ad6dda89761b35853043df4cf",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 502
+    },
+    "extensions/require/nflows/selftestkit_requirement.nflow": {
+      "hash": "600f46a938dfb83ae482adb9443efa9b4af5a7427abd05af6613328f8c8fa57c",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 137
+    },
+    "extensions/require/normalize.go": {
+      "hash": "fb44e23f1014b35ed72368c8f59772bf90e664b29f058c96062ec0c4b19ad3b4",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 815
+    },
+    "extensions/require/parse.go": {
+      "hash": "1b2fee60b2756a18dbdb7112b89e98daf5f30a7285315e5ecbf7e96814046492",
+      "mod_time": "2026-10-25T14:59:50+01:00",
+      "size": 2491
+    },
+    "extensions/require/require.go": {
+      "hash": "b8f0b49e8d3c5ae7ab3794f1056f84e248c1f7c0d51d8d9c73d442cfa855ad3e",
+      "mod_time": "2026-10-25T15:09:38+01:00",
+      "size": 19862
+    },
+    "extensions/require/resolve.go": {
+      "hash": "ce7c9b5103e997c029770792a724aadcb85c5e3bbf62020c6445c3bbc06f621a",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 1666
+    },
+    "extensions/resilience/advise.go": {
+      "hash": "72057b13e7e5cd9d8f10546b63e17728ed6e3a016427470b70c5c66cbde96d08",
+      "mod_time": "2026-10-15T19:25:06+02:00",
+      "size": 4765
+    },
+    "extensions/resilience/config.go": {
+      "hash": "930fe3c0f4a997f3c7d79487e7858add277fea97a85c6c6203ab5294e99be3b3",
+      "mod_time": "2026-10-15T19:25:04+02:00",
+      "size": 3273
+    },
+    "extensions/resilience/library.go": {
+      "hash": "1175418341fcbc5c2f2b1187f44904acb1946f84095cc919b9dc65a94c13e96d",
+      "mod_time": "2026-10-21T12:44:52+02:00",
+      "size": 2426
+    },
+    "extensions/resilience/modifiers.go": {
+      "hash": "d1b1527700dba27ca0356be3aad59117fc58833e82d63e6427a65e975f163987",
+      "mod_time": "2026-10-15T17:56:58+02:00",
+      "size": 791
+    },
+    "extensions/resilience/nflows/circuit_breaker.nflow": {
+      "hash": "a2c38dcfca7c365daad90bd16fdaca6a1a03a66506f033df83b94e1ce9611bf2",
+      "mod_time": "2026-10-15T19:25:44+02:00",
+      "size": 304
+    },
+    "extensions/resilience/nflows/circuit_breaker_healthy.nflow": {
+      "hash": "a1fdf5383025ba9e5ee3a2be6bca91c354226745abbf67d17294fe6c67baf101",
+      "mod_time": "2026-10-15T19:25:46+02:00",
+      "size": 181
+    },
+    "extensions/resilience/nflows/retry_cached_quote.nflow": {
+      "hash": "d8997c08bde5bf9741229e55a143b06d933da1655d9105ef55e5395fd297be94",
+      "mod_time": "2026-10-15T19:25:48+02:00",
+      "size": 253
+    },
+    "extensions/retry/advise.go": {
+      "hash": "790239aba587093de942f2eabdc88979c72d014c85f99d191c7f3d61f3f09d58",
+      "mod_time": "2026-10-15T14:10:58+02:00",
+      "size": 1499
+    },
+    "extensions/retry/config.go": {
+      "hash": "870b867b1896c6487469f09bcc1adbae07743cdf2229b76f3667bbae45597895",
+      "mod_time": "2026-10-15T19:30:22+02:00",
+      "size": 4037
+    },
+    "extensions/retry/library.go": {
+      "hash": "4d39c094f47f72c111fcd3cec4af1be7ac5b9d30d2b939f45007ebdc3c54fcab",
+      "mod_time": "2026-10-21T12:44:32+02:00",
+      "size": 2335
+    },
+    "extensions/retry/nflows/stable_action.nflow": {
+      "hash": "86a6bdc2c1bfd96845da8efafee0e226ee46647e6f4890357c3aea13ce8624c3",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 127
+    },
+    "extensions/runtime/call.go": {
+      "hash": "bc5968665e382fe7bbf512bb3e633944ec1316458458a049b13eac4673bc2791",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 1253
+    },
+    "extensions/runtime/const.go": {
+      "hash": "a252c5d9c4666c4a29cc9edb602392a50f9ef5da08c42a2f3626d31b5cbb5f30",
+      "mod_time": "2026-10-12T10:22:51.1096923+02:00",
+      "size": 2197
+    },
+    "extensions/runtime/debug.go": {
+      "hash": "10340a5b0d35d019293e8dfe7d3c072618faa3cf069c8633d92dbedd8133b6be",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 771
+    },
+    "extensions/runtime/dispatch.go": {
+      "hash": "1a4a2e2ce69441805fcf2cec7017543056a5dc6b72f1c80d7631645bf66cc1f4",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 1205
+    },
+    "extensions/runtime/env.go": {
+      "hash": "fc8392f7936bee28fbb055edb02d9ff103a20c415cc60b48b99e9ea497502c7d",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 938
+    },
+    "extensions/runtime/fail.go": {
+      "hash": "2a46f67a9a2c1f07cf0e4c068d17dca856d0baa82fc6dbd35cf76fa8e2f4a4b6",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1388
+    },
+    "extensions/runtime/flatten.go": {
+      "hash": "4f3f062f044fb809cc068a32962d94cffd500be0e9388ff13868e77ea30ec265",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1654
+    },
+    "extensions/runtime/helpers.go": {
+      "hash": "493ad3f883158ff8e385e1b20ca1517a264b65e5b59dc8920b9b516976cd7b66",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1436
+    },
+    "extensions/runtime/json.go": {
+      "hash": "23c1ab43da9d536e863b6eca5e6a8e893c65fb55054d630f496d5461aba09105",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 2802
+    },
+    "extensions/runtime/library.go": {
+      "hash": "3624d8be2fc37a153a0bdf66d50d009b1e20860d795419c18aff501c77924d06",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 1509
+    },
+    "extensions/runtime/nflows/call.nflow": {
+      "hash": "d274bf8c3e2b450c04585bc1fdbf4d18daf779c15297ca02ac7561bc48e5502b",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 155
+    },
+    "extensions/runtime/nflows/const_bool.nflow": {
+      "hash": "d774a34d58e89d4ad88580495a597355317b72f54903cf081e7abcc63e028b75",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 112
+    },
+    "extensions/runtime/nflows/const_int.nflow": {
+      "hash": "70b3c8aae1a88820b362133285063bb2170b1eb50a5eafc2ded0c5c1509a8f38",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 109
+    },
+    "extensions/runtime/nflows/data_shaping.nflow": {
+      "hash": "f4c9787db47472ec698b2e2fb506c8e2f393d521b0ec24cc7ad23da800327c93",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 381
+    },
+    "extensions/runtime/nflows/debug.nflow": {
+      "hash": "5f5f5862ed46ab0b9119a91af5d28a9e418deb90046c97c980c9aead05c10b19",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 147
+    },
+    "extensions/runtime/nflows/dispatch_by_prefix.nflow": {
+      "hash": "a79a7e14155930e026a2d206d380b222ac87d9f2a04c849b3b8253f87e4f3bda",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 185
+    },
+    "extensions/runtime/nflows/env.nflow": {
+      "hash": "9b8fd32770a1671398e4ea3281a93976d5303468cf21304a05800c1dfd7293a2",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 137
+    },
+    "extensions/runtime/nflows/pick_path.nflow": {
+      "hash": "d7bdc6a1e277faaa913e9e3f3ef6608603833770656e8d1bac31cb8783b42fd2",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 194
+    },
+    "extensions/runtime/nflows/print.nflow": {
+      "hash": "0e3f7f99723e31b8667ccf982f46e5c3d266623dc7facfc43b43ff09e1c71b3f",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 127
+    },
+    "extensions/runtime/nflows/print_limits.nflow": {
+      "hash": "3f1cefccdbaa8d72c562e77a1200c216c46ebd14b3b4888b35ce7f11918a49f4",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 253
+    },
+    "extensions/runtime/nflows/uuid.nflow": {
+      "hash": "f4e0fabac747a0f1b52f4d992f90b7ae1617d22064e04d8a35db85276b5180aa",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 86
+    },
+    "extensions/runtime/noop.go": {
+      "hash": "b6b4bfd9b3a3e789b0e824e41fcd76c2c3cde9de7de92c0138be6323afa4e1fa",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 430
+    },
+    "extensions/runtime/pick.go": {
+      "hash": "d4050c92983e2b247ae5f44f8dfbec6cf05bb97f08ae3e00b8c96d541ee3f3b0",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 2057
+    },
+    "extensions/runtime/print.go": {
+      "hash": "3998f8a65199ac083d4c81d2731e248961deaee3e9d1bf256ce418d0a8663b11",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 7495
+    },
+    "extensions/runtime/sleep.go": {
+      "hash": "be00f88d537b86a90a102ecad3ec1a1cd0a3234311e2ed374a140820013ad1f0",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 845
+    },
+    "extensions/runtime/uuid.go": {
+      "hash": "bdf1928fd21752b7b94a5efc99b7ef9d5ef015b8d0ca8ed53fe57e3fda262845",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1332
+    },
+    "extensions/runtime/with.go": {
+      "hash": "e6de324de08e4f763b4b2f7f645d528959c73928d14e22d18a4fa9893c404f37",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 714
+    },
+    "extensions/runtime/wrap.go": {
+      "hash": "11ff766c5603cf85d76946035a1f6eb6957118f0affa3b7f6cbaa7f82d6c5d14",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 830
+    },
+    "extensions/schema/action.go": {
+      "hash": "dca82078222b93f85185ccfb94b4d733d320291005e68f78a0758d5e135f7afb",
+      "mod_time": "2026-10-15T11:17:10+02:00",
+      "size": 1737
+    },
+    "extensions/schema/advisor.go": {
+      "hash": "7c6e0388516f7d1a6fbbfc6c2d557776a5b41394130fad2b7a1905384d2b2b30",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 2519
+    },
+    "extensions/schema/defaults.go": {
+      "hash": "2dff0cdf30b91d81e7b79f6e2078838e9830aac77c7827fd5d60eea06ee2769f",
+      "mod_time": "2026-10-15T10:08:38+02:00",
+      "size": 5038
+    },
+    "extensions/schema/directive.go": {
+      "hash": "e85e14bb494b3e05e07805b2bb6fb438cd91283dca3fe78b4076b3064a0ba177",
+      "mod_time": "2026-10-27T09:18:36.4089327+01:00",
+      "size": 5552
+    },
+    "extensions/schema/library.go": {
+      "hash": "37952e04b724f9689d6118a40ee141577c083dd2d4328e2d03d969389e2fca83",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 3506
+    },
+    "extensions/schema/materialize.go": {
+      "hash": "64cee01a5f4e2e0a466ae604ca8709318b88e322ce54949f3dc6309005adfe13",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 2524
+    },
+    "extensions/schema/nflows/array_element_rejects.nflow": {
+      "hash": "e8958419b0ac256b782ce9cd97b5b1171dabf0124077fbc5b24aa1e9838da73f",
+      "mod_time": "2026-10-22T13:07:14+02:00",
+      "size": 341
+    },
+    "extensions/schema/nflows/basic.nflow": {
+      "hash": "f3c4a8da636dacdd38d3b4a87faf7322d21de48a233559557317190694befddb",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 246
+    },
+    "extensions/schema/nflows/defaults.nflow": {
+      "hash": "3a9df88de819bfcb1f3cf7d82a7f3e498d4148a5a80bd5a811fa0d548bf5b41f",
+      "mod_time": "2026-10-15T09:56:26+02:00",
+      "size": 330
+    },
+    "extensions/schema/nflows/email_tag.nflow": {
+      "hash": "027c78a91320257f9db413d60ac592724fa484461f85c484511456b57ce27138",
+      "mod_time": "2026-10-11T21:12:31.7043785+02:00",
+      "size": 325
+    },
+    "extensions/schema/nflows/oneof_accepts.nflow": {
+      "hash": "38f333e83b0438e3a0dbb55ebe82137a2535700298be4626ef64b81caaaa880e",
+      "mod_time": "2026-10-11T21:41:21.6421567+02:00",
+      "size": 240
+    },
+    "extensions/schema/nflows/oneof_rejects.nflow": {
+      "hash": "957deb5f930a889e6045513cca1fa11e300c6e07fce9c70eac87183f58f47fef",
+      "mod_time": "2026-10-11T21:12:17.720811+02:00",
+      "size": 350
+    },
+    "extensions/schema/nflows/pipeline_boundary.nflow": {
+      "hash": "71b5dace3516e0dca2b2333c3c71c054a6fcf1e56c90ddb4b05b23688ec59fd5",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 393
+    },
+    "extensions/schema/nflows/required_empty_string.nflow": {
+      "hash": "b12890811e23c6f5d0f666e942a9e37adaf5b98b1f92722635f9a646211cbe09",
+      "mod_time": "2026-10-11T21:12:42.8628457+02:00",
+      "size": 299
+    },
+    "extensions/schema/nflows/runtime_validation.nflow": {
+      "hash": "8c64be495b831668abec88cff2ca2313bcbb5767b3e69cf20f3f94c4d6c36e4c",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 354
+    },
+    "extensions/schema/nflows/struct_tag_validation.nflow": {
+      "hash": "9e2966f0c73f915cf860227f2b37e1eb6c1b0eb0e056c7c68bba6f809b04278d",
+      "mod_time": "2026-10-22T13:03:04+02:00",
+      "size": 501
+    },
+    "extensions/schema/normalize.go": {
+      "hash": "2740e8e0c9ac525cfc168284a5cf78de58b7b9772858cb2f9b9c497086af3668",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 1199
+    },
+    "extensions/schema/schema.go": {
+      "hash": "b4507af997ad22ebe70dc439f590fff8def8f50de80e6edc1c8440c31fbbccd8",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 9926
+    },
+    "extensions/schema/tags.go": {
+      "hash": "0dc4dedf8a93c3ef507c0ae38bd127ae4cc9f519cbf936290bf66a12baac120d",
+      "mod_time": "2026-10-15T09:56:12+02:00",
+      "size": 1802
+    },
+    "extensions/schema/types.go": {
+      "hash": "dc52fdcf8b805c26db3f4d75616b8e7fa7b476c042060aa47818e6e099190a04",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 1168
+    },
+    "extensions/scope/directive.go": {
+      "hash": "e2d75f8188d816b625000c0d0d075692932162698a64ac888ab23d731c727ea5",
+      "mod_time": "2026-10-21T19:39:50+02:00",
+      "size": 4798
+    },
+    "extensions/scope/library.go": {
+      "hash": "d3051e861f2476c6e335d53896ff6e0dade592fee0aed82257042a4eb727944b",
+      "mod_time": "2026-10-21T13:04:32+02:00",
+      "size": 2106
+    },
+    "extensions/scope/nflows/basic.nflow": {
+      "hash": "691137a08001ee8510bedf807dc1fbcd01761364d20f161c129dfd6003caecd3",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 135
+    },
+    "extensions/scope/nflows/nested.nflow": {
+      "hash": "9b4f5cec1588914c779bc1e0681a67af9599a3f36f491337207f8d05a524690f",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 155
+    },
+    "extensions/scope/nflows/precedence.nflow": {
+      "hash": "b2344eb5418b920840fe6192e269ef3ed892a5bf56cf6e73dc9cadc43c859f62",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 720
+    },
+    "extensions/scope/nflows/profile.nflow": {
+      "hash": "548292eae466884512e7989252917cdf950b0ed1e73653baa1d57ec8225a6ade",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 194
+    },
+    "extensions/scope/nflows/profiles.nflow": {
+      "hash": "9d8cdfd013b8137fc44b35bb808617d0579292a9353e0d5cc133f413971e44a5",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 646
+    },
+    "extensions/scope/profile.go": {
+      "hash": "d754ba1b8b520861aa1c5fb6a684706403e413da12c56d1714c7bd78077f24c7",
+      "mod_time": "2026-10-21T19:44:54+02:00",
+      "size": 5496
+    },
+    "extensions/selftestkit/library.go": {
+      "hash": "13da72ead1caf25fb17f55cb5e21444e38650cd3b82e9c5e34759ed280731bd4",
+      "mod_time": "2026-10-28T16:20:24+01:00",
+      "size": 6481
+    },
+    "extensions/selftestkit/nflows/bundle_source--module.nflow": {
+      "hash": "30db4796f0a046dabb9feb28aa2c3202d2833c44be9fc99ae8b653bc77358df9",
+      "mod_time": "2026-10-24T18:05:42+02:00",
+      "size": 71
+    },
+    "extensions/selftestkit/nflows/bundle_source--private-test.nflow": {
+      "hash": "3756a61ff0c58f85737a90ce321da6cff8930ab2fa778daf1601062d0f3b606a",
+      "mod_time": "2026-10-24T18:05:42+02:00",
+      "size": 88
+    },
+    "extensions/selftestkit/nflows/bundle_source--private.nflow": {
+      "hash": "1f56b818a91e1847f1f8f24cc433d9d3720c924f1ce53c39c5d05be53f0d8778",
+      "mod_time": "2026-10-24T18:05:42+02:00",
+      "size": 60
+    },
+    "extensions/selftestkit/nflows/bundle_source--unknown.nflow": {
+      "hash": "9089e0b2e2288cd36d18b48dc7991d62b07f8556bc871212629cd3583b2e6b61",
+      "mod_time": "2026-10-24T18:05:42+02:00",
+      "size": 84
+    },
+    "extensions/selftestkit/nflows/bundle_source.nflow": {
+      "hash": "673250ef2deda2d79da2a66b57a849b940f26ab9225cad0da77a80c7551080eb",
+      "mod_time": "2026-10-24T18:05:42+02:00",
+      "size": 225
+    },
+    "extensions/selftestkit/nflows/echo.nflow": {
+      "hash": "c976b0cd2af322b24924c2c5038db58c8768d8b8f3cfce5e2c50a7f336a27b39",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 106
+    },
+    "extensions/stream_ops/fold.go": {
+      "hash": "a736c6c732482d17c6ceda8bfca68db9018165d01b642b4da0f0a6c0660647b8",
+      "mod_time": "2026-10-14T22:29:20+02:00",
+      "size": 1534
+    },
+    "extensions/stream_ops/library.go": {
+      "hash": "39c97d088919d6f546257465d8d591c467c86b10610a15e94739b025d10e9f00",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 651
+    },
+    "extensions/stream_ops/nflows/batch.nflow": {
+      "hash": "9ac469004bf94140c55e48bde1e003f5929205bd9047be2d9fbd8e2ef62910d0",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 155
+    },
+    "extensions/stream_ops/nflows/collect.nflow": {
+      "hash": "6d67291567367729ebd726942ff28969a37c0ec08615254c1f9d673732544040",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 164
+    },
+    "extensions/stream_ops/nflows/filter.nflow": {
+      "hash": "ab9120a1f1c1291134614345e830b11f0e6b8da2ee761f889e3187ef35caa5e6",
+      "mod_time": "2026-10-15T12:58:30+02:00",
+      "size": 236
+    },
+    "extensions/stream_ops/nflows/flatmap.nflow": {
+      "hash": "d1972a258c373f4d8680f02e42839852e0e8ebea414dab59e83c61b70cf35fd1",
+      "mod_time": "2026-10-15T12:58:30+02:00",
+      "size": 344
+    },
+    "extensions/stream_ops/nflows/fold.nflow": {
+      "hash": "6976fd27c4f7af90a7aa6a1757999ef3d4fcacebcd88b77c5fd797726ace7c5b",
+      "mod_time": "2026-10-14T22:26:50+02:00",
+      "size": 337
+    },
+    "extensions/stream_ops/nflows/map.nflow": {
+      "hash": "e9133ddc21df498a91474b900eea7842320be5f2df1f0204e95023fcc0afe6d5",
+      "mod_time": "2026-10-15T12:58:30+02:00",
+      "size": 271
+    },
+    "extensions/stream_ops/nflows/take.nflow": {
+      "hash": "e3a2d8c71837e18a457eb25817d460a7f18dc90cc2ae589349cef73998dbef3a",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 131
+    },
+    "extensions/stream_ops/nflows/throttle.nflow": {
+      "hash": "dc3a6f06e52aee911b57f81c1205f78aa73c28a365388104ac3d627c95a04ec6",
+      "mod_time": "2026-10-11T07:36:04+02:00",
+      "size": 191
+    },
+    "extensions/stream_ops/nflows/window.nflow": {
+      "hash": "a8b103f9ef8bbaf10e4f4fa16ea9e16ecac62c1a6eb1cab944799d15a0543c82",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 164
+    },
+    "extensions/stream_ops/operators.go": {
+      "hash": "9d3efc847baaf68c3c7335d28573d9d6a27f3e986105f8cc191d430bfc48935b",
+      "mod_time": "2026-10-15T12:58:30+02:00",
+      "size": 1563
+    },
+    "extensions/stream_ops/transforms.go": {
+      "hash": "5d517fe8d1bea1077530a63061b548b0a1d88e046ace42a2fbd02b810a15ee2a",
+      "mod_time": "2026-10-15T12:58:30+02:00",
+      "size": 3774
+    },
+    "extensions/symbols/directive.go": {
+      "hash": "84576687eca542783f0d5865c7869295497ba83ccca7d7b15026a8a4a70af6a4",
+      "mod_time": "2026-10-27T09:18:36.4089327+01:00",
+      "size": 3539
+    },
+    "extensions/symbols/library.go": {
+      "hash": "0f84206d382aabded4979c718e33fc8c8b1a7d69a4f7a94ca3c7c31fd8ac9cb7",
+      "mod_time": "2026-10-12T20:42:56+02:00",
+      "size": 825
+    },
+    "extensions/symbols/nflows/domain_status.nflow": {
+      "hash": "aa7627d184607f5c43e97701c9034ffad9f0a013cac98b3239ae6fbd1a334c39",
+      "mod_time": "2026-10-11T22:52:48.631561+02:00",
+      "size": 501
+    },
+    "extensions/symbols/nflows/expression_contexts.nflow": {
+      "hash": "efd8ba77444f7fae67510d89ea67721e26cae1295a60849c7fd7d8827094bc5f",
+      "mod_time": "2026-10-12T20:42:56+02:00",
+      "size": 387
+    },
+    "extensions/symbols/nflows/file_local.nflow": {
+      "hash": "1be504f86bf57537e2c012b9b2b3f8c9a70a183c5b4fd8be3af6f2e5b26faaac",
+      "mod_time": "2026-10-11T22:50:46.4925971+02:00",
+      "size": 374
+    },
+    "extensions/symbols/nflows/inside_pipeline.nflow": {
+      "hash": "cca736d38e6823b7cd2bb76edb25a5e569c32ededeb5c6546cf64245fd65ece7",
+      "mod_time": "2026-10-11T23:07:27.1006962+02:00",
+      "size": 432
+    },
+    "extensions/symbols/nflows/multi_namespace.nflow": {
+      "hash": "dd658a402346ec026b70e196001e11fbdfea04a1f913cdec513df3d7531517a5",
+      "mod_time": "2026-10-11T22:53:28.7407107+02:00",
+      "size": 565
+    },
+    "extensions/symbols/nflows/projection_integration.nflow": {
+      "hash": "6c175b6f022ec41590372cf2b0b7647f251490a8442ad3efc794d02e39d266f4",
+      "mod_time": "2026-10-17T20:40:58+02:00",
+      "size": 426
+    },
+    "extensions/symbols/nflows/role_aliases.nflow": {
+      "hash": "f1b711b1c0420c576a2655b2cdc10ebafe9bffe8291da713f89b5383ddfd076f",
+      "mod_time": "2026-10-11T22:52:15.9666192+02:00",
+      "size": 530
+    },
+    "extensions/symbols/nflows/shadow_global.nflow": {
+      "hash": "5cf5ae0318198fcb4e50cd4f838ed5cffbaf60fa5ac1c232637342b42b301a48",
+      "mod_time": "2026-10-11T22:53:00.1895707+02:00",
+      "size": 520
+    },
+    "extensions/symbols/nflows/sla_tiers.nflow": {
+      "hash": "60518388d1dde51377bab5ea7fc3e662ec2fd716abdd2c1425c1824d5c1600c4",
+      "mod_time": "2026-10-11T22:52:25.6383363+02:00",
+      "size": 367
+    },
+    "extensions/syntax/library.go": {
+      "hash": "2d5e00000021777995caf0fd3ee8c98489637f98226281bbfd5b579b18c0011b",
+      "mod_time": "2026-10-14T21:26:48+02:00",
+      "size": 2776
+    },
+    "extensions/syntax/named_parallel.go": {
+      "hash": "3535b71f3b2859567d9750572f80d8238b468cada826e2af19e9fb890936685b",
+      "mod_time": "2026-10-11T17:00:20.7008796+02:00",
+      "size": 4311
+    },
+    "extensions/syntax/nflows/argument_value_forms.nflow": {
+      "hash": "07eb921c0fbc60de5de8b1269f8e4d9ce38a93b58b1f214011f330c75f4da3bb",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 291
+    },
+    "extensions/syntax/nflows/fallback_operator.nflow": {
+      "hash": "d4558eb95db34be6b971c13fdfce844c6215ba35971e95901c9076133099eeb8",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 210
+    },
+    "extensions/syntax/nflows/keywords.nflow": {
+      "hash": "6d5f70a4b8826ce7b8b7e2f34839ad5699639a27d2133aeab633d7f8f4e8b968",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 118
+    },
+    "extensions/syntax/nflows/modifier_colon_boundaries.nflow": {
+      "hash": "09b4f1c5393a9d9350b227182baadb0735d5a64268b44392576bd7e1f61a6869",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 226
+    },
+    "extensions/syntax/nflows/named_parallel.nflow": {
+      "hash": "61b1ce25f8af84658976991ab459d8514f216d1062a815ea4172f059b04d7bc8",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 290
+    },
+    "extensions/syntax/nflows/parallel_ampersand.nflow": {
+      "hash": "8e52cbd33d498be997fe0ab70013eeb197d26e73569a82ec3a857709349f6260",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 149
+    },
+    "extensions/syntax/nflows/parallel_structured.nflow": {
+      "hash": "8e7d3749e20a6c05e52832b59c8d2d0e5fcfb73bc76bfee130435d8b657fbcc2",
+      "mod_time": "2026-10-17T20:40:58+02:00",
+      "size": 306
+    },
+    "extensions/syntax/nflows/pipe_alias.nflow": {
+      "hash": "6a080339ea12aeecbf28d75a9829fd68c0a9be2bb86ee212d8103d555c607fd2",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 163
+    },
+    "extensions/syntax/nflows/pipe_dataflow.nflow": {
+      "hash": "2e9d900cb6e8d2b44717e7311ea9a2443220aad8f471cd61a077b164565e3311",
+      "mod_time": "2026-10-10T19:38:22+02:00",
+      "size": 273
+    },
+    "extensions/syntax/nflows/race.nflow": {
+      "hash": "bdbf43890e5639e8c60d113378d2b6fa82d5e362edfba28cd1cba153f19dc177",
+      "mod_time": "2026-10-14T21:26:32+02:00",
+      "size": 192
+    },
+    "extensions/syntax/nflows/spaced_modifiers.nflow": {
+      "hash": "7dc739c02df45557464a2eba8e20f61c7641dfd985ff0e88e038813bc222a157",
+      "mod_time": "2026-10-17T20:40:58+02:00",
+      "size": 276
+    },
+    "extensions/syntax/nflows/ternary_edges.nflow": {
+      "hash": "616ac30dcf24e0d659ddfe0e54691348209c2f6575dd66e903ea6e1472473f87",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 281
+    },
+    "extensions/syntax/nflows/ternary_two_arm.nflow": {
+      "hash": "80c74b9f954f0b43f71411d86a86513ea232b0598d5444c46b2ecb83e8af7fe2",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 144
+    },
+    "extensions/syntax/race.go": {
+      "hash": "fb123839e387b69b7ab7c5895c79956751fc1341417a9511b4ea9931a109ba43",
+      "mod_time": "2026-10-14T22:18:08+02:00",
+      "size": 3386
+    },
+    "extensions/template/library.go": {
+      "hash": "67fc30c36b0034ae66572a09e3cd52105aa9bd008c9505815fb5c1a0666c2b9c",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 874
+    },
+    "extensions/template/nflows/invoice.nflow": {
+      "hash": "85f4f3cf766d82a865df4d4a5a8f63880a5dfb1aa22b72ecae5b3447aeb6908d",
+      "mod_time": "2026-10-11T13:14:18+02:00",
+      "size": 235
+    },
+    "extensions/template/render.go": {
+      "hash": "2c6fd9782f0be4f2810281b7b01440fa93d9c9abcc0c4941c136f642fdbc72ce",
+      "mod_time": "2026-10-11T09:08:48+02:00",
+      "size": 1597
+    },
+    "extensions/template/render_action.go": {
+      "hash": "d77cf61c9c39062a1ee2269b0111736d61eee4bf76317402b62410934919417c",
+      "mod_time": "2026-10-11T09:08:40+02:00",
+      "size": 831
+    },
+    "formatter/at_brace.go": {
+      "hash": "3eda93616ea6672c830afa14a7ec6a0245b2be239f476f0cc49d001d9631d9ec",
+      "mod_time": "2026-10-25T17:59:30+01:00",
+      "size": 3724
+    },
+    "formatter/formatter.go": {
+      "hash": "bbc43f6b5d4f0702a94e9889fc9fad1a8308c30c217eb072aa7871dee902f1dd",
+      "mod_time": "2026-10-27T09:56:50.4049995+01:00",
+      "size": 24942
+    },
+    "formatter/testdata/taskapi_http_nats.nflow": {
+      "hash": "891a4f6682ac2a27aa604e31518ffcd80cbf28297890b49362f45aea8c25a8c6",
+      "mod_time": "1980-01-01T00:00:00+01:00",
+      "size": 1458
+    },
+    "go.mod": {
+      "hash": "efb503cb2a340c32ef362c9c6b28c5339f602871aeac7a290474c010797c904e",
+      "mod_time": "2026-10-28T16:39:22+01:00",
+      "size": 794
+    },
+    "native/build.go": {
+      "hash": "2ff22101326127805c8921f0cadef2629e322c4f4cf2c9205386d81f3d555ff4",
+      "mod_time": "2026-10-25T14:57:10+01:00",
+      "size": 4171
+    },
+    "native/native.go": {
+      "hash": "45d14cfe4da902f379da6eb037710f0b97bfefedf05fc810c5c1d6149c37e0f2",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 7159
+    },
+    "runner/approval_journal.go": {
+      "hash": "2e0d08d1dbec4d0633d21f39300286d51aa0b168e6598dfe818fd6b9aca72d28",
+      "mod_time": "2026-10-22T13:52:04+02:00",
+      "size": 2992
+    },
+    "runner/approval_options.go": {
+      "hash": "8fb77c80516ef7f4439deed18e70f8d7257a5a53817a173970c6f74b594caf0c",
+      "mod_time": "2026-10-14T22:16:20+02:00",
+      "size": 1067
+    },
+    "runner/approval_suspension.go": {
+      "hash": "43ef22a44bc78c97ed438518a1ba2cdd28367af4649cb619829cbda8840e136a",
+      "mod_time": "2026-10-14T22:17:04+02:00",
+      "size": 6554
+    },
+    "runner/assertions.go": {
+      "hash": "e4d5d4171c009553f2e2f28e5cc27eaf97f9cc359b920e5c8f9ed69dd15b8f11",
+      "mod_time": "2026-10-27T12:54:54.7413835+01:00",
+      "size": 7113
+    },
+    "runner/compile_policy.go": {
+      "hash": "3f13d16371d10261ac467e0e7e00b8c21a43ecbe7b47ec8abcdaf2f5752433cb",
+      "mod_time": "2026-10-14T20:32:30+02:00",
+      "size": 385
+    },
+    "runner/config.go": {
+      "hash": "48556b35e3144da5ab49cc58a9c7d7e3a7266990340687a2a151bbb6df24cb3e",
+      "mod_time": "2026-10-21T14:35:52+02:00",
+      "size": 5549
+    },
+    "runner/diagnostics.go": {
+      "hash": "f2fa153edab971b13a88c29cbfb76ed4dce6e35caaf2769371dc409c3f390f3e",
+      "mod_time": "2026-10-27T12:54:54.7413835+01:00",
+      "size": 2847
+    },
+    "runner/durability_options.go": {
+      "hash": "800810054ebf5a37998b1f0d59c6e2f7435057a5fc5daf1962c5ca11f2b83d57",
+      "mod_time": "2026-10-14T22:19:00+02:00",
+      "size": 2483
+    },
+    "runner/execute.go": {
+      "hash": "266d686b2b500da507932f828fe9dea287d488f8eb083643b681e7c024102f57",
+      "mod_time": "2026-10-27T17:28:10+01:00",
+      "size": 14590
+    },
+    "runner/execution_identity.go": {
+      "hash": "be7152fc717f5b134bad5268d499dc1211c280a0d25d1d95aa1be979e866cc9b",
+      "mod_time": "2026-10-14T20:46:46+02:00",
+      "size": 3846
+    },
+    "runner/execution_resolver.go": {
+      "hash": "9778a79c5270dd5b0db8c2eaca15e74f10b3fd40994eeda9641039d42dfc6ef3",
+      "mod_time": "2026-10-21T19:41:20+02:00",
+      "size": 8995
+    },
+    "runner/file_journal.go": {
+      "hash": "bd88d7e22d571902217ebb9a209929c32e714150db17c8f6533ce6eb4712cecf",
+      "mod_time": "2026-10-22T13:51:12+02:00",
+      "size": 12038
+    },
+    "runner/file_resolver.go": {
+      "hash": "f8f7377c966af24694cc1d9dcfbe0e4729388b2f2d02ec084bd614234a3447bf",
+      "mod_time": "2026-10-13T11:03:32+02:00",
+      "size": 1741
+    },
+    "runner/host.go": {
+      "hash": "b85da74ba75c056a2fe2b5249f697da2ba8dc3d1ce19e73d840d5f3b4582d0dc",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 6021
+    },
+    "runner/info.go": {
+      "hash": "0068e044dbf5cb1282d3572dff0043e6881ae748c1f238c1ef3869bc160ff6d0",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 1676
+    },
+    "runner/lean.go": {
+      "hash": "80332903591ae7c3fd6a82a0a62d9750a7296a480cb6335552bd8874239f048a",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 1154
+    },
+    "runner/observer.go": {
+      "hash": "01058cedf83f8ddf771e253c320f57a44cefdb8e55090129fd554dcd260767ec",
+      "mod_time": "2026-10-11T05:54:18+02:00",
+      "size": 4200
+    },
+    "runner/primaries.go": {
+      "hash": "cf8eb2f2df9eac3f0b5cb6dd57b3b9cafa73d4dba993aaac9172579735e28028",
+      "mod_time": "2026-10-12T22:24:51.1852408+02:00",
+      "size": 1638
+    },
+    "runner/runner.go": {
+      "hash": "d34424b37da4aac5e1bc5fe9ca8ba9e702510a936e2c9222821ef6c834fe85a2",
+      "mod_time": "2026-10-27T12:54:54.742382+01:00",
+      "size": 8310
+    },
+    "runner/source_module.go": {
+      "hash": "dd1fafab627f77e73548cef18bf8c6a857a7a5bd8d50aac9784c1e6d717417fb",
+      "mod_time": "2026-10-27T17:29:56+01:00",
+      "size": 2993
+    },
+    "runner/step_idempotency_store.go": {
+      "hash": "8602c797c88b84dc3367d6a8afd82c1cb0538b7f19d630d2e979ccb4242667e3",
+      "mod_time": "2026-10-14T22:15:16+02:00",
+      "size": 5120
+    },
+    "runner/testdata/master_attached.nflow": {
+      "hash": "6d14e1701b631dc1b15868e5c6f520593ed0cb44e1b07432a9687167030536ac",
+      "mod_time": "2026-10-29T14:52:46+01:00",
+      "size": 25339
+    },
+    "runner/testdata/master_proposed.nflow": {
+      "hash": "2b8b8f04904979e1a1a0df90f96fb573c30eb5aa064935a685e07c9e78a65981",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 7039
+    },
+    "runner/testdata/master_supported.nflow": {
+      "hash": "a43ee89b03a59b74b36d37700f4b8634ca5da9ebb9e27d724793db93d89ea502",
+      "mod_time": "2026-10-24T15:19:18+02:00",
+      "size": 3539
+    },
+    "spec/01_order_intake/bundle/library.go": {
+      "hash": "4a4f60257368004323fe211598aa54f471d98df2a5f3ea59486f68128a0dd6ba",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 2167
+    },
+    "spec/01_order_intake/main.nflow": {
+      "hash": "bfaaf70ccde50d68b264b24d21c0c55d324ec1865d4ede3b0f803d7f19c58a10",
+      "mod_time": "2026-10-22T13:05:30+02:00",
+      "size": 1173
+    },
+    "spec/01_order_intake/normalize.nflow": {
+      "hash": "7bc106e0e09bbbd19d8fe7a57e21070bd6cbd27df5f8bce82ab8de39a2e3f09b",
+      "mod_time": "2026-10-22T12:06:56+02:00",
+      "size": 269
+    },
+    "spec/02_support_triage/bundle/library.go": {
+      "hash": "ad9fe6fbee6bf52fde3e2043dbfb05a349fd2f1b547af3f9691f9f551a0df301",
+      "mod_time": "2026-10-22T13:12:02+02:00",
+      "size": 3679
+    },
+    "spec/02_support_triage/common/triage.nflow": {
+      "hash": "b2e2d7f92274493b2f02496f49a7b1369d9531ad03eff2a47190c4cc20738876",
+      "mod_time": "2026-10-22T13:11:18+02:00",
+      "size": 587
+    },
+    "spec/02_support_triage/fallback.nflow": {
+      "hash": "26b3a867b5ee1b745241c17a65a46229127883d39f73984c732a46b3c26ddd32",
+      "mod_time": "2026-10-22T13:11:28+02:00",
+      "size": 575
+    },
+    "spec/02_support_triage/happy.nflow": {
+      "hash": "4eb7ca47c942a5eadfc800afcce5c1ba70aa05e089fa581633113ea7f0a18e5c",
+      "mod_time": "2026-10-22T13:05:32+02:00",
+      "size": 603
+    },
+    "spec/03_reconciliation/bundle/library.go": {
+      "hash": "9b78a4dfbc068b518461405c2e2653bbeac3012be3a57b703b4f24fc7628a485",
+      "mod_time": "2026-10-12T20:43:46+02:00",
+      "size": 3379
+    },
+    "spec/03_reconciliation/main.nflow": {
+      "hash": "7e770ed99a32e5cdbc83fa0fb51971ebf7ad2a6481f9ce9447a98f07dbea2afd",
+      "mod_time": "2026-10-22T13:05:20+02:00",
+      "size": 1613
+    },
+    "spec/README.md": {
+      "hash": "711ec5e36457ab35a0d6f734f6bd3f879156e378e89e17b34c71fa5984177eb0",
+      "mod_time": "2026-10-22T13:14:02+02:00",
+      "size": 3518
+    }
+  }
+}

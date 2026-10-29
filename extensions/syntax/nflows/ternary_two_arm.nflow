@@ -1,0 +1,3 @@
+@description "Two-arm ternary compiles without an else branch"
+# @syntax-only
+runtime.const @{ value: true } ? runtime.const @{ value: "then" }

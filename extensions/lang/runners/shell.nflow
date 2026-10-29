@@ -1,9 +1,0 @@
-{
-    "_comment": "POSIX shell. Bash or sh must be on PATH; no automatic installation is configured.",
-    "id": "shell",
-    "ext": ".sh",
-    "aliases": ["sh", "bash"],
-    "find": ["bash", "sh"],
-    "stdin": "text",
-    "stdout": "text"
-}

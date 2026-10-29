@@ -5,8 +5,8 @@
 // The bundle set the suite runs against is native.SelftestBundles() —
 // the shipped set plus selftestkit. The extra bundles are deliberate:
 // fixtures across every bundle rely on cov.* helpers. Self-test also
-// deliberately disables language auto-install so missing runtimes are
-// reported as skips rather than installed on the host.
+// runs only in-tree bundles; external language adapters own their conformance
+// tests in their standalone repositories.
 package selftest
 
 import (
@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/nexssp/flow/compiler"
-	"github.com/nexssp/flow/extensions/lang"
 	"github.com/nexssp/flow/native"
 	flowrunner "github.com/nexssp/flow/runner"
 )
@@ -31,6 +30,7 @@ type Options struct {
 	NoColor      bool
 	NoSpinner    bool
 	JSON         bool
+	SyntaxOnly   bool
 	SaveBaseline bool
 }
 
@@ -80,7 +80,6 @@ func optionOutput(opts Options) io.Writer {
 }
 
 func runWithBundles(ctx context.Context, opts Options, bundles []compiler.Bundle) int {
-	ctx = lang.WithAutoInstallDisabled(ctx)
 	if opts.Out == nil {
 		opts.Out = os.Stdout
 	}
@@ -111,6 +110,9 @@ func runWithBundles(ctx context.Context, opts Options, bundles []compiler.Bundle
 	if opts.JSON {
 		return runJSON(ctx, opts, cfg, res.Sections)
 	}
+	if opts.SyntaxOnly {
+		writeLine(opts.Out, "syntax-only: compiling selected fixtures without executing flows or probing language runtimes")
+	}
 
 	r := newRenderer(opts)
 	r.Banner(res.Sections)
@@ -135,7 +137,7 @@ func runWithBundles(ctx context.Context, opts Options, bundles []compiler.Bundle
 				continue
 			}
 			r.FeatureStart(f)
-			runRes := runFeature(ctx, cfg, f)
+			runRes := runSelectedFeature(ctx, cfg, f, opts.SyntaxOnly)
 			runRes.Section = s.Name
 			r.FeatureDone(runRes)
 			results = append(results, runRes)

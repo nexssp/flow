@@ -32,7 +32,6 @@ import (
 	"github.com/nexssp/flow/extensions/hook"
 	"github.com/nexssp/flow/extensions/include"
 	"github.com/nexssp/flow/extensions/io"
-	"github.com/nexssp/flow/extensions/lang"
 	"github.com/nexssp/flow/extensions/loop"
 	"github.com/nexssp/flow/extensions/macros"
 	"github.com/nexssp/flow/extensions/match"
@@ -134,9 +133,10 @@ func bundles(retryBundle compiler.Bundle) []compiler.Bundle {
 // fixtures live in other bundles' nflows/ directories and reference
 // those actions. A production pipeline must never see cov.*, so
 // selftestkit is not in Bundles(). A self-test fixture must always find
-// them, so it is here. Optional bundles such as config_yaml and lang are
+// them, so it is here. Optional in-tree bundles such as config_yaml are
 // also included here so their conformance fixtures run without making the
-// capabilities part of the default bundle set.
+// capabilities part of the default bundle set. Language execution is supplied
+// by github.com/nexssp/lang/nexssflow through the external @require harness.
 //
 // These bundles are not in the ordinary CLI set unless explicitly required.
 // Keep this set aligned with extension packages so the self-test environment
@@ -153,7 +153,6 @@ func SelftestBundlesFrom(bundles []compiler.Bundle) []compiler.Bundle {
 	return append(out,
 		selftestkit.Bundle(nil),
 		config_yaml.Bundle(nil),
-		lang.Bundle(nil),
 		decide.Bundle(nil),
 		resilience.Bundle(nil),
 		template.Bundle(nil),

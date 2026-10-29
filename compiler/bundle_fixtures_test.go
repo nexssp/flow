@@ -80,3 +80,31 @@ func TestDiscoverFixtures_LoadsFlatCompanionFiles(t *testing.T) {
 		}
 	}
 }
+
+func TestDiscoverFixturesRecognizesSyntaxOnlyMarker(t *testing.T) {
+	t.Parallel()
+
+	fixtures := fstest.MapFS{
+		"nflows/syntax.nflow":  &fstest.MapFile{Data: []byte("@description \"Syntax fixture\"\n# @syntax-only\nnoop")},
+		"nflows/runtime.nflow": &fstest.MapFile{Data: []byte("@description \"Runtime fixture\"\nnoop")},
+	}
+
+	features := discoverFixtures("sample", fixtures)
+	if len(features) != 2 {
+		t.Fatalf("discovered %d fixtures, want 2", len(features))
+	}
+	for _, feature := range features {
+		switch feature.Name {
+		case "Syntax fixture":
+			if !feature.SyntaxOnly {
+				t.Errorf("syntax fixture SyntaxOnly = false, want true")
+			}
+		case "Runtime fixture":
+			if feature.SyntaxOnly {
+				t.Errorf("ordinary fixture SyntaxOnly = true, want false")
+			}
+		default:
+			t.Errorf("unexpected fixture %q", feature.Name)
+		}
+	}
+}

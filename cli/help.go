@@ -141,6 +141,7 @@ var helpRegistry = map[string]helpText{
       --verbose             print DSL on failure
       --json                machine-readable JSON summary
       --no-color            disable ANSI color
+      --syntax-only         compile selected fixtures without executing flows or probing language runtimes
 Self bench:
       --path FILE_OR_DIR    benchmark one file or discover a directory instead of built-ins
       --iterations N        measured iterations (default 50; range 1..1000000)
@@ -154,6 +155,7 @@ Self bench:
 			`nflow self test loop assert          # anything matching "loop" OR "assert"`,
 			`nflow self test §3.4                 # a single feature by ref`,
 			`nflow self test --json > report.json # CI-friendly output`,
+			`nflow self test --syntax-only        # compile fixtures only; no runtime execution`,
 			`nflow self bench                    # benchmark built-in scenarios`,
 			`nflow self bench api --iterations 100 --warmup 5`,
 			`nflow self bench --path ./flows --list`,

@@ -59,7 +59,7 @@ _nflow() {
         self)
             if [ "$COMP_CWORD" -eq 2 ]; then flags="up test bench"
             elif [[ "$op" == "bench" ]]; then flags="--path --iterations --warmup --json --list"
-            elif [[ "$op" == "test" ]]; then flags="--verbose --json --no-color"
+            elif [[ "$op" == "test" ]]; then flags="--verbose --json --no-color --syntax-only"
             else flags=""
             fi ;;
         require)
@@ -168,6 +168,12 @@ _nflow() {
                     '--warmup=[number of warmup iterations]:N:()' \
                     '--json[emit a JSON report]' \
                     '--list[list matching scenarios without running]'
+            elif [[ "${words[3]}" == "test" ]]; then
+                _arguments \
+                    '--verbose[print DSL on failure]' \
+                    '--json[emit a JSON report]' \
+                    '--no-color[disable ANSI color]' \
+                    '--syntax-only[compile selected fixtures without execution or language runtime probes]'
             fi
             ;;
         completion)
@@ -259,7 +265,7 @@ Register-ArgumentCompleter -Native -CommandName nflow -ScriptBlock {
     $flags = switch ($sub) {
         'run'   { @('-v', '-vv', '-vvv', '--assert=', '--approval=', '--budget=', '--max-tokens=', '--journal-dir=', '--execution-id=') }
         'build' { @('-o', '--output=', '--debug', '-d', '--no-trimpath', '--all-bundles') }
-		'self' { if ($tokens.Count -ge 3 -and $tokens[2].ToString() -eq 'bench') { @('--path', '--iterations', '--warmup', '--json', '--list') } elseif ($tokens.Count -ge 3 -and $tokens[2].ToString() -eq 'test') { @('--verbose', '--json', '--no-color') } else { @() } }
+'self' { if ($tokens.Count -ge 3 -and $tokens[2].ToString() -eq 'bench') { @('--path', '--iterations', '--warmup', '--json', '--list') } elseif ($tokens.Count -ge 3 -and $tokens[2].ToString() -eq 'test') { @('--verbose', '--json', '--no-color', '--syntax-only') } else { @() } }
 		'require' { if ($tokens.Count -ge 3 -and $tokens[2].ToString() -in @('check', 'update', 'pin')) { @('--package') } else { @() } }
         'pin' { @('--package') }
         default { @() }

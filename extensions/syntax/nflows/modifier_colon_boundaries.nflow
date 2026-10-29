@@ -1,0 +1,3 @@
+@description "Modifiers and ternary colons remain distinct during compilation"
+# @syntax-only
+runtime.const @{ value: true } ? runtime.const:timeout=2s:retry=1 @{ value: "then" } : runtime.const :timeout=3s @{ value: "else" }

@@ -1,7 +1,6 @@
 package runner_test
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,14 +82,6 @@ func TestAttachedMasterShowcasePreservesPipelineData(t *testing.T) {
 	source, err := os.ReadFile(filepath.Join("testdata", "master_attached.nflow"))
 	ktest.RequireNoError(t, err)
 	execution, err := runner.Execute(t.Context(), cfg, string(source), "master_attached.nflow", nil)
-	if err != nil {
-		var skippable interface{ SelfTestSkipReason() string }
-		if errors.As(err, &skippable) {
-			if reason := skippable.SelfTestSkipReason(); reason != "" {
-				t.Skipf("showcase requires unavailable language tooling: %s", reason)
-			}
-		}
-	}
 	ktest.RequireNoError(t, err)
 
 	asserts, ok := execution.Meta["asserts"].([]string)

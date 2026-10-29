@@ -1,8 +1,0 @@
-@description "Inline rs tag executes a Rust script and returns text."
-@require lang
-@assert: result == "ok"
-
-# Requires rust-script; self-test skips this fixture if it is not installed.
-{ message: "hello" } -> rs {
-    fn main() { println!(r#""ok""#); }
-}

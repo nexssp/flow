@@ -175,6 +175,7 @@ func runSelf(ctx context.Context, inv *invocation, args []string) int {
 			Verbose:      hasFlag(flags, "--verbose") || hasFlag(flags, "-v"),
 			NoColor:      hasFlag(flags, "--no-color"),
 			JSON:         hasFlag(flags, "--json"),
+			SyntaxOnly:   hasFlag(flags, "--syntax-only"),
 			SaveBaseline: hasFlag(flags, "--save-baseline"),
 		}, bundles, inv.host)
 	default:

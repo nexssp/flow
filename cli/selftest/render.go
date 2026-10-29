@@ -465,6 +465,7 @@ type jsonFeature struct {
 	Section           string `json:"section,omitempty"`
 	Source            string `json:"source,omitempty"`
 	Status            string `json:"status"`
+	SyntaxOnly        bool   `json:"syntax_only,omitempty"`
 	ElapsedNS         int64  `json:"elapsed_ns"`
 	ElapsedText       string `json:"elapsed_text"`
 	CompileAllocs     uint64 `json:"compile_allocs"`
@@ -507,7 +508,7 @@ func runJSON(ctx context.Context, opts Options, cfg flowrunner.Config, sections 
 			if f.Skip != "" {
 				res = Result{SelfTestFeature: f, Status: StatusSkip, SkipReason: f.Skip, Section: s.Name}
 			} else {
-				res = runFeature(ctx, cfg, f)
+				res = runSelectedFeature(ctx, cfg, f, opts.SyntaxOnly)
 				res.Section = s.Name
 			}
 			results = append(results, res)
@@ -525,6 +526,7 @@ func runJSON(ctx context.Context, opts Options, cfg flowrunner.Config, sections 
 				Section:           s.Name,
 				Source:            f.Source,
 				ElapsedNS:         res.Elapsed.Nanoseconds(),
+				SyntaxOnly:        opts.SyntaxOnly || f.SyntaxOnly,
 				ElapsedText:       formatElapsed(res.Elapsed),
 				CompileAllocs:     res.CompileAllocs,
 				CompileAllocBytes: res.CompileAllocBytes,

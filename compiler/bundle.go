@@ -22,9 +22,12 @@ type PreprocessContributions struct {
 }
 
 type SelfTestFeature struct {
-	Name               string
-	DSL                string
-	Files              map[string]string
+	Name  string
+	DSL   string
+	Files map[string]string
+	// SyntaxOnly marks fixtures that must be compiled but never executed by
+	// the ordinary self-test path. Fixtures opt in with `# @syntax-only`.
+	SyntaxOnly         bool
 	Skip               string
 	Source             string
 	ExpectCompileError string
@@ -290,13 +293,23 @@ func discoverFixtures(bundleID string, fsys fs.FS) []SelfTestFeature {
 			continue
 		}
 		features = append(features, SelfTestFeature{
-			Name:   fixtureName(p, string(content)),
-			DSL:    string(content),
-			Files:  readFixtureFiles(fsys, p),
-			Source: source,
+			Name:       fixtureName(p, string(content)),
+			DSL:        string(content),
+			Files:      readFixtureFiles(fsys, p),
+			SyntaxOnly: fixtureSyntaxOnly(string(content)),
+			Source:     source,
 		})
 	}
 	return features
+}
+
+func fixtureSyntaxOnly(source string) bool {
+	for line := range strings.SplitSeq(source, "\n") {
+		if strings.EqualFold(strings.TrimSpace(line), "# @syntax-only") {
+			return true
+		}
+	}
+	return false
 }
 
 // isFixtureCompanionPath reports whether p is nested beneath the companion

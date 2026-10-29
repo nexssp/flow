@@ -1,0 +1,12 @@
+@description "Argument values cover scalar, collection, nested, and reference forms"
+# @syntax-only
+runtime.const @{
+  value: {
+    text: "quoted: value",
+    count: 3,
+    enabled: true,
+    empty: null,
+    items: ["one", 2, false, null],
+    nested: { from: .input.name, whole: . }
+  }
+}
