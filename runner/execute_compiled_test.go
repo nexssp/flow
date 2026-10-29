@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xfile"
 
 	"github.com/nexssp/flow/compiler"
@@ -99,8 +101,13 @@ func TestExecuteCompiledReusesProgramAndExecutionContext(t *testing.T) {
 
 func TestExecuteCompiledRejectsNilProgram(t *testing.T) {
 	result, err := runner.ExecuteCompiled(t.Context(), runner.Config{}, runner.Compilation{}, "", "", nil)
-	if err == nil || err.Error() != "compile: source is empty" {
-		t.Fatalf("error = %v, want compile: source is empty", err)
+	if err == nil || xerr.KindFrom(err) != xerr.KindBadRequest ||
+		!strings.Contains(err.Error(), "no runnable Flow expression remained after preprocessing") ||
+		!strings.Contains(err.Error(), "source means the .nflow program text") ||
+		!strings.Contains(err.Error(), "not a JSON payload field or symbol") ||
+		!strings.Contains(err.Error(), "add a top-level call") ||
+		!strings.Contains(err.Error(), "nflow info <file>") {
+		t.Fatalf("error = %v, want actionable BadRequest with entrypoint and source-inspection guidance", err)
 	}
 	if result.ExecutionID == "" {
 		t.Fatal("nil-program result has no execution identity")

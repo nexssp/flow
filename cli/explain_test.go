@@ -57,6 +57,23 @@ func TestExplain_AtomWithLocalModifier(t *testing.T) {
 	ktest.RequireStringContains(t, out, "from atom")
 }
 
+func TestExplain_ExamplePayloadVisibleOnActionAndPipeline(t *testing.T) {
+	out := explainSource(t, `
+@pipeline lookup :example='{"account_id":"acct-demo"}'
+  noop:example='{"value":"body-sample"}'
+@end
+
+noop:example='{"value":"top-level-sample"}'
+`)
+	for _, want := range []string{
+		`:example={"account_id":"acct-demo"}`,
+		`:example={"value":"body-sample"}`,
+		`:example={"value":"top-level-sample"}`,
+	} {
+		ktest.RequireStringContains(t, out, want)
+	}
+}
+
 func TestExplain_ScopeAttribution(t *testing.T) {
 	out := explainSource(t, `@scope :timeout=5s {
   noop

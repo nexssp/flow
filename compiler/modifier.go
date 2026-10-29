@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -29,13 +30,14 @@ const (
 	ModifierKindInt64
 	ModifierKindFloat64
 	ModifierKindDuration
+	ModifierKindJSON
 )
 
 // Modifier is one `:name` or `:name=value` annotation on an atom.
 //
-// Name is the identifier without the leading colon. Apply runs once per
-// occurrence, in source order, on the atom's builder. The raw string is
-// the DSL text after `=`, or "" for a flag. The parser has already
+// Name is the identifier without the leading colon. The configured Apply
+// or ApplyTarget callback runs once per occurrence, in source order. The
+// raw string is the DSL text after `=`, or "" for a flag. The parser has already
 // stripped surrounding quotes and expanded adjacent tokens, so no
 // modifier needs to worry about either.
 //
@@ -50,6 +52,9 @@ type Modifier struct {
 	Inheritable bool
 	Example     string
 	Apply       func(b *action.Builder[any, any], raw string) error
+	// ApplyTarget receives the original action as well as its dynamic builder.
+	// Use it for compile-time annotations that validate against request schema.
+	ApplyTarget func(target action.AnyAction, b *action.Builder[any, any], raw string) error
 }
 
 // String returns a stable identifier for the kind, suitable for JSON
@@ -74,6 +79,8 @@ func (k ModifierKind) String() string {
 		return "float64"
 	case ModifierKindDuration:
 		return "duration"
+	case ModifierKindJSON:
+		return "json"
 	default:
 		return "unknown"
 	}
@@ -116,6 +123,10 @@ func ValidateModifierValue(kind ModifierKind, value string) error {
 		}
 	case ModifierKindString:
 		// Any string is valid.
+	case ModifierKindJSON:
+		if !json.Valid([]byte(value)) {
+			return errors.New("expected valid JSON")
+		}
 	case ModifierKindStringList:
 		if strings.TrimSpace(value) == "" {
 			return errors.New("expected at least one value")
@@ -222,8 +233,17 @@ func (t *ModifierTable) ApplyAll(target action.AnyAction, raws []string) (action
 		if err := ValidateModifierValue(modifier.ValueKind, value); err != nil {
 			return nil, xerr.Validation("modifier :" + name + ": " + err.Error())
 		}
-		if err := modifier.Apply(builder, value); err != nil {
-			return nil, xerr.Validation("modifier :"+name+": "+err.Error(), err)
+		var applyErr error
+		switch {
+		case modifier.ApplyTarget != nil:
+			applyErr = modifier.ApplyTarget(target, builder, value)
+		case modifier.Apply != nil:
+			applyErr = modifier.Apply(builder, value)
+		default:
+			return nil, xerr.Internal("modifier :" + name + " has no application handler")
+		}
+		if applyErr != nil {
+			return nil, xerr.Validation("modifier :"+name+": "+applyErr.Error(), applyErr)
 		}
 	}
 	return builder.Build(), nil

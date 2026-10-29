@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xtest/ktest"
 
 	"github.com/nexssp/flow/compiler"
@@ -33,6 +34,8 @@ func TestValidateModifierValue(t *testing.T) {
 		{"float64 fails on alpha", compiler.ModifierKindFloat64, "abc", true},
 		{"duration ok", compiler.ModifierKindDuration, "5s", false},
 		{"duration fails on alpha", compiler.ModifierKindDuration, "abc", true},
+		{"json object ok", compiler.ModifierKindJSON, `{"ok":true}`, false},
+		{"json rejects trailing value", compiler.ModifierKindJSON, `{"ok":true} false`, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -80,4 +83,11 @@ func TestModifierTable_RejectsDuplicateUnique(t *testing.T) {
 	_, err := table.ApplyAll(act, []string{"count=1", "count=2"})
 	ktest.RequireCondition(t, err != nil, "expected duplicate error")
 	ktest.RequireStringContains(t, err.Error(), "not repeatable")
+}
+
+func TestModifierTable_MissingHandlerIsInternal(t *testing.T) {
+	table := compiler.NewModifierTable(compiler.Modifier{Name: "broken"})
+	act := action.New("test", func(_ context.Context, in any) (any, error) { return in, nil }).Build()
+	_, err := table.ApplyAll(act, []string{"broken"})
+	ktest.RequireCondition(t, xerr.KindFrom(err) == xerr.KindInternal, "expected an internal error")
 }

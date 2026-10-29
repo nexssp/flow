@@ -122,6 +122,23 @@ func materializePipeline(req compiler.MaterializeReq, definition pipelineDefinit
 		wrapped := fmt.Errorf("compile sub-pipeline %q: %w", definition.name, err)
 		return isPendingPipelineDependency(err, pending), wrapped
 	}
+	if requestSchema != nil && program != nil {
+		if meta := program.Describe(); meta != nil && meta.Example != nil {
+			validationCtx := req.Ctx
+			if validationCtx == nil {
+				validationCtx = context.Background()
+			}
+			effective, validateErr := schemaext.ApplyDefaultsAndValidate(validationCtx, *requestSchema, meta.Example)
+			if validateErr != nil {
+				return false, fmt.Errorf("@pipeline %q :example does not match request schema %q: %w", definition.name, requestSchema.Name, validateErr)
+			}
+			if requestSelection.strict {
+				if unknownErr := rejectUnknownFields(*requestSchema, effective); unknownErr != nil {
+					return false, fmt.Errorf("@pipeline %q :example: %w", definition.name, unknownErr)
+				}
+			}
+		}
+	}
 
 	// Dynamic preserves the compiled action's modifiers, statuses, tags, and
 	// route bindings while giving it its canonical pipeline name.

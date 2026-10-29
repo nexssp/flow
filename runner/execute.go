@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/compiler/contracts"
@@ -331,7 +332,7 @@ func executeCompiled(
 		if compileStartStats != nil && compileEndStats != nil {
 			fillCompileAllocs(&result, cfg.MeasureAllocs, compileStartStats, compileEndStats)
 		}
-		return result, errors.New("compile: source is empty")
+		return result, xerr.BadRequest("compile: no runnable Flow expression remained after preprocessing. Here, source means the .nflow program text, not a JSON payload field or symbol. A declaration such as @pipeline NAME defines a reusable action but does not execute it; add a top-level call such as `{} -> pipeline.NAME`. If the file already has a top-level call, inspect what Flow parsed with `nflow info <file>` and confirm the command is running the saved file you inspected.")
 	}
 	var runStats runtime.MemStats
 

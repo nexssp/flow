@@ -111,7 +111,7 @@ func ensureHarnessContext(ctx context.Context, mode harnessMode, reqs []require.
 	if err != nil {
 		return "", fmt.Errorf("harness: bundle plan: %w", err)
 	}
-	key := harnessKey(external, goworkPath, usedNative...) + "-" + string(mode)
+	key := harnessKeyForDriver(external, goworkPath, driverRoot, driverVersion, usedNative...) + "-" + string(mode)
 	prepareDuration := time.Since(prepareStart)
 
 	dir, err := harnessCacheDir(key)
@@ -372,6 +372,11 @@ func ExecHarnessContext(ctx context.Context, bin string, args []string) int {
 }
 
 func harnessKey(reqs []require.Requirement, goworkPath string, usedNative ...nativeBundleInfo) string {
+	driverRoot, driverVersion := resolveDriverInfo()
+	return harnessKeyForDriver(reqs, goworkPath, driverRoot, driverVersion, usedNative...)
+}
+
+func harnessKeyForDriver(reqs []require.Requirement, goworkPath, driverRoot, driverVersion string, usedNative ...nativeBundleInfo) string {
 	sorted := append([]require.Requirement(nil), reqs...)
 	sort.Slice(sorted, func(i, j int) bool {
 		if sorted[i].Import != sorted[j].Import {
@@ -424,6 +429,14 @@ func harnessKey(reqs []require.Requirement, goworkPath string, usedNative ...nat
 	}
 	fmt.Fprintf(h, "go=%s\n", runtime.Version())
 	fmt.Fprintf(h, "nflow=%s\n", Version)
+	fmt.Fprintf(h, "driver_version=%s\n", driverVersion)
+	if driverRoot != "" {
+		if absolute, err := filepath.Abs(driverRoot); err == nil {
+			driverRoot = absolute
+		}
+		fmt.Fprintf(h, "driver_root=%s\n", filepath.Clean(driverRoot))
+		fmt.Fprintf(h, "driver_source=%s\n", moduleSourceFingerprint(driverRoot))
+	}
 
 	if goworkPath != "" {
 		fmt.Fprintf(h, "gowork=%s\n", goworkPath)
@@ -442,9 +455,6 @@ func harnessKey(reqs []require.Requirement, goworkPath string, usedNative ...nat
 		}
 	}
 
-	if root, err := selfModuleRoot(); err == nil {
-		fmt.Fprintf(h, "source=%s\n", moduleSourceFingerprint(root))
-	}
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 

@@ -58,7 +58,9 @@ platform equivalent); a source change to a local module invalidates the
 entry automatically.
 
 A successful run prints the flow's output. A failed run prints the
-error and, at verbosity ≥ 1, an execution trace:
+error and, at verbosity ≥ 1, compile timing plus an execution trace if
+runtime actions started. Compile-time failures explicitly say when no runtime
+events are expected:
 
 ```
 ✗ Pipeline Execution Failed
@@ -262,6 +264,13 @@ nflow show fs.walk
 `show` prints details for one capability: description, tags, scope,
 typed request and response fields, and the example payload if the
 bundle declares one. It accepts the same `--flow` flag.
+
+`nflow show example` documents the JSON syntax for source-defined request
+samples. Add `:example='{"account_id":"acct-demo"}'` to an action or pipeline
+declaration, then use `nflow explain flow.nflow` to see the sample with the
+source. Typed action requests and pipeline `:request-schema` examples are
+validated during compilation; the sample is metadata, not a runtime payload,
+and applying it does not execute the action.
 
 ```sh
 nflow catalog > catalog.json

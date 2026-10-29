@@ -458,6 +458,10 @@ func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string,
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", paint("✗ Pipeline Execution Failed", ansiRed, useColorErr))
 		fmt.Fprintf(os.Stderr, "  %s\n\n", runner.FormatErrorDetail(execErr, src, name, useColorErr))
 		if verbosity >= 1 {
+			fmt.Fprintf(os.Stderr, "  debug: compile finished in %s\n", runner.FormatDuration(ex.CompileDuration))
+			if ex.RunDuration == 0 {
+				fmt.Fprintln(os.Stderr, "  debug: execution did not start; no runtime action events are expected")
+			}
 			observer.PrintSummary(os.Stderr)
 		}
 		if ex.RunDuration == 0 {

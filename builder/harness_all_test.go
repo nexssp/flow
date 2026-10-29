@@ -790,6 +790,40 @@ func TestHarnessKey_DistinguishesResolvedPackageAndVersion(t *testing.T) {
 	}
 }
 
+func TestHarnessKey_DistinguishesDriverVersions(t *testing.T) {
+	t.Parallel()
+	reqs := []require.Requirement{{
+		Import:          "example.invalid/cache/repo",
+		Version:         "v1.2.3",
+		PackagePath:     "example.invalid/cache/repo/nexssflow",
+		ModulePath:      "example.invalid/cache/repo",
+		ResolvedVersion: "v1.2.3",
+	}}
+	v050 := harnessKeyForDriver(reqs, "", "", "v0.50.0")
+	v051 := harnessKeyForDriver(reqs, "", "", "v0.51.0")
+	if v050 == v051 {
+		t.Fatal("different installed Flow driver versions shared a harness cache key")
+	}
+}
+
+func TestHarnessKey_DistinguishesLocalDriverSource(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module github.com/nexssp/flow\n\ngo 1.23\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	driverSource := filepath.Join(root, "driver.go")
+	if err := os.WriteFile(driverSource, []byte("package flow\n\nvar DriverVersion = 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before := harnessKeyForDriver(nil, "", root, "")
+	if err := os.WriteFile(driverSource, []byte("package flow\n\nvar DriverVersion = 2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if after := harnessKeyForDriver(nil, "", root, ""); after == before {
+		t.Fatal("changed local Flow driver source reused the same harness cache key")
+	}
+}
+
 func TestHarnessKey_DistinguishesNativeBundleSets(t *testing.T) {
 	requirement := require.Requirement{
 		Import:          "example.invalid/local/bundle",

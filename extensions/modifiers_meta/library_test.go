@@ -17,7 +17,7 @@ func TestBundle_WiresModifiers(t *testing.T) {
 	ktest.RequireCondition(t, b.SelfTest == nil, "duplicate inline SelfTest remains")
 
 	want := []string{
-		"name", "desc", "description", "status", "tag", "scope",
+		"name", "desc", "description", "example", "status", "tag", "scope",
 		"read_only", "audit", "debug", "deprecated", "strict", "lenient",
 	}
 	got := make(map[string]bool, len(b.Modifiers))

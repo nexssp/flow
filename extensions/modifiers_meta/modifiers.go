@@ -13,6 +13,7 @@ func Modifiers() []compiler.Modifier {
 		compiler.String("name", (*action.Builder[any, any]).Name),
 		compiler.String("desc", (*action.Builder[any, any]).Description),
 		compiler.String("description", (*action.Builder[any, any]).Description),
+		exampleModifier(),
 		compiler.Int("status", (*action.Builder[any, any]).SuccessStatus),
 
 		compiler.StringList("tag", func(b *action.Builder[any, any], tags []string) *action.Builder[any, any] {
