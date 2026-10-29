@@ -121,6 +121,7 @@ func TestHarnessCacheSameMtimeEmbeddedAsset(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration harness build in short mode")
 	}
+	t.Setenv("GOWORK", "off")
 	root := t.TempDir()
 	t.Setenv(harnessCacheEnv, filepath.Join(root, "cache"))
 	local := filepath.Join(root, "cacheedit")

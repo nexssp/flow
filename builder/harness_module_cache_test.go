@@ -64,6 +64,7 @@ func TestHarnessCacheLocalSubpackageSiblingEdit(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping local subpackage harness build in short mode")
 	}
+	t.Setenv("GOWORK", "off")
 	root := t.TempDir()
 	t.Setenv(harnessCacheEnv, filepath.Join(root, "cache"))
 	module := filepath.Join(root, "cachemodule")
