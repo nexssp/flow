@@ -73,7 +73,11 @@ func (c *programCache) compile(raw string) (*vm.Program, error) {
 		c.entries.Delete(raw)
 	}
 
-	program, err := compiler.CompileExpression(buildProgramSource(raw),
+	source, err := buildProgramSource(raw)
+	if err != nil {
+		return nil, xerr.Validation(fmt.Sprintf("projection %q: %v", strings.TrimSpace(raw), err))
+	}
+	program, err := compiler.CompileExpression(source,
 		expr.AllowUndefinedVariables(),
 		spreadMergeOption,
 	)

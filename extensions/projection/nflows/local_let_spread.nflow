@@ -1,0 +1,20 @@
+@description "spec: projection-local lets coexist with spread and shorthand"
+{
+  name: "Ada",
+  status: "new",
+  profile: {
+    name: "Ada Lovelace"
+  },
+  extra: "preserved"
+}
+-> {
+  let profile = .profile;
+  ...,
+  name,
+  display: profile.name,
+  status: "active"
+}
+@assert: result.name == "Ada"
+@assert: result.display == "Ada Lovelace"
+@assert: result.status == "active"
+@assert: result.extra == "preserved"

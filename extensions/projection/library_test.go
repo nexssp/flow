@@ -55,6 +55,9 @@ func TestFixtures_Discoverable(t *testing.T) {
 		"nflows/explicit_projection.nflow",
 		"nflows/mixed_shorthand.nflow",
 		"nflows/shorthand_spread.nflow",
+		"nflows/local_let_single.nflow",
+		"nflows/local_let_multiple.nflow",
+		"nflows/local_let_spread.nflow",
 	} {
 		ktest.RequireCondition(t, seen[fixture], "expected projection fixture %q to be discoverable", fixture)
 	}

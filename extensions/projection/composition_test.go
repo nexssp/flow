@@ -180,3 +180,61 @@ func TestProjectionPreservesWrappedAppError(t *testing.T) {
 	ktest.RequireCondition(t, ok && appErr != nil, "want wrapped AppError, got %T: %v", err, err)
 	ktest.RequireEqual(t, appErr.Kind, xerr.KindUnavailable)
 }
+
+func TestProjectionLocalLets(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		source string
+		assert []string
+	}{
+		{
+			name:   "single binding used by sibling fields",
+			source: `{ user: { profile: { name: "Ada", handle: "ada" } } } -> { let profile = .user.profile; first: profile.name, display: profile.name }`,
+			assert: []string{`result.first == "Ada"`, `result.display == "Ada"`},
+		},
+		{
+			name:   "multiple ordered bindings",
+			source: `{ user: { profile: { name: "Ada", handle: "ada" } } } -> { let profile = .user.profile; let display = profile.name; first: display, second: profile.handle }`,
+			assert: []string{`result.first == "Ada"`, `result.second == "ada"`},
+		},
+		{
+			name:   "bindings coexist with shorthand and spread",
+			source: `{ name: "Ada", status: "new", profile: { name: "A" } } -> { let profile = .profile; ..., name, display: profile.name, status: "active" }`,
+			assert: []string{`result.name == "Ada"`, `result.display == "A"`, `result.status == "active"`},
+		},
+	}
+	cfg, err := runner.BuildConfig(native.Bundles())
+	ktest.RequireNoError(t, err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			execution, execErr := runner.Execute(t.Context(), cfg, tc.source, "projection-let.nflow", nil)
+			ktest.RequireNoError(t, execErr)
+			ktest.RequireEqual(t, len(runner.EvaluateAssertions(execution.Output, tc.assert)), 0)
+		})
+	}
+}
+
+func TestProjectionLocalLetInvalidDeclarations(t *testing.T) {
+	t.Parallel()
+	cfg, err := runner.BuildConfig(native.Bundles())
+	ktest.RequireNoError(t, err)
+	for _, source := range []string{
+		`{ let profile = ; display: profile.name }`,
+		`{ let profile = .user.profile; let profile = .user; display: profile.name }`,
+		`{ let display = profile.name; let profile = .user.profile; display: display }`,
+	} {
+		_, compileErr := runner.Compile(t.Context(), cfg, source, "invalid-projection-let.nflow")
+		ktest.RequireCondition(t, compileErr != nil, "invalid local let compiled: %s", source)
+	}
+}
+
+func TestProjectionLocalLetDoesNotEscapeItsProjection(t *testing.T) {
+	t.Parallel()
+	cfg, err := runner.BuildConfig(native.Bundles())
+	ktest.RequireNoError(t, err)
+	source := `{ user: { profile: { name: "Ada" } } } -> { let profile = .user.profile; display: profile.name } -> { escaped: profile.name }`
+	_, err = runner.Execute(t.Context(), cfg, source, "projection-let-scope.nflow", nil)
+	ktest.RequireCondition(t, err != nil, "local binding escaped into the next projection")
+}

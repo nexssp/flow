@@ -69,7 +69,11 @@ func (p *composedProjection) Build(ctx context.Context, bCtx *compiler.BuildCont
 			children = append(children, action.IntrospectionChild{Node: child, Relation: "value", Role: "value"})
 		}
 	}
-	program, err := compiler.CompileExpression(buildProgramSource(p.raw), options...)
+	source, err := buildProgramSource(p.raw)
+	if err != nil {
+		return nil, compiler.SourceError(p.pos, "projection: %v", err)
+	}
+	program, err := compiler.CompileExpression(source, options...)
 	if err != nil {
 		return nil, compiler.SourceError(p.pos, "projection: %v", err)
 	}

@@ -1,0 +1,16 @@
+@description "spec: one projection-local let feeds later sibling fields"
+{
+  user: {
+    profile: {
+      name: "Ada",
+      handle: "ada"
+    }
+  }
+}
+-> {
+  let profile = .user.profile;
+  first: profile.name,
+  display: profile.name
+}
+@assert: result.first == "Ada"
+@assert: result.display == "Ada"

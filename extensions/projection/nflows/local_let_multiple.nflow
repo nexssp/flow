@@ -1,0 +1,19 @@
+@description "spec: ordered projection-local lets can use earlier bindings"
+{
+  user: {
+    profile: {
+      name: "Ada",
+      handle: "ada"
+    }
+  }
+}
+-> {
+  let profile = .user.profile;
+  let display = profile.name;
+  first: display,
+  second: profile.handle,
+  repeated: display
+}
+@assert: result.first == "Ada"
+@assert: result.second == "ada"
+@assert: result.repeated == "Ada"
