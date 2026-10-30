@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/observe"
 	"github.com/nexssp/kernel/xerr"
 
 	"github.com/nexssp/flow/compiler"
@@ -172,6 +173,9 @@ func ExecutePrepared(
 
 func compilePrepared(ctx context.Context, cfg Config, prepared *compiler.PreparedSource) (Compilation, error) {
 	cfg.CompileOpts = compileOptsWithRunnerPolicies(cfg)
+	if cfg.EventSink != nil {
+		cfg.Hooks = append(append([]action.AnyHook(nil), cfg.Hooks...), observe.Hook(cfg.EventSink))
+	}
 	return compileSource(ctx, cfg, prepared)
 }
 

@@ -9,17 +9,23 @@ import (
 	"time"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/observe"
 
 	"github.com/nexssp/flow/compiler/redact"
 )
 
-// Observer tracks every action that passes through the runtime.
+const observerEventCapacity = 256
+
+// Observer adapts Kernel lifecycle events to Flow's existing CLI trace while
+// retaining a bounded, metadata-only snapshot for callers that need lifecycle
+// information without action payloads.
 type Observer struct {
 	out       io.Writer
 	verbosity int
 
 	mu      sync.Mutex
 	records []Record
+	events  *observe.MemorySink
 }
 
 type Record struct {
@@ -33,32 +39,64 @@ func NewObserver(out io.Writer, verbosity int) *Observer {
 	if out == nil {
 		out = io.Discard
 	}
-	return &Observer{out: out, verbosity: verbosity}
-}
-
-type startKey struct{}
-
-func (o *Observer) Hook() action.AnyHook {
-	return action.AnyHook{
-		Before: func(ctx context.Context, _ any, _ *action.Meta) (context.Context, error) {
-			return context.WithValue(ctx, startKey{}, time.Now()), nil
-		},
-		OnSuccess: func(ctx context.Context, req, res any, meta *action.Meta) {
-			o.record(ctx, meta, req, res, nil)
-		},
-		OnError: func(ctx context.Context, req any, err error, meta *action.Meta) {
-			o.record(ctx, meta, req, nil, err)
-		},
+	return &Observer{
+		out:       out,
+		verbosity: verbosity,
+		events:    observe.NewMemorySink(observerEventCapacity),
 	}
 }
 
-func (o *Observer) record(ctx context.Context, meta *action.Meta, req, res any, err error) {
-	start, _ := ctx.Value(startKey{}).(time.Time)
-	dur := time.Since(start)
+// Hook returns Kernel's standard lifecycle hook backed by this Flow adapter.
+func (o *Observer) Hook() action.AnyHook {
+	return observe.Hook(o)
+}
+
+// Emit stores a payload-free lifecycle snapshot and translates terminal action
+// events into the legacy Flow records used by CLI summaries and assertions.
+func (o *Observer) Emit(ctx context.Context, event observe.Event) {
+	if o == nil {
+		return
+	}
+	if o.events != nil {
+		o.events.Emit(ctx, metadataOnlyEvent(event))
+	}
+	switch event.Kind {
+	case observe.KindSuccess:
+		o.record(event, nil)
+	case observe.KindError:
+		o.record(event, event.Error)
+	}
+}
+
+// Events returns an isolated, oldest-to-newest snapshot of the most recent
+// Kernel lifecycle metadata. Request, response, error, and recovered values are
+// intentionally omitted; callers that explicitly need raw events may provide
+// Config.EventSink instead. The snapshot is bounded to observerEventCapacity.
+func (o *Observer) Events() []observe.Event {
+	if o == nil || o.events == nil {
+		return nil
+	}
+	return o.events.Events()
+}
+
+func metadataOnlyEvent(event observe.Event) observe.Event {
+	event.Request = nil
+	event.Response = nil
+	event.Error = nil
+	event.Recovered = nil
+	return event
+}
+
+func (o *Observer) record(event observe.Event, err error) {
+	start := event.Time.Add(-event.Duration)
+	if event.Time.IsZero() {
+		start = time.Now().Add(-event.Duration)
+	}
+	dur := event.Duration
 
 	o.mu.Lock()
 	o.records = append(o.records, Record{
-		Action:   meta.Name,
+		Action:   event.Action,
 		Duration: dur,
 		Err:      err,
 		Start:    start,
@@ -71,7 +109,7 @@ func (o *Observer) record(ctx context.Context, meta *action.Meta, req, res any, 
 		if err != nil {
 			status = "✗"
 		}
-		fmt.Fprintf(o.out, "  %s %-30s %s\n", status, meta.Name, FormatDuration(dur))
+		fmt.Fprintf(o.out, "  %s %-30s %s\n", status, event.Action, FormatDuration(dur))
 	}
 	// -vvv prints live progress WITH data payloads
 	if o.verbosity >= 3 {
@@ -79,12 +117,12 @@ func (o *Observer) record(ctx context.Context, meta *action.Meta, req, res any, 
 		if err != nil {
 			status = "✗"
 		}
-		fmt.Fprintf(o.out, "  %s %-30s %s\n", status, meta.Name, FormatDuration(dur))
-		fmt.Fprintf(o.out, "      in:  %s\n", formatTracePayload(req))
+		fmt.Fprintf(o.out, "  %s %-30s %s\n", status, event.Action, FormatDuration(dur))
+		fmt.Fprintf(o.out, "      in:  %s\n", formatTracePayload(event.Request))
 		if err != nil {
 			fmt.Fprintf(o.out, "      err: %v\n", err)
 		} else {
-			fmt.Fprintf(o.out, "      out: %s\n", formatTracePayload(res))
+			fmt.Fprintf(o.out, "      out: %s\n", formatTracePayload(event.Response))
 		}
 	}
 }
@@ -168,3 +206,5 @@ func FormatDuration(d time.Duration) string {
 	}
 	return fmt.Sprintf("%.2fs", d.Seconds())
 }
+
+var _ observe.Sink = (*Observer)(nil)
