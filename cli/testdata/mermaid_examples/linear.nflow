@@ -1,0 +1,19 @@
+runtime.const @{ value: {
+    order_id: "ORD-3107",
+    customer_name: "Julia",
+    item_count: 2,
+    currency: "USD",
+    private_note: "PAYLOAD-MUST-NOT-RENDER"
+} }
+-> {
+  order_id: .order_id,
+  customer_name: .customer_name,
+  item_count: .item_count,
+  currency: .currency
+}
+-> {
+  order_id: .order_id,
+  customer_name: .customer_name,
+  item_count: .item_count,
+  currency: .currency
+}

@@ -42,7 +42,31 @@ type ActionPlanNode struct {
 	File   string `json:"file,omitempty"`
 	Line   int    `json:"line,omitempty"`
 	Column int    `json:"column,omitempty"`
+
+	// These static direct-field summaries are rendered only in Mermaid. They
+	// are intentionally unexported so JSON/DOT retain their existing shape.
+	projectionReads   []string
+	projectionOutputs []string
 }
+
+type actionPlanOutputFormat uint8
+
+const (
+	actionPlanOutputText actionPlanOutputFormat = iota
+	actionPlanOutputJSON
+	actionPlanOutputDOT
+	actionPlanOutputMermaid
+)
+
+const (
+	actionPlanNodeKindConditional = "conditional"
+	actionPlanNodeKindErrorGuard  = "error.guard"
+	actionPlanNodeKindFallback    = "fallback"
+	actionPlanNodeKindLoop        = "loop"
+	actionPlanNodeKindLoopExit    = "loop.exit"
+	actionPlanNodeKindMatch       = "match"
+	actionPlanNodeKindMerge       = "merge"
+)
 
 func renderExplainActionPlan(
 	ctx context.Context,
@@ -53,6 +77,35 @@ func renderExplainActionPlan(
 	jsonOut bool,
 	dotOut bool,
 ) error {
+	format := actionPlanOutputText
+	if jsonOut {
+		format = actionPlanOutputJSON
+	} else if dotOut {
+		format = actionPlanOutputDOT
+	}
+	return renderExplainActionPlanWithFormat(ctx, w, cfg, src, path, format)
+}
+
+func renderExplainActionPlanWithFormat(
+	ctx context.Context,
+	w io.Writer,
+	cfg runner.Config,
+	src string,
+	path string,
+	format actionPlanOutputFormat,
+) error {
+	return renderExplainActionPlanWithFormatAndTheme(ctx, w, cfg, src, path, format, actionPlanMermaidThemeLight)
+}
+
+func renderExplainActionPlanWithFormatAndTheme(
+	ctx context.Context,
+	w io.Writer,
+	cfg runner.Config,
+	src string,
+	path string,
+	format actionPlanOutputFormat,
+	mermaidTheme string,
+) error {
 	topAST, pipelines, err := parseExplainASTWithContext(ctx, cfg, src, path)
 	if err != nil {
 		return err
@@ -61,14 +114,19 @@ func renderExplainActionPlan(
 	if err != nil {
 		return err
 	}
-	if jsonOut {
+	switch format {
+	case actionPlanOutputJSON:
 		return writeJSON(w, report, true)
-	}
-	if dotOut {
+	case actionPlanOutputDOT:
 		return writeActionPlanDOT(w, report)
+	case actionPlanOutputMermaid:
+		return writeActionPlanMermaidWithTheme(w, report, mermaidTheme)
+	case actionPlanOutputText:
+		writeActionPlanText(w, report)
+		return nil
+	default:
+		return fmt.Errorf("unsupported action plan output format %d", format)
 	}
-	writeActionPlanText(w, report)
-	return nil
 }
 
 func actionPlanReport(
@@ -105,6 +163,7 @@ func buildActionPlanGraph(resolver compiler.CapabilityResolver, expr compiler.Ex
 	if err != nil {
 		return nil, err
 	}
+	projectionFields := actionPlanProjectionFieldSummaries(expr)
 	plan := &ActionPlanGraph{
 		Entry: graph.Entry,
 		Exit:  graph.Exit,
@@ -112,10 +171,18 @@ func buildActionPlanGraph(resolver compiler.CapabilityResolver, expr compiler.Ex
 		Nodes: make([]ActionPlanNode, len(graph.Nodes)),
 	}
 	for i, node := range graph.Nodes {
-		plan.Nodes[i] = ActionPlanNode{
+		plannedNode := ActionPlanNode{
 			ID: node.ID, Kind: node.Kind, Name: node.Name,
 			File: node.File, Line: node.Line, Column: node.Column,
 		}
+		if node.Name == "projection.project" {
+			position := actionPlanNodePosition{file: node.File, line: node.Line, column: node.Column}
+			if fields, ok := projectionFields[position]; ok {
+				plannedNode.projectionReads = fields.reads
+				plannedNode.projectionOutputs = fields.outputs
+			}
+		}
+		plan.Nodes[i] = plannedNode
 	}
 	return plan, nil
 }
@@ -136,7 +203,8 @@ func writeActionPlanText(w io.Writer, report ActionPlanReport) {
 func renderActionPlanGraphText(w io.Writer, graph *ActionPlanGraph) {
 	fmt.Fprintf(w, "entry: %s  exit: %s\n", graph.Entry, graph.Exit)
 	fmt.Fprintln(w, "nodes:")
-	for _, node := range graph.Nodes {
+	for i := range graph.Nodes {
+		node := &graph.Nodes[i]
 		fmt.Fprintf(w, "  %s [%s] %s", node.ID, node.Kind, node.Name)
 		if node.File != "" && node.Line > 0 {
 			fmt.Fprintf(w, " @%s:%d:%d", node.File, node.Line, node.Column)
@@ -169,7 +237,8 @@ func writeActionPlanDOT(w io.Writer, report ActionPlanReport) error {
 func writeActionPlanCluster(w io.Writer, cluster int, label string, graph *ActionPlanGraph) {
 	prefix := "p" + strconv.Itoa(cluster) + "_"
 	fmt.Fprintf(w, "  subgraph cluster_%d {\n    label=%s;\n", cluster, strconv.Quote(label))
-	for _, node := range graph.Nodes {
+	for i := range graph.Nodes {
+		node := &graph.Nodes[i]
 		id := prefix + node.ID
 		text := node.Kind
 		if node.Name != "" {
@@ -189,9 +258,9 @@ func writeActionPlanCluster(w io.Writer, cluster int, label string, graph *Actio
 
 func actionPlanShape(kind string) string {
 	switch kind {
-	case "parallel.fork", "conditional", "fallback", "match", "error.guard", "loop":
+	case "parallel.fork", actionPlanNodeKindConditional, actionPlanNodeKindFallback, actionPlanNodeKindMatch, actionPlanNodeKindErrorGuard, actionPlanNodeKindLoop:
 		return "diamond"
-	case "merge", "loop.exit":
+	case actionPlanNodeKindMerge, actionPlanNodeKindLoopExit:
 		return "circle"
 	default:
 		return "box"

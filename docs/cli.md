@@ -210,6 +210,25 @@ Every `file:line` position that appears in an error is also printed here
 in a form terminals can hyperlink. `explain` is a static report; it
 does not execute the flow.
 
+Export the AST-derived lowering plan as Graphviz DOT or Mermaid when you need
+a diagram. Both formats show the top-level graph and each `@pipeline` body;
+the plan omits action argument values:
+
+```sh
+nflow explain --plan --dot flow.nflow > flow.dot
+nflow explain --plan --mermaid flow.nflow > flow.mmd
+nflow explain --plan --mermaid --mermaid-theme dark flow.nflow > flow-dark.mmd
+```
+
+`--mermaid` requires `--plan` and cannot be combined with `--json` or `--dot`.
+Mermaid uses the light palette by default; `--mermaid-theme light|dark` selects
+the palette and is valid only with `--mermaid`.
+
+For projection nodes only, a simple map such as `{ email: .customer.email }`
+gets a `reads` / `outputs` summary. Computed or dynamic projections are left
+unlabeled. This is not general action data-lineage analysis; action payloads,
+arguments, and literal values remain omitted.
+
 ---
 
 ## Inspect the pipeline shape

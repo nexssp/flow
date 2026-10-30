@@ -107,18 +107,22 @@ var helpRegistry = map[string]helpText{
 	},
 	explainCommand: {
 		Summary: "Show effective modifiers, the resolved AST, the built Kernel action graph, or the AST-derived plan.",
-		Usage:   "nflow explain <file.nflow> [--ast|--actions|--plan] [--json|--dot]",
+		Usage:   "nflow explain <file.nflow> [--ast|--actions|--plan] [--json|--dot|--mermaid] [--mermaid-theme light|dark]",
 		Flags: `      --ast         show the effective AST
-			      --actions     show the built Kernel action graph; argument values are omitted
-			      --plan        show the AST-derived Flow lowering plan (not the built graph)
-		      --json        emit the selected view as JSON
-			      --dot         emit an action graph or plan in Graphviz DOT format`,
+	      --actions     show the built Kernel action graph; argument values are omitted
+	      --plan        show the AST-derived Flow lowering plan (not the built graph)
+	      --json        emit the selected view as JSON
+	      --dot         emit an action graph or plan in Graphviz DOT format
+	      --mermaid     emit the action plan as Mermaid
+	      --mermaid-theme <light|dark>
+	                   select the Mermaid palette (light is the default)`,
 		Examples: []string{
 			`nflow explain flows/client.nflow`,
 			`nflow explain --ast flows/client.nflow`,
 			`nflow explain --ast --json flows/client.nflow > ast.json`,
 			`nflow explain --actions flows/client.nflow`,
 			`nflow explain --plan --dot flows/client.nflow > plan.dot`,
+			`nflow explain --plan --mermaid --mermaid-theme dark flows/client.nflow > plan-dark.mmd`,
 			`nflow explain --actions --dot flows/client.nflow > actions.dot`,
 		},
 	},

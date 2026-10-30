@@ -1,0 +1,251 @@
+@pipeline normalize_order
+  {
+    order_id: .order.id,
+    customer: .order.customer,
+    item: .order.item,
+    payment: .order.payment,
+    fulfillment: .order.fulfillment
+  }
+  -> {
+    order_id: .order_id,
+    customer: .customer,
+    item: .item,
+    payment: .payment,
+    fulfillment: .fulfillment
+  }
+  -> {
+    order_id: .order_id,
+    customer_id: .customer.id,
+    buyer_name: .customer.name,
+    contact_email: .customer.email,
+    customer: .customer,
+    item: .item,
+    payment: .payment,
+    fulfillment: .fulfillment
+  }
+@end
+
+@pipeline verify_customer
+  {
+    order_id: .order_id,
+    customer_id: .customer_id,
+    buyer_name: .buyer_name,
+    contact_email: .contact_email,
+    customer: .customer,
+    item: .item,
+    payment: .payment,
+    fulfillment: .fulfillment
+  }
+  -> {
+    order_id: .order_id,
+    customer_id: .customer_id,
+    buyer_name: .buyer_name,
+    contact_email: .contact_email,
+    customer_status: .customer.status,
+    risk_band: .payment.risk,
+    item: .item,
+    payment: .payment,
+    fulfillment: .fulfillment
+  }
+  -> {
+    order_id: .order_id,
+    customer_id: .customer_id,
+    buyer_name: .buyer_name,
+    contact_email: .contact_email,
+    customer_status: .customer_status,
+    risk_band: .risk_band,
+    item: .item,
+    payment: .payment,
+    fulfillment: .fulfillment
+  }
+@end
+
+@pipeline enrich_catalog
+  {
+    order_id: .order_id,
+    customer_id: .customer_id,
+    buyer_name: .buyer_name,
+    contact_email: .contact_email,
+    customer_status: .customer_status,
+    risk_band: .risk_band,
+    item: .item,
+    payment: .payment,
+    fulfillment: .fulfillment
+  }
+  -> {
+    order_id: .order_id,
+    customer_id: .customer_id,
+    buyer_name: .buyer_name,
+    contact_email: .contact_email,
+    customer_status: .customer_status,
+    risk_band: .risk_band,
+    item_code: .item.sku,
+    product_family: .item.family,
+    item: .item,
+    payment: .payment,
+    fulfillment: .fulfillment
+  }
+  -> {
+    order_id: .order_id,
+    customer_id: .customer_id,
+    buyer_name: .buyer_name,
+    contact_email: .contact_email,
+    customer_status: .customer_status,
+    risk_band: .risk_band,
+    item_code: .item_code,
+    product_family: .product_family,
+    item: .item,
+    payment: .payment,
+    fulfillment: .fulfillment
+  }
+@end
+
+@pipeline prepare_notice
+  {
+    order_id: .order_id,
+    contact_email: .contact_email,
+    buyer_name: .buyer_name,
+    item_code: .item_code,
+    product_family: .product_family,
+    item: .item,
+    payment: .payment,
+    fulfillment: .fulfillment
+  }
+  -> {
+    order_id: .order_id,
+    recipient: .contact_email,
+    buyer_name: .buyer_name,
+    item_code: .item_code,
+    product_family: .product_family,
+    item: .item,
+    payment: .payment,
+    fulfillment: .fulfillment
+  }
+  -> {
+    order_id: .order_id,
+    recipient: .recipient,
+    buyer_name: .buyer_name,
+    item_code: .item_code,
+    product_family: .product_family,
+    item: .item,
+    payment: .payment,
+    fulfillment: .fulfillment
+  }
+@end
+
+@pipeline check_inventory
+  {
+    order_id: .order_id,
+    sku: .item.sku,
+    units: .item.units,
+    warehouse: .fulfillment.warehouse,
+    zone: .fulfillment.zone
+  }
+  -> {
+    order_id: .order_id,
+    sku: .sku,
+    units: .units,
+    warehouse: .warehouse,
+    zone: .zone
+  }
+  -> {
+    order_id: .order_id,
+    reservation_sku: .sku,
+    requested_units: .units,
+    warehouse: .warehouse,
+    zone: .zone
+  }
+@end
+
+@pipeline quote_payment
+  {
+    order_id: .order_id,
+    payment_profile: .payment.profile,
+    currency: .payment.currency,
+    price_cents: .item.price_cents,
+    units: .item.units,
+    risk_band: .payment.risk
+  }
+  -> {
+    order_id: .order_id,
+    payment_profile: .payment_profile,
+    currency: .currency,
+    price_cents: .price_cents,
+    units: .units,
+    risk_band: .risk_band
+  }
+  -> {
+    order_id: .order_id,
+    payment_profile: .payment_profile,
+    currency: .currency,
+    subtotal_cents: .price_cents,
+    units: .units,
+    risk_band: .risk_band
+  }
+@end
+
+@pipeline plan_delivery
+  {
+    order_id: .order_id,
+    region: .fulfillment.region,
+    warehouse: .fulfillment.warehouse,
+    window: .fulfillment.window,
+    item_code: .item.sku,
+    units: .item.units
+  }
+  -> {
+    order_id: .order_id,
+    region: .region,
+    warehouse: .warehouse,
+    window: .window,
+    item_code: .item_code,
+    units: .units
+  }
+  -> {
+    order_id: .order_id,
+    region: .region,
+    warehouse: .warehouse,
+    delivery_window: .window,
+    item_code: .item_code,
+    units: .units
+  }
+@end
+
+runtime.const @{ value: {
+    order: {
+      id: "ORD-5600",
+      customer: {
+        id: "CUS-4410",
+        name: "Julia",
+        email: "julia@example.test",
+        status: "active"
+      },
+      item: {
+        sku: "BOOK-204",
+        units: 2,
+        price_cents: 2499,
+        family: "books"
+      },
+      payment: {
+        profile: "profile-test-7",
+        risk: "standard",
+        currency: "USD"
+      },
+      fulfillment: {
+        region: "north",
+        warehouse: "WH-03",
+        window: "weekday-evening",
+        zone: "zone-b"
+      }
+    },
+    private_note: "PAYLOAD-MUST-NOT-RENDER"
+} }
+-> pipeline.normalize_order
+-> pipeline.verify_customer
+-> pipeline.enrich_catalog
+-> pipeline.prepare_notice
+-> (
+  pipeline.check_inventory &
+  pipeline.quote_payment &
+  pipeline.plan_delivery
+)

@@ -1,0 +1,19 @@
+runtime.const @{ value: {
+    ticket_id: "TKT-7712",
+    customer_name: "Julia",
+    email: "julia@example.test",
+    queue: "billing-review",
+    order_id: "ORD-7712",
+    private_note: "PAYLOAD-MUST-NOT-RENDER"
+} } -> (
+  {
+    ticket_id: .ticket_id,
+    contact_name: .customer_name,
+    email: .email
+  } &
+  {
+    ticket_id: .ticket_id,
+    queue: .queue,
+    order_id: .order_id
+  }
+)

@@ -20,7 +20,7 @@ import (
 func runExplain(ctx context.Context, inv *invocation, args []string) int {
 	options, err := parseExplainOptions(args)
 	if err != nil {
-		return fatalf("usage: nflow explain <file.nflow> [--ast|--actions|--plan] [--json|--dot]: %v", err)
+		return fatalf("usage: nflow explain <file.nflow> [--ast|--actions|--plan] [--json|--dot|--mermaid] [--mermaid-theme light|dark]: %v", err)
 	}
 	if _, err := os.Stat(options.path); err != nil {
 		return fatalf("read: %v", err)
@@ -31,7 +31,7 @@ func runExplain(ctx context.Context, inv *invocation, args []string) int {
 func runExplainInProcess(ctx context.Context, inv *invocation, args []string) int {
 	options, err := parseExplainOptions(args)
 	if err != nil {
-		return fatalf("usage: nflow explain <file.nflow> [--ast|--actions|--plan] [--json|--dot]: %v", err)
+		return fatalf("usage: nflow explain <file.nflow> [--ast|--actions|--plan] [--json|--dot|--mermaid] [--mermaid-theme light|dark]: %v", err)
 	}
 	path := options.path
 
@@ -57,8 +57,14 @@ func runExplainInProcess(ctx context.Context, inv *invocation, args []string) in
 		return 0
 	}
 	if options.plan {
-		if err := renderExplainActionPlan(ctx, os.Stdout, cfg, string(src), path, options.json, options.dot); err != nil {
-			return fatalf("%v", err)
+		var renderErr error
+		if options.mermaid {
+			renderErr = renderExplainActionPlanWithFormatAndTheme(ctx, os.Stdout, cfg, string(src), path, actionPlanOutputMermaid, options.mermaidTheme)
+		} else {
+			renderErr = renderExplainActionPlan(ctx, os.Stdout, cfg, string(src), path, options.json, options.dot)
+		}
+		if renderErr != nil {
+			return fatalf("%v", renderErr)
 		}
 		return 0
 	}
@@ -77,20 +83,46 @@ func runExplainInProcess(ctx context.Context, inv *invocation, args []string) in
 }
 
 type explainOptions struct {
-	path    string
-	ast     bool
-	actions bool
-	plan    bool
-	json    bool
-	dot     bool
+	path         string
+	ast          bool
+	actions      bool
+	plan         bool
+	json         bool
+	dot          bool
+	mermaid      bool
+	mermaidTheme string
 }
+
+const explainMermaidThemeValueError = "--mermaid-theme requires a value (light or dark)"
 
 func parseExplainOptions(args []string) (explainOptions, error) {
 	var options explainOptions
+	waitingForMermaidTheme := false
 	for _, arg := range args {
-		if err := applyExplainOption(&options, arg); err != nil {
-			return explainOptions{}, err
+		if waitingForMermaidTheme {
+			if strings.HasPrefix(arg, "--") || arg == "" {
+				return explainOptions{}, errors.New(explainMermaidThemeValueError)
+			}
+			options.mermaidTheme = arg
+			waitingForMermaidTheme = false
+			continue
 		}
+		switch {
+		case arg == "--mermaid-theme":
+			waitingForMermaidTheme = true
+		case strings.HasPrefix(arg, "--mermaid-theme="):
+			options.mermaidTheme = strings.TrimPrefix(arg, "--mermaid-theme=")
+			if options.mermaidTheme == "" {
+				return explainOptions{}, errors.New(explainMermaidThemeValueError)
+			}
+		default:
+			if err := applyExplainOption(&options, arg); err != nil {
+				return explainOptions{}, err
+			}
+		}
+	}
+	if waitingForMermaidTheme {
+		return explainOptions{}, errors.New(explainMermaidThemeValueError)
 	}
 	if err := validateExplainOptions(options); err != nil {
 		return explainOptions{}, err
@@ -110,6 +142,8 @@ func applyExplainOption(options *explainOptions, arg string) error {
 		options.json = true
 	case "--dot":
 		options.dot = true
+	case "--mermaid":
+		options.mermaid = true
 	default:
 		return setExplainPath(options, arg)
 	}
@@ -140,12 +174,44 @@ func validateExplainOptions(options explainOptions) error {
 	if views > 1 {
 		return errors.New("--ast, --actions, and --plan select different views")
 	}
+	if err := validateExplainFormatOptions(options); err != nil {
+		return err
+	}
+	if err := validateExplainMermaidOptions(options); err != nil {
+		return err
+	}
+	return validateExplainJSONOptions(options)
+}
+
+func validateExplainFormatOptions(options explainOptions) error {
 	if options.dot && !options.actions && !options.plan {
 		return errors.New("--dot requires --actions or --plan")
 	}
 	if options.dot && options.json {
 		return errors.New("--dot and --json are mutually exclusive")
 	}
+	return nil
+}
+
+func validateExplainMermaidOptions(options explainOptions) error {
+	if options.mermaidTheme != "" {
+		if options.mermaidTheme != actionPlanMermaidThemeLight && options.mermaidTheme != actionPlanMermaidThemeDark {
+			return fmt.Errorf("invalid --mermaid-theme %q (want light or dark)", options.mermaidTheme)
+		}
+		if !options.mermaid {
+			return errors.New("--mermaid-theme requires --mermaid")
+		}
+	}
+	if options.mermaid && !options.plan {
+		return errors.New("--mermaid requires --plan")
+	}
+	if options.mermaid && (options.dot || options.json) {
+		return errors.New("--mermaid is mutually exclusive with --dot and --json")
+	}
+	return nil
+}
+
+func validateExplainJSONOptions(options explainOptions) error {
 	if options.json && !options.ast && !options.actions && !options.plan {
 		return errors.New("--json requires --ast, --actions, or --plan")
 	}
