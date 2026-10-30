@@ -76,6 +76,25 @@ events are expected:
 
 ---
 
+## Test a directory of flows
+
+```sh
+nflow test ./spec
+nflow test                         # defaults to ./spec
+```
+
+`nflow test [directory]` discovers `.nflow` files one directory below the
+target (for example, `spec/<scenario>/*.nflow`) and runs each through the
+normal Flow execution path. Existing `@assert:` directives are evaluated as
+part of each run; nested helper files are not treated as entrypoints. Every
+discovered flow is attempted, and the command exits non-zero if any run or
+assertion fails. No additional test DSL is required.
+
+`task specs` remains available for compatibility and uses this command for the
+repository's integrated suite. `task test:nflow` is an alternate focused task.
+
+---
+
 ## Format Flow source
 
 ```sh

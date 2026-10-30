@@ -43,6 +43,14 @@ var helpRegistry = map[string]helpText{
 			`nflow run --info flows/client.nflow`,
 		},
 	},
+	"test": {
+		Summary: "Run .nflow acceptance entrypoints found one directory below a path.",
+		Usage:   "nflow test [directory]",
+		Examples: []string{
+			`nflow test ./spec`,
+			`nflow test`,
+		},
+	},
 	buildCommand: {
 		Summary: "Compile a .nflow file into a standalone executable with embedded source and @require modules.",
 		Usage:   "nflow build <file.nflow> [-o <output>] [--debug] [--no-trimpath] [--all-bundles]",

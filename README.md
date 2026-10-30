@@ -61,7 +61,7 @@ Run the complete set locally with `task examples:nflow` from the central example
 
 ## Integrated specifications
 
-The root [`spec/`](spec/README.md) suite contains deterministic, real-world workflows that combine extensions with scenario-local custom bundles. It covers order intake, support triage and safe recovery, and payment reconciliation. Run its static lint gate with `task lint:nflow` and execute its assertions with `task specs`. `task test` runs Go tests, including native extension conformance and the host-root embed fixture, but not integrated scenarios. `task ci` includes the integrated scenarios as well. See [focused syntax checks](docs/cli.md#self-test) for a smaller verification scope.
+The root [`spec/`](spec/README.md) suite contains deterministic, real-world workflows that combine extensions with scenario-local custom bundles. It covers order intake, support triage and safe recovery, and payment reconciliation. Run its static lint gate with `task lint:nflow` and execute its assertions with `nflow test ./spec` (or `task test:nflow`). The existing `task specs` target remains available and CI continues to run it. `task test` runs Go tests, including native extension conformance and the host-root embed fixture, but not integrated scenarios. See [focused syntax checks](docs/cli.md#self-test) for a smaller verification scope.
 
 ## Verify without running a flow 🌀
 
@@ -84,6 +84,7 @@ task --list
 task test
 task test -- ./runner
 task lint:nflow
+task test:nflow
 task test:smoke
 task bench
 task ci

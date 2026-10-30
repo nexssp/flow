@@ -20,13 +20,15 @@ The local package uses the repository's single root Go module; do not add a nest
 
 Use **`extensions/<name>/nflows/*.nflow`** for a single extension's conformance examples, with descriptive filenames and flat companion files. Use **root `spec/`** when the value is the composition: multiple extensions, local domain actions, and a realistic workflow contract. Tutorial-first walkthroughs live in the central [examples repository](https://github.com/nexssp/examples/tree/main/flow).
 
-Run all integrated scenarios with:
+Run all integrated scenarios directly with:
 
 ```sh
-task specs
+nflow test ./spec
 ```
 
-This builds the CLI once, then runs every `spec/<scenario>/*.nflow` entrypoint through `nflow run`, which evaluates its `@assert` directives. The one-level glob deliberately includes all entrypoints beside scenario bundles while leaving nested included helpers such as `02_support_triage/common/triage.nflow` to be loaded by their parent workflow. Every matched entrypoint is attempted; any execution or assertion failure makes the task return a non-zero exit status. Add new scenario entrypoints beside their scenario bundle; the `specs` task discovers them automatically.
+`nflow test [directory]` runs every `.nflow` entrypoint one directory below the target through the normal Flow execution path, which evaluates existing `@assert` directives. The one-level discovery deliberately includes all entrypoints beside scenario bundles while leaving nested included helpers such as `02_support_triage/common/triage.nflow` to be loaded by their parent workflow. Every matched entrypoint is attempted; any execution or assertion failure makes the command return a non-zero exit status. Add new scenario entrypoints beside their scenario bundle; they are discovered automatically. No `@test` DSL is needed.
+
+`task test:nflow` is the focused Task alias. The existing `task specs` command remains available for compatibility and CI uses it to run the same suite.
 
 `task ci`, also invoked by the GitHub Actions CI workflow, runs `task specs` together with the native extension self-tests and the Go lint/test gates. `task test` runs Go tests, including the extension conformance gate and host-configured embed fixture, but it does not execute the integrated scenarios. The CLI extension self-test gate is also useful on its own:
 

@@ -48,6 +48,7 @@ const (
 var commands = map[string]func(context.Context, *invocation, []string) int{
 	"init": func(_ context.Context, _ *invocation, args []string) int { return runInit(args) },
 	"run":  runFlowInInvocation,
+	"test": runTestInInvocation,
 	buildCommand: func(ctx context.Context, inv *invocation, args []string) int {
 		return builder.RunBuild(ctx, args, inv.sourceRequiresFromFile)
 	},

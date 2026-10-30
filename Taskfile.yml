@@ -33,29 +33,13 @@ tasks:
       - go test ./builder -run '^$' -bench '^BenchmarkHarnessWarmRuns$' -benchtime=50x -count=1 -v
 
   test:smoke:        { desc: "{{.GOTEST}} ./cli/... -race -count=1 -v -run TestSmoke", cmds: ['{{.GOTEST}} ./cli/... -race -count=1 -v -run TestSmoke'] }
+  test:nflow:        { desc: "Run the integrated NFlow acceptance suite in spec/", cmds: ['{{.NFLOW}} test ./spec'] }
 
   self: {desc: '{{.NFLOW}} self test', cmds: ['{{.NFLOW}} self test']}
 
   specs:
     desc: Execute all integrated acceptance scenarios (including @assert checks)
-    cmds:
-      - |
-        set -eu
-        temp_dir=$(mktemp -d)
-        trap 'rm -rf "$temp_dir"' EXIT
-        go build -o "$temp_dir/nflow" ./cmd/nflow
-        status=0
-        for spec in ./spec/*/*.nflow
-        do
-          echo "=== $spec ==="
-          if "$temp_dir/nflow" run "$spec"; then
-            echo "PASS: $spec"
-          else
-            echo "FAIL: $spec" >&2
-            status=1
-          fi
-        done
-        exit "$status"
+    cmds: ['{{.NFLOW}} test ./spec']
 
   catalog:
     desc: Write the compiler catalog to catalog.json

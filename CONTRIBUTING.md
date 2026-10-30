@@ -34,6 +34,7 @@ task lint -- ./compiler ./runner
 task test -- ./compiler -run '^TestParser' -count=1
 task test:race:nocache -- ./runner -run '^TestApproval'
 task lint:nflow # static lint of the in-repository spec/ sources
+task test:nflow # run the integrated NFlow acceptance suite via nflow test ./spec
 task specs      # execute the integrated acceptance flows and their assertions
 task self       # native and optional-bundle extension conformance checks
 task test:smoke # CLI smoke checks
@@ -42,7 +43,7 @@ task vuln       # govulncheck
 
 For a deliberately scoped review, select explicit packages and test names rather than invoking the full gates. Record the commands, results, and untested scope. Do not describe focused checks as a full-suite pass.
 
-The `examples/` directory points to the central [examples repository](https://github.com/nexssp/examples). Run its example targets from that checkout, not this one. In this repository, use `task specs` and `task lint:nflow` when changing DSL composition or CLI wiring. For build or `@require` changes, select the relevant tests in `builder/` and `cli/`; these can compile additional binaries.
+The `examples/` directory points to the central [examples repository](https://github.com/nexssp/examples). Run its example targets from that checkout, not this one. In this repository, use `nflow test ./spec` (or `task specs`) and `task lint:nflow` when changing DSL composition or CLI wiring. For build or `@require` changes, select the relevant tests in `builder/` and `cli/`; these can compile additional binaries.
 
 ## Requirements
 
