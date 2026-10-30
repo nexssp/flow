@@ -52,9 +52,22 @@ type Modifier struct {
 	Inheritable bool
 	Example     string
 	Apply       func(b *action.Builder[any, any], raw string) error
+	// ApplyNative consumes a symbol value already parsed according to its
+	// explicit @symbols type; it must not parse or stringify the value.
+	ApplyNative func(b *action.Builder[any, any], value any) error
 	// ApplyTarget receives the original action as well as its dynamic builder.
 	// Use it for compile-time annotations that validate against request schema.
 	ApplyTarget func(target action.AnyAction, b *action.Builder[any, any], raw string) error
+}
+
+// ModifierValue preserves the source spelling while optionally carrying a
+// native, explicitly typed symbol value. Raw remains available for diagnostics
+// and explain tooling.
+type ModifierValue struct {
+	Raw    string
+	Value  any
+	Typed  bool
+	Quoted bool
 }
 
 // String returns a stable identifier for the kind, suitable for JSON
@@ -207,12 +220,23 @@ func (t *ModifierTable) All() []Modifier {
 // @{ file: ... } — and it produces a fix-the-typo message instead of a
 // bare "unknown modifier".
 func (t *ModifierTable) ApplyAll(target action.AnyAction, raws []string) (action.AnyAction, error) {
-	if len(raws) == 0 {
+	values := make([]ModifierValue, len(raws))
+	for i, raw := range raws {
+		values[i] = ModifierValue{Raw: raw}
+	}
+	return t.ApplyAllValues(target, values)
+}
+
+// ApplyAllValues applies modifiers while preserving already-parsed native
+// symbol values. Typed values are validated against the modifier's exact
+// native kind before its ApplyNative callback is invoked.
+func (t *ModifierTable) ApplyAllValues(target action.AnyAction, values []ModifierValue) (action.AnyAction, error) {
+	if len(values) == 0 {
 		return target, nil
 	}
 	builder := action.Dynamic(target)
-	for i, raw := range raws {
-		name, value := splitRawModifier(raw)
+	for i, input := range values {
+		name, rawValue := splitRawModifier(input.Raw)
 		modifier, ok := t.ByName(name)
 		if !ok {
 			if hint := SuggestModifierFix(target, name); hint != "" {
@@ -220,33 +244,79 @@ func (t *ModifierTable) ApplyAll(target action.AnyAction, raws []string) (action
 			}
 			return nil, xerr.BadRequest("unknown modifier :" + name)
 		}
-
 		if modifier.Unique {
 			for j := range i {
-				prevName, _ := splitRawModifier(raws[j])
-				if prevName == name {
+				previous, _ := splitRawModifier(values[j].Raw)
+				if previous == name {
 					return nil, xerr.Validation("modifier :" + name + " is not repeatable")
 				}
 			}
 		}
 
-		if err := ValidateModifierValue(modifier.ValueKind, value); err != nil {
-			return nil, xerr.Validation("modifier :" + name + ": " + err.Error())
-		}
 		var applyErr error
-		switch {
-		case modifier.ApplyTarget != nil:
-			applyErr = modifier.ApplyTarget(target, builder, value)
-		case modifier.Apply != nil:
-			applyErr = modifier.Apply(builder, value)
-		default:
-			return nil, xerr.Internal("modifier :" + name + " has no application handler")
+		if input.Typed {
+			if err := validateNativeModifierValue(modifier.ValueKind, input.Value); err != nil {
+				return nil, xerr.Validation("modifier :" + name + ": " + err.Error())
+			}
+			if modifier.ApplyNative == nil {
+				return nil, xerr.Validation("modifier :" + name + ": does not accept typed symbol values")
+			}
+			applyErr = modifier.ApplyNative(builder, input.Value)
+		} else {
+			if err := ValidateModifierValue(modifier.ValueKind, rawValue); err != nil {
+				return nil, xerr.Validation("modifier :" + name + ": " + err.Error())
+			}
+			switch {
+			case modifier.ApplyTarget != nil:
+				applyErr = modifier.ApplyTarget(target, builder, rawValue)
+			case modifier.Apply != nil:
+				applyErr = modifier.Apply(builder, rawValue)
+			default:
+				return nil, xerr.Internal("modifier :" + name + " has no application handler")
+			}
 		}
 		if applyErr != nil {
 			return nil, xerr.Validation("modifier :"+name+": "+applyErr.Error(), applyErr)
 		}
 	}
 	return builder.Build(), nil
+}
+
+func validateNativeModifierValue(kind ModifierKind, value any) error {
+	var ok bool
+	switch kind {
+	case ModifierKindAny:
+		return nil
+	case ModifierKindString:
+		_, ok = value.(string)
+	case ModifierKindInt:
+		_, ok = value.(int)
+	case ModifierKindInt32:
+		_, ok = value.(int32)
+	case ModifierKindInt64:
+		_, ok = value.(int64)
+	case ModifierKindFloat64:
+		_, ok = value.(float64)
+	case ModifierKindDuration:
+		_, ok = value.(time.Duration)
+	case ModifierKindFlag, ModifierKindStringList, ModifierKindJSON:
+		return fmt.Errorf("typed symbol values are not supported for %s modifiers", kind)
+	default:
+		return fmt.Errorf("typed symbol values are not supported for %s modifiers", kind)
+	}
+	if !ok {
+		return fmt.Errorf("expected %s typed value, got %T", kind, value)
+	}
+	return nil
+}
+
+func typedModifierValue[T any](kind ModifierKind, value any) (T, error) {
+	native, ok := value.(T)
+	if !ok {
+		var zero T
+		return zero, fmt.Errorf("expected %s typed value, got %T", kind, value)
+	}
+	return native, nil
 }
 
 func (t *ModifierTable) Actions() []action.AnyAction { return nil }
@@ -292,6 +362,14 @@ func Duration(name string, apply func(*action.Builder[any, any], time.Duration) 
 			apply(b, d)
 			return nil
 		},
+		ApplyNative: func(b *action.Builder[any, any], value any) error {
+			native, err := typedModifierValue[time.Duration](ModifierKindDuration, value)
+			if err != nil {
+				return err
+			}
+			apply(b, native)
+			return nil
+		},
 	}
 }
 
@@ -305,6 +383,14 @@ func Int(name string, apply func(*action.Builder[any, any], int) *action.Builder
 				return fmt.Errorf("parse int: %w", err)
 			}
 			apply(b, n)
+			return nil
+		},
+		ApplyNative: func(b *action.Builder[any, any], value any) error {
+			native, err := typedModifierValue[int](ModifierKindInt, value)
+			if err != nil {
+				return err
+			}
+			apply(b, native)
 			return nil
 		},
 	}
@@ -322,6 +408,14 @@ func Int32(name string, apply func(*action.Builder[any, any], int32) *action.Bui
 			apply(b, int32(n))
 			return nil
 		},
+		ApplyNative: func(b *action.Builder[any, any], value any) error {
+			native, err := typedModifierValue[int32](ModifierKindInt32, value)
+			if err != nil {
+				return err
+			}
+			apply(b, native)
+			return nil
+		},
 	}
 }
 
@@ -335,6 +429,14 @@ func Int64(name string, apply func(*action.Builder[any, any], int64) *action.Bui
 				return fmt.Errorf("parse int64: %w", err)
 			}
 			apply(b, n)
+			return nil
+		},
+		ApplyNative: func(b *action.Builder[any, any], value any) error {
+			native, err := typedModifierValue[int64](ModifierKindInt64, value)
+			if err != nil {
+				return err
+			}
+			apply(b, native)
 			return nil
 		},
 	}
@@ -352,6 +454,14 @@ func Float64(name string, apply func(*action.Builder[any, any], float64) *action
 			apply(b, f)
 			return nil
 		},
+		ApplyNative: func(b *action.Builder[any, any], value any) error {
+			native, err := typedModifierValue[float64](ModifierKindFloat64, value)
+			if err != nil {
+				return err
+			}
+			apply(b, native)
+			return nil
+		},
 	}
 }
 
@@ -361,6 +471,14 @@ func String(name string, apply func(*action.Builder[any, any], string) *action.B
 		ValueKind: ModifierKindString,
 		Apply: func(b *action.Builder[any, any], raw string) error {
 			apply(b, raw)
+			return nil
+		},
+		ApplyNative: func(b *action.Builder[any, any], value any) error {
+			native, err := typedModifierValue[string](ModifierKindString, value)
+			if err != nil {
+				return err
+			}
+			apply(b, native)
 			return nil
 		},
 	}
@@ -443,23 +561,36 @@ func ModifiersToMap(modifiers []string) map[string]any {
 // A nil table or nil inner function returns the lookup unchanged.
 // Sources are preserved.
 func filterInheritable(lk LineLookup, mt *ModifierTable) LineLookup {
-	if lk.Fn == nil || mt == nil {
+	if mt == nil {
 		return lk
 	}
-	inner := lk.Fn
-	lk.Fn = func(line int) []string {
-		raw := inner(line)
-		if len(raw) == 0 {
-			return nil
-		}
-		var kept []string
-		for _, m := range raw {
-			mod, ok := mt.ByName(ModifierName(m))
-			if !ok || mod.Inheritable {
-				kept = append(kept, m)
+	keep := func(raw string) bool {
+		mod, ok := mt.ByName(ModifierName(raw))
+		return !ok || mod.Inheritable
+	}
+	if lk.Fn != nil {
+		inner := lk.Fn
+		lk.Fn = func(line int) []string {
+			var kept []string
+			for _, raw := range inner(line) {
+				if keep(raw) {
+					kept = append(kept, raw)
+				}
 			}
+			return kept
 		}
-		return kept
+	}
+	if lk.ValueFn != nil {
+		inner := lk.ValueFn
+		lk.ValueFn = func(line int) []ModifierValue {
+			var kept []ModifierValue
+			for _, value := range inner(line) {
+				if keep(value.Raw) {
+					kept = append(kept, value)
+				}
+			}
+			return kept
+		}
 	}
 	return lk
 }

@@ -20,6 +20,14 @@ type SymbolNamespace struct {
 	Symbols map[string]any
 }
 
+// TypedSymbolValue carries an explicitly annotated @symbols value through
+// compile-time metadata without erasing its declared type. Value remains in
+// its native Go representation.
+type TypedSymbolValue struct {
+	Type  string
+	Value any
+}
+
 var (
 	symbolRegistryMu sync.RWMutex
 	symbolRegistry   = make(map[string]SymbolNamespace)
@@ -83,7 +91,7 @@ func WithSymbolNamespaces(env map[string]any) map[string]any {
 		if _, exists := out[name]; exists {
 			continue
 		}
-		out[name] = ns.Symbols
+		out[name] = RuntimeSymbolValue(ns.Symbols)
 	}
 	return out
 }
@@ -123,12 +131,20 @@ func SymbolsFromMeta(meta map[string]any) map[string]SymbolNamespace {
 	return symbols
 }
 
-// ResolveSymbolValue resolves an exact `<namespace>.<member>` reference using
-// the source's local and explicitly imported namespaces, then the global
-// registry. A local namespace shadows a global namespace completely, matching
-// the compiler's existing data-value resolver. Unresolved references return
-// false and remain available to the caller as ordinary modifier text.
+// ResolveSymbolValue resolves a symbol reference and returns its native runtime
+// value. Explicit type metadata is unwrapped for compatibility with existing
+// consumers.
 func ResolveSymbolValue(meta map[string]any, reference string) (any, bool) {
+	value, ok := ResolveSymbolDeclaration(meta, reference)
+	if !ok {
+		return nil, false
+	}
+	return RuntimeSymbolValue(value), true
+}
+
+// ResolveSymbolDeclaration preserves an explicit TypedSymbolValue wrapper for
+// compile-time use sites that must check the declared type.
+func ResolveSymbolDeclaration(meta map[string]any, reference string) (any, bool) {
 	namespace, member, ok := strings.Cut(reference, ".")
 	if !ok || namespace == "" || member == "" {
 		return nil, false
@@ -139,6 +155,29 @@ func ResolveSymbolValue(meta map[string]any, reference string) (any, bool) {
 	return LookupSymbol(namespace, member)
 }
 
+// RuntimeSymbolValue unwraps typed compile-time values for Flow expressions and
+// action payloads. Composite values are copied recursively.
+func RuntimeSymbolValue(value any) any {
+	switch value := value.(type) {
+	case TypedSymbolValue:
+		return RuntimeSymbolValue(value.Value)
+	case map[string]any:
+		out := make(map[string]any, len(value))
+		for key, item := range value {
+			out[key] = RuntimeSymbolValue(item)
+		}
+		return out
+	case []any:
+		out := make([]any, len(value))
+		for i, item := range value {
+			out[i] = RuntimeSymbolValue(item)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
 // MergeSymbolNamespaces returns a fresh environment containing every
 // registered global namespace, then any file-local namespace from ctx
 // (overriding globals of the same name), then the caller's env
@@ -147,7 +186,7 @@ func ResolveSymbolValue(meta map[string]any, reference string) (any, bool) {
 func MergeSymbolNamespaces(ctx context.Context, env map[string]any) map[string]any {
 	out := WithSymbolNamespaces(nil)
 	for name, ns := range LocalSymbolsFrom(ctx) {
-		out[name] = ns.Symbols
+		out[name] = RuntimeSymbolValue(ns.Symbols)
 	}
 	maps.Copy(out, env)
 	return out

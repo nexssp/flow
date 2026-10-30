@@ -1,5 +1,5 @@
 {
-  "last_run": "2026-10-29T14:19:55.9249845Z",
+  "last_run": "2026-10-30T11:35:39.1207958Z",
   "files": {
     ".gitattributes": {
       "hash": "d60f352d0db1404c70afb4bb8b2ca3fd1c610572aa40720e8a0b7baa7885418c",
@@ -42,9 +42,9 @@
       "size": 7800
     },
     "CONTRIBUTING.md": {
-      "hash": "6b3a9d508079ca63a2374e13e1f6019a6049cf58a0b387aa35c48e90d02663f5",
-      "mod_time": "2026-10-22T13:49:00+02:00",
-      "size": 3663
+      "hash": "99f0e13514bcd7cbb5805b6ededb3b3af759205d0677f192f7c03055155da566",
+      "mod_time": "2026-10-30T12:04:41.0110538+01:00",
+      "size": 3770
     },
     "LICENSE": {
       "hash": "9fe9da3ed59bad41170926c2fd151348214483669155b1a783b3ad612a41f800",
@@ -57,9 +57,9 @@
       "size": 126
     },
     "README.md": {
-      "hash": "cd10cea0e70399c71b61fbab6f57d3982b1e31b5842dc7410a592c59c6a60daf",
-      "mod_time": "1980-01-01T00:00:00+01:00",
-      "size": 6719
+      "hash": "4191ef80896279b0f73b5796885a3782a96543547a6b3ddd2ba293966a74c5f1",
+      "mod_time": "2026-10-30T12:04:41.0120571+01:00",
+      "size": 6791
     },
     "SECURITY.md": {
       "hash": "7038a34010ec59d88b1cc583928bd40156467d30a9e4441df57f8c3fe6c6d4e1",
@@ -67,9 +67,9 @@
       "size": 846
     },
     "Taskfile.yml": {
-      "hash": "4389fdc1414053f883620d034f32df2a266322fca1007d494ca6f41e88352d08",
-      "mod_time": "2026-10-27T12:54:54.7338342+01:00",
-      "size": 5368
+      "hash": "f097ef3a70632c63703d495a8faa962287543a2a26ca0fdb8c5e55cc4f4f67ba",
+      "mod_time": "2026-10-30T12:04:41.0120571+01:00",
+      "size": 5072
     },
     "builder/build.go": {
       "hash": "00231284b43e02240ecf6154ec926af635f39a0c0aefd4d1a7ec628b4c7bc97a",
@@ -102,9 +102,9 @@
       "size": 1954
     },
     "builder/harness.go": {
-      "hash": "f30591faff96be663acbcfa594ab267c3ada99f3418366000beca486e20f0f2b",
-      "mod_time": "2026-10-28T17:56:42+01:00",
-      "size": 50452
+      "hash": "31394877313a457b84dbb8a7ee9184d6304b45c4eaec9ca197b647891518ac8b",
+      "mod_time": "2026-10-29T23:52:33.6372469+01:00",
+      "size": 51494
     },
     "builder/module.go": {
       "hash": "a40750ce1e48ed91759bf9739e2df55546134405d15d69c80242a49f21b3571d",
@@ -167,9 +167,9 @@
       "size": 1434
     },
     "cli/cli.go": {
-      "hash": "62265eaf61606adaf4f8da4025ad6f1e8370962f3a2ccb1dab6ee19017477f5a",
-      "mod_time": "2026-10-29T14:52:46+01:00",
-      "size": 5685
+      "hash": "e9b4bfb15d7d4d95bdda161f51d19ea8c81d15cb94b86576bf2698943d60b271",
+      "mod_time": "2026-10-30T12:04:41.0120571+01:00",
+      "size": 5715
     },
     "cli/color.go": {
       "hash": "a4e825180171f28d913b9e209b70b52954bd47d3fd0b1fd8aba7a2ee54eb665c",
@@ -177,9 +177,9 @@
       "size": 1132
     },
     "cli/completion.go": {
-      "hash": "3565c8fc80628edec3226040a7a371c760a487df8dd05220fffdf6efc36525d4",
-      "mod_time": "2026-10-29T14:52:46+01:00",
-      "size": 11169
+      "hash": "44923c28a2fad92b1c22c15a547f88c60129f8ae996ffa5e3f7929802cb3dd1b",
+      "mod_time": "2026-10-30T12:04:41.0130572+01:00",
+      "size": 11717
     },
     "cli/env.go": {
       "hash": "b6640f19f15ae9fdda7096934785acc86e0f4d90bee64e5cfd7a1cec02e3651d",
@@ -227,9 +227,9 @@
       "size": 777
     },
     "cli/help.go": {
-      "hash": "c31bf63d6de20d7269b84d440b4c91bc652739ea9c59ea7caf603bf970b277bb",
-      "mod_time": "2026-10-29T14:52:46+01:00",
-      "size": 10390
+      "hash": "59c18f3108afa534b15583ff4a5df8a91eb4d1de9000271568f168ea55da04df",
+      "mod_time": "2026-10-30T12:29:26.0771651+01:00",
+      "size": 10629
     },
     "cli/init.go": {
       "hash": "b8abd4612f2db8671b0c30897b4a4646d1c22d73d590b3d40b5f6a5f5fbc5dca",
@@ -242,9 +242,9 @@
       "size": 1754
     },
     "cli/invocation.go": {
-      "hash": "ea63710dd396083f271a29096118ccd710e18f111cfa5fd704ea6ab56a8eefb9",
-      "mod_time": "1980-01-01T00:00:00+01:00",
-      "size": 11958
+      "hash": "40c510544a89ed6bf08cf6f165fef91bf93117eb71e5dbf73c4e263d1703bd74",
+      "mod_time": "2026-10-30T12:29:26.078167+01:00",
+      "size": 13053
     },
     "cli/json.go": {
       "hash": "1a2b9e26b5c1dcb4ef9402b39ddae03e52ac7eae7942280917e7d05000d34deb",
@@ -257,9 +257,9 @@
       "size": 3488
     },
     "cli/lint.go": {
-      "hash": "f4aa175cc9b0b159d537ad35c9b36b90dce2c2f1b02cc7361489e4187eb0baaf",
-      "mod_time": "2026-10-27T12:54:54.7373501+01:00",
-      "size": 9036
+      "hash": "508ecd76149732fa09d527344b11211704cd0d07faf7a4f0e70ffb58e489d126",
+      "mod_time": "2026-10-29T21:44:40+01:00",
+      "size": 9234
     },
     "cli/list.go": {
       "hash": "311e0808e8bfa7944a7444ad3e45f9cd0f1e35d7070e6c4e23128d8657d4ddbf",
@@ -267,14 +267,49 @@
       "size": 5789
     },
     "cli/lsp.go": {
-      "hash": "c7e7ef837eac80d441ae3b2a14c0ac97782ec37406597778edda22584f919120",
-      "mod_time": "2026-10-28T19:04:18+01:00",
-      "size": 28024
+      "hash": "436aed8268181e70d8c549597f71f19432527788aede2d6e624a0b5170de41ae",
+      "mod_time": "2026-10-30T07:48:18.7839492+01:00",
+      "size": 30716
+    },
+    "cli/lsp_folding.go": {
+      "hash": "f0c74e9d261efafee31f4e29ab30473e690515d88f715385080b6cd5af39f42d",
+      "mod_time": "2026-10-30T07:48:18.7844542+01:00",
+      "size": 1608
     },
     "cli/lsp_help.go": {
       "hash": "b034fb414296877a8288d24bf1dffc6f684485b6dd133682d41409aceb72d261",
       "mod_time": "2026-10-25T12:31:00+01:00",
       "size": 285
+    },
+    "cli/lsp_pipeline_symbols.go": {
+      "hash": "29e3bb56dcbfe09562fa94bb9a4ac9a9bcbf003319365b76c1771725db51867f",
+      "mod_time": "2026-10-30T07:48:18.7849969+01:00",
+      "size": 19057
+    },
+    "cli/lsp_schema.go": {
+      "hash": "eeacdd27a5b8f4f100fd44b10d5c1413e940e0b792493a48b8dd557fbceedac6",
+      "mod_time": "2026-10-30T07:48:18.785518+01:00",
+      "size": 30560
+    },
+    "cli/lsp_semantic_tokens.go": {
+      "hash": "ff2a0ecf02400e174535324b83bd6be7da6d5b8dcfb96a0b685c0104ff25a2c8",
+      "mod_time": "2026-10-30T07:48:18.7872311+01:00",
+      "size": 3087
+    },
+    "cli/lsp_source_index.go": {
+      "hash": "280f2276bba3cf02676c17de07a3a124820f4ad85f62d37bfad8450cde3dab31",
+      "mod_time": "2026-10-30T07:48:18.7877361+01:00",
+      "size": 2383
+    },
+    "cli/lsp_symbols.go": {
+      "hash": "8025376e7155f29f58501b6a4118c2e9a700a972f6ad332b53a45a7c00c6b299",
+      "mod_time": "2026-10-30T07:48:18.7882523+01:00",
+      "size": 2493
+    },
+    "cli/lsp_workspace_symbols.go": {
+      "hash": "230e06d712c5fa1e08e6ea6846858f723e1ec8d8f5e4423f621baa4eb8be0f78",
+      "mod_time": "2026-10-30T07:48:18.7888425+01:00",
+      "size": 4691
     },
     "cli/native_bundles.go": {
       "hash": "48962f37f87df158ec2ec365d58ee1e9290c92dca01f05cf063c5d14938c4a81",
@@ -292,9 +327,9 @@
       "size": 3775
     },
     "cli/run.go": {
-      "hash": "6e4a60816c2d363e1cd8a479bfbb65d4e87fa754066e1145121802a4e1a61a6e",
-      "mod_time": "2026-10-27T12:54:54.7383451+01:00",
-      "size": 20341
+      "hash": "1851a8ff8a5605d7710ce3bfb6435af0a4f66d8a554303d12709e4fb8fd51b53",
+      "mod_time": "2026-10-30T12:29:26.078167+01:00",
+      "size": 21360
     },
     "cli/selfbench.go": {
       "hash": "161f315fc78533cb1f0b20e8f599c071412b512a27d7103b28dbdaf29f9d2e17",
@@ -378,12 +413,12 @@
     },
     "cli/selftest/render.go": {
       "hash": "175c7751d5b8a151bd20ac731fea54bac6912fb29dd2c7652b07a8de1e9879fb",
-      "mod_time": "2026-10-29T14:52:46+01:00",
+      "mod_time": "2026-10-29T21:44:40+01:00",
       "size": 15363
     },
     "cli/selftest/runner.go": {
       "hash": "44c9db42047bd5e65f7f23ff804accc7a696fccd41377d57221a3ae697d958ef",
-      "mod_time": "2026-10-29T14:52:46+01:00",
+      "mod_time": "2026-10-29T21:44:40+01:00",
       "size": 11071
     },
     "cli/selftest/score.go": {
@@ -398,7 +433,7 @@
     },
     "cli/selftest/selftest.go": {
       "hash": "2cc0bbaee799231a95493258c4608dd5f53ba335618cc4d4ca91780a6801b752",
-      "mod_time": "2026-10-29T14:52:46+01:00",
+      "mod_time": "2026-10-29T21:44:40+01:00",
       "size": 6043
     },
     "cli/selftest/skip.go": {
@@ -441,10 +476,15 @@
       "mod_time": "2026-10-10T19:38:22+02:00",
       "size": 3162
     },
+    "cli/test.go": {
+      "hash": "4e3377b6f9b9cde65840555c664e3494252f707b515993abce4a70afc2cc19c4",
+      "mod_time": "2026-10-30T12:29:26.078167+01:00",
+      "size": 1880
+    },
     "cli/toolchain.go": {
-      "hash": "ced6db69d977cc5806143fcc63d004bc982faeb68b9d7ba2107b6d1d895d5a22",
-      "mod_time": "2026-10-27T11:24:46.168528+01:00",
-      "size": 30597
+      "hash": "5bb235cd30d3aa97c061d9ddb32e1fab4797c78e9efcbdae9cf4cb3dcf6e8a8a",
+      "mod_time": "2026-10-30T12:04:41.0140543+01:00",
+      "size": 30613
     },
     "cli/version.go": {
       "hash": "def52329266041d2244fe3fe6f55ce18e1675c2ca6b077d6d47f09e44ae75e05",
@@ -482,9 +522,9 @@
       "size": 5097
     },
     "compiler/ast_build.go": {
-      "hash": "6a0053b918ba08d52dc74db6e78d4ec421b488659a294365d202e09c3c1ee5f4",
-      "mod_time": "2026-10-21T19:41:42+02:00",
-      "size": 33265
+      "hash": "b709335a30e250aa503ce6f628758a8e63dbf494fb9c26427865d8604e43eaaf",
+      "mod_time": "2026-10-29T21:44:40+01:00",
+      "size": 33376
     },
     "compiler/at_brace.go": {
       "hash": "03963f9b5cd10f681c0d3826f4f7d5324e23a08dfb786d1ecbfcce3c0b60aa10",
@@ -508,7 +548,7 @@
     },
     "compiler/bundle.go": {
       "hash": "32bd75c7136c79ebb5740befc6a0add0ae01211b2f8f25f6f48bada8767a5216",
-      "mod_time": "2026-10-29T14:52:46+01:00",
+      "mod_time": "2026-10-29T21:44:40+01:00",
       "size": 12305
     },
     "compiler/bundle_source.go": {
@@ -527,9 +567,9 @@
       "size": 8796
     },
     "compiler/compile.go": {
-      "hash": "9e482aa6b635731fef78e434f20bcf1230ec52b174f8dab0dd32585dee64a66c",
-      "mod_time": "2026-10-27T17:27:54+01:00",
-      "size": 11751
+      "hash": "ab945fde4da8de78dd35aa7bac381201847fb4bfead08b8799610232a310a192",
+      "mod_time": "2026-10-30T07:48:18.7893796+01:00",
+      "size": 12457
     },
     "compiler/compile_options.go": {
       "hash": "c28a2daf1bc9a80283411845cb19e8722e0d5d2770c9463d679c3c25413fdc76",
@@ -537,9 +577,9 @@
       "size": 8285
     },
     "compiler/config_refs.go": {
-      "hash": "97fde4645acd18cc3f9c58769dcb533102b9365a02e63375d4f3954c2bf1830b",
-      "mod_time": "2026-10-22T13:52:04+02:00",
-      "size": 7819
+      "hash": "1368377d11a6a76c503afad6eca3fb3d1218f71c30a04e02f5858d7bb8e10f95",
+      "mod_time": "2026-10-29T21:44:40+01:00",
+      "size": 8565
     },
     "compiler/constants.go": {
       "hash": "866cc4f7a3e1e13f78b5b04e1dd40f08677bb2736780defdccd483518b6dd99f",
@@ -567,9 +607,9 @@
       "size": 1791
     },
     "compiler/declaration_header.go": {
-      "hash": "efa55780535a8bf1c688ca20a9293c7c0bfa49f607c520ccae683d884db01c54",
-      "mod_time": "2026-10-17T18:41:08+02:00",
-      "size": 3826
+      "hash": "8031f530dcb9fa1f5e339625a741eb28609a45ff2e71dc2502ee08fa91e8eb7d",
+      "mod_time": "2026-10-30T11:12:53.9846578+01:00",
+      "size": 6165
     },
     "compiler/decode.go": {
       "hash": "3f7d1a57ff0fde0806c4fb4edae34480e42cf8bc6d8f2866a3eb297571b6d6a0",
@@ -582,9 +622,9 @@
       "size": 863
     },
     "compiler/directive_block.go": {
-      "hash": "c12c4afc5758ee1e2388d5f64987e88e4382d2c8dcb9271819a0d4353bf21294",
-      "mod_time": "2026-10-28T17:56:44+01:00",
-      "size": 5344
+      "hash": "00854a420510cfa83ff503b757b6965b1a7925a128d054ff2c74f9a990420784",
+      "mod_time": "2026-10-30T07:48:18.790101+01:00",
+      "size": 8721
     },
     "compiler/errors.go": {
       "hash": "b21dedbd65dee874aa3f8e7e4e98bbe25779ca7381a5644c2f197b3a800fb129",
@@ -602,9 +642,9 @@
       "size": 2170
     },
     "compiler/extensions.go": {
-      "hash": "36a2b08016e19dfbfe6ffef36a085eeb7b0b18dd563d06255f43ed377528924b",
-      "mod_time": "2026-10-27T09:18:36.4059334+01:00",
-      "size": 2595
+      "hash": "f9af48972934f5c72cc74c2d9307e10380402ade8ad55768ee1b136fd6f3f32f",
+      "mod_time": "2026-10-30T07:48:18.7906062+01:00",
+      "size": 2860
     },
     "compiler/introspection_constants.go": {
       "hash": "66c720c2ee4004347c2a41cf1126efe653f35ee7d2d020eb16c84cb3c62521de",
@@ -612,9 +652,9 @@
       "size": 181
     },
     "compiler/lexer.go": {
-      "hash": "b1a013bd5e19ad2ac4ee53f37c265ba037fda7e581c8095114800f64182577bf",
-      "mod_time": "2026-10-22T14:13:40+02:00",
-      "size": 5966
+      "hash": "254f5b9cc292f8ac4f88523068ff5c7ee1fbe84fd7c26cf79e96c0f910a251b5",
+      "mod_time": "2026-10-30T07:48:18.7906062+01:00",
+      "size": 6463
     },
     "compiler/materialize.go": {
       "hash": "3358b32c469c66e4dd0be69bc37012a04a61eb2ef8ee9c4b3fe28beafe6e6c82",
@@ -622,9 +662,9 @@
       "size": 1112
     },
     "compiler/modifier.go": {
-      "hash": "4a84892e87545273e85d4db94c5fec16f1b17c61915539a80f16d0c286c27496",
-      "mod_time": "2026-10-11T06:21:00+02:00",
-      "size": 13022
+      "hash": "a5108db0327c316688d333059354f7cd3abb361131738a36eaed651733d0c353",
+      "mod_time": "2026-10-29T23:52:33.640767+01:00",
+      "size": 13739
     },
     "compiler/modifier_hint.go": {
       "hash": "c2c4078fec4b4717935bd771f42e55854cba591075d2297600648822f6aa95c1",
@@ -637,14 +677,14 @@
       "size": 2483
     },
     "compiler/parser.go": {
-      "hash": "eefd245e243c41ffc25915edc6c75e12c643a6630da5823e0bf96327503a7822",
-      "mod_time": "2026-10-22T13:54:46+02:00",
-      "size": 14650
+      "hash": "66f19408152fbff3ca85ce30c68c03220d57aa1cd409a0e329d90935f9299084",
+      "mod_time": "2026-10-29T21:44:40+01:00",
+      "size": 16057
     },
     "compiler/preprocess.go": {
-      "hash": "5463764c2152f2468590b3f7ed2e6c82a47bf83662e3b2e5a95ec9b936312722",
-      "mod_time": "2026-10-27T17:28:00+01:00",
-      "size": 6391
+      "hash": "9bc99028a13c90034600503b0901e77cb1ed38b39025379fe3fb4443e87d6e4e",
+      "mod_time": "2026-10-30T07:48:18.7914748+01:00",
+      "size": 7973
     },
     "compiler/preprocess_observer.go": {
       "hash": "2593848793a77a40e688459791c0ab3c2a378901958285a639102c4b8c308678",
@@ -691,6 +731,11 @@
       "mod_time": "2026-10-21T19:40:54+02:00",
       "size": 2002
     },
+    "compiler/source_index.go": {
+      "hash": "b1ae472704cb36dc8fcce3ea39b049e199af9e60c843b6b1c4445bd97548da61",
+      "mod_time": "2026-10-30T08:04:52.8783216+01:00",
+      "size": 8047
+    },
     "compiler/source_lines.go": {
       "hash": "f8533c4267340d702c215a3aa60907ecc07deaa43b5ca16f11987247c282c439",
       "mod_time": "2026-10-21T13:03:04+02:00",
@@ -702,9 +747,9 @@
       "size": 1209
     },
     "compiler/source_module.go": {
-      "hash": "a23f05f2ed21c0200945cef3ccb7c0d6f6f271eb7e7a60e001c86bc31167cda3",
-      "mod_time": "2026-10-27T17:29:04+01:00",
-      "size": 4008
+      "hash": "063771656e1bb6c4779277801832f44929dacf821f6870965a35ef079159752a",
+      "mod_time": "2026-10-30T07:48:18.7928686+01:00",
+      "size": 7668
     },
     "compiler/strict.go": {
       "hash": "44ba3fa503c9733aaf04c69a088240aa1220a32d4956fcdf71ddb8b6b8cef4e0",
@@ -712,14 +757,14 @@
       "size": 1695
     },
     "compiler/symbols.go": {
-      "hash": "1532ac4635497907fea33966f841a025b847a878033f58cb9f571f023f137cde",
-      "mod_time": "2026-10-21T19:41:42+02:00",
-      "size": 4673
+      "hash": "2c5656d7a6dc4f64111d2495691c9a02c08fb406e7ede08dce0d7af64a1ec7d7",
+      "mod_time": "2026-10-30T11:12:53.9846578+01:00",
+      "size": 5405
     },
     "compiler/token.go": {
-      "hash": "1f14247b26bff7d994101bfae220aa0288205e2772f974ba14808c486e2eb6b3",
-      "mod_time": "2026-10-22T13:51:22+02:00",
-      "size": 964
+      "hash": "8337302713963ce1a38ccc3026291a11b454c8f2fcf0c53eb725a570914bc41c",
+      "mod_time": "2026-10-30T07:48:18.7928686+01:00",
+      "size": 982
     },
     "compiler/version.go": {
       "hash": "20268155ccc42e63c85ea7b9a1dd1b9a0795616354058532484760ebf443737f",
@@ -747,9 +792,9 @@
       "size": 1654
     },
     "docs/cli.md": {
-      "hash": "7c7171499e0fa106764dbd807b674ec4682b7050abd8707e00f23c7431df7f3d",
-      "mod_time": "2026-10-27T12:54:54.7393821+01:00",
-      "size": 24435
+      "hash": "3731808d8dbc57d7d71c4dcfab4bf7db14f6c8bddf7e9f07462433e801fc5e00",
+      "mod_time": "2026-10-30T12:29:26.0791661+01:00",
+      "size": 26113
     },
     "docs/constants-compile-runtime.md": {
       "hash": "a299e49eabed55a60f2ec2bc516cce7c251ee22c712bc37f4a7ff3659562e2eb",
@@ -777,14 +822,14 @@
       "size": 24275
     },
     "docs/language-reference.md": {
-      "hash": "63d4c852839715ee70daefa0f4a9278d04ddae60ea8a2063d3bf2a258a53fe5f",
-      "mod_time": "2026-10-29T14:52:46+01:00",
-      "size": 36357
+      "hash": "895fa066ce1e5f58feba131321c9d01f26215b2b89fc1570c42a5545e857efd9",
+      "mod_time": "2026-10-30T12:29:26.0791661+01:00",
+      "size": 36668
     },
     "docs/language.md": {
-      "hash": "007d7da03f27b6522055d127788ab7fac881f7016308934ea194a433b794652d",
-      "mod_time": "2026-10-29T14:52:46+01:00",
-      "size": 22314
+      "hash": "9a23163697a4a411d1c26a3a1d1e88be1ad900ade855845fe024e83e9ac2673c",
+      "mod_time": "2026-10-29T21:44:40+01:00",
+      "size": 22868
     },
     "docs/long-lived-services.md": {
       "hash": "3eee76fcc7e9800d8b3cd811f2e4f6eda2931de1253264d408e83bc3881aae9a",
@@ -842,9 +887,9 @@
       "size": 3948
     },
     "docs/schema.md": {
-      "hash": "f3bbbbb2229dc1e498f64c872280076508887c9f54a134bbe07ded78f0ca82fb",
-      "mod_time": "2026-10-24T15:19:18+02:00",
-      "size": 4677
+      "hash": "45848156be503f6a9748dbfc3367dcb7b6e60d1c8053fad51bc9ba90975f65bc",
+      "mod_time": "2026-10-30T11:12:53.9856566+01:00",
+      "size": 6492
     },
     "docs/static-embed.md": {
       "hash": "51abb98d2785e4118e0941ba85db18e0e3410cefc8157a198aed442a8c2a8956",
@@ -857,9 +902,9 @@
       "size": 1245
     },
     "docs/symbols.md": {
-      "hash": "8379a802687e5cc9bf82a16ae6084495325f055d7aa239b486e64e9419130baf",
-      "mod_time": "2026-10-21T19:42:46+02:00",
-      "size": 3320
+      "hash": "677d80cef7ed30dc8d7f326db5591fc884498569eca24e45bb1c3863712484fa",
+      "mod_time": "2026-10-30T11:12:53.9856566+01:00",
+      "size": 4695
     },
     "docs/template.md": {
       "hash": "3b5a1868da615dd3e0353b9ab959065d1d4e9b78682684b7b2814ea945ebfb93",
@@ -1312,9 +1357,9 @@
       "size": 950
     },
     "extensions/include/directive.go": {
-      "hash": "76ae193dc826e4d7e62faf145ba8cfde06269b4dfc226930d42871f3c4d3d9c3",
-      "mod_time": "2026-10-21T19:40:22+02:00",
-      "size": 2523
+      "hash": "14e621b4236e56f6270ab58028699c7b96c299b359806912228cc5bb2ef2a590",
+      "mod_time": "2026-10-30T07:48:18.7933811+01:00",
+      "size": 3787
     },
     "extensions/include/library.go": {
       "hash": "8593129cde3fe96b488ae5e168d544fb3d7d373080f1937837cd4e34bf2af5a3",
@@ -1581,15 +1626,20 @@
       "mod_time": "2026-10-10T19:38:22+02:00",
       "size": 617
     },
+    "extensions/modifiers_meta/example.go": {
+      "hash": "8499f844d172fc5fefc5169607edd27ec208b1b29f600920cc0b27c1d0bc008b",
+      "mod_time": "2026-10-29T23:52:33.641764+01:00",
+      "size": 2542
+    },
     "extensions/modifiers_meta/library.go": {
       "hash": "adfc94a89e8a86cab050d93247e69e12a3811b313d4a6415b047fef4732675fb",
       "mod_time": "2026-10-12T20:43:46+02:00",
       "size": 989
     },
     "extensions/modifiers_meta/modifiers.go": {
-      "hash": "1537d0939a783a89d70c1ae65fc5f6299cde30fe2f91071b0ec44fa77d77c485",
-      "mod_time": "2026-10-12T20:43:46+02:00",
-      "size": 1567
+      "hash": "17f5258cea460f5dd956d0a6c14c612d3aeb032b007438f354bd8f81b92c2104",
+      "mod_time": "2026-10-29T23:52:33.6427643+01:00",
+      "size": 1588
     },
     "extensions/modifiers_meta/nflows/desc.nflow": {
       "hash": "cb8e619d2e5741540b28e66bc19cf58e1bc4c2d1b7926b260bae1315bc49b7a3",
@@ -1877,9 +1927,9 @@
       "size": 2532
     },
     "extensions/pipeline/directive.go": {
-      "hash": "11af2997e09b4b8e09ca372181666d559f1bcadeee413bf2c6b7d9cc490c1fd0",
-      "mod_time": "2026-10-21T19:46:12+02:00",
-      "size": 5722
+      "hash": "76286a399416e20b2d1114534b9e03c1b5e5f04043a58f4e460f087cb4394dea",
+      "mod_time": "2026-10-30T11:12:53.9856566+01:00",
+      "size": 7194
     },
     "extensions/pipeline/library.go": {
       "hash": "089ba85bad2db549f6d99618050a8df735815b14107da2a21d739911a0b988e7",
@@ -1887,14 +1937,19 @@
       "size": 2024
     },
     "extensions/pipeline/materialize.go": {
-      "hash": "e6524443a63c5c2c459bb8472079525a7594edb42370f064125a902ed6d84a4d",
-      "mod_time": "2026-10-27T16:07:50+01:00",
-      "size": 11725
+      "hash": "70d8bda3651f52a70eeee515cebba754415ba719b7dabf8a375160ce0fea1a55",
+      "mod_time": "2026-10-30T11:12:53.9866561+01:00",
+      "size": 13809
     },
     "extensions/pipeline/nflows/basic.nflow": {
       "hash": "b61500c4ce41462c557a7a12be50a6bd6d9e1a5352a4311711e5c5099e26de0e",
       "mod_time": "2026-10-10T19:38:22+02:00",
       "size": 151
+    },
+    "extensions/pipeline/nflows/config_timeout_inheritance.nflow": {
+      "hash": "71401b1cf5bc187a698eca063907eb55f694b1a52871f063630019e46589dca1",
+      "mod_time": "2026-10-29T21:44:40+01:00",
+      "size": 277
     },
     "extensions/pipeline/nflows/distribute_map_forward_reference.nflow": {
       "hash": "633c68b63fe0a005083971d0eacc20cd27cbd9e7a7e484458ceb96d2f3f5e3fa",
@@ -1915,6 +1970,26 @@
       "hash": "0dcf5ef3159176baf9b25207c1906f1bddf369981a091ce14727e13db3c11df1",
       "mod_time": "2026-10-10T19:38:22+02:00",
       "size": 304
+    },
+    "extensions/pipeline/nflows/schema_alias_strict_request.nflow": {
+      "hash": "960726094a1a84ffcc70ce206df7f0a25a2ab9f936bfb2ae4a0c7372a9cb4644",
+      "mod_time": "2026-10-30T11:12:53.9866561+01:00",
+      "size": 613
+    },
+    "extensions/pipeline/nflows/schema_alias_strict_response.nflow": {
+      "hash": "063ccfe6b248e5befbb5f39c9aa0ac9c5874cdc65f0e61f0350e62154c0d556f",
+      "mod_time": "2026-10-30T11:12:53.9876556+01:00",
+      "size": 670
+    },
+    "extensions/pipeline/nflows/schema_aliases--types.nflow": {
+      "hash": "69f2cf7b9ea573b507ae8a4d8b9a73c191aae8b25a066c12f9ba8acbcc18f5f6",
+      "mod_time": "2026-10-30T11:12:53.9876556+01:00",
+      "size": 196
+    },
+    "extensions/pipeline/nflows/schema_aliases.nflow": {
+      "hash": "fba0d95d0b4812b8ea6a82f30821816032c04b27d1fb6676717968fcb87656a9",
+      "mod_time": "2026-10-30T11:12:53.9876556+01:00",
+      "size": 415
     },
     "extensions/pipeline/nflows/schema_contract.nflow": {
       "hash": "90ec3a7f9cd7eb53f5c0be0493b912ddaecebed6225d8761f927d5f7d52371af",
@@ -1940,6 +2015,16 @@
       "hash": "23dea3317f0d6f4dd5eab1e9f2626975485ca74b61a598496d8f442d91cf9e1a",
       "mod_time": "2026-10-24T15:19:18+02:00",
       "size": 443
+    },
+    "extensions/pipeline/nflows/symbol_modifiers--catalog.nflow": {
+      "hash": "aa14885fee222535f2a3907b2e76f8313539a64bda6b6d4c7d3090987262781c",
+      "mod_time": "2026-10-30T11:12:53.9876556+01:00",
+      "size": 173
+    },
+    "extensions/pipeline/nflows/symbol_modifiers.nflow": {
+      "hash": "34afd8e94be53d4f2685fa2a3f36e47a61e5c46986eea660da0468d79fa0bd88",
+      "mod_time": "2026-10-30T11:12:53.9886568+01:00",
+      "size": 816
     },
     "extensions/pool/build.go": {
       "hash": "fbbe85860b72c6c465db3c4b8eb4dbf0ee372a5038894434bb69b7db3b081d52",
@@ -2307,9 +2392,9 @@
       "size": 127
     },
     "extensions/runtime/nflows/print_limits.nflow": {
-      "hash": "3f1cefccdbaa8d72c562e77a1200c216c46ebd14b3b4888b35ce7f11918a49f4",
-      "mod_time": "2026-10-11T13:14:18+02:00",
-      "size": 253
+      "hash": "c1f66d5753dc8c7f8f85f55afd348745d536534250e678c8b94cddc9014848fc",
+      "mod_time": "2026-10-29T21:44:40+01:00",
+      "size": 234
     },
     "extensions/runtime/nflows/uuid.nflow": {
       "hash": "f4e0fabac747a0f1b52f4d992f90b7ae1617d22064e04d8a35db85276b5180aa",
@@ -2357,29 +2442,29 @@
       "size": 1737
     },
     "extensions/schema/advisor.go": {
-      "hash": "7c6e0388516f7d1a6fbbfc6c2d557776a5b41394130fad2b7a1905384d2b2b30",
-      "mod_time": "2026-10-24T15:19:18+02:00",
-      "size": 2519
+      "hash": "413255e0c53a8ca5caa733fba0d5e00aea292fcbdd5fd7288d30ad5ce43a0089",
+      "mod_time": "2026-10-30T11:12:53.9886568+01:00",
+      "size": 2454
     },
     "extensions/schema/defaults.go": {
-      "hash": "2dff0cdf30b91d81e7b79f6e2078838e9830aac77c7827fd5d60eea06ee2769f",
-      "mod_time": "2026-10-15T10:08:38+02:00",
-      "size": 5038
+      "hash": "c62acd866d1558f85fe3c7f05a3b98344ead86fb611006ae056bfb37093f3674",
+      "mod_time": "2026-10-30T11:12:53.9886568+01:00",
+      "size": 5327
     },
     "extensions/schema/directive.go": {
-      "hash": "e85e14bb494b3e05e07805b2bb6fb438cd91283dca3fe78b4076b3064a0ba177",
-      "mod_time": "2026-10-27T09:18:36.4089327+01:00",
-      "size": 5552
+      "hash": "3b4e7a68a8bafc004794d052beeffd8719a9491d7fdc02d3ede18afc11cd646f",
+      "mod_time": "2026-10-30T11:12:53.9886568+01:00",
+      "size": 7922
     },
     "extensions/schema/library.go": {
-      "hash": "37952e04b724f9689d6118a40ee141577c083dd2d4328e2d03d969389e2fca83",
-      "mod_time": "2026-10-24T15:19:18+02:00",
-      "size": 3506
+      "hash": "cf623bd0373af7b9bdaaf1cc850be1e563d30a616fc6e0aed6591706ee08f413",
+      "mod_time": "2026-10-30T11:12:53.9896549+01:00",
+      "size": 4049
     },
     "extensions/schema/materialize.go": {
-      "hash": "64cee01a5f4e2e0a466ae604ca8709318b88e322ce54949f3dc6309005adfe13",
-      "mod_time": "2026-10-24T15:19:18+02:00",
-      "size": 2524
+      "hash": "753d0adc778a47c05ec1dd6b25ed2043ea47360d763f31c1641393bf3de25722",
+      "mod_time": "2026-10-30T11:12:53.9896549+01:00",
+      "size": 2442
     },
     "extensions/schema/nflows/array_element_rejects.nflow": {
       "hash": "e8958419b0ac256b782ce9cd97b5b1171dabf0124077fbc5b24aa1e9838da73f",
@@ -2431,15 +2516,25 @@
       "mod_time": "2026-10-22T13:03:04+02:00",
       "size": 501
     },
+    "extensions/schema/nflows/symbol_defaults.nflow": {
+      "hash": "80d8c1a72eeca506b2561afa75290567976bba904618c3df67dc11161f50050d",
+      "mod_time": "2026-10-30T11:12:53.9896549+01:00",
+      "size": 532
+    },
     "extensions/schema/normalize.go": {
       "hash": "2740e8e0c9ac525cfc168284a5cf78de58b7b9772858cb2f9b9c497086af3668",
       "mod_time": "2026-10-24T15:19:18+02:00",
       "size": 1199
     },
     "extensions/schema/schema.go": {
-      "hash": "b4507af997ad22ebe70dc439f590fff8def8f50de80e6edc1c8440c31fbbccd8",
-      "mod_time": "2026-10-24T15:19:18+02:00",
-      "size": 9926
+      "hash": "3699da786db4657bcebe2b8c2ffa566e26fa9e5e1038a0831fd26a0211c16ee6",
+      "mod_time": "2026-10-30T11:12:53.9906548+01:00",
+      "size": 10699
+    },
+    "extensions/schema/symbols.go": {
+      "hash": "6defe10d25df4fa379a9c147a1f6d230f228a79890ae90967edcbee120d804a0",
+      "mod_time": "2026-10-30T11:12:53.9906548+01:00",
+      "size": 3249
     },
     "extensions/schema/tags.go": {
       "hash": "0dc4dedf8a93c3ef507c0ae38bd127ae4cc9f519cbf936290bf66a12baac120d",
@@ -2487,14 +2582,14 @@
       "size": 646
     },
     "extensions/scope/profile.go": {
-      "hash": "d754ba1b8b520861aa1c5fb6a684706403e413da12c56d1714c7bd78077f24c7",
-      "mod_time": "2026-10-21T19:44:54+02:00",
-      "size": 5496
+      "hash": "c9dcd4dfec7135a63b43e3eb489c9ddd9551cd0ffc1a72fb89bd737ed054df47",
+      "mod_time": "2026-10-30T11:12:53.9906548+01:00",
+      "size": 6641
     },
     "extensions/selftestkit/library.go": {
-      "hash": "13da72ead1caf25fb17f55cb5e21444e38650cd3b82e9c5e34759ed280731bd4",
-      "mod_time": "2026-10-28T16:20:24+01:00",
-      "size": 6481
+      "hash": "25077e3e6b402310c89cac4966df1017f7f5a3e523ed89f73e15d7a722d88577",
+      "mod_time": "2026-10-29T21:44:40+01:00",
+      "size": 6620
     },
     "extensions/selftestkit/nflows/bundle_source--module.nflow": {
       "hash": "30db4796f0a046dabb9feb28aa2c3202d2833c44be9fc99ae8b653bc77358df9",
@@ -2592,14 +2687,19 @@
       "size": 3774
     },
     "extensions/symbols/directive.go": {
-      "hash": "84576687eca542783f0d5865c7869295497ba83ccca7d7b15026a8a4a70af6a4",
-      "mod_time": "2026-10-27T09:18:36.4089327+01:00",
-      "size": 3539
+      "hash": "9c124690ba61d2044ae1faaac7044d90db6159f487d74318607b89c85fdcaab3",
+      "mod_time": "2026-10-30T11:12:53.9916559+01:00",
+      "size": 4170
     },
     "extensions/symbols/library.go": {
       "hash": "0f84206d382aabded4979c718e33fc8c8b1a7d69a4f7a94ca3c7c31fd8ac9cb7",
       "mod_time": "2026-10-12T20:42:56+02:00",
       "size": 825
+    },
+    "extensions/symbols/nflows/bare_values.nflow": {
+      "hash": "d59c634a7d2c85a78f437934813fb0b3ea25e8a8f796e82471778e3f6cb69b26",
+      "mod_time": "2026-10-30T11:12:53.9916559+01:00",
+      "size": 567
     },
     "extensions/symbols/nflows/domain_status.nflow": {
       "hash": "aa7627d184607f5c43e97701c9034ffad9f0a013cac98b3239ae6fbd1a334c39",
@@ -2657,9 +2757,9 @@
       "size": 4311
     },
     "extensions/syntax/nflows/argument_value_forms.nflow": {
-      "hash": "07eb921c0fbc60de5de8b1269f8e4d9ce38a93b58b1f214011f330c75f4da3bb",
-      "mod_time": "2026-10-29T14:52:46+01:00",
-      "size": 291
+      "hash": "cc099731e55e4285143d68d52ec539363a0d001057d47f54bea417d00896f65a",
+      "mod_time": "2026-10-29T21:44:41+01:00",
+      "size": 283
     },
     "extensions/syntax/nflows/fallback_operator.nflow": {
       "hash": "d4558eb95db34be6b971c13fdfce844c6215ba35971e95901c9076133099eeb8",
@@ -2673,7 +2773,7 @@
     },
     "extensions/syntax/nflows/modifier_colon_boundaries.nflow": {
       "hash": "09b4f1c5393a9d9350b227182baadb0735d5a64268b44392576bd7e1f61a6869",
-      "mod_time": "2026-10-29T14:52:46+01:00",
+      "mod_time": "2026-10-29T21:44:41+01:00",
       "size": 226
     },
     "extensions/syntax/nflows/named_parallel.nflow": {
@@ -2713,12 +2813,12 @@
     },
     "extensions/syntax/nflows/ternary_edges.nflow": {
       "hash": "616ac30dcf24e0d659ddfe0e54691348209c2f6575dd66e903ea6e1472473f87",
-      "mod_time": "2026-10-29T14:52:46+01:00",
+      "mod_time": "2026-10-29T21:44:41+01:00",
       "size": 281
     },
     "extensions/syntax/nflows/ternary_two_arm.nflow": {
       "hash": "80c74b9f954f0b43f71411d86a86513ea232b0598d5444c46b2ecb83e8af7fe2",
-      "mod_time": "2026-10-29T14:52:46+01:00",
+      "mod_time": "2026-10-29T21:44:41+01:00",
       "size": 144
     },
     "extensions/syntax/race.go": {
@@ -2745,6 +2845,26 @@
       "hash": "d77cf61c9c39062a1ee2269b0111736d61eee4bf76317402b62410934919417c",
       "mod_time": "2026-10-11T09:08:40+02:00",
       "size": 831
+    },
+    "extensions/test/README.md": {
+      "hash": "673731bc14dad7727ad588453f7e47817c5752a62ac3cd3a44cfdc0eb4f6ab8c",
+      "mod_time": "2026-10-30T12:29:26.0801662+01:00",
+      "size": 661
+    },
+    "extensions/test/directive.go": {
+      "hash": "e20a04c07446e2c9ab4d115d05e0c9d5d0aa6b6b5b0186bb1ba34f392c913094",
+      "mod_time": "2026-10-30T12:29:26.0801662+01:00",
+      "size": 2151
+    },
+    "extensions/test/testdata/spec/01_pass/main.nflow": {
+      "hash": "56d60658411bde3747b4125ad8306203e791fd44c3966ef58f2b31efbc56edeb",
+      "mod_time": "2026-10-30T12:29:26.0811651+01:00",
+      "size": 69
+    },
+    "extensions/test/testdata/spec/02_fail/main.nflow": {
+      "hash": "4797d4c26394fa540c0ccfd7fbac3df325ff53cad4ca93d986c94ae265229377",
+      "mod_time": "2026-10-30T12:29:26.0821673+01:00",
+      "size": 49
     },
     "formatter/at_brace.go": {
       "hash": "3eda93616ea6672c830afa14a7ec6a0245b2be239f476f0cc49d001d9631d9ec",
@@ -2817,9 +2937,9 @@
       "size": 2483
     },
     "runner/execute.go": {
-      "hash": "266d686b2b500da507932f828fe9dea287d488f8eb083643b681e7c024102f57",
-      "mod_time": "2026-10-27T17:28:10+01:00",
-      "size": 14590
+      "hash": "642eebf1ec2a7013e8493e682146c4dad9312b921695e0c7a49d91adf7ff7b4e",
+      "mod_time": "2026-10-30T07:48:18.7943878+01:00",
+      "size": 15521
     },
     "runner/execution_identity.go": {
       "hash": "be7152fc717f5b134bad5268d499dc1211c280a0d25d1d95aa1be979e866cc9b",
@@ -2942,9 +3062,9 @@
       "size": 1613
     },
     "spec/README.md": {
-      "hash": "711ec5e36457ab35a0d6f734f6bd3f879156e378e89e17b34c71fa5984177eb0",
-      "mod_time": "2026-10-22T13:14:02+02:00",
-      "size": 3518
+      "hash": "071b40f5cc603e0a903b57da887e8f3277d44314ff1afa42078477c2e5429150",
+      "mod_time": "2026-10-30T12:04:41.0150576+01:00",
+      "size": 3742
     }
   }
 }

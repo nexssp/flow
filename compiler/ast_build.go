@@ -208,6 +208,12 @@ func atomStreamParams(ctx context.Context, atom *Atom) map[string]any {
 			}
 		}
 	}
+	for key, value := range atom.ParamValues {
+		if params == nil {
+			params = make(map[string]any, len(atom.ParamValues))
+		}
+		params[key] = value
+	}
 	if len(atom.Args) > 0 {
 		if params == nil {
 			params = make(map[string]any, len(atom.Args))
@@ -710,6 +716,9 @@ func resolveConfigRefsInAtom(ctx context.Context, a *Atom) {
 	}
 	for i, raw := range a.Modifiers {
 		a.Modifiers[i] = resolveConfigRefsInModifier(cfg, cliArgs, raw)
+		if i < len(a.ModifierValues) {
+			a.ModifierValues[i].Raw = a.Modifiers[i]
+		}
 	}
 }
 
@@ -845,6 +854,7 @@ func buildPayload(ctx context.Context, in any, a *Atom) map[string]any {
 		for k, v := range a.Params {
 			out[k] = v
 		}
+		maps.Copy(out, a.ParamValues)
 		for k, v := range a.Args {
 			out[k] = resolveValue(ctx, v, m)
 		}
@@ -859,6 +869,7 @@ func buildPayload(ctx context.Context, in any, a *Atom) map[string]any {
 	for k, v := range a.Params {
 		merged[k] = v
 	}
+	maps.Copy(merged, a.ParamValues)
 	for k, v := range a.Args {
 		merged[k] = resolveValue(ctx, v, m)
 	}
@@ -885,7 +896,7 @@ func resolveValue(ctx context.Context, v *Value, state map[string]any) any {
 		return v.Typed
 	case ValueBare:
 		if val, ok := lookupSymbolValue(ctx, v.Str); ok {
-			return val
+			return RuntimeSymbolValue(val)
 		}
 		return v.Str
 	case ValueNumber:
@@ -919,12 +930,45 @@ func resolveValue(ctx context.Context, v *Value, state map[string]any) any {
 func resolveSymbolsInAtom(ctx context.Context, a *Atom) {
 	for key, value := range a.Params {
 		if val, ok := lookupSymbolValue(ctx, value); ok {
+			if typed, ok := val.(TypedSymbolValue); ok {
+				if a.ParamValues == nil {
+					a.ParamValues = make(map[string]any)
+				}
+				a.ParamValues[key] = typed.Value
+				continue
+			}
 			a.Params[key] = fmt.Sprint(val)
 		}
 	}
 	for _, value := range a.Args {
 		resolveSymbolsInValue(ctx, value)
 	}
+	a.ModifierValues = resolveTypedModifierValues(ctx, a.Modifiers, a.ModifierValues)
+}
+
+func resolveTypedModifierValues(ctx context.Context, raws []string, values []ModifierValue) []ModifierValue {
+	out := make([]ModifierValue, len(raws))
+	copy(out, values)
+	for i, raw := range raws {
+		if i >= len(values) {
+			out[i] = ModifierValue{Raw: raw}
+		} else {
+			out[i].Raw = raw
+		}
+		input := &out[i]
+		if input.Typed || input.Quoted || !strings.Contains(raw, "=") {
+			continue
+		}
+		name, symbol := splitRawModifier(raw)
+		if value, ok := lookupSymbolValue(ctx, symbol); ok {
+			if typed, ok := value.(TypedSymbolValue); ok {
+				input.Value = typed.Value
+				input.Typed = true
+				input.Raw = name + "=" + symbol
+			}
+		}
+	}
+	return out
 }
 
 func resolveSymbolsInValue(ctx context.Context, value *Value) {
@@ -934,6 +978,17 @@ func resolveSymbolsInValue(ctx context.Context, value *Value) {
 	switch value.Kind {
 	case ValueBare:
 		if val, ok := lookupSymbolValue(ctx, value.Str); ok {
+			if typed, ok := val.(TypedSymbolValue); ok {
+				switch native := typed.Value.(type) {
+				case string:
+					value.Kind = ValueString
+					value.Str = native
+				default:
+					value.Kind = ValueTyped
+					value.Typed = native
+				}
+				return
+			}
 			switch v := val.(type) {
 			case string:
 				value.Kind = ValueString
@@ -954,8 +1009,8 @@ func resolveSymbolsInValue(ctx context.Context, value *Value) {
 				value.Kind = ValueTyped
 				value.Typed = v
 			default:
-				value.Kind = ValueString
-				value.Str = fmt.Sprint(val)
+				value.Kind = ValueTyped
+				value.Typed = val
 			}
 		}
 	case ValueMap:
@@ -1167,8 +1222,12 @@ func (d *DecoratedExpr) Build(ctx context.Context, bCtx *BuildContext) (action.A
 	}
 	cfg, cliArgs := compileConfigFromCtx(ctx)
 	modifiers := resolveConfigRefsInModifiers(cfg, cliArgs, d.Modifiers)
-	modified, err := bCtx.Modifiers.ApplyAll(inner, modifiers)
+	values := resolveTypedModifierValues(ctx, modifiers, d.ModifierValues)
+	modified, err := bCtx.Modifiers.ApplyAllValues(inner, values)
 	if err != nil {
+		if hasTypedModifierValues(values) {
+			return nil, SourceError(d.Pos, "%w", err)
+		}
 		return nil, err
 	}
 	return inspectBuiltChild(bCtx, modified, "modifier", action.IntrospectionChild{
@@ -1226,11 +1285,23 @@ func finalizeAtomAction(a *Atom, bCtx *BuildContext, act action.AnyAction) (acti
 		}
 		return inspectBuiltAction(bCtx, act), nil
 	}
-	modified, err := bCtx.Modifiers.ApplyAll(act, a.Modifiers)
+	modified, err := bCtx.Modifiers.ApplyAllValues(act, a.ModifierValues)
 	if err != nil {
+		if hasTypedModifierValues(a.ModifierValues) {
+			return nil, SourceError(a.Pos, "%w", err)
+		}
 		return nil, err
 	}
 	return inspectBuiltChild(bCtx, modified, "modifier", action.IntrospectionChild{
 		Node: act, Relation: "wraps", Role: IntrospectionKindAction,
 	}), nil
+}
+
+func hasTypedModifierValues(values []ModifierValue) bool {
+	for _, value := range values {
+		if value.Typed {
+			return true
+		}
+	}
+	return false
 }

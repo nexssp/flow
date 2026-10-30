@@ -1,0 +1,20 @@
+@description "spec: typed symbols remain native across request defaults and response validation boundaries"
+@symbols boundary_values {
+  status: int = 201;
+  timeout: duration = 5s
+}
+@schema TypedRequest {
+  Status  int      `json:"status" default:"boundary_values.status" validate:"eq=boundary_values.status"`
+  Timeout duration `json:"timeout" default:"boundary_values.timeout" validate:"gte=boundary_values.timeout"`
+}
+@schema TypedResponse {
+  Status  int      `json:"status" validate:"eq=boundary_values.status"`
+  Timeout duration `json:"timeout" validate:"gte=boundary_values.timeout"`
+}
+@pipeline typed_boundary :request-schema=TypedRequest :response-schema=TypedResponse
+  runtime.noop
+@end
+@pipeline typed_invalid_response :response-schema=TypedResponse
+  runtime.const @{ status: 202, timeout: boundary_values.timeout }
+@end
+pipeline.typed_boundary

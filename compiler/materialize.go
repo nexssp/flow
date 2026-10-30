@@ -24,7 +24,10 @@ type MaterializeReq struct {
 	Meta     map[string]any
 	Resolver CapabilityResolver
 	Compile  func(name, source string, modifiers ...string) (action.AnyAction, error)
-	Alias    string
+	// CompileValues carries explicitly typed modifier values without flattening
+	// them through the legacy string callback.
+	CompileValues func(name, source string, modifiers []ModifierValue) (action.AnyAction, error)
+	Alias         string
 	// Introspection enables retaining child-action relationships on materialized actions.
 	Introspection bool
 }

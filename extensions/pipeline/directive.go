@@ -92,6 +92,12 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 		req.Out["pipelines"] = pipelines
 	}
 	pipelines[name] = strings.Join(bodyLines, "\n")
+	positions, _ := req.Out["pipeline_declaration_positions"].(map[string]compiler.Position)
+	if positions == nil {
+		positions = make(map[string]compiler.Position)
+	}
+	positions[name] = compiler.Position{File: req.File, Line: req.I + 1, Col: 1}
+	req.Out["pipeline_declaration_positions"] = positions
 
 	if len(applied) > 0 {
 		pipelineMods, _ := req.Out["pipeline_modifiers"].(map[string][]string)

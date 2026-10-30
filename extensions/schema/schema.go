@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/validation"
@@ -14,9 +15,10 @@ import (
 )
 
 const (
-	typeString = "string"
-	typeNumber = "number"
-	typeObject = "object"
+	typeString   = "string"
+	typeNumber   = "number"
+	typeObject   = "object"
+	typeDuration = "duration"
 )
 
 type Kind uint8
@@ -26,21 +28,25 @@ const (
 	KindInt
 	KindFloat
 	KindBool
+	KindDuration
 	KindAny
 	KindStruct
 )
 
 type Field struct {
-	Name     string
-	JSONName string
-	Type     string
-	Kind     Kind
-	ElemType string
-	Pointer  bool
-	Slice    bool
-	Map      bool
-	Tags     map[string]string
-	Embed    string
+	Name            string
+	JSONName        string
+	Type            string
+	Kind            Kind
+	ElemType        string
+	Pointer         bool
+	Slice           bool
+	Map             bool
+	Tags            map[string]string
+	Embed           string
+	TypedDefault    any
+	HasTypedDefault bool
+	Position        compiler.Position
 }
 
 type Schema struct {
@@ -75,7 +81,8 @@ func SplitFields(s Schema) (payload, config []string) {
 	payload = make([]string, 0, len(s.Fields))
 	config = make([]string, 0, len(s.Fields))
 
-	for _, f := range s.Fields {
+	for i := range s.Fields {
+		f := s.Fields[i]
 		toConfig := f.Tags["config"] == "true"
 		toPayload := f.Tags["payload"] == "true" || !toConfig
 
@@ -148,7 +155,8 @@ func ApplyDefaultsAndValidate(ctx context.Context, schema Schema, payload any) (
 
 func validateValues(ctx context.Context, schema Schema, m map[string]any) error {
 	var details xerr.ValidationDetails
-	for _, field := range schema.Fields {
+	for i := range schema.Fields {
+		field := schema.Fields[i]
 		value, present := m[field.JSONName]
 		rule := field.Tags["validate"]
 		required := hasValidationTag(rule, "required")
@@ -280,6 +288,12 @@ func checkFieldKind(field Field, value any) (xerr.ValidationDetail, bool) {
 			detail.Value = fmt.Sprintf("must be a boolean (got %s)", friendlyType(value))
 			return detail, true
 		}
+	case KindDuration:
+		if _, ok := value.(time.Duration); !ok {
+			detail.Validation = typeDuration
+			detail.Value = fmt.Sprintf("must be a duration (got %s)", friendlyType(value))
+			return detail, true
+		}
 	case KindStruct:
 		if _, ok := value.(map[string]any); !ok {
 			detail.Validation = typeObject
@@ -307,6 +321,8 @@ func friendlyType(v any) string {
 		return "string"
 	case bool:
 		return "boolean"
+	case time.Duration:
+		return typeDuration
 	case int, int8, int16, int32, int64,
 		uint, uint8, uint16, uint32, uint64,
 		float32, float64:
@@ -331,7 +347,8 @@ func ToJSONSchema(s Schema) map[string]any {
 	properties := make(map[string]any, len(s.Fields))
 	var required []string
 
-	for _, f := range s.Fields {
+	for i := range s.Fields {
+		f := s.Fields[i]
 		prop := jsonSchemaKind(f.Kind)
 
 		if f.Slice {
@@ -390,6 +407,8 @@ func jsonSchemaKind(kind Kind) map[string]any {
 		prop["type"] = typeNumber
 	case KindBool:
 		prop["type"] = "boolean"
+	case KindDuration:
+		prop["type"] = "integer"
 	case KindStruct:
 		prop["type"] = typeObject
 	case KindAny:

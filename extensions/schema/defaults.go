@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 )
 
@@ -26,7 +29,8 @@ func ApplyDefaults(schema Schema, payload any) (map[string]any, error) {
 	values := make(map[string]any, len(input)+len(schema.Fields))
 	maps.Copy(values, input)
 
-	for _, field := range schema.Fields {
+	for i := range schema.Fields {
+		field := schema.Fields[i]
 		if _, present := values[field.JSONName]; present {
 			continue
 		}
@@ -56,9 +60,13 @@ func fieldDefaultValue(field Field) (value any, hasDefault bool, err error) {
 }
 
 func validateSchemaDefaults(fields []Field) error {
-	for _, field := range fields {
+	for i := range fields {
+		field := fields[i]
 		raw, ok := field.Tags["default"]
 		if !ok {
+			continue
+		}
+		if field.HasTypedDefault {
 			continue
 		}
 		if _, err := parseDefaultValue(field, raw); err != nil {
@@ -69,6 +77,9 @@ func validateSchemaDefaults(fields []Field) error {
 }
 
 func parseDefaultValue(field Field, raw string) (any, error) {
+	if field.HasTypedDefault {
+		return field.TypedDefault, nil
+	}
 	if field.Slice || field.Map {
 		value, err := parseJSONDefault(raw)
 		if err != nil {
@@ -107,6 +118,8 @@ func parseDefaultValue(field Field, raw string) (any, error) {
 		return value, nil
 	case KindBool:
 		return strconv.ParseBool(raw)
+	case KindDuration:
+		return action.CoerceStringValue(raw, reflect.TypeFor[time.Duration]())
 	case KindAny:
 		var value any
 		if err := json.Unmarshal([]byte(raw), &value); err == nil {

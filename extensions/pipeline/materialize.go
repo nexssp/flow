@@ -24,12 +24,13 @@ func materialize(req compiler.MaterializeReq) error {
 	if len(pipelines) == 0 {
 		return nil
 	}
-	if req.Compile == nil {
+	if req.Compile == nil && req.CompileValues == nil {
 		return errors.New("@pipeline: compiler is not available")
 	}
 
 	pipelineMods, _ := req.Meta["pipeline_modifiers"].(map[string][]string)
 	pipelineQuoted, _ := req.Meta["pipeline_modifier_quoted"].(map[string][]bool)
+	pipelinePositions, _ := req.Meta["pipeline_declaration_positions"].(map[string]compiler.Position)
 	definitions := make([]pipelineDefinition, 0, len(pipelines))
 	for name, source := range pipelines {
 		definitions = append(definitions, pipelineDefinition{
@@ -37,6 +38,7 @@ func materialize(req compiler.MaterializeReq) error {
 			source:    source,
 			modifiers: pipelineMods[name],
 			quoted:    pipelineQuoted[name],
+			pos:       pipelinePositions[name],
 		})
 	}
 	sort.Slice(definitions, func(i, j int) bool {
@@ -50,6 +52,7 @@ type pipelineDefinition struct {
 	source    string
 	modifiers []string
 	quoted    []bool
+	pos       compiler.Position
 }
 
 func materializePipelines(req compiler.MaterializeReq, definitions []pipelineDefinition) error {
@@ -99,32 +102,30 @@ func materializePipelines(req compiler.MaterializeReq, definitions []pipelineDef
 
 func materializePipeline(req compiler.MaterializeReq, definition pipelineDefinition, pending map[string]struct{}) (retry bool, err error) {
 	canonicalName := pipelineActionName(definition.name)
-	modifiers := resolvePipelineModifierSymbols(req.Meta, definition.modifiers, definition.quoted)
-	requestSelection, responseSelection, compileMods, err := splitSchemaModifiers(definition.name, modifiers)
+	modifiers := resolvePipelineModifierValues(req.Meta, definition.modifiers, definition.quoted)
+	modifierRaws := make([]string, len(modifiers))
+	for i, modifier := range modifiers {
+		modifierRaws[i] = modifier.Raw
+	}
+	resolvedSchemas, err := resolvePipelineSchemas(req.Meta, definition.name, modifierRaws)
 	if err != nil {
 		return false, err
 	}
+	requestSelection := resolvedSchemas.requestSelection
+	responseSelection := resolvedSchemas.responseSelection
+	compileMods := resolvedSchemas.compileModifiers
+	requestSchema := resolvedSchemas.requestSchema
+	responseSchema := resolvedSchemas.responseSchema
 
-	requestSchemaValue, hasRequestSchema, err := selectedPipelineSchema(req.Meta, definition.name, requestSelection, schemaext.RequestSchemaModifierName, false)
+	compileValues := make([]compiler.ModifierValue, 0, len(compileMods))
+	for _, modifier := range modifiers {
+		if !isSchemaSelectionModifier(compiler.ModifierName(modifier.Raw)) {
+			compileValues = append(compileValues, modifier)
+		}
+	}
+	program, err := compilePipelineProgram(req, definition, canonicalName, compileValues, compileMods)
 	if err != nil {
-		return false, err
-	}
-	responseSchemaValue, hasResponseSchema, err := selectedPipelineSchema(req.Meta, definition.name, responseSelection, schemaext.ResponseSchemaModifierName, true)
-	if err != nil {
-		return false, err
-	}
-	var requestSchema, responseSchema *schemaext.Schema
-	if hasRequestSchema {
-		requestSchema = &requestSchemaValue
-	}
-	if hasResponseSchema {
-		responseSchema = &responseSchemaValue
-	}
-
-	program, err := req.Compile(canonicalName, definition.source, compileMods...)
-	if err != nil {
-		wrapped := fmt.Errorf("compile sub-pipeline %q: %w", definition.name, err)
-		return isPendingPipelineDependency(err, pending), wrapped
+		return pipelineCompileFailure(definition, compileValues, pending, err)
 	}
 	if requestSchema != nil && program != nil {
 		if meta := program.Describe(); meta != nil && meta.Example != nil {
@@ -171,21 +172,96 @@ func materializePipeline(req compiler.MaterializeReq, definition pipelineDefinit
 	return false, nil
 }
 
-func resolvePipelineModifierSymbols(meta map[string]any, modifiers []string, quoted []bool) []string {
-	resolved := append([]string(nil), modifiers...)
+type pipelineSchemaSelections struct {
+	requestSelection  schemaSelection
+	responseSelection schemaSelection
+	compileModifiers  []string
+	requestSchema     *schemaext.Schema
+	responseSchema    *schemaext.Schema
+}
+
+func resolvePipelineSchemas(meta map[string]any, pipelineName string, modifierRaws []string) (pipelineSchemaSelections, error) {
+	requestSelection, responseSelection, compileMods, err := splitSchemaModifiers(pipelineName, modifierRaws)
+	if err != nil {
+		return pipelineSchemaSelections{}, err
+	}
+	requestValue, hasRequest, err := selectedPipelineSchema(meta, pipelineName, requestSelection, schemaext.RequestSchemaModifierName, false)
+	if err != nil {
+		return pipelineSchemaSelections{}, err
+	}
+	responseValue, hasResponse, err := selectedPipelineSchema(meta, pipelineName, responseSelection, schemaext.ResponseSchemaModifierName, true)
+	if err != nil {
+		return pipelineSchemaSelections{}, err
+	}
+	resolved := pipelineSchemaSelections{
+		requestSelection: requestSelection, responseSelection: responseSelection, compileModifiers: compileMods,
+	}
+	if hasRequest {
+		resolved.requestSchema = &requestValue
+	}
+	if hasResponse {
+		resolved.responseSchema = &responseValue
+	}
+	return resolved, nil
+}
+
+func compilePipelineProgram(req compiler.MaterializeReq, definition pipelineDefinition, canonicalName string, compileValues []compiler.ModifierValue, compileMods []string) (action.AnyAction, error) {
+	if req.CompileValues != nil {
+		return req.CompileValues(canonicalName, definition.source, compileValues)
+	}
+	for _, modifier := range compileValues {
+		if modifier.Typed {
+			return nil, compiler.SourceError(definition.pos,
+				"@pipeline %q: compiler does not support typed modifier values", definition.name)
+		}
+	}
+	return req.Compile(canonicalName, definition.source, compileMods...)
+}
+
+func pipelineCompileFailure(definition pipelineDefinition, compileValues []compiler.ModifierValue, pending map[string]struct{}, err error) (bool, error) {
+	wrapped := fmt.Errorf("compile sub-pipeline %q: %w", definition.name, err)
+	if hasTypedPipelineModifier(compileValues) && definition.pos.Line > 0 {
+		wrapped = compiler.SourceError(definition.pos, "%w", wrapped)
+	}
+	return isPendingPipelineDependency(err, pending), wrapped
+}
+
+func resolvePipelineModifierValues(meta map[string]any, modifiers []string, quoted []bool) []compiler.ModifierValue {
+	resolved := make([]compiler.ModifierValue, len(modifiers))
 	for i, raw := range modifiers {
-		if quotedAt(quoted, i) {
+		resolved[i] = compiler.ModifierValue{Raw: raw, Quoted: quotedAt(quoted, i)}
+		if resolved[i].Quoted {
 			continue
 		}
 		name, value, hasValue := strings.Cut(raw, "=")
-		if !hasValue || name == schemaext.SchemaModifierName || name == schemaext.RequestSchemaModifierName || name == schemaext.ResponseSchemaModifierName || name == schemaext.InSchemaModifierName || name == schemaext.OutSchemaModifierName {
+		if !hasValue || isSchemaSelectionModifier(name) {
 			continue
 		}
-		if symbol, ok := compiler.ResolveSymbolValue(meta, value); ok {
-			resolved[i] = name + "=" + fmt.Sprint(symbol)
+		if symbol, ok := compiler.ResolveSymbolDeclaration(meta, value); ok {
+			if typed, isTyped := symbol.(compiler.TypedSymbolValue); isTyped {
+				resolved[i].Value = typed.Value
+				resolved[i].Typed = true
+				continue
+			}
+			resolved[i].Raw = name + "=" + fmt.Sprint(symbol)
 		}
 	}
 	return resolved
+}
+
+func isSchemaSelectionModifier(name string) bool {
+	return name == schemaext.SchemaModifierName || name == schemaext.RequestSchemaModifierName ||
+		name == schemaext.ResponseSchemaModifierName || name == schemaext.InSchemaModifierName ||
+		name == schemaext.OutSchemaModifierName
+}
+
+func hasTypedPipelineModifier(values []compiler.ModifierValue) bool {
+	for _, value := range values {
+		if value.Typed {
+			return true
+		}
+	}
+	return false
 }
 
 func selectedPipelineSchema(meta map[string]any, pipelineName string, selection schemaSelection, modifierName string, rejectDefaults bool) (schemaext.Schema, bool, error) {
@@ -212,7 +288,8 @@ func noProgressError(deferredErrors, terminalErrors []error) error {
 }
 
 func rejectResponseSchemaDefaults(pipelineName string, responseSchema schemaext.Schema) error {
-	for _, field := range responseSchema.Fields {
+	for i := range responseSchema.Fields {
+		field := responseSchema.Fields[i]
 		if _, hasDefault := field.Tags["default"]; hasDefault {
 			return fmt.Errorf("@pipeline %q: :response-schema=%s: field %q declares a default; response schemas must not declare defaults", pipelineName, responseSchema.Name, field.JSONName)
 		}
@@ -390,7 +467,8 @@ func rejectUnknownFields(schema schemaext.Schema, payload any) error {
 		return nil // The boundary's schema validation checks object shape first.
 	}
 	known := make(map[string]struct{}, len(schema.Fields))
-	for _, field := range schema.Fields {
+	for i := range schema.Fields {
+		field := schema.Fields[i]
 		known[field.JSONName] = struct{}{}
 	}
 	var unknown []string

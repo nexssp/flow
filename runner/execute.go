@@ -198,20 +198,22 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 	}
 	topContribs := prepared.Contributions()
 
-	compileSub := func(subName, subSource string, mods ...string) (action.AnyAction, error) {
-		wrapperMods, bodyMods := SplitPipelineModifiers(cfg.Modifiers, mods)
+	compileSubValues := func(subName, subSource string, modifiers []compiler.ModifierValue) (action.AnyAction, error) {
+		wrapperMods, bodyMods := SplitPipelineModifierValues(cfg.Modifiers, modifiers)
 
 		subOpts := append([]compiler.CompileOption(nil), cfg.CompileOpts...)
 		subOpts = append(subOpts, topContribs.CompileOpts...)
 		if len(bodyMods) > 0 {
-			captured := append([]string(nil), bodyMods...)
+			capturedValues := append([]compiler.ModifierValue(nil), bodyMods...)
+			capturedRaw := make([]string, len(capturedValues))
+			for i, value := range capturedValues {
+				capturedRaw[i] = value.Raw
+			}
 			subOpts = append(subOpts, compiler.WithLineModifiers(compiler.LineLookup{
-				Source: compiler.ModifierSource{
-					Kind:  "pipeline",
-					Label: subName,
-				},
-				Fn: func(int) []string {
-					return captured
+				Source: compiler.ModifierSource{Kind: "pipeline", Label: subName},
+				Fn:     func(int) []string { return capturedRaw },
+				ValueFn: func(int) []compiler.ModifierValue {
+					return append([]compiler.ModifierValue(nil), capturedValues...)
 				},
 			}))
 		}
@@ -231,7 +233,7 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 
 		program := subRes.Program
 		if len(wrapperMods) > 0 && cfg.Modifiers != nil {
-			applied, merr := cfg.Modifiers.ApplyAll(program, wrapperMods)
+			applied, merr := cfg.Modifiers.ApplyAllValues(program, wrapperMods)
 			if merr != nil {
 				return nil, merr
 			}
@@ -246,8 +248,14 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 			}
 			program = applied
 		}
-
 		return program, nil
+	}
+	compileSub := func(subName, subSource string, mods ...string) (action.AnyAction, error) {
+		values := make([]compiler.ModifierValue, len(mods))
+		for i, raw := range mods {
+			values[i] = compiler.ModifierValue{Raw: raw}
+		}
+		return compileSubValues(subName, subSource, values)
 	}
 
 	for _, m := range cfg.Materializers {
@@ -259,6 +267,7 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 			Meta:          meta,
 			Resolver:      resolver,
 			Compile:       compileSub,
+			CompileValues: compileSubValues,
 			Introspection: prepared.ActionIntrospectionEnabled(),
 		}); matErr != nil {
 			return Compilation{Meta: meta, Resolver: resolver}, fmt.Errorf("materialize: %w", matErr)
@@ -460,6 +469,21 @@ func SplitPipelineModifiers(table *compiler.ModifierTable, mods []string) (wrapp
 			continue
 		}
 		wrapper = append(wrapper, raw)
+	}
+	return wrapper, body
+}
+
+// SplitPipelineModifierValues mirrors SplitPipelineModifiers while retaining
+// native typed values and quoted-literal metadata.
+func SplitPipelineModifierValues(table *compiler.ModifierTable, mods []compiler.ModifierValue) (wrapper, body []compiler.ModifierValue) {
+	for _, value := range mods {
+		if table != nil {
+			if modifier, ok := table.ByName(compiler.ModifierName(value.Raw)); ok && modifier.Inheritable {
+				body = append(body, value)
+				continue
+			}
+		}
+		wrapper = append(wrapper, value)
 	}
 	return wrapper, body
 }

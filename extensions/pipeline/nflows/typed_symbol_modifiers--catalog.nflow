@@ -1,0 +1,3 @@
+@description "typed symbol module catalog"
+@symbols http_status { created: int = 202 }
+@symbols policy { short: duration = 7s }

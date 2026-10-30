@@ -43,6 +43,8 @@ func classifyScalar(t string) Kind {
 		return KindFloat
 	case "bool":
 		return KindBool
+	case "duration", "time.Duration":
+		return KindDuration
 	case "any", "interface{}":
 		return KindAny
 	default:

@@ -13,15 +13,16 @@ import (
 )
 
 type atomPolicy struct {
-	remaining     []string
-	retries       int
-	hasRetry      bool
-	timeout       time.Duration
-	hasTimeout    bool
-	concurrency   int32
-	hasConcurrent bool
-	breakerKey    string
-	hasBreaker    bool
+	remaining       []string
+	remainingValues []compiler.ModifierValue
+	retries         int
+	hasRetry        bool
+	timeout         time.Duration
+	hasTimeout      bool
+	concurrency     int32
+	hasConcurrent   bool
+	breakerKey      string
+	hasBreaker      bool
 }
 
 func advise(cfg Config, atom *compiler.Atom, builder *action.Builder[any, any]) error {
@@ -32,7 +33,7 @@ func advise(cfg Config, atom *compiler.Atom, builder *action.Builder[any, any]) 
 	if err := cfg.validate(); err != nil {
 		return err
 	}
-	policy, err := parseAtomPolicy(atom.Modifiers, cfg.Retry.DefaultMax)
+	policy, err := parseAtomPolicy(atom.Modifiers, atom.ModifierValues, cfg.Retry.DefaultMax)
 	if err != nil {
 		return err
 	}
@@ -47,12 +48,16 @@ func advise(cfg Config, atom *compiler.Atom, builder *action.Builder[any, any]) 
 		return fmt.Errorf("apply resilience: %w", err)
 	}
 	atom.Modifiers = policy.remaining
+	atom.ModifierValues = policy.remainingValues
 	return nil
 }
 
-func parseAtomPolicy(modifiers []string, defaultRetries int) (atomPolicy, error) {
+func parseAtomPolicy(modifiers []string, modifierValues []compiler.ModifierValue, defaultRetries int) (atomPolicy, error) {
 	policy := atomPolicy{remaining: make([]string, 0, len(modifiers)), retries: defaultRetries}
-	for _, raw := range modifiers {
+	if len(modifierValues) > 0 {
+		policy.remainingValues = make([]compiler.ModifierValue, 0, len(modifierValues))
+	}
+	for i, raw := range modifiers {
 		name, value := split(raw)
 		switch name {
 		case "retry":
@@ -69,12 +74,20 @@ func parseAtomPolicy(modifiers []string, defaultRetries int) (atomPolicy, error)
 			if policy.hasTimeout {
 				return atomPolicy{}, errorsForDuplicate(name)
 			}
-			timeout, err := parsePositiveDuration(name, value)
-			if err != nil {
-				return atomPolicy{}, err
+			if i < len(modifierValues) && modifierValues[i].Typed {
+				typedTimeout, ok := modifierValues[i].Value.(time.Duration)
+				if !ok || typedTimeout <= 0 {
+					return atomPolicy{}, xerr.Validation(fmt.Sprintf("%s expects a positive duration, got %q", name, modifierValues[i].Value))
+				}
+				policy.timeout = typedTimeout
+			} else {
+				timeout, err := parsePositiveDuration(name, value)
+				if err != nil {
+					return atomPolicy{}, err
+				}
+				policy.timeout = timeout
 			}
 			policy.hasTimeout = true
-			policy.timeout = timeout
 		case "concurrency":
 			if policy.hasConcurrent {
 				return atomPolicy{}, errorsForDuplicate(name)
@@ -93,6 +106,13 @@ func parseAtomPolicy(modifiers []string, defaultRetries int) (atomPolicy, error)
 			policy.breakerKey = strings.TrimSpace(value)
 		default:
 			policy.remaining = append(policy.remaining, raw)
+			if len(modifierValues) > 0 {
+				if i < len(modifierValues) {
+					policy.remainingValues = append(policy.remainingValues, modifierValues[i])
+				} else {
+					policy.remainingValues = append(policy.remainingValues, compiler.ModifierValue{Raw: raw})
+				}
+			}
 		}
 	}
 	return policy, nil

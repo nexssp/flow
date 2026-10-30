@@ -23,8 +23,9 @@ type Parser struct {
 }
 
 type LineLookup struct {
-	Source ModifierSource
-	Fn     func(line int) []string
+	Source  ModifierSource
+	Fn      func(line int) []string
+	ValueFn func(line int) []ModifierValue
 }
 
 func NewParser(ctx context.Context, ops *OperatorTable, src string) *Parser {
@@ -349,6 +350,7 @@ func (p *Parser) parsePostfixModifiers(expr Expr) (Expr, error) {
 
 	startPos := p.Position()
 	var mods []string
+	var values []ModifierValue
 	for p.Cur().Type == TokColon && !p.isTernaryColon() {
 		p.Next()
 		if p.Cur().Type != TokIdent {
@@ -358,15 +360,19 @@ func (p *Parser) parsePostfixModifiers(expr Expr) (Expr, error) {
 		p.Next()
 		if p.Cur().Type == TokEquals {
 			p.Next()
+			quoted := p.Cur().Type == TokString
 			value, err := p.consumeValue()
 			if err != nil {
 				return nil, err
 			}
 			name += "=" + value
+			values = append(values, ModifierValue{Raw: name, Quoted: quoted})
+		} else {
+			values = append(values, ModifierValue{Raw: name})
 		}
 		mods = append(mods, name)
 	}
-	return &DecoratedExpr{Inner: expr, Modifiers: mods, Pos: startPos}, nil
+	return &DecoratedExpr{Inner: expr, Modifiers: mods, ModifierValues: values, Pos: startPos}, nil
 }
 
 func (p *Parser) parseAtomInner() (Expr, error) {
@@ -454,6 +460,10 @@ func (p *Parser) parseAtom() (Expr, error) {
 	for i := range a.ModifierSources {
 		a.ModifierSources[i] = ModifierSource{Kind: "atom"}
 	}
+	for len(a.ModifierValues) < len(a.Modifiers) {
+		i := len(a.ModifierValues)
+		a.ModifierValues = append(a.ModifierValues, ModifierValue{Raw: a.Modifiers[i]})
+	}
 	return expr, nil
 }
 
@@ -464,11 +474,14 @@ func (p *Parser) prependInherited(a *Atom, line int) {
 	}
 	appliedRaw := make([]string, 0, len(inherited))
 	appliedSrc := make([]ModifierSource, 0, len(inherited))
+	appliedValues := make([]ModifierValue, 0, len(inherited))
 	for _, modifier := range inherited {
 		appliedRaw = append(appliedRaw, modifier.raw)
 		appliedSrc = append(appliedSrc, modifier.source)
+		appliedValues = append(appliedValues, modifier.value)
 	}
 	a.Modifiers = append(appliedRaw, a.Modifiers...)
+	a.ModifierValues = append(appliedValues, a.ModifierValues...)
 	a.ModifierSources = append(appliedSrc, a.ModifierSources...)
 }
 
@@ -483,10 +496,13 @@ func (p *Parser) prependInheritedToExpr(expr Expr, line int, pos Position) Expr 
 			return node
 		}
 		applied := make([]string, 0, len(inherited))
+		appliedValues := make([]ModifierValue, 0, len(inherited))
 		for _, modifier := range inherited {
 			applied = append(applied, modifier.raw)
+			appliedValues = append(appliedValues, modifier.value)
 		}
 		node.Modifiers = append(applied, node.Modifiers...)
+		node.ModifierValues = append(appliedValues, node.ModifierValues...)
 		return node
 	default:
 		inherited := p.inheritedForLine(line, nil)
@@ -494,16 +510,19 @@ func (p *Parser) prependInheritedToExpr(expr Expr, line int, pos Position) Expr 
 			return expr
 		}
 		modifiers := make([]string, len(inherited))
+		values := make([]ModifierValue, len(inherited))
 		for i, modifier := range inherited {
 			modifiers[i] = modifier.raw
+			values[i] = modifier.value
 		}
-		return &DecoratedExpr{Inner: expr, Modifiers: modifiers, Pos: pos}
+		return &DecoratedExpr{Inner: expr, Modifiers: modifiers, ModifierValues: values, Pos: pos}
 	}
 }
 
 type sourcedLineModifier struct {
 	raw    string
 	source ModifierSource
+	value  ModifierValue
 }
 
 func (p *Parser) inheritedForLine(line int, localModifiers []string) []sourcedLineModifier {
@@ -519,15 +538,24 @@ func (p *Parser) inheritedForLine(line int, localModifiers []string) []sourcedLi
 	index := make(map[string]int)
 	var applied []sourcedLineModifier
 	for _, lookup := range p.lineModifiers {
-		if lookup.Fn == nil {
+		if lookup.Fn == nil && lookup.ValueFn == nil {
 			continue
 		}
-		for _, raw := range lookup.Fn(line) {
+		values := make([]ModifierValue, 0)
+		if lookup.ValueFn != nil {
+			values = append(values, lookup.ValueFn(line)...)
+		} else {
+			for _, raw := range lookup.Fn(line) {
+				values = append(values, ModifierValue{Raw: raw})
+			}
+		}
+		for _, value := range values {
+			raw := value.Raw
 			name := ModifierName(raw)
 			if localNames[name] {
 				continue
 			}
-			modifier := sourcedLineModifier{raw: raw, source: lookup.Source}
+			modifier := sourcedLineModifier{raw: raw, source: lookup.Source, value: value}
 			if i, ok := index[name]; ok {
 				applied[i] = modifier
 			} else {
@@ -580,9 +608,11 @@ func (p *Parser) parseModifier(a *Atom) error {
 	}
 	m := p.Cur().Lit
 	p.Next()
+	quoted := false
 
 	if p.Cur().Type == TokEquals {
 		p.Next()
+		quoted = p.Cur().Type == TokString
 		value, err := p.consumeValue()
 		if err != nil {
 			return err
@@ -590,6 +620,7 @@ func (p *Parser) parseModifier(a *Atom) error {
 		m += "=" + value
 	}
 	a.Modifiers = append(a.Modifiers, m)
+	a.ModifierValues = append(a.ModifierValues, ModifierValue{Raw: m, Quoted: quoted})
 	return nil
 }
 

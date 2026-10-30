@@ -6,19 +6,28 @@ package symbols
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"reflect"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/nexssp/kernel/action"
 
 	"github.com/nexssp/flow/compiler"
 )
 
 var Directive = compiler.Directive{
 	Name: "symbols",
-	Example: `@symbols routing {
-	  primary_queue: "billing-operations"
-	  max_retries:   "3"
-	}
+	Example: `@symbols http_status {
+  ok: int = 200
+  created: int = 201
+  base_url: string = "https://api.internal"
+  timeout: duration = 5s
+}
 
-@symbols memory { search, put, chat_turn }`,
+@symbols legacy { pending: "pending" }`,
 	Handler:     handleDirective,
 	OpaqueBlock: true,
 }
@@ -29,8 +38,7 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 
 	rest := strings.TrimSpace(strings.TrimPrefix(line, "@symbols"))
 	if rest == "" {
-		return compiler.DirectiveRes{}, compiler.SourceError(pos,
-			"@symbols: expected NAME { ... }")
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@symbols: expected NAME { ... }")
 	}
 	nameEnd := strings.IndexAny(rest, " \t{")
 	if nameEnd <= 0 {
@@ -43,31 +51,29 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 			"@symbols: invalid namespace name %q", name)
 	}
 
-	entries, next, err := compiler.ReadBlock(req.Lines, req.I)
+	block, err := compiler.ReadBlockWithSpans(req.Lines, req.I)
 	if err != nil {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@symbols: %v", err)
 	}
-	if len(entries) == 0 {
+	if len(block.Entries) == 0 {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@symbols %s: namespace must declare at least one symbol", name)
 	}
 
-	symbols := make(map[string]any, len(entries))
-	for _, entry := range entries {
-		if strings.Contains(entry, ":") {
-			key, value, ok := splitSymbolEntry(entry)
-			if !ok {
-				return compiler.DirectiveRes{}, compiler.SourceError(pos,
-					"@symbols %s: expected bare symbol names or `name: value`, got %q", name, entry)
+	symbols := make(map[string]any, len(block.Entries))
+	for _, entry := range block.Entries {
+		parts := compiler.SplitTopLevel(entry.Text, ';')
+		searchFrom := 0
+		for _, part := range parts {
+			text := strings.TrimSpace(part)
+			if text == "" {
+				continue
 			}
-			if err := addSymbol(pos, name, symbols, key, value); err != nil {
-				return compiler.DirectiveRes{}, err
-			}
-			continue
-		}
-
-		for key := range strings.FieldsSeq(entry) {
-			if err := addSymbol(pos, name, symbols, key, key); err != nil {
+			rel := strings.Index(entry.Text[searchFrom:], text)
+			rel = max(0, rel)
+			entryPos := positionAt(req, entry.Span.Start+searchFrom+rel)
+			searchFrom += rel + len(text) + 1
+			if err := addEntry(entryPos, name, symbols, text); err != nil {
 				return compiler.DirectiveRes{}, err
 			}
 		}
@@ -91,8 +97,47 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 
 	namespaces[name] = compiler.SymbolNamespace{Name: name, Symbols: symbols}
 	req.Out["symbols"] = namespaces
+	return compiler.DirectiveRes{Next: block.Next}, nil
+}
 
-	return compiler.DirectiveRes{Next: next}, nil
+func addEntry(pos compiler.Position, namespace string, symbols map[string]any, entry string) error {
+	if !strings.Contains(entry, ":") {
+		for key := range strings.FieldsSeq(entry) {
+			if err := addSymbol(pos, namespace, symbols, key, key); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	key, rhs, ok := splitSymbolEntry(entry)
+	if !ok {
+		return compiler.SourceError(pos,
+			"@symbols %s: expected bare symbol names or `name: value`, got %q", namespace, entry)
+	}
+	if !validNamespaceName(key) {
+		return compiler.SourceError(pos, "@symbols %s: invalid symbol name %q", namespace, key)
+	}
+	if _, dup := symbols[key]; dup {
+		return compiler.SourceError(pos, "@symbols %s: duplicate symbol %q", namespace, key)
+	}
+	var value any
+	if equal := compiler.IndexTopLevel(rhs, '='); equal >= 0 {
+		typeName := strings.TrimSpace(rhs[:equal])
+		if isTypedSymbolType(typeName) {
+			native, err := parseTypedLiteral(typeName, strings.TrimSpace(rhs[equal+1:]))
+			if err != nil {
+				return compiler.SourceError(pos, "@symbols %s: invalid %s literal for %q: %v", namespace, typeName, key, err)
+			}
+			value = compiler.TypedSymbolValue{Type: canonicalTypedSymbolType(typeName), Value: native}
+		} else {
+			value = compiler.TrimQuotes(rhs)
+		}
+	} else {
+		value = compiler.TrimQuotes(rhs)
+	}
+	symbols[key] = value
+	return nil
 }
 
 func addSymbol(pos compiler.Position, namespace string, symbols map[string]any, key string, value any) error {
@@ -108,17 +153,70 @@ func addSymbol(pos compiler.Position, namespace string, symbols map[string]any, 
 	return nil
 }
 
-func splitSymbolEntry(entry string) (key string, value any, ok bool) {
+func splitSymbolEntry(entry string) (key, value string, ok bool) {
 	colon := strings.IndexByte(entry, ':')
 	if colon <= 0 {
-		return "", nil, false
+		return "", "", false
 	}
-	k := strings.TrimSpace(entry[:colon])
-	if k == "" {
-		return "", nil, false
+	key = strings.TrimSpace(entry[:colon])
+	if key == "" {
+		return "", "", false
 	}
-	raw := compiler.TrimQuotes(strings.TrimSpace(entry[colon+1:]))
-	return k, raw, true
+	return key, strings.TrimSpace(entry[colon+1:]), true
+}
+
+func parseTypedLiteral(typeName, raw string) (any, error) {
+	if raw == "" {
+		return nil, fmt.Errorf("typed %s value is empty", typeName)
+	}
+	switch typeName {
+	case "string":
+		if len(raw) < 2 || raw[0] != '"' || raw[len(raw)-1] != '"' {
+			return nil, errors.New("typed string literal must be double-quoted")
+		}
+		value, err := strconv.Unquote(raw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid string literal: %w", err)
+		}
+		return value, nil
+	case "int":
+		return action.CoerceStringValue(raw, reflect.TypeFor[int]())
+	case "float64":
+		return action.CoerceStringValue(raw, reflect.TypeFor[float64]())
+	case "bool":
+		return action.CoerceStringValue(raw, reflect.TypeFor[bool]())
+	case "duration", "time.Duration":
+		return action.CoerceStringValue(raw, reflect.TypeFor[time.Duration]())
+	default:
+		return nil, fmt.Errorf("unsupported type %q", typeName)
+	}
+}
+
+func isTypedSymbolType(typeName string) bool {
+	switch typeName {
+	case "string", "int", "float64", "bool", "duration", "time.Duration":
+		return true
+	default:
+		return false
+	}
+}
+
+func canonicalTypedSymbolType(typeName string) string {
+	if typeName == "time.Duration" {
+		return "duration"
+	}
+	return typeName
+}
+
+func positionAt(req compiler.DirectiveReq, offset int) compiler.Position {
+	for line := range req.Lines {
+		start := req.Offset(line, 0)
+		end := req.Offset(line, len(req.Lines[line]))
+		if offset >= start && offset <= end {
+			return compiler.Position{File: req.File, Line: line + 1, Col: offset - start + 1}
+		}
+	}
+	return compiler.Position{File: req.File, Line: req.I + 1}
 }
 
 func validNamespaceName(name string) bool {

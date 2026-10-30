@@ -91,6 +91,34 @@ func TestAdviseConsumesAllPoliciesAndPreservesOtherModifiers(t *testing.T) {
 	}
 }
 
+func TestAdviseConsumesTypedTimeoutAndPreservesOtherModifierValues(t *testing.T) {
+	t.Parallel()
+	cfg, err := ConfigFromOptions(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	timeout := compiler.ModifierValue{Raw: "timeout=policy.short", Value: 5 * time.Second, Typed: true}
+	cache := compiler.ModifierValue{Raw: "cache=1m"}
+	atom := &compiler.Atom{
+		Name:           "test.typed_timeout",
+		Modifiers:      []string{timeout.Raw, cache.Raw},
+		ModifierValues: []compiler.ModifierValue{timeout, cache},
+	}
+	builder := action.New[any, any]("test.typed_timeout", func(context.Context, any) (any, error) { return nil, nil })
+	if err := advise(cfg, atom, builder); err != nil {
+		t.Fatal(err)
+	}
+	if got := builder.Describe().Timeout; got != 5*time.Second {
+		t.Fatalf("metadata timeout = %s, want 5s", got)
+	}
+	if got := strings.Join(atom.Modifiers, ","); got != "cache=1m" {
+		t.Fatalf("remaining modifiers = %q, want cache=1m", got)
+	}
+	if len(atom.ModifierValues) != 1 || atom.ModifierValues[0].Raw != "cache=1m" {
+		t.Fatalf("remaining modifier values = %#v, want only cache=1m", atom.ModifierValues)
+	}
+}
+
 func TestAdviseRetryZeroDisablesRetry(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32

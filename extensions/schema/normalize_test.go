@@ -2,6 +2,7 @@ package schema
 
 import (
 	"testing"
+	"time"
 )
 
 type NormalizeEmbeddedFields struct {
@@ -112,5 +113,49 @@ func TestNormalizeObjectRejectsNilAndNonObjects(t *testing.T) {
 				t.Fatalf("NormalizeObject(%T) = %#v, want nil map on error", value, got)
 			}
 		})
+	}
+}
+
+func TestNormalizeObjectPreservesTypedDurationMapField(t *testing.T) {
+	t.Parallel()
+	want := 5 * time.Second
+	got, err := NormalizeObject(map[string]any{"timeout": want})
+	if err != nil {
+		t.Fatalf("NormalizeObject: %v", err)
+	}
+	if got["timeout"] != want {
+		t.Fatalf("timeout = %#v (%T), want %#v (%T)", got["timeout"], got["timeout"], want, want)
+	}
+}
+
+func TestNormalizeObjectPreservesNestedStructDurations(t *testing.T) {
+	t.Parallel()
+	type nested struct {
+		Limit time.Duration `json:"limit"`
+	}
+	type response struct {
+		Timeout time.Duration   `json:"timeout"`
+		Nested  *nested         `json:"nested"`
+		Values  []time.Duration `json:"values"`
+	}
+	want := 5 * time.Second
+	got, err := NormalizeObject(&response{
+		Timeout: want,
+		Nested:  &nested{Limit: 7 * time.Second},
+		Values:  []time.Duration{want, 9 * time.Second},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeObject: %v", err)
+	}
+	if got["timeout"] != want {
+		t.Fatalf("timeout = %#v (%T), want %#v (%T)", got["timeout"], got["timeout"], want, want)
+	}
+	child, ok := got["nested"].(map[string]any)
+	if !ok || child["limit"] != 7*time.Second {
+		t.Fatalf("nested duration = %#v, want 7s", got["nested"])
+	}
+	values, ok := got["values"].([]any)
+	if !ok || len(values) != 2 || values[0] != want || values[1] != 9*time.Second {
+		t.Fatalf("duration slice = %#v, want [5s 9s]", got["values"])
 	}
 }

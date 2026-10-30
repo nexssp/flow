@@ -213,7 +213,8 @@ func (s *flowLanguageServer) schemaCompletions(uri, source string, position lspP
 	}
 	items := make([]map[string]any, 0, len(fieldSchema.Fields))
 	seen := make(map[string]struct{}, len(fieldSchema.Fields))
-	for _, field := range fieldSchema.Fields {
+	for i := range fieldSchema.Fields {
+		field := &fieldSchema.Fields[i]
 		name := field.JSONName
 		if name == "" {
 			name = field.Name
@@ -684,7 +685,8 @@ func formatLSPFlowSchemaHover(schema flowschema.Schema) string {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "**%s** — NFlow schema\n\n", schema.Name)
 	fmt.Fprintf(&builder, "**Fields (%d)**", len(schema.Fields))
-	for _, field := range schema.Fields {
+	for i := range schema.Fields {
+		field := &schema.Fields[i]
 		fmt.Fprintf(&builder, "\n- **%s** (`%s`): `%s`", field.Name, field.JSONName, field.Type)
 		var tags []string
 		if value, ok := field.Tags["default"]; ok {

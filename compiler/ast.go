@@ -35,7 +35,9 @@ func (l *LiteralExpr) Build(_ context.Context, bCtx *BuildContext) (action.AnyAc
 type Atom struct {
 	Name            string
 	Params          map[string]string
+	ParamValues     map[string]any // native symbol values; takes precedence over Params
 	Modifiers       []string
+	ModifierValues  []ModifierValue  // parallel to Modifiers for quoted or native values
 	ModifierSources []ModifierSource // parallel to Modifiers; same length
 	Args            map[string]*Value
 	Prompt          string
@@ -200,9 +202,10 @@ func walkExpr(e Expr, visit func(Expr)) {
 // like atoms for policy purposes. Build lowers Inner and applies the
 // modifier chain through the same ModifierTable used for atoms.
 type DecoratedExpr struct {
-	Inner     Expr
-	Modifiers []string
-	Pos       Position
+	Inner          Expr
+	Modifiers      []string
+	ModifierValues []ModifierValue
+	Pos            Position
 }
 
 func (*DecoratedExpr) Node()              {}

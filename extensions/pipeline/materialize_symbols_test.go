@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/nexssp/flow/compiler"
 	pipelineext "github.com/nexssp/flow/extensions/pipeline"
 	"github.com/nexssp/flow/runner"
 )
@@ -255,5 +257,80 @@ pipeline.invalid
 	_, err := runner.Compile(t.Context(), cfg, source, "mixed-response-schema-aliases.nflow")
 	if err == nil || !strings.Contains(err.Error(), "cannot combine") {
 		t.Fatalf("mixed response-schema/out-schema error = %v, want alias conflict diagnostic", err)
+	}
+}
+
+func TestTypedSymbolModifiersResolveLocallyAndFromImports(t *testing.T) {
+	t.Parallel()
+	fixtures := pipelineext.Bundle(nil).Fixtures
+	source, err := fs.ReadFile(fixtures, "nflows/typed_symbol_modifiers.nflow")
+	if err != nil {
+		t.Fatalf("read typed symbol modifier fixture: %v", err)
+	}
+	catalog, err := fs.ReadFile(fixtures, "nflows/typed_symbol_modifiers--catalog.nflow")
+	if err != nil {
+		t.Fatalf("read imported typed symbol fixture: %v", err)
+	}
+	dir := t.TempDir()
+	rootFile := filepath.Join(dir, "typed_symbol_modifiers.nflow")
+	if err := os.WriteFile(filepath.Join(dir, "catalog.nflow"), catalog, 0o600); err != nil {
+		t.Fatalf("write imported typed symbol fixture: %v", err)
+	}
+	compiled, err := runner.Compile(t.Context(), pipelineTestConfig(t), string(source), rootFile)
+	if err != nil {
+		t.Fatalf("compile typed symbol modifier fixture: %v", err)
+	}
+	for _, tc := range []struct {
+		name   string
+		status int
+	}{
+		{name: "pipeline.local_typed", status: 201},
+		{name: "pipeline.imported_typed", status: 202},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			action, ok := compiled.Resolver.Action(tc.name)
+			if !ok {
+				t.Fatalf("compiled resolver has no action %q", tc.name)
+			}
+			meta := action.Describe()
+			if meta == nil || meta.SuccessStatus != tc.status {
+				t.Fatalf("%s metadata = %#v, want status %d", tc.name, meta, tc.status)
+			}
+		})
+	}
+	cfg := pipelineTestConfig(t)
+	target, ok := cfg.Resolver.Action("runtime.noop")
+	if !ok {
+		t.Fatal("configured resolver has no runtime.noop action")
+	}
+	withTimeout, err := cfg.Modifiers.ApplyAllValues(target, []compiler.ModifierValue{{
+		Raw: "timeout=policy.short", Value: 5 * time.Second, Typed: true,
+	}})
+	if err != nil {
+		t.Fatalf("apply native typed timeout modifier: %v", err)
+	}
+	if meta := withTimeout.Describe(); meta == nil || meta.Timeout != 5*time.Second {
+		t.Fatalf("native duration modifier metadata = %#v, want timeout 5s", meta)
+	}
+}
+
+func TestPipelineRejectsTypedModifierTypeMismatchAtHeader(t *testing.T) {
+	t.Parallel()
+	source := `@symbols values { timeout: duration = 5s }
+@pipeline invalid :status=values.timeout
+  runtime.noop
+@end
+pipeline.invalid
+`
+	_, err := runner.Compile(t.Context(), pipelineTestConfig(t), source, "typed-modifier-mismatch.nflow")
+	if err == nil || !strings.Contains(err.Error(), "expected int typed value") {
+		t.Fatalf("compile error = %v, want an integer typed-value mismatch", err)
+	}
+	position, ok := compiler.PositionOf(err)
+	if !ok {
+		t.Fatalf("compile error %v has no source position", err)
+	}
+	if position.Line != 2 {
+		t.Fatalf("mismatch position = %v, want pipeline header line 2", position)
 	}
 }

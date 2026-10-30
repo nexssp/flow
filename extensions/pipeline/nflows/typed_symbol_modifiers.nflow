@@ -1,0 +1,11 @@
+@description "spec: local and imported typed symbols flow natively into status and timeout pipeline modifiers"
+@symbols http_status { created: int = 201 }
+@symbols policy { short: duration = 5s }
+@include ./catalog.nflow AS api
+@pipeline local_typed :status=http_status.created :timeout=policy.short
+  runtime.noop
+@end
+@pipeline imported_typed :status=api.http_status.created :timeout=api.policy.short
+  runtime.noop
+@end
+pipeline.local_typed

@@ -1,0 +1,15 @@
+@description "spec: explicitly typed symbols provide native schema defaults and type-directed validation operands"
+@symbols constraints {
+  status: int = 201;
+  timeout: duration = 5s;
+  label: string = "created"
+}
+@schema TypedRequest {
+  Status  int      `json:"status" default:"constraints.status" validate:"eq=constraints.status"`
+  Timeout time.Duration `json:"timeout" default:"constraints.timeout" validate:"gte=constraints.timeout"`
+  Label   string   `json:"label" default:"constraints.label" validate:"oneof=constraints.label"`
+}
+{} -> TypedRequest.validate
+@assert: result.status == 201
+@assert: result.label == "created"
+@assert: result.timeout != nil

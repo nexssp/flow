@@ -1,0 +1,15 @@
+@description "spec: explicit symbol types preserve native values while legacy mapped and bare names remain strings"
+@symbols http_status {
+  ok: int = 200;
+  created: int = 201;
+  base_url: string = "https://api.internal";
+  timeout: duration = 5s
+}
+@symbols legacy { ready: "needs_review" }
+@symbols states { pending }
+runtime.const @{ status: http_status.created, base_url: http_status.base_url, timeout: http_status.timeout, legacy: legacy.ready, identity: states.pending }
+@assert: result.status == 201
+@assert: result.base_url == "https://api.internal"
+@assert: result.timeout != nil
+@assert: result.legacy == "needs_review"
+@assert: result.identity == "pending"

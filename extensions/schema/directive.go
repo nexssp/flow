@@ -79,14 +79,20 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 		}
 	}
 
-	raw, embedReferences, err := parseSchemaEntries(block.Entries, body, pos, name)
+	raw, embedReferences, err := parseSchemaEntries(block.Entries, body, req, pos, name)
 	if err != nil {
 		return compiler.DirectiveRes{Next: next}, err
 	}
 	if resolveErr := resolveSchemaSymbols(raw, compiler.SymbolsFromMeta(req.Out)); resolveErr != nil {
+		if _, positioned := compiler.PositionOf(resolveErr); positioned {
+			return compiler.DirectiveRes{Next: next}, resolveErr
+		}
 		return compiler.DirectiveRes{Next: next}, compiler.SourceError(pos, "@schema %s: %v", name, resolveErr)
 	}
 	if defaultErr := validateSchemaDefaults(raw); defaultErr != nil {
+		if _, positioned := compiler.PositionOf(defaultErr); positioned {
+			return compiler.DirectiveRes{Next: next}, defaultErr
+		}
 		return compiler.DirectiveRes{Next: next}, compiler.SourceError(pos, "@schema %s: %v", name, defaultErr)
 	}
 	for _, reference := range embedReferences {
@@ -105,13 +111,20 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	return compiler.DirectiveRes{Next: next}, nil
 }
 
-func parseSchemaEntries(entries []compiler.BlockEntry, body []string, pos compiler.Position, schemaName string) ([]Field, []compiler.SourceReference, error) {
+func parseSchemaEntries(entries []compiler.BlockEntry, body []string, req compiler.DirectiveReq, pos compiler.Position, schemaName string) ([]Field, []compiler.SourceReference, error) {
 	fields := make([]Field, 0, len(body))
 	var references []compiler.SourceReference
 	for i, raw := range body {
 		field, err := parseSchemaField(raw)
 		if err != nil {
-			return nil, nil, compiler.SourceError(pos, "@schema %s: %v", schemaName, err)
+			fieldPos := pos
+			if i < len(entries) {
+				fieldPos = positionAt(req, entries[i].Span.Start)
+			}
+			return nil, nil, compiler.SourceError(fieldPos, "@schema %s: %v", schemaName, err)
+		}
+		if i < len(entries) {
+			field.Position = positionAt(req, entries[i].Span.Start)
 		}
 		if field.Name == "" && field.Embed == "" {
 			continue
@@ -123,6 +136,17 @@ func parseSchemaEntries(entries []compiler.BlockEntry, body []string, pos compil
 		}
 	}
 	return fields, references, nil
+}
+
+func positionAt(req compiler.DirectiveReq, offset int) compiler.Position {
+	for line := range req.Lines {
+		start := req.Offset(line, 0)
+		end := req.Offset(line, len(req.Lines[line]))
+		if offset >= start && offset <= end {
+			return compiler.Position{File: req.File, Line: line + 1, Col: offset - start + 1}
+		}
+	}
+	return compiler.Position{File: req.File, Line: req.I + 1}
 }
 
 // resolveEmbeds flattens embedded schemas into the parent field list.
@@ -138,7 +162,8 @@ func resolveEmbeds(raw []Field, declared []Schema, pos compiler.Position, schema
 	out := make([]Field, 0, len(raw))
 	seen := make(map[string]bool, len(raw))
 
-	for _, f := range raw {
+	for i := range raw {
+		f := raw[i]
 		if f.Embed == "" {
 			if seen[f.Name] {
 				return nil, compiler.SourceError(pos, "@schema %s: duplicate field %q", schemaName, f.Name)
@@ -156,7 +181,8 @@ func resolveEmbeds(raw []Field, declared []Schema, pos compiler.Position, schema
 			return nil, compiler.SourceError(pos,
 				"@schema %s: embedded schema %q is not declared before this point", schemaName, f.Embed)
 		}
-		for _, embedded := range src.Fields {
+		for i := range src.Fields {
+			embedded := src.Fields[i]
 			if seen[embedded.Name] {
 				return nil, compiler.SourceError(pos,
 					"@schema %s: field %q collides with an embedded schema field", schemaName, embedded.Name)
