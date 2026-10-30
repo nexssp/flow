@@ -185,7 +185,7 @@ func TestDirective_DuplicateField(t *testing.T) {
 		`  A string`,
 		`}`,
 	)
-	ktest.RequireErrorContains(t, err, "duplicate field")
+	ktest.RequireErrorContains(t, err, `duplicate field "A"`)
 }
 
 // runSchemaSequence walks every @schema block in order, sharing the
@@ -272,6 +272,23 @@ func TestDirective_Composition(t *testing.T) {
 		ktest.RequireErrorContains(t, err, `duplicate field "JSON"`)
 	})
 
+	t.Run("duplicate Go field names across embedded schemas", func(t *testing.T) {
+		t.Parallel()
+		_, err := runSchemaSequence(t,
+			`@schema A {`,
+			`  ID string`,
+			`}`,
+			`@schema B {`,
+			`  ID int`,
+			`}`,
+			`@schema Combined {`,
+			`  A`,
+			`  B`,
+			`}`,
+		)
+		ktest.RequireErrorContains(t, err, `field "ID" collides with an embedded schema field`)
+	})
+
 	t.Run("tags on embed line rejected", func(t *testing.T) {
 		t.Parallel()
 		_, err := runSchemaSequence(t,
@@ -324,6 +341,64 @@ func TestDirective_Composition(t *testing.T) {
 			ktest.RequireEqual(t, f.Embed, "")
 		}
 	})
+}
+
+func TestDirective_JSONNameCollision(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		lines []string
+		want  string
+	}{
+		{
+			name: "direct fields",
+			lines: []string{
+				`@schema Request {`,
+				"  Name string `json:\"value\"`",
+				"  Other int `json:\"value\"`",
+				`}`,
+			},
+			want: `fields "Name" and "Other" share JSON name "value"`,
+		},
+		{
+			name: "embedded and direct fields",
+			lines: []string{
+				`@schema Common {`,
+				"  Name string `json:\"value\"`",
+				`}`,
+				`@schema Request {`,
+				`  Common`,
+				"  Other int `json:\"value\"`",
+				`}`,
+			},
+			want: `fields "Name" and "Other" share JSON name "value"`,
+		},
+		{
+			name: "fields from separate embedded schemas",
+			lines: []string{
+				`@schema First {`,
+				"  Name string `json:\"value\"`",
+				`}`,
+				`@schema Second {`,
+				"  Other int `json:\"value\"`",
+				`}`,
+				`@schema Request {`,
+				`  First`,
+				`  Second`,
+				`}`,
+			},
+			want: `fields "Name" and "Other" share JSON name "value"`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := runSchemaSequence(t, tc.lines...)
+			ktest.RequireErrorContains(t, err, tc.want)
+		})
+	}
 }
 
 func TestCompiler_PreprocessResolvesSymbolsInTypedSchema(t *testing.T) {

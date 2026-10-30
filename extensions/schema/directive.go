@@ -161,12 +161,24 @@ func resolveEmbeds(raw []Field, declared []Schema, pos compiler.Position, schema
 
 	out := make([]Field, 0, len(raw))
 	seen := make(map[string]bool, len(raw))
+	seenJSON := make(map[string]Field, len(raw))
+	checkJSONName := func(field Field) error {
+		if prior, ok := seenJSON[field.JSONName]; ok {
+			return compiler.SourceError(pos,
+				"@schema %s: fields %q and %q share JSON name %q", schemaName, prior.Name, field.Name, field.JSONName)
+		}
+		seenJSON[field.JSONName] = field
+		return nil
+	}
 
 	for i := range raw {
 		f := raw[i]
 		if f.Embed == "" {
 			if seen[f.Name] {
 				return nil, compiler.SourceError(pos, "@schema %s: duplicate field %q", schemaName, f.Name)
+			}
+			if err := checkJSONName(f); err != nil {
+				return nil, err
 			}
 			seen[f.Name] = true
 			out = append(out, f)
@@ -186,6 +198,9 @@ func resolveEmbeds(raw []Field, declared []Schema, pos compiler.Position, schema
 			if seen[embedded.Name] {
 				return nil, compiler.SourceError(pos,
 					"@schema %s: field %q collides with an embedded schema field", schemaName, embedded.Name)
+			}
+			if err := checkJSONName(embedded); err != nil {
+				return nil, err
 			}
 			seen[embedded.Name] = true
 			out = append(out, embedded)
