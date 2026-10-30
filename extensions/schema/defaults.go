@@ -55,6 +55,19 @@ func fieldDefaultValue(field Field) (value any, hasDefault bool, err error) {
 	return value, true, nil
 }
 
+func validateSchemaDefaults(fields []Field) error {
+	for _, field := range fields {
+		raw, ok := field.Tags["default"]
+		if !ok {
+			continue
+		}
+		if _, err := parseDefaultValue(field, raw); err != nil {
+			return fmt.Errorf("field %q default: %w", field.Name, err)
+		}
+	}
+	return nil
+}
+
 func parseDefaultValue(field Field, raw string) (any, error) {
 	if field.Slice || field.Map {
 		value, err := parseJSONDefault(raw)

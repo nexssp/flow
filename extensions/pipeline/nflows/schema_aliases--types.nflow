@@ -1,0 +1,5 @@
+@description "ChatTurn schema imported by the pipeline alias fixture"
+@schema ChatTurn {
+  Role    string `json:"role" validate:"required"`
+  Content string `json:"content" validate:"required"`
+}

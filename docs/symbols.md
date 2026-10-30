@@ -14,6 +14,20 @@ Use symbols for domain values that must stay consistent across routing, output c
 @assert: result.status == invoice.needs_review
 ```
 
+For identity-valued symbols such as operation names or status labels, use bare
+names instead of repeating each value:
+
+```nflow
+@symbols memory { search, put, chat_turn }
+# The comma-free form is also valid:
+# @symbols memory { search put chat_turn }
+```
+
+Each bare name resolves to the same string as its name (`memory.search` becomes
+`"search"`). Bare names may be mixed with the existing explicit `name: "value"`
+form. Commas are optional between bare names; names may be on one line or
+separate lines.
+
 ## Declaration and scope
 
 - Namespace and symbol names are identifiers: letters or `_` first, then letters, digits, or `_`.
@@ -29,7 +43,25 @@ Extensions can provide global namespaces through `Bundle.Symbols` or `compiler.R
 
 The same local/global environment is available in action data, `match` and projection expressions, `loop(... ) until(...)`, the `assert(...)` keyword, `@assert:` checks, and error-routing conditions. For DSL data positions, a known bare `namespace.name` is replaced with its declared value. In expression positions, it is a variable/member lookup.
 
-Symbols are not interpolated into quoted strings, embedded Python/Go source, shell text, or arbitrary external files. When a separate worker must use the same value, pass it as an argument or through a structured input from Flow. For example, a Python worker can read status values from `sys.argv` rather than carrying another copy of `"CLEAR"` and `"NEEDS_REVIEW"` in its code.
+Schema `default` and `validate` tag values can also refer to symbols, for example
+`default:"memory.search"` and `validate:"oneof=memory.search memory.put"`.
+Declare the namespace before the schema; the compiler substitutes the symbol's
+string value and reports an unknown member within a declared namespace. See
+[NFlow schemas](schema.md) for the typed validation example.
+
+Unquoted pipeline-header modifier values also resolve exact symbol references
+before the modifier's existing type validation. For example,
+`:status=http_status.created` can use a declared string value such as `"201"`;
+the status modifier still validates that value as an integer. Quote a value to
+keep it literal. Imported symbols must use their explicit include alias, and
+unresolved values are left for the modifier to validate as ordinary text.
+
+Outside those explicitly supported contexts, symbols are not interpolated into
+quoted strings, embedded Python/Go source, shell text, or arbitrary external
+files. When a separate worker must use the same value, pass it as an argument or
+through a structured input from Flow. For example, a Python worker can read
+status values from `sys.argv` rather than carrying another copy of `"CLEAR"` and
+`"NEEDS_REVIEW"` in its code.
 
 ## Precedence and collision guidance
 

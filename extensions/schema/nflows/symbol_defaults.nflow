@@ -1,0 +1,10 @@
+@description "spec: bare @symbols values resolve in schema defaults and validation, including typed integer defaults"
+@symbols memory { search, put, chat_turn }
+@symbols http { created: "201" }
+@schema MemoryRequest {
+  Operation string `json:"operation" default:"memory.search" validate:"required,oneof=memory.search memory.put memory.chat_turn"`
+  Status    int    `json:"status" default:"http.created" validate:"eq=http.created"`
+}
+{} -> MemoryRequest.validate
+@assert: result.operation == "search"
+@assert: result.status == 201

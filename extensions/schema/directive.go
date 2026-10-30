@@ -83,6 +83,12 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	if err != nil {
 		return compiler.DirectiveRes{Next: next}, err
 	}
+	if resolveErr := resolveSchemaSymbols(raw, compiler.SymbolsFromMeta(req.Out)); resolveErr != nil {
+		return compiler.DirectiveRes{Next: next}, compiler.SourceError(pos, "@schema %s: %v", name, resolveErr)
+	}
+	if defaultErr := validateSchemaDefaults(raw); defaultErr != nil {
+		return compiler.DirectiveRes{Next: next}, compiler.SourceError(pos, "@schema %s: %v", name, defaultErr)
+	}
 	for _, reference := range embedReferences {
 		req.RecordReference(reference)
 	}
@@ -205,11 +211,6 @@ func parseSchemaField(line string) (*Field, error) {
 		}
 		if field.JSONName == "" {
 			field.JSONName = lowerFirst(name)
-		}
-		if _, ok := tags["default"]; ok {
-			if _, err := parseDefaultValue(*field, tags["default"]); err != nil {
-				return nil, fmt.Errorf("field %q default: %w", name, err)
-			}
 		}
 		return field, nil
 	default:

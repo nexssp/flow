@@ -8,6 +8,7 @@ import (
 	"github.com/nexssp/kernel/xtest/ktest"
 
 	compiler "github.com/nexssp/flow/compiler"
+	symbolsext "github.com/nexssp/flow/extensions/symbols"
 )
 
 func runDirective(tb testing.TB, lines ...string) (map[string]any, error) {
@@ -323,4 +324,74 @@ func TestDirective_Composition(t *testing.T) {
 			ktest.RequireEqual(t, f.Embed, "")
 		}
 	})
+}
+
+func TestCompiler_PreprocessResolvesSymbolsInTypedSchema(t *testing.T) {
+	t.Parallel()
+	source := strings.Join([]string{
+		`@symbols memory { search, put, chat_turn }`,
+		`@schema MemoryRequest {`,
+		"  Operation string `json:\"operation\" default:\"memory.search\" validate:\"required,oneof=memory.search memory.put memory.chat_turn\"`",
+		`}`,
+	}, "\n")
+	_, meta, err := compiler.Preprocess(
+		t.Context(),
+		compiler.NewDirectiveTable(symbolsext.Directive, Directive),
+		source,
+		"memory.nflow",
+	)
+	ktest.RequireNoError(t, err)
+
+	schemas := SchemasFromMap(meta)
+	ktest.RequireEqual(t, len(schemas), 1)
+	field := schemas[0].Fields[0]
+	ktest.RequireEqual(t, field.Tags["default"], "search")
+	ktest.RequireEqual(t, field.Tags["validate"], "required,oneof=search put chat_turn")
+
+	effective, err := ApplyDefaultsAndValidate(t.Context(), schemas[0], map[string]any{})
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, effective["operation"], "search")
+	_, err = ApplyDefaultsAndValidate(t.Context(), schemas[0], map[string]any{"operation": "delete"})
+	ktest.RequireErrorContains(t, err, "must be one of")
+}
+
+func TestCompiler_PreprocessRejectsUnknownSymbolInTypedSchema(t *testing.T) {
+	t.Parallel()
+	source := strings.Join([]string{
+		`@symbols memory { search put }`,
+		`@schema MemoryRequest {`,
+		"  Operation string `json:\"operation\" default:\"memory.missing\"`",
+		`}`,
+	}, "\n")
+	_, _, err := compiler.Preprocess(
+		t.Context(),
+		compiler.NewDirectiveTable(symbolsext.Directive, Directive),
+		source,
+		"memory.nflow",
+	)
+	ktest.RequireErrorContains(t, err, `unknown symbol "memory.missing"`)
+}
+
+func TestCompiler_PreprocessResolvesSymbolBeforeTypedDefaultParsing(t *testing.T) {
+	t.Parallel()
+	source := strings.Join([]string{
+		`@symbols http { created: "201" }`,
+		`@schema Response {`,
+		"  Status int `json:\"status\" default:\"http.created\" validate:\"eq=201\"`",
+		`}`,
+	}, "\n")
+	_, meta, err := compiler.Preprocess(
+		t.Context(),
+		compiler.NewDirectiveTable(symbolsext.Directive, Directive),
+		source,
+		"response.nflow",
+	)
+	ktest.RequireNoError(t, err)
+
+	schemas := SchemasFromMap(meta)
+	ktest.RequireEqual(t, len(schemas), 1)
+	ktest.RequireEqual(t, schemas[0].Fields[0].Tags["default"], "201")
+	effective, err := ApplyDefaultsAndValidate(t.Context(), schemas[0], map[string]any{})
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, effective["status"], 201)
 }

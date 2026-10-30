@@ -56,6 +56,21 @@ func TestParseDeclarationHeaderRejectsMalformedModifiers(t *testing.T) {
 	}
 }
 
+func TestParseDeclarationHeaderWithSpansRetainsQuoteState(t *testing.T) {
+	t.Parallel()
+	header, err := ParseDeclarationHeaderWithSpans(DirectiveReq{
+		Lines: []string{
+			`@pipeline create :status=api.created :route="POST /api/agents"`,
+			`  :tag='api.created'`,
+		},
+		File: "header.nflow",
+	}, "pipeline")
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, header.Modifiers, []string{"status=api.created", "route=POST /api/agents", "tag=api.created"})
+	ktest.RequireEqual(t, header.QuotedModifiers, []bool{false, true, true})
+	ktest.RequireEqual(t, header.Next, 2)
+}
+
 func TestParseDeclarationHeaderNestedIndent(t *testing.T) {
 	t.Parallel()
 	_, mods, next, err := ParseDeclarationHeader(DirectiveReq{Lines: []string{

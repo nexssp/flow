@@ -1,0 +1,21 @@
+@description "spec: local and source-imported symbols resolve in unquoted pipeline modifiers"
+@symbols status { created: "201" }
+@symbols labels { local: "local-pipeline" }
+@include ./catalog.nflow AS api
+@pipeline local_status :status=status.created :description=labels.local
+  runtime.const @{ value: "local-status" }
+@end
+@pipeline imported_status :status=api.status.created :description=api.labels.imported
+  runtime.const @{ value: "imported-status" }
+@end
+@pipeline quoted_literal :description="api.labels.quoted"
+  runtime.const @{ value: "quoted-literal" }
+@end
+parallel {
+  local: pipeline.local_status,
+  imported: pipeline.imported_status,
+  quoted: pipeline.quoted_literal
+}
+@assert: result.local == "local-status"
+@assert: result.imported == "imported-status"
+@assert: result.quoted == "quoted-literal"

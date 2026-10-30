@@ -1,0 +1,15 @@
+@description "Bare symbols accept whitespace or comma-separated names and explicit mappings"
+@symbols words { alpha beta gamma }
+@symbols colors { red, green, blue }
+@symbols states {
+  review: "needs_review"
+  approved: "APPROVED"
+}
+{
+  spaced: words.alpha + "|" + words.beta + "|" + words.gamma,
+  comma_separated: colors.red + "|" + colors.green + "|" + colors.blue,
+  mapped: states.review + "|" + states.approved
+}
+@assert: result.spaced == "alpha|beta|gamma"
+@assert: result.comma_separated == "red|green|blue"
+@assert: result.mapped == "needs_review|APPROVED"

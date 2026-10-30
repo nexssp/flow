@@ -123,6 +123,22 @@ func SymbolsFromMeta(meta map[string]any) map[string]SymbolNamespace {
 	return symbols
 }
 
+// ResolveSymbolValue resolves an exact `<namespace>.<member>` reference using
+// the source's local and explicitly imported namespaces, then the global
+// registry. A local namespace shadows a global namespace completely, matching
+// the compiler's existing data-value resolver. Unresolved references return
+// false and remain available to the caller as ordinary modifier text.
+func ResolveSymbolValue(meta map[string]any, reference string) (any, bool) {
+	namespace, member, ok := strings.Cut(reference, ".")
+	if !ok || namespace == "" || member == "" {
+		return nil, false
+	}
+	if local, exists := SymbolsFromMeta(meta)[namespace]; exists {
+		return lookupPath(local.Symbols, member)
+	}
+	return LookupSymbol(namespace, member)
+}
+
 // MergeSymbolNamespaces returns a fresh environment containing every
 // registered global namespace, then any file-local namespace from ctx
 // (overriding globals of the same name), then the caller's env

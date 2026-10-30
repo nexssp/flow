@@ -19,6 +19,7 @@ const profilesKey = "scope.profiles"
 type profileDef struct {
 	parent string
 	mods   []string
+	quoted []bool
 }
 
 func profilesFromMeta(meta map[string]any) map[string]profileDef {
@@ -42,16 +43,17 @@ var ProfileDirective = compiler.Directive{
 
 func handleProfile(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 	pos := compiler.Position{File: req.File, Line: req.I + 1}
-	name, mods, next, err := compiler.ParseDeclarationHeader(req, "profile")
+	header, err := compiler.ParseDeclarationHeaderWithSpans(req, "profile")
 	if err != nil {
 		return compiler.DirectiveRes{}, err
 	}
+	name, mods, quoted, next := header.Name, header.Modifiers, header.QuotedModifiers, header.Next
 	if !isValidProfileName(name) {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@profile: invalid name %q", name)
 	}
 
-	parent, mods, err := extractParent(mods)
+	parent, mods, quoted, err := extractParent(mods, quoted)
 	if err != nil {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			"@profile %s: %v", name, err)
@@ -70,34 +72,33 @@ func handleProfile(_ context.Context, req compiler.DirectiveReq) (compiler.Direc
 		profiles = make(map[string]profileDef)
 		req.Out[profilesKey] = profiles
 	}
-	profiles[name] = profileDef{parent: parent, mods: mods}
+	profiles[name] = profileDef{parent: parent, mods: mods, quoted: quoted}
 
 	return compiler.DirectiveRes{Next: next}, nil
 }
 
-// extractParent pulls a single :parent=NAME entry out of mods.
-// A duplicate, a bare :parent, or an empty value is an error.
-// extractParent pulls a single :parent=NAME entry out of mods.
-// A duplicate, a bare :parent, or an empty value is an error.
-func extractParent(mods []string) (parent string, rest []string, err error) {
-	for _, m := range mods {
+// extractParent pulls a single :parent=NAME entry out of mods and keeps the
+// quote flags aligned with the modifiers that remain.
+func extractParent(mods []string, quoted []bool) (parent string, rest []string, restQuoted []bool, err error) {
+	for i, m := range mods {
 		if compiler.ModifierName(m) != "parent" {
 			rest = append(rest, m)
+			restQuoted = append(restQuoted, quotedAt(quoted, i))
 			continue
 		}
 		if parent != "" {
-			return "", nil, errors.New(":parent may appear at most once")
+			return "", nil, nil, errors.New(":parent may appear at most once")
 		}
 		_, value, ok := strings.Cut(m, "=")
 		if !ok {
-			return "", nil, errors.New(":parent requires a value (use :parent=NAME)")
+			return "", nil, nil, errors.New(":parent requires a value (use :parent=NAME)")
 		}
 		if value == "" {
-			return "", nil, errors.New(":parent requires a profile name")
+			return "", nil, nil, errors.New(":parent requires a profile name")
 		}
 		parent = value
 	}
-	return parent, rest, nil
+	return parent, rest, restQuoted, nil
 }
 
 // ExpandProfile returns the effective modifier list for a named
@@ -108,66 +109,89 @@ func extractParent(mods []string) (parent string, rest []string, err error) {
 // error naming the missing profile. The full parent chain is included
 // in cycle diagnostics.
 func ExpandProfile(meta map[string]any, name string) ([]string, error) {
+	mods, _, err := ExpandProfileWithQuotes(meta, name)
+	return mods, err
+}
+
+// ExpandProfileWithQuotes is ExpandProfile plus quote-state metadata aligned
+// with the resulting modifier list. It preserves quote semantics through
+// parent inheritance and child overrides.
+func ExpandProfileWithQuotes(meta map[string]any, name string) (mods []string, quoted []bool, err error) {
 	profiles := profilesFromMeta(meta)
 	if profiles == nil {
-		return nil, fmt.Errorf("unknown profile %q", name)
+		return nil, nil, fmt.Errorf("unknown profile %q", name)
 	}
 	return expandProfile(profiles, name, nil)
 }
 
-func expandProfile(profiles map[string]profileDef, name string, chain []string) ([]string, error) {
+func expandProfile(profiles map[string]profileDef, name string, chain []string) (mods []string, quoted []bool, err error) {
 	if slices.Contains(chain, name) {
-		return nil, fmt.Errorf("profile cycle: %s → %s",
+		return nil, nil, fmt.Errorf("profile cycle: %s → %s",
 			strings.Join(chain, " → "), name)
 	}
 	def, ok := profiles[name]
 	if !ok {
 		if len(chain) == 0 {
-			return nil, fmt.Errorf("unknown profile %q", name)
+			return nil, nil, fmt.Errorf("unknown profile %q", name)
 		}
-		return nil, fmt.Errorf("unknown parent profile %q in chain %s",
+		return nil, nil, fmt.Errorf("unknown parent profile %q in chain %s",
 			name, strings.Join(chain, " → "))
 	}
 
 	var parentMods []string
+	var parentQuoted []bool
 	if def.parent != "" {
 		var err error
-		parentMods, err = expandProfile(profiles, def.parent,
+		parentMods, parentQuoted, err = expandProfile(profiles, def.parent,
 			append(slices.Clone(chain), name))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return mergeMods(parentMods, def.mods), nil
+	mods, quoted = mergeModsWithQuotes(parentMods, parentQuoted, def.mods, def.quoted)
+	return mods, quoted, nil
 }
 
-// mergeMods merges parent and child modifier lists. Child wins on name
-// collision. Order: parent-first, child appended after; first-seen
-// position is preserved for names present in both.
-func mergeMods(parent, child []string) []string {
+func mergeModsWithQuotes(parent []string, parentQuoted []bool, child []string, childQuoted []bool) (mods []string, quoted []bool) {
 	switch {
 	case len(parent) == 0:
-		return append([]string(nil), child...)
+		return append([]string(nil), child...), alignedQuotes(child, childQuoted)
 	case len(child) == 0:
-		return append([]string(nil), parent...)
+		return append([]string(nil), parent...), alignedQuotes(parent, parentQuoted)
 	}
 
 	out := make([]string, 0, len(parent)+len(child))
+	outQuoted := make([]bool, 0, len(parent)+len(child))
 	index := make(map[string]int, len(parent))
-	for _, m := range parent {
+	for i, m := range parent {
 		index[compiler.ModifierName(m)] = len(out)
 		out = append(out, m)
+		outQuoted = append(outQuoted, quotedAt(parentQuoted, i))
 	}
-	for _, m := range child {
+	for i, m := range child {
 		n := compiler.ModifierName(m)
-		if i, ok := index[n]; ok {
-			out[i] = m
+		if outIndex, ok := index[n]; ok {
+			out[outIndex] = m
+			outQuoted[outIndex] = quotedAt(childQuoted, i)
 			continue
 		}
 		index[n] = len(out)
 		out = append(out, m)
+		outQuoted = append(outQuoted, quotedAt(childQuoted, i))
+	}
+	return out, outQuoted
+}
+
+func alignedQuotes(mods []string, quoted []bool) []bool {
+	out := make([]bool, len(mods))
+	for i := range mods {
+		out[i] = quotedAt(quoted, i)
 	}
 	return out
+}
+
+func quotedAt(quoted []bool, index int) bool {
+	return index >= 0 && index < len(quoted) && quoted[index]
 }
 
 func isValidProfileName(name string) bool {

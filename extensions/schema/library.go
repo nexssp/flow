@@ -1,7 +1,8 @@
 // Package schema provides the `@schema NAME { Field Type `json:"..."
 // default:"..." validate:"..."` ... }` directive. The declaration lands in
-// meta["schemas"]. `:request-schema=NAME` and `:response-schema=NAME` attach
-// explicit pipeline boundary contracts; prefixing the name with `!` rejects
+// meta["schemas"]. `:request-schema=NAME` (`:in-schema=NAME`) and
+// `:response-schema=NAME` (`:out-schema=NAME`) attach explicit pipeline boundary
+// contracts; prefixing the name with `!` rejects
 // undeclared fields at that boundary. Requests receive defaults before
 // validation; response schemas are validated without defaults and must not
 // declare any `default` tags. Such declarations fail before execution. Extra
@@ -54,11 +55,11 @@ func Bundle(_ map[string]string) compiler.Bundle {
 		ID:           ID,
 		Libraries:    []action.Library{Library()},
 		Directives:   []compiler.Directive{Directive},
-		Modifiers:    []compiler.Modifier{SchemaModifier, RequestSchemaModifier, ResponseSchemaModifier},
+		Modifiers:    []compiler.Modifier{SchemaModifier, RequestSchemaModifier, ResponseSchemaModifier, InSchemaModifier, OutSchemaModifier},
 		OnPreprocess: wireSchemaAdvisor,
 		Materialize:  materialize,
 		WrapPipeline: func(meta map[string]any, inner action.AnyAction) (action.AnyAction, error) {
-			schemas := SchemasFromMap(meta)
+			schemas := VisibleSchemasFromMeta(meta)
 			return action.New("schema.wrap", func(ctx context.Context, req any) (any, error) {
 				execCtx := WithContextSchemas(ctx, schemas)
 				execCtx = rootInputKey.With(execCtx, req)
@@ -82,6 +83,8 @@ const (
 	SchemaModifierName         = "schema"
 	RequestSchemaModifierName  = "request-schema"
 	ResponseSchemaModifierName = "response-schema"
+	InSchemaModifierName       = "in-schema"
+	OutSchemaModifierName      = "out-schema"
 )
 
 // SchemaModifier attaches schema metadata to an atom. Pipeline boundaries use
@@ -97,6 +100,16 @@ var RequestSchemaModifier = compiler.String(RequestSchemaModifierName,
 	})
 
 var ResponseSchemaModifier = compiler.String(ResponseSchemaModifierName,
+	func(b *action.Builder[any, any], name string) *action.Builder[any, any] {
+		return b.Tag("response-schema:" + name)
+	})
+
+var InSchemaModifier = compiler.String(InSchemaModifierName,
+	func(b *action.Builder[any, any], name string) *action.Builder[any, any] {
+		return b.Tag("request-schema:" + name)
+	})
+
+var OutSchemaModifier = compiler.String(OutSchemaModifierName,
 	func(b *action.Builder[any, any], name string) *action.Builder[any, any] {
 		return b.Tag("response-schema:" + name)
 	})

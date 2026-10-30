@@ -32,6 +32,7 @@ var Directive = compiler.Directive{
 type AppliedModifier struct {
 	Raw    string
 	Source compiler.ModifierSource
+	Quoted bool
 }
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
@@ -40,7 +41,7 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	if err != nil {
 		return compiler.DirectiveRes{}, err
 	}
-	name, mods, next := header.Name, header.Modifiers, header.Next
+	name, mods, quoted, next := header.Name, header.Modifiers, header.QuotedModifiers, header.Next
 	keywordSpan, nameSpan, headerSpan := header.KeywordSpan, header.NameSpan, header.HeaderSpan
 
 	canonical := name
@@ -80,7 +81,7 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 		return compiler.DirectiveRes{Next: next}, declareErr
 	}
 
-	applied, err := expandProfiles(mods, req.Out, pos, name)
+	applied, err := expandProfiles(mods, quoted, req.Out, pos, name)
 	if err != nil {
 		return compiler.DirectiveRes{Next: next}, err
 	}
@@ -103,6 +104,17 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 			raw[i] = am.Raw
 		}
 		pipelineMods[name] = raw
+
+		pipelineQuoted, _ := req.Out["pipeline_modifier_quoted"].(map[string][]bool)
+		if pipelineQuoted == nil {
+			pipelineQuoted = make(map[string][]bool)
+			req.Out["pipeline_modifier_quoted"] = pipelineQuoted
+		}
+		quotedValues := make([]bool, len(applied))
+		for i, am := range applied {
+			quotedValues[i] = am.Quoted
+		}
+		pipelineQuoted[name] = quotedValues
 
 		sources, _ := req.Out["pipeline_modifier_sources"].(map[string][]compiler.ModifierSource)
 		if sources == nil {
@@ -127,7 +139,7 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 //
 // A reference to an undeclared profile, an unresolved parent, or a
 // parent cycle is a compile error, not a silent no-op.
-func expandProfiles(mods []string, meta map[string]any, pos compiler.Position, pipelineName string) ([]AppliedModifier, error) {
+func expandProfiles(mods []string, quoted []bool, meta map[string]any, pos compiler.Position, pipelineName string) ([]AppliedModifier, error) {
 	if len(mods) == 0 {
 		return nil, nil
 	}
@@ -136,19 +148,19 @@ func expandProfiles(mods []string, meta map[string]any, pos compiler.Position, p
 
 	var expanded []AppliedModifier
 	index := make(map[string]int)
-	add := func(raw string, src compiler.ModifierSource) {
+	add := func(raw string, src compiler.ModifierSource, isQuoted bool) {
 		n := compiler.ModifierName(raw)
 		if i, ok := index[n]; ok {
-			expanded[i] = AppliedModifier{Raw: raw, Source: src}
+			expanded[i] = AppliedModifier{Raw: raw, Source: src, Quoted: isQuoted}
 			return
 		}
 		index[n] = len(expanded)
-		expanded = append(expanded, AppliedModifier{Raw: raw, Source: src})
+		expanded = append(expanded, AppliedModifier{Raw: raw, Source: src, Quoted: isQuoted})
 	}
 
-	for _, raw := range mods {
+	for i, raw := range mods {
 		if compiler.ModifierName(raw) != "profile" {
-			add(raw, localSource)
+			add(raw, localSource, quotedAt(quoted, i))
 			continue
 		}
 
@@ -161,16 +173,20 @@ func expandProfiles(mods []string, meta map[string]any, pos compiler.Position, p
 				"@pipeline: :profile requires a name (use :profile=NAME)")
 		}
 
-		profileMods, err := scope.ExpandProfile(meta, value)
+		profileMods, profileQuoted, err := scope.ExpandProfileWithQuotes(meta, value)
 		if err != nil {
 			return nil, compiler.SourceError(pos, "@pipeline: %v", err)
 		}
 		profileSource := compiler.ModifierSource{Kind: "profile", Label: value}
-		for _, pm := range profileMods {
-			add(pm, profileSource)
+		for i, pm := range profileMods {
+			add(pm, profileSource, quotedAt(profileQuoted, i))
 		}
 	}
 	return expanded, nil
+}
+
+func quotedAt(quoted []bool, index int) bool {
+	return index >= 0 && index < len(quoted) && quoted[index]
 }
 
 // EndDirective rejects a stray `@end`. It only fires when `@end` appears

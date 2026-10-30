@@ -15,10 +15,12 @@ func TestBundle_WiresDirectiveModifierFixtures(t *testing.T) {
 	ktest.RequireEqual(t, len(b.Libraries), 1)
 	ktest.RequireEqual(t, len(b.Directives), 1)
 	ktest.RequireEqual(t, b.Directives[0].Name, "schema")
-	ktest.RequireEqual(t, len(b.Modifiers), 3)
+	ktest.RequireEqual(t, len(b.Modifiers), 5)
 	ktest.RequireEqual(t, b.Modifiers[0].Name, SchemaModifierName)
 	ktest.RequireEqual(t, b.Modifiers[1].Name, RequestSchemaModifierName)
 	ktest.RequireEqual(t, b.Modifiers[2].Name, ResponseSchemaModifierName)
+	ktest.RequireEqual(t, b.Modifiers[3].Name, InSchemaModifierName)
+	ktest.RequireEqual(t, b.Modifiers[4].Name, OutSchemaModifierName)
 	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
 }
 

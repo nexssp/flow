@@ -40,6 +40,24 @@ runtime.const
 	ktest.RequireEqual(t, strings.Count(clean, "\n"), strings.Count(source, "\n"))
 }
 
+func TestProfileExpansionPreservesModifierQuoteState(t *testing.T) {
+	t.Parallel()
+	source := `@profile base
+  :status=api.created
+  :route="POST /api/agents"
+@profile child
+  :parent=base
+  :status='api.created'
+runtime.noop
+`
+	_, meta, err := compiler.Preprocess(t.Context(), compiler.NewDirectiveTable(ProfileDirective), source, "quoted-profile.nflow")
+	ktest.RequireNoError(t, err)
+	mods, quoted, err := ExpandProfileWithQuotes(meta, "child")
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, mods, []string{"status=api.created", "route=POST /api/agents"})
+	ktest.RequireEqual(t, quoted, []bool{true, true})
+}
+
 func TestProfileMultilineParentErrors(t *testing.T) {
 	t.Parallel()
 	for _, tail := range []string{":parent", ":parent=missing :parent=other"} {

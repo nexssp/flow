@@ -29,12 +29,14 @@ func materialize(req compiler.MaterializeReq) error {
 	}
 
 	pipelineMods, _ := req.Meta["pipeline_modifiers"].(map[string][]string)
+	pipelineQuoted, _ := req.Meta["pipeline_modifier_quoted"].(map[string][]bool)
 	definitions := make([]pipelineDefinition, 0, len(pipelines))
 	for name, source := range pipelines {
 		definitions = append(definitions, pipelineDefinition{
 			name:      name,
 			source:    source,
 			modifiers: pipelineMods[name],
+			quoted:    pipelineQuoted[name],
 		})
 	}
 	sort.Slice(definitions, func(i, j int) bool {
@@ -47,6 +49,7 @@ type pipelineDefinition struct {
 	name      string
 	source    string
 	modifiers []string
+	quoted    []bool
 }
 
 func materializePipelines(req compiler.MaterializeReq, definitions []pipelineDefinition) error {
@@ -96,7 +99,8 @@ func materializePipelines(req compiler.MaterializeReq, definitions []pipelineDef
 
 func materializePipeline(req compiler.MaterializeReq, definition pipelineDefinition, pending map[string]struct{}) (retry bool, err error) {
 	canonicalName := pipelineActionName(definition.name)
-	requestSelection, responseSelection, compileMods, err := splitSchemaModifiers(definition.name, definition.modifiers)
+	modifiers := resolvePipelineModifierSymbols(req.Meta, definition.modifiers, definition.quoted)
+	requestSelection, responseSelection, compileMods, err := splitSchemaModifiers(definition.name, modifiers)
 	if err != nil {
 		return false, err
 	}
@@ -144,7 +148,7 @@ func materializePipeline(req compiler.MaterializeReq, definition pipelineDefinit
 	// route bindings while giving it its canonical pipeline name.
 	var act action.AnyAction = action.Dynamic(program).Name(canonicalName).Build()
 	if requestSelection.name != "" || responseSelection.name != "" {
-		act = wrapWithSchemaBoundary(act, requestSelection, requestSchema, responseSelection, responseSchema, schemaext.SchemasFromMap(req.Meta))
+		act = wrapWithSchemaBoundary(act, requestSelection, requestSchema, responseSelection, responseSchema, schemaext.VisibleSchemasFromMeta(req.Meta))
 	}
 	if req.Introspection {
 		act = action.WithComposition(act, action.IntrospectionComposition{
@@ -165,6 +169,23 @@ func materializePipeline(req compiler.MaterializeReq, definition pipelineDefinit
 		return false, fmt.Errorf("mount sub-pipeline %q: %w", definition.name, err)
 	}
 	return false, nil
+}
+
+func resolvePipelineModifierSymbols(meta map[string]any, modifiers []string, quoted []bool) []string {
+	resolved := append([]string(nil), modifiers...)
+	for i, raw := range modifiers {
+		if quotedAt(quoted, i) {
+			continue
+		}
+		name, value, hasValue := strings.Cut(raw, "=")
+		if !hasValue || name == schemaext.SchemaModifierName || name == schemaext.RequestSchemaModifierName || name == schemaext.ResponseSchemaModifierName || name == schemaext.InSchemaModifierName || name == schemaext.OutSchemaModifierName {
+			continue
+		}
+		if symbol, ok := compiler.ResolveSymbolValue(meta, value); ok {
+			resolved[i] = name + "=" + fmt.Sprint(symbol)
+		}
+	}
+	return resolved
 }
 
 func selectedPipelineSchema(meta map[string]any, pipelineName string, selection schemaSelection, modifierName string, rejectDefaults bool) (schemaext.Schema, bool, error) {
@@ -263,12 +284,15 @@ type schemaSelection struct {
 
 func splitSchemaModifiers(pipelineName string, modifiers []string) (request, response schemaSelection, compileModifiers []string, err error) {
 	compileModifiers = make([]string, 0, len(modifiers))
+	requestSpelling, responseSpelling := "", ""
 	for _, raw := range modifiers {
 		modifierName := compiler.ModifierName(raw)
 		if modifierName == schemaext.SchemaModifierName {
 			return schemaSelection{}, schemaSelection{}, nil, fmt.Errorf("@pipeline %q: :schema is no longer supported; use :%s=Name", pipelineName, schemaext.RequestSchemaModifierName)
 		}
-		if modifierName != schemaext.RequestSchemaModifierName && modifierName != schemaext.ResponseSchemaModifierName {
+		isRequest := modifierName == schemaext.RequestSchemaModifierName || modifierName == schemaext.InSchemaModifierName
+		isResponse := modifierName == schemaext.ResponseSchemaModifierName || modifierName == schemaext.OutSchemaModifierName
+		if !isRequest && !isResponse {
 			compileModifiers = append(compileModifiers, raw)
 			continue
 		}
@@ -288,13 +312,19 @@ func splitSchemaModifiers(pipelineName string, modifiers []string) (request, res
 		selection.name = selected
 
 		target := &request
-		if modifierName == schemaext.ResponseSchemaModifierName {
+		spelling := &requestSpelling
+		if isResponse {
 			target = &response
+			spelling = &responseSpelling
+		}
+		if *spelling != "" && *spelling != modifierName {
+			return schemaSelection{}, schemaSelection{}, nil, fmt.Errorf("@pipeline %q: cannot combine :%s and :%s for the same schema boundary", pipelineName, *spelling, modifierName)
 		}
 		if target.name != "" && *target != selection {
 			return schemaSelection{}, schemaSelection{}, nil, fmt.Errorf("@pipeline %q: conflicting %s schema selections %q and %q", pipelineName, modifierName, target.name, selection.name)
 		}
 		*target = selection
+		*spelling = modifierName
 	}
 	return request, response, compileModifiers, nil
 }

@@ -53,3 +53,49 @@ func TestDirective_AcceptsUniqueSymbols(t *testing.T) {
 	ktest.RequireEqual(t, namespaces["route"].Symbols["approved"], "approved")
 	ktest.RequireEqual(t, namespaces["route"].Symbols["review"], "review")
 }
+
+func TestDirective_AcceptsBareNames(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name  string
+		lines []string
+	}{
+		{
+			name:  "comma-free",
+			lines: []string{"@symbols memory { search put chat_turn }"},
+		},
+		{
+			name:  "comma-separated",
+			lines: []string{"@symbols memory { search, put, chat_turn }"},
+		},
+		{
+			name: "mixed with explicit values",
+			lines: []string{
+				"@symbols memory {",
+				"search put,",
+				`chat_turn: "TURN"`,
+				"}",
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			out, err := runSymbols(t, test.lines)
+			ktest.RequireNoError(t, err)
+			namespaces, _ := out["symbols"].(map[string]compiler.SymbolNamespace)
+			ktest.RequireEqual[any](t, namespaces["memory"].Symbols["search"], "search")
+			ktest.RequireEqual[any](t, namespaces["memory"].Symbols["put"], "put")
+			wantTurn := "chat_turn"
+			if test.name == "mixed with explicit values" {
+				wantTurn = "TURN"
+			}
+			ktest.RequireEqual[any](t, namespaces["memory"].Symbols["chat_turn"], wantTurn)
+		})
+	}
+}
+
+func TestDirective_RejectsDuplicateBareName(t *testing.T) {
+	t.Parallel()
+	_, err := runSymbols(t, []string{"@symbols memory { search put search }"})
+	ktest.RequireErrorContains(t, err, `duplicate symbol "search"`)
+}

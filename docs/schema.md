@@ -45,12 +45,53 @@ unknown fields, for example `:request-schema=!PackInput` or
 The former pipeline-header alias `:schema=PackInput` is no longer supported;
 use `:request-schema=PackInput` instead.
 
+For shorter headers, `:in-schema=PackInput` is an additive alias for
+`:request-schema=PackInput`, and `:out-schema=PackOutput` aliases
+`:response-schema=PackOutput`. The long forms remain fully supported and are
+not deprecated. Do not specify both spellings for the same boundary in one
+pipeline header; Flow rejects the duplicate rather than guessing which one wins.
+
+Schemas from an explicitly included module are reusable by their qualified
+name; they do not become unqualified declarations in the importing module. If
+`memory_types.nflow` declares `@schema ChatTurn`, a caller can write:
+
+```nflow
+@include "./memory_types.nflow" AS memory
+@pipeline memory_search
+  :in-schema=!memory.ChatTurn
+  runtime.noop
+@end
+```
+
+The same qualified name is available to `:request-schema`, `:response-schema`,
+`:out-schema`, and `schema.validate` in that importing source. A schema declared
+locally with the same name remains distinct from `memory.ChatTurn`.
+
 A `default` tag supplies a value only when its JSON field is **absent**. An
 explicit value—including `null`, `0`, or an empty slice—is preserved. Defaults
 are applied before validation, so a defaulted field can satisfy
 `validate:"required"`; all resulting values are still checked against the
 field's type and validation rules. Malformed defaults are rejected when the
 `@schema` declaration is compiled.
+
+Schema `default` and `validate` tag values can reference previously declared
+symbols. This lets the same values drive both application logic and typed
+validation:
+
+```nflow
+@symbols memory { search, put, chat_turn }
+@schema MemoryRequest {
+  Operation string `json:"operation" default:"memory.search" validate:"required,oneof=memory.search memory.put memory.chat_turn"`
+}
+```
+
+Bare symbol declarations use their names as string values, so this default
+becomes `"search"` and the `oneof` rule accepts only the three declared
+operations. Resolved defaults are then parsed according to the field's declared
+type, so a string-valued symbol such as `"201"` can provide an integer default.
+Declare the symbol namespace before the schema; an unknown member inside a
+declared namespace is a compile-time error. See [Symbols](symbols.md) for scope
+and declaration forms.
 
 ## Supported values
 

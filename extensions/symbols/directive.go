@@ -16,7 +16,9 @@ var Directive = compiler.Directive{
 	Example: `@symbols routing {
 	  primary_queue: "billing-operations"
 	  max_retries:   "3"
-	}`,
+	}
+
+@symbols memory { search, put, chat_turn }`,
 	Handler:     handleDirective,
 	OpaqueBlock: true,
 }
@@ -52,20 +54,27 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 
 	symbols := make(map[string]any, len(entries))
 	for _, entry := range entries {
-		key, value, ok := splitSymbolEntry(entry)
-		if !ok {
-			return compiler.DirectiveRes{}, compiler.SourceError(pos,
-				"@symbols %s: expected `name: value`, got %q", name, entry)
+		if strings.Contains(entry, ":") {
+			key, value, ok := splitSymbolEntry(entry)
+			if !ok {
+				return compiler.DirectiveRes{}, compiler.SourceError(pos,
+					"@symbols %s: expected bare symbol names or `name: value`, got %q", name, entry)
+			}
+			if err := addSymbol(pos, name, symbols, key, value); err != nil {
+				return compiler.DirectiveRes{}, err
+			}
+			continue
 		}
-		if !validNamespaceName(key) {
-			return compiler.DirectiveRes{}, compiler.SourceError(pos,
-				"@symbols %s: invalid symbol name %q", name, key)
+
+		for key := range strings.FieldsSeq(entry) {
+			if err := addSymbol(pos, name, symbols, key, key); err != nil {
+				return compiler.DirectiveRes{}, err
+			}
 		}
-		if _, dup := symbols[key]; dup {
-			return compiler.DirectiveRes{}, compiler.SourceError(pos,
-				"@symbols %s: duplicate symbol %q", name, key)
-		}
-		symbols[key] = value
+	}
+	if len(symbols) == 0 {
+		return compiler.DirectiveRes{}, compiler.SourceError(pos,
+			"@symbols %s: namespace must declare at least one symbol", name)
 	}
 
 	namespaces, _ := req.Out["symbols"].(map[string]compiler.SymbolNamespace)
@@ -84,6 +93,19 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	req.Out["symbols"] = namespaces
 
 	return compiler.DirectiveRes{Next: next}, nil
+}
+
+func addSymbol(pos compiler.Position, namespace string, symbols map[string]any, key string, value any) error {
+	if !validNamespaceName(key) {
+		return compiler.SourceError(pos,
+			"@symbols %s: invalid symbol name %q", namespace, key)
+	}
+	if _, dup := symbols[key]; dup {
+		return compiler.SourceError(pos,
+			"@symbols %s: duplicate symbol %q", namespace, key)
+	}
+	symbols[key] = value
+	return nil
 }
 
 func splitSymbolEntry(entry string) (key string, value any, ok bool) {

@@ -9,6 +9,8 @@ import (
 
 	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/validation"
+
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 const (
@@ -51,6 +53,24 @@ func SchemasFromMap(meta map[string]any) []Schema {
 	return schemas
 }
 
+// VisibleSchemasFromMeta returns local schemas plus schemas from explicitly
+// included modules, qualified by each include alias. It does not merge imported
+// schemas into the local declaration set; callers must use the qualified name
+// (for example, memory.ChatTurn) to select an imported schema.
+func VisibleSchemasFromMeta(meta map[string]any) []Schema {
+	visible := append([]Schema(nil), SchemasFromMap(meta)...)
+	for _, imported := range compiler.SourceImports(meta) {
+		if imported.Source == nil {
+			continue
+		}
+		for _, target := range VisibleSchemasFromMeta(imported.Source.Metadata()) {
+			target.Name = imported.Namespace + "." + target.Name
+			visible = append(visible, target)
+		}
+	}
+	return visible
+}
+
 func SplitFields(s Schema) (payload, config []string) {
 	payload = make([]string, 0, len(s.Fields))
 	config = make([]string, 0, len(s.Fields))
@@ -70,7 +90,7 @@ func SplitFields(s Schema) (payload, config []string) {
 }
 
 func ByName(meta map[string]any, name string) (Schema, bool) {
-	for _, s := range SchemasFromMap(meta) {
+	for _, s := range VisibleSchemasFromMeta(meta) {
 		if s.Name == name {
 			return s, true
 		}

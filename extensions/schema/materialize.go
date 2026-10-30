@@ -13,7 +13,7 @@ import (
 
 func materialize(req compiler.MaterializeReq) error {
 	schemas := SchemasFromMap(req.Meta)
-	if err := validatePipelineSchemaModifiers(req.Meta, schemas); err != nil {
+	if err := validatePipelineSchemaModifiers(req.Meta); err != nil {
 		return err
 	}
 	if len(schemas) == 0 {
@@ -47,15 +47,10 @@ func materialize(req compiler.MaterializeReq) error {
 	return nil
 }
 
-func validatePipelineSchemaModifiers(meta map[string]any, schemas []Schema) error {
+func validatePipelineSchemaModifiers(meta map[string]any) error {
 	pipelineMods, _ := meta["pipeline_modifiers"].(map[string][]string)
 	if len(pipelineMods) == 0 {
 		return nil
-	}
-
-	declared := make(map[string]struct{}, len(schemas))
-	for _, targetSchema := range schemas {
-		declared[targetSchema.Name] = struct{}{}
 	}
 
 	for pipelineName, modifiers := range pipelineMods {
@@ -64,7 +59,7 @@ func validatePipelineSchemaModifiers(meta map[string]any, schemas []Schema) erro
 			if modifierName == SchemaModifierName {
 				return fmt.Errorf("@pipeline %q: :schema is no longer supported; use :%s=Name", pipelineName, RequestSchemaModifierName)
 			}
-			if modifierName != RequestSchemaModifierName && modifierName != ResponseSchemaModifierName {
+			if modifierName != RequestSchemaModifierName && modifierName != ResponseSchemaModifierName && modifierName != InSchemaModifierName && modifierName != OutSchemaModifierName {
 				continue
 			}
 			_, schemaName, hasValue := strings.Cut(raw, "=")
@@ -75,7 +70,7 @@ func validatePipelineSchemaModifiers(meta map[string]any, schemas []Schema) erro
 			if schemaName == "" {
 				return fmt.Errorf("@pipeline %q: :%s requires a schema name after the strictness marker", pipelineName, modifierName)
 			}
-			if _, ok := declared[schemaName]; !ok {
+			if _, ok := ByName(meta, schemaName); !ok {
 				return fmt.Errorf("@pipeline %q: :%s=%s: unknown schema", pipelineName, modifierName, schemaName)
 			}
 		}

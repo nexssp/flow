@@ -1,0 +1,8 @@
+@description "spec: source-imported qualified schemas resolve through strict :in-schema and :out-schema aliases"
+@include ./types.nflow AS memory
+@pipeline validate_memory :in-schema=!memory.ChatTurn :out-schema=memory.ChatTurn
+  runtime.noop
+@end
+{ role: "assistant", content: "symbols and schemas" } -> pipeline.validate_memory
+@assert: result.role == "assistant"
+@assert: result.content == "symbols and schemas"
