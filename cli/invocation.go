@@ -20,6 +20,7 @@ type invocation struct {
 	host             *runner.Host
 	toolchainEnabled bool
 	injected         []compiler.Bundle
+	modeBundles      []compiler.Bundle
 	targets          map[string]struct{}
 	nativeFactory    func() []compiler.Bundle
 	native           []compiler.Bundle
@@ -117,7 +118,7 @@ func (inv *invocation) nativeBundles() ([]compiler.Bundle, error) {
 }
 
 func (inv *invocation) directiveTable() (*compiler.DirectiveTable, error) {
-	if inv.directives != nil {
+	if inv.directives != nil && len(inv.modeBundles) == 0 {
 		return inv.directives, nil
 	}
 	bundles, err := inv.nativeBundles()
@@ -128,8 +129,14 @@ func (inv *invocation) directiveTable() (*compiler.DirectiveTable, error) {
 	for i := range bundles {
 		directives = append(directives, bundles[i].Directives...)
 	}
-	inv.directives = compiler.NewDirectiveTable(directives...)
-	return inv.directives, nil
+	for i := range inv.modeBundles {
+		directives = append(directives, inv.modeBundles[i].Directives...)
+	}
+	table := compiler.NewDirectiveTable(directives...)
+	if len(inv.modeBundles) == 0 {
+		inv.directives = table
+	}
+	return table, nil
 }
 
 func (inv *invocation) requirementDiscoveryTable() (*compiler.DirectiveTable, error) {
@@ -140,6 +147,13 @@ func (inv *invocation) requirementDiscoveryTable() (*compiler.DirectiveTable, er
 	var directives []compiler.Directive
 	for i := range bundles {
 		for _, directive := range bundles[i].Directives {
+			if directive.Name != "include" {
+				directives = append(directives, directive)
+			}
+		}
+	}
+	for i := range inv.modeBundles {
+		for _, directive := range inv.modeBundles[i].Directives {
 			if directive.Name != "include" {
 				directives = append(directives, directive)
 			}
@@ -335,6 +349,7 @@ func (inv *invocation) buildConfig(reqs []require.Requirement) (runner.Config, e
 	}
 	bundles := append([]compiler.Bundle(nil), baseBundles...)
 	bundles = append(bundles, inv.injected...)
+	bundles = append(bundles, inv.modeBundles...)
 	bundles = append(bundles, required...)
 	return runner.BuildConfig(bundles)
 }

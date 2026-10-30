@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const testModeFlag = "--nflow-test-mode"
+
 func runTestInInvocation(ctx context.Context, inv *invocation, args []string) int {
 	if len(args) > 1 {
 		return fatalf("usage: nflow test [directory]")
@@ -28,7 +30,7 @@ func runTestInInvocation(ctx context.Context, inv *invocation, args []string) in
 	}
 
 	return runTestFiles(files, func(path string) int {
-		return runFlowInInvocation(ctx, inv, []string{path})
+		return runFlowInInvocation(ctx, inv, []string{path, testModeFlag})
 	})
 }
 

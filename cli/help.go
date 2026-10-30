@@ -44,7 +44,7 @@ var helpRegistry = map[string]helpText{
 		},
 	},
 	"test": {
-		Summary: "Run .nflow acceptance entrypoints found one directory below a path.",
+		Summary: "Run .nflow acceptance entrypoints found one directory below a path; supports test-only @test assertions.",
 		Usage:   "nflow test [directory]",
 		Examples: []string{
 			`nflow test ./spec`,

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/nexssp/kernel/ai/dag"
@@ -15,6 +16,7 @@ import (
 	"github.com/nexssp/flow/builder"
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
+	testext "github.com/nexssp/flow/extensions/test"
 	"github.com/nexssp/flow/runner"
 )
 
@@ -154,11 +156,36 @@ func requirementsNeedExternalHarness(inv *invocation, reqs []require.Requirement
 }
 
 func runFlowInInvocation(ctx context.Context, inv *invocation, args []string) int {
+	testMode := slices.Contains(args, testModeFlag)
+	if testMode {
+		previousModeBundles := inv.modeBundles
+		inv.modeBundles = append(append([]compiler.Bundle(nil), previousModeBundles...), testext.Bundle(nil))
+		defer func() { inv.modeBundles = previousModeBundles }()
+	}
+
 	target, _, _, err := splitArgs(args)
 	if err != nil {
 		return fatalf("%v", err)
 	}
-	return withHarness(ctx, inv, "run", target, args, runFlowInProcess)
+	return withHarness(ctx, inv, "run", target, args, func(runCtx context.Context, runInv *invocation, runArgs []string) int {
+		if testMode {
+			runArgs = withoutTestModeFlag(runArgs)
+		}
+		return runFlowInProcess(runCtx, runInv, runArgs)
+	})
+}
+
+func withoutTestModeFlag(args []string) []string {
+	if !slices.Contains(args, testModeFlag) {
+		return args
+	}
+	filtered := make([]string, 0, len(args)-1)
+	for _, arg := range args {
+		if arg != testModeFlag {
+			filtered = append(filtered, arg)
+		}
+	}
+	return filtered
 }
 
 func runFlowInProcess(ctx context.Context, inv *invocation, args []string) int {

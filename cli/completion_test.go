@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -24,21 +25,51 @@ func TestCompletionRegistersNflowBinary(t *testing.T) {
 }
 
 func TestCompletionIncludesTestCommand(t *testing.T) {
-	markers := map[string]string{
-		"bash":       `subcommands="init run test`,
-		"zsh":        `'test:run .nflow acceptance entrypoints in a directory'`,
-		"pwsh":       `@('init', 'run', 'test'`,
-		"powershell": `@('init', 'run', 'test'`,
-	}
-	for shell, marker := range markers {
+	for _, shell := range SupportedShells {
 		t.Run(shell, func(t *testing.T) {
 			var script bytes.Buffer
 			if err := Completion(shell, &script); err != nil {
 				t.Fatalf("Completion(%q): %v", shell, err)
 			}
-			if !strings.Contains(script.String(), marker) {
-				t.Fatalf("completion script for %q does not expose test: %q\n%s", shell, marker, script.String())
+			if !completionIncludesCommand(shell, script.String(), "test") {
+				t.Fatalf("completion script for %q does not expose the test command", shell)
 			}
 		})
 	}
+}
+
+func completionIncludesCommand(shell, script, command string) bool {
+	for line := range strings.SplitSeq(script, "\n") {
+		line = strings.TrimSpace(line)
+		switch shell {
+		case "bash":
+			commands, found := strings.CutPrefix(line, "subcommands=")
+			if found {
+				if slices.Contains(strings.Fields(strings.Trim(commands, `"`)), command) {
+					return true
+				}
+			}
+		case "zsh":
+			entry := strings.Trim(line, "'")
+			name, _, found := strings.Cut(entry, ":")
+			if found && name == command {
+				return true
+			}
+		case "pwsh", "powershell":
+			if !strings.Contains(line, "$subcommands") {
+				continue
+			}
+			values, found := strings.CutPrefix(line, "$subcommands = @(")
+			if !found {
+				continue
+			}
+			values = strings.TrimSuffix(values, ")")
+			for candidate := range strings.SplitSeq(values, ",") {
+				if strings.Trim(strings.TrimSpace(candidate), "'") == command {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

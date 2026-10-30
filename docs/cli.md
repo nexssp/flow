@@ -88,7 +88,20 @@ target (for example, `spec/<scenario>/*.nflow`) and runs each through the
 normal Flow execution path. Existing `@assert:` directives are evaluated as
 part of each run; nested helper files are not treated as entrypoints. Every
 discovered flow is attempted, and the command exits non-zero if any run or
-assertion fails. No additional test DSL is required.
+assertion fails.
+
+Test flows may also use `@test` for post-run checks:
+
+```nflow
+const @{ value: "ready" }
+@test: result == "ready"
+```
+
+`@test` accepts the same single-expression, block, and compact-list forms as
+`@assert`, and uses the same result context and evaluator. The CLI mounts this
+small extension only while `nflow test` runs a discovered flow; ordinary
+`nflow run` and other commands do not recognize `@test`. Existing `@assert`
+syntax and behavior are unchanged.
 
 `task specs` remains available for compatibility and uses this command for the
 repository's integrated suite. `task test:nflow` is an alternate focused task.

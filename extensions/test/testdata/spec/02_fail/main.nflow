@@ -1,0 +1,2 @@
+const @{ value: "not-ok" }
+@test: result == "ok"

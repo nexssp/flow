@@ -90,7 +90,7 @@ The example above is the executable [`match_predicates.nflow`](../extensions/mat
 
 ### Error routing and assertions
 
-There are two runtime assertion forms:
+There are two standard runtime assertion forms:
 
 - `assert(condition, message)` is a runtime expression in the pipeline. It checks the current value and fails that execution if the condition is false.
 - `@assert: expression` records a post-run assertion evaluated against the completed result (including `result`, direct result fields, `duration_ms`, and `actions`). The CLI reports failures and exits nonzero. `nflow run --assert=EXPR` adds the same kind of post-run check from the command line.
@@ -98,6 +98,8 @@ There are two runtime assertion forms:
 For frequent checks, `@assert {` starts a multiline block with one assertion per non-empty, non-comment line, and `@assert: { expr1, expr2, ... }` is a compact list. Each expression is evaluated independently in source order; commas inside strings, nested calls, or collections do not split the compact list. Expressions use the existing expr-lang evaluator (for example, `len(result.items) > 0` or `all(result.items, # != "")`). Failure output identifies the assertion's source file and line. The original single-expression form is unchanged.
 
 These are runtime checks; neither is a compile-time input schema. See [`extensions/assert/`](../extensions/assert/), [`runner/assertions.go`](../runner/assertions.go), and [`extensions/assert/nflows/`](../extensions/assert/nflows/).
+
+The `nflow test` command additionally mounts the opt-in [`extensions/test/`](../extensions/test/) bundle. It provides `@test` with the same post-run syntax and result context as `@assert`; it is not in the stock bundle set, so ordinary `nflow run` does not recognize it.
 
 For recovery, `? on_error ...` wraps one expression and provides an error environment to its handler; `@on_error ...` wraps a whole pipeline and invokes its handler with the original request. Block forms can route by error kind; short forms select one target. Without a matching case/default, the error propagates. Neither form recovers standard caller cancellation. `||` is separate and catches a failing left branch. See [`docs/on-error.md`](on-error.md) and [`extensions/on_error/`](../extensions/on_error/).
 

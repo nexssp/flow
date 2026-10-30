@@ -62,6 +62,27 @@ func TestTestCommandRunsEveryFlowAndEvaluatesAssertions(t *testing.T) {
 	}
 }
 
+func TestTestCommandMountsTestExtensionOnlyInTestMode(t *testing.T) {
+	root := filepath.Join("..", "extensions", "test", "testdata", "spec")
+	code, stdout, stderr := runTestCommand(t, []string{"test", root})
+	if code == 0 {
+		t.Fatalf("nflow test exit code = 0, want the deliberate @test failure\nstdout:\n%s\nstderr:\n%s", stdout, stderr)
+	}
+	pass := filepath.Join(root, "01_pass", "main.nflow")
+	fail := filepath.Join(root, "02_fail", "main.nflow")
+	if !strings.Contains(stdout, "PASS: "+pass) {
+		t.Errorf("stdout missing passing @test fixture %q:\n%s", pass, stdout)
+	}
+	if !strings.Contains(stderr, "FAIL: "+fail) || !strings.Contains(stderr, `result == "ok"`) {
+		t.Errorf("stderr missing failing @test fixture and assertion:\n%s", stderr)
+	}
+
+	code, _, stderr = runTestCommand(t, []string{"run", pass})
+	if code == 0 || !strings.Contains(stderr, "@test") {
+		t.Fatalf("ordinary nflow run accepted test-only @test: code=%d stderr=%q", code, stderr)
+	}
+}
+
 func TestTestCommandRejectsInvalidInvocation(t *testing.T) {
 	root := t.TempDir()
 
@@ -106,7 +127,7 @@ func writeTestFlow(t *testing.T, path, source string) {
 	}
 }
 
-func runTestCommand(t *testing.T, args []string) (int, string, string) {
+func runTestCommand(t *testing.T, args []string) (exitCode int, stdout, stderr string) {
 	t.Helper()
 	inv, err := newNativeInvocation(nil, nil)
 	if err != nil {
@@ -136,7 +157,7 @@ func runTestCommand(t *testing.T, args []string) (int, string, string) {
 		stderrDone <- string(data)
 	}()
 
-	code := runInvocation(context.Background(), inv, func(ctx context.Context) int {
+	exitCode = runInvocation(context.Background(), inv, func(ctx context.Context) int {
 		return runCLI(ctx, inv, args)
 	})
 	_ = stdoutWrite.Close()
@@ -144,9 +165,9 @@ func runTestCommand(t *testing.T, args []string) (int, string, string) {
 	os.Stdout, os.Stderr = originalStdout, originalStderr
 	slog.SetDefault(originalLogger)
 
-	stdout := <-stdoutDone
-	stderr := <-stderrDone
+	stdout = <-stdoutDone
+	stderr = <-stderrDone
 	_ = stdoutRead.Close()
 	_ = stderrRead.Close()
-	return code, stdout, stderr
+	return exitCode, stdout, stderr
 }
