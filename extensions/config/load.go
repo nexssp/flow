@@ -117,10 +117,19 @@ func parseConfigLoadSpec(spec string) configLoadSpec {
 	return parsed
 }
 
-// decodeConfigFile dispatches by extension: .json → encoding/json,
-// .toml → minimal TOML parser, .yaml/.yml → the registered YAML
-// loader (from extensions/config_yaml). Any other extension is an
-// error.
+// DecodeFile dispatches by extension: .json → encoding/json, .toml → the
+// minimal TOML parser, and .yaml/.yml → the registered YAML loader from
+// extensions/config_yaml. It exposes structured values to runtime extensions
+// without changing compile-time @config.load semantics.
+func DecodeFile(data []byte, ext string) (map[string]any, error) {
+	ext = strings.ToLower(ext)
+	if (ext == ".yaml" || ext == ".yml") && yamlLoader.Load() == nil {
+		return nil, errors.New("YAML requires the optional config_yaml decoder")
+	}
+	return decodeConfigFile(data, ext)
+}
+
+// decodeConfigFile dispatches by extension for compile-time @config.load.
 func decodeConfigFile(data []byte, ext string) (map[string]any, error) {
 	switch ext {
 	case ".json":

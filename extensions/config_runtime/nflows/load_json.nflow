@@ -1,0 +1,15 @@
+@description "Load a structured JSON config at runtime and validate it with @schema"
+@schema AppSettings {
+  Service  string   `json:"service" validate:"required"`
+  Port     int      `json:"port" validate:"gte=1,lte=65535"`
+  Enabled  bool     `json:"enabled"`
+  Features []string `json:"features" validate:"required,min=1,dive,required"`
+}
+{}
+  -> config_runtime.load @{ path: "settings.json" }
+  -> AppSettings.validate
+@assert: result.service == "payments"
+@assert: result.port == 8443
+@assert: result.enabled == true
+@assert: len(result.features) == 2
+@assert: result.database.host == "db.internal"

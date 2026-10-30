@@ -43,8 +43,9 @@ func TestServeStartsDependentsOnlyAfterReadinessAndCancelsCleanly(t *testing.T) 
 	dependentStarted := make(chan struct{})
 
 	parent := action.New("test.parent", func(ctx context.Context, _ any) (any, error) {
-		contracts.SignalReady(ctx)
+		// Publish the marker before SignalReady releases dependent goroutines.
 		close(parentReady)
+		contracts.SignalReady(ctx)
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}).Build()

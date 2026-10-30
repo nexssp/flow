@@ -40,6 +40,19 @@ func TestLoad_JSON(t *testing.T) {
 	ktest.RequireEqual(t, cfg["nested.deep"], "y")
 }
 
+func TestDecodeFile_PreservesStructuredJSON(t *testing.T) {
+	cfg, err := DecodeFile([]byte(`{"nested":{"enabled":true,"ports":[80,443]}}`), ".JSON")
+	ktest.RequireNoError(t, err)
+	nested, ok := cfg["nested"].(map[string]any)
+	ktest.RequireCondition(t, ok, "nested value has type %T, want map[string]any", cfg["nested"])
+	enabled, ok := nested["enabled"].(bool)
+	ktest.RequireCondition(t, ok, "enabled value has type %T, want bool", nested["enabled"])
+	ktest.RequireEqual(t, enabled, true)
+	ports, ok := nested["ports"].([]any)
+	ktest.RequireCondition(t, ok, "ports value has type %T, want []any", nested["ports"])
+	ktest.RequireEqual(t, ports, []any{float64(80), float64(443)})
+}
+
 func TestLoad_TOML(t *testing.T) {
 	path := writeFixture(t, "nexss.toml", "[db]\nhost = \"localhost\"\nport = 5432\n")
 	cfg, err := runLoad(t, "", `@config.load:path="`+path+`"`)

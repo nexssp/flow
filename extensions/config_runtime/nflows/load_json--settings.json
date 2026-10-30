@@ -1,0 +1,10 @@
+{
+  "service": "payments",
+  "port": 8443,
+  "enabled": true,
+  "features": ["checkout", "refund"],
+  "database": {
+    "host": "db.internal",
+    "pool": { "min": 2, "max": 12 }
+  }
+}

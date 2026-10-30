@@ -21,13 +21,17 @@ import (
 // extension or a fixture accidentally placed outside its owning package.
 func TestSelftest_RepositoryFixturesMatchEmbeddedFiles(t *testing.T) {
 	embedded := make(map[string][]byte)
-	// @embed requires a host-declared filesystem root, so its real NFlow
-	// fixture is embedded and executed by embed.TestHostRootNFlowFixture,
-	// not the stock native bundle set. Keep this exception file-exact so
+	// These fixtures need host-provided roots and therefore cannot run in the
+	// stock native self-test bundle set. Their extension package tests embed
+	// and execute them with explicit roots. Keep this exception file-exact so
 	// additional host fixtures cannot silently escape a coverage decision.
 	hostFixtures := map[string]bool{
-		"embed/nflows/host_root.nflow":      false,
-		"embed/nflows/host_root--terms.txt": false,
+		"config_runtime/nflows/load_json.nflow":          false,
+		"config_runtime/nflows/load_json--settings.json": false,
+		"config_runtime/nflows/load_yaml.nflow":          false,
+		"config_runtime/nflows/load_yaml--settings.yml":  false,
+		"embed/nflows/host_root.nflow":                   false,
+		"embed/nflows/host_root--terms.txt":              false,
 	}
 	for _, bundle := range native.SelftestBundles() {
 		ktest.RequireCondition(t, bundle.Fixtures != nil, "bundle %q has no fixtures", bundle.ID)

@@ -1,0 +1,13 @@
+@description "Load a structured YAML config at runtime and validate it with @schema"
+@schema WebSettings {
+  Host    string `json:"host" validate:"required"`
+  Port    int    `json:"port" validate:"gte=1,lte=65535"`
+  Enabled bool   `json:"enabled"`
+}
+{}
+  -> config_runtime.load @{ path: "settings.yml" }
+  -> WebSettings.validate
+@assert: result.host == "api.example.test"
+@assert: result.port == 8443
+@assert: result.enabled == true
+@assert: result.tls.mode == "strict"

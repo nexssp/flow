@@ -1,0 +1,8 @@
+host: api.example.test
+port: 8443
+enabled: true
+tls:
+  mode: strict
+  ciphers:
+    - modern
+    - approved
