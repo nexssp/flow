@@ -1,6 +1,9 @@
 package compiler
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseBlockOptions_SingleLine(t *testing.T) {
 	t.Parallel()
@@ -50,6 +53,39 @@ func TestParseBlockOptions_EmptyBlockReturnsNil(t *testing.T) {
 	}
 	if options != nil {
 		t.Fatalf("options = %#v, want nil", options)
+	}
+}
+
+func TestReadBlockWithSpansBalancesNestedBracesAndIgnoresCommentsAndStrings(t *testing.T) {
+	lines := []string{
+		`@schema Request {`,
+		`  ID string`,
+		`  Nested struct {`,
+		`    Text string`,
+		`  }`,
+		`  Note string # }`,
+		`  Literal string = "}"`,
+		`}`,
+		`next`,
+	}
+	block, err := ReadBlockWithSpans(lines, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := strings.Join(lines, "\n")
+	open := strings.IndexByte(source, '{')
+	closingBraceAt := strings.LastIndex(source, "\n}") + 1
+	if block.Next != 8 {
+		t.Fatalf("next = %d, want 8", block.Next)
+	}
+	if block.Span != (SourceSpan{Start: open, End: closingBraceAt + 1}) {
+		t.Fatalf("block span = %#v, want [%d,%d)", block.Span, open, closingBraceAt+1)
+	}
+	if block.BodySpan != (SourceSpan{Start: open + 1, End: closingBraceAt}) {
+		t.Fatalf("body span = %#v, want [%d,%d)", block.BodySpan, open+1, closingBraceAt)
+	}
+	if len(block.Body) != 6 {
+		t.Fatalf("body entries = %#v, want six lines before the outer closing brace", block.Body)
 	}
 }
 

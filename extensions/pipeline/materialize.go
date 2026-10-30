@@ -148,7 +148,7 @@ func materializePipeline(req compiler.MaterializeReq, definition pipelineDefinit
 	}
 	if req.Introspection {
 		act = action.WithComposition(act, action.IntrospectionComposition{
-			Kind: "pipeline",
+			Kind: ID,
 			Children: []action.IntrospectionChild{{
 				Node: program, Relation: "pipeline_body", Role: "body", Label: canonicalName,
 			}},
@@ -156,7 +156,7 @@ func materializePipeline(req compiler.MaterializeReq, definition pipelineDefinit
 	}
 
 	err = req.Resolver.Mount(action.Library{
-		Name: compiler.DeclarationOwner(req.Meta, "pipeline", canonicalName, "pipeline."+definition.name),
+		Name: compiler.DeclarationOwner(req.Meta, ID, canonicalName, ID+"."+definition.name),
 		Actions: []action.AnyAction{
 			act,
 		},

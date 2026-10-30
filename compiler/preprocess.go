@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -74,10 +75,17 @@ func Preprocess(ctx context.Context, dt *DirectiveTable, source, file string) (c
 }
 
 func preprocessWithMeta(ctx context.Context, dt *DirectiveTable, source, file string, meta map[string]any) (clean string, out map[string]any, err error) {
+	return preprocessWithMetaMode(ctx, dt, source, file, meta, false)
+}
+
+func preprocessWithMetaMode(ctx context.Context, dt *DirectiveTable, source, file string, meta map[string]any, partial bool) (clean string, out map[string]any, err error) {
 	if meta == nil {
 		meta = make(map[string]any)
 	}
 	if err := ctx.Err(); err != nil {
+		if partial {
+			return "", meta, err
+		}
 		return "", nil, err
 	}
 	if dt == nil {
@@ -88,7 +96,7 @@ func preprocessWithMeta(ctx context.Context, dt *DirectiveTable, source, file st
 	if file != "" {
 		stack.push(file)
 	}
-	return preprocess(ctx, dt, source, file, stack, meta)
+	return preprocess(ctx, dt, source, file, stack, meta, partial)
 }
 
 type includeStack struct {
@@ -127,6 +135,7 @@ func preprocess(
 	source, file string,
 	stack *includeStack,
 	initialMeta map[string]any,
+	partial bool,
 ) (clean string, meta map[string]any, err error) {
 	meta = initialMeta
 	if meta == nil {
@@ -144,15 +153,17 @@ func preprocess(
 	}
 
 	lines := strings.Split(source, "\n")
+	lineOffsets := sourceLineOffsets(lines)
 	body := make([]string, len(lines))
 	embedded := make(map[int][]SourceLine)
 	blanked := make(map[int]bool)
 	var directives []string
+	var partialErrors []error
 
 	i := 0
 	for i < len(lines) {
 		if err := ctx.Err(); err != nil {
-			return "", nil, err
+			return preprocessAbort(meta, partial, partialErrors, err)
 		}
 		line := strings.TrimSpace(lines[i])
 
@@ -182,6 +193,7 @@ func preprocess(
 			File:        file,
 			BaseDir:     baseDir,
 			Table:       dt,
+			lineOffsets: lineOffsets,
 			embedSource: func(clean string, lineage []SourceLine) { body[i] = clean; embedded[i] = lineage },
 			Recurse: func(target string) (string, map[string]any, error) {
 				data, resolvedPath, loadErr := loader.Load(file, target)
@@ -194,15 +206,23 @@ func preprocess(
 						"@include cycle detected: %s", stack.chain(resolvedPath))
 				}
 				defer stack.pop()
-				return preprocess(ctx, dt, string(data), resolvedPath, stack, nil)
+				return preprocess(ctx, dt, string(data), resolvedPath, stack, nil, partial)
 			},
 		}
 		req.Import = func(target, namespace string) error {
-			return importSource(ctx, dt, loader, stack, req, target, namespace)
+			return importSourceAt(ctx, dt, loader, stack, req, target, namespace, SourceSpan{}, SourceSpan{}, SourceSpan{}, partial)
+		}
+		req.ImportAt = func(target, namespace string, span, targetSpan, namespaceSpan SourceSpan) error {
+			return importSourceAt(ctx, dt, loader, stack, req, target, namespace, span, targetSpan, namespaceSpan, partial)
 		}
 		res, err := handler.Do(ctx, req)
 		if err != nil {
-			return "", nil, err
+			if canRecoverIndexDirective(partial, res, i, len(lines)) {
+				partialErrors = append(partialErrors, err)
+				i = res.Next
+				continue
+			}
+			return preprocessAbort(meta, partial, partialErrors, err)
 		}
 		directives = append(directives, name)
 
@@ -221,7 +241,7 @@ func preprocess(
 	}
 
 	if err := ctx.Err(); err != nil {
-		return "", nil, err
+		return preprocessAbort(meta, partial, partialErrors, err)
 	}
 	meta[sourceLinesKey] = renderedSourceLines(file, body, embedded)
 	clean = strings.Join(body, "\n")
@@ -229,7 +249,26 @@ func preprocess(
 		File: file, Original: source, Source: strings.Join(lines, "\n"),
 		Clean: clean, Metadata: meta, Directives: directives,
 	})
-	return clean, meta, nil
+	return clean, meta, errors.Join(partialErrors...)
+}
+
+func preprocessAbort(meta map[string]any, partial bool, priorErrors []error, err error) (clean string, resultMeta map[string]any, resultErr error) {
+	if !partial {
+		return "", nil, err
+	}
+	return "", meta, errors.Join(append(priorErrors, err)...)
+}
+
+func canRecoverIndexDirective(partial bool, res DirectiveRes, current, lineCount int) bool {
+	return partial && res.Next > current && res.Next <= lineCount
+}
+
+func sourceLineOffsets(lines []string) []int {
+	offsets := make([]int, len(lines))
+	for i := 1; i < len(lines); i++ {
+		offsets[i] = offsets[i-1] + len(lines[i-1]) + 1
+	}
+	return offsets
 }
 
 func directiveName(line string) string {

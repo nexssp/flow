@@ -18,14 +18,18 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
+	"github.com/nexssp/kernel/xerr"
+
 	"github.com/nexssp/flow/compiler"
 	flowformatter "github.com/nexssp/flow/formatter"
 	"github.com/nexssp/flow/runner"
 )
 
-const lspSource = "nflow"
-
 const (
+	lspSource          = "nflow"
+	lspRangeKey        = "range"
+	lspNewTextKey      = "newText"
+	lspChangesKey      = "changes"
 	maxLSPHeaderBytes  = 16 * 1024
 	maxLSPMessageBytes = 16 * 1024 * 1024
 )
@@ -36,6 +40,7 @@ type flowLanguageServer struct {
 	rootPath        string
 	documents       map[string]string
 	documentVersion map[string]int
+	schemaCache     map[string]lspSchemaCacheEntry
 	initialized     bool
 	shutdown        bool
 	exitCode        int
@@ -73,9 +78,15 @@ type lspRange struct {
 	End   lspPosition `json:"end"`
 }
 
+type lspTextEdit struct {
+	Range   lspRange `json:"range"`
+	NewText string   `json:"newText"`
+}
+
 type lspDiagnostic struct {
 	Range    lspRange `json:"range"`
 	Severity int      `json:"severity"`
+	Code     string   `json:"code,omitempty"`
 	Source   string   `json:"source"`
 	Message  string   `json:"message"`
 }
@@ -125,6 +136,7 @@ func newFlowLanguageServer(ctx context.Context, inv *invocation) *flowLanguageSe
 		inv:             inv,
 		documents:       make(map[string]string),
 		documentVersion: make(map[string]int),
+		schemaCache:     make(map[string]lspSchemaCacheEntry),
 		exitCode:        1,
 	}
 }
@@ -259,7 +271,7 @@ func (s *flowLanguageServer) validateMethodKind(message lspMessage) (bool, error
 		if len(message.ID) != 0 {
 			return false, s.respondError(message.ID, -32600, message.Method+" is a notification and must not have an id")
 		}
-	case "initialize", "shutdown", "textDocument/completion", "textDocument/hover", "textDocument/formatting":
+	case "initialize", "shutdown", "textDocument/completion", "textDocument/hover", "textDocument/definition", "textDocument/references", "textDocument/rename", "textDocument/documentSymbol", "textDocument/foldingRange", "textDocument/semanticTokens/full", "workspace/symbol", "textDocument/formatting", "textDocument/codeAction":
 		if len(message.ID) == 0 {
 			slog.Warn("ignoring LSP request method sent as a notification", "method", message.Method)
 			return false, nil
@@ -318,10 +330,33 @@ func (s *flowLanguageServer) dispatch(message lspMessage) error {
 		return s.handleDidChange(message)
 	case "textDocument/didClose":
 		return s.handleDidClose(message)
+	default:
+		return s.dispatchFeatureRequest(message)
+	}
+}
+
+func (s *flowLanguageServer) dispatchFeatureRequest(message lspMessage) error {
+	switch message.Method {
 	case "textDocument/completion":
 		return s.handleCompletion(message)
 	case "textDocument/hover":
 		return s.handleHover(message)
+	case "textDocument/definition":
+		return s.handleDefinition(message)
+	case "textDocument/references":
+		return s.handleReferences(message)
+	case "textDocument/rename":
+		return s.handleRename(message)
+	case "textDocument/documentSymbol":
+		return s.handleDocumentSymbol(message)
+	case "textDocument/foldingRange":
+		return s.handleFoldingRange(message)
+	case "textDocument/semanticTokens/full":
+		return s.handleSemanticTokensFull(message)
+	case "workspace/symbol":
+		return s.handleWorkspaceSymbol(message)
+	case "textDocument/codeAction":
+		return s.handleCodeAction(message)
 	case "textDocument/formatting":
 		return s.handleFormatting(message)
 	default:
@@ -358,8 +393,22 @@ func (s *flowLanguageServer) handleInitialize(message lspMessage) error {
 		"capabilities": map[string]any{
 			"textDocumentSync":           map[string]any{"openClose": true, "change": 1},
 			"documentFormattingProvider": true,
-			"completionProvider":         map[string]any{"triggerCharacters": []string{"@", ":", ".", " ", "-", "|", "&", "?", "{"}},
-			"hoverProvider":              true,
+			"documentSymbolProvider":     true,
+			"foldingRangeProvider":       true,
+			"semanticTokensProvider": map[string]any{
+				"legend": map[string]any{
+					"tokenTypes":     lspSemanticTokenTypes,
+					"tokenModifiers": lspSemanticTokenModifiers,
+				},
+				"full": true,
+			},
+			"workspaceSymbolProvider": true,
+			"completionProvider":      map[string]any{"triggerCharacters": []string{"@", ":", ".", " ", "-", "|", "&", "?", "{"}},
+			"hoverProvider":           true,
+			"definitionProvider":      true,
+			"referencesProvider":      true,
+			"renameProvider":          true,
+			"codeActionProvider":      map[string]any{"codeActionKinds": []string{"quickfix"}},
 		},
 		"serverInfo": map[string]string{"name": "nflow", versionCommand: compiler.Version},
 	})
@@ -388,6 +437,7 @@ func (s *flowLanguageServer) handleDidOpen(message lspMessage) error {
 	text, version := *params.TextDocument.Text, *params.TextDocument.Version
 	s.documents[uri] = text
 	s.documentVersion[uri] = version
+	delete(s.schemaCache, uri)
 	return s.publishDiagnostics(uri, s.compileDiagnostics(uri, text), &version)
 }
 
@@ -428,6 +478,7 @@ func (s *flowLanguageServer) handleDidChange(message lspMessage) error {
 	text := *params.ContentChanges[len(params.ContentChanges)-1].Text
 	s.documents[uri] = text
 	s.documentVersion[uri] = version
+	delete(s.schemaCache, uri)
 	return s.publishDiagnostics(uri, s.compileDiagnostics(uri, text), &version)
 }
 
@@ -446,6 +497,7 @@ func (s *flowLanguageServer) handleDidClose(message lspMessage) error {
 	version, hadDocument := s.documentVersion[uri]
 	delete(s.documents, uri)
 	delete(s.documentVersion, uri)
+	delete(s.schemaCache, uri)
 	var versionPtr *int
 	if hadDocument {
 		versionPtr = &version
@@ -472,7 +524,8 @@ func (s *flowLanguageServer) handleCompletion(message lspMessage) error {
 	if len(message.ID) == 0 {
 		return nil
 	}
-	return s.respond(message.ID, s.completions(*params.Position, params.Context.TriggerKind, params.Context.TriggerCharacter))
+	uri := params.TextDocument.URI
+	return s.respond(message.ID, s.completions(uri, s.documents[uri], *params.Position, params.Context.TriggerKind, params.Context.TriggerCharacter))
 }
 
 func (s *flowLanguageServer) handleHover(message lspMessage) error {
@@ -490,12 +543,14 @@ func (s *flowLanguageServer) handleHover(message lspMessage) error {
 	if len(message.ID) == 0 {
 		return nil
 	}
-	return s.respond(message.ID, map[string]any{
-		"contents": map[string]string{
-			"kind":  "markdown",
-			"value": "**Nexss Flow** node or DSL construct.",
-		},
-	})
+	uri := params.TextDocument.URI
+	if hover, found := s.pipelineHover(uri, s.documents[uri], *params.Position); found {
+		return s.respond(message.ID, hover)
+	}
+	if hover, found := s.handleSchemaHover(uri, *params.Position); found {
+		return s.respond(message.ID, hover)
+	}
+	return s.respond(message.ID, nil)
 }
 
 func (s *flowLanguageServer) handleFormatting(message lspMessage) error {
@@ -527,8 +582,8 @@ func (s *flowLanguageServer) handleFormatting(message lspMessage) error {
 		return s.formattingError(message.ID, uri, text, &version, err)
 	}
 	edit := map[string]any{
-		"range":   lspRange{Start: lspPosition{}, End: lspEndPosition(text)},
-		"newText": formatted,
+		lspRangeKey:   lspRange{Start: lspPosition{}, End: lspEndPosition(text)},
+		lspNewTextKey: formatted,
 	}
 	return s.respond(message.ID, []any{edit})
 }
@@ -553,6 +608,10 @@ func (s *flowLanguageServer) decodeParams(message lspMessage, target any) (bool,
 }
 
 func (s *flowLanguageServer) invalidParams(message lspMessage, err error) error {
+	var validationErr *xerr.AppError
+	if errors.As(err, &validationErr) && validationErr.Kind == xerr.KindValidation {
+		err = errors.New(validationErr.Message)
+	}
 	messageText := fmt.Sprintf("Invalid params for %s: %v", message.Method, err)
 	if len(message.ID) != 0 {
 		return s.respondError(message.ID, -32602, messageText)
@@ -562,24 +621,31 @@ func (s *flowLanguageServer) invalidParams(message lspMessage, err error) error 
 }
 
 func (s *flowLanguageServer) compileDiagnostics(uri, source string) []lspDiagnostic {
-	name := s.sourceName(uri)
-	_, _, cfg, err := s.inv.prepareRequiredSource(s.ctx, source, name)
-	if err != nil {
-		return []lspDiagnostic{diagnosticFromError(source, lspRequirementError(err))}
+	diagnostics := make([]lspDiagnostic, 0, 2)
+	if s.inv != nil {
+		entry := s.schemaCacheEntry(uri, source)
+		if entry.prepareError != nil {
+			diagnostics = append(diagnostics, diagnosticFromError(source, lspRequirementError(entry.prepareError)))
+		} else if entry.prepared != nil {
+			if _, err := runner.CompilePrepared(s.ctx, entry.config, entry.prepared); err != nil {
+				diagnostics = append(diagnostics, diagnosticFromError(source, err))
+			}
+		}
 	}
-	if _, err := runner.Compile(s.ctx, cfg, source, name); err != nil {
-		return []lspDiagnostic{diagnosticFromError(source, err)}
+	issues := s.schemaIssues(uri, source)
+	for i := range issues {
+		diagnostics = append(diagnostics, issues[i].diagnostic)
 	}
-	return nil
+	return diagnostics
 }
 
 func (s *flowLanguageServer) formatterFor(uri, source string) (*flowformatter.Formatter, error) {
-	_, metadata, cfg, err := s.inv.prepareRequiredSource(s.ctx, source, s.sourceName(uri))
-	if err != nil {
-		return nil, err
+	entry := s.schemaCacheEntry(uri, source)
+	if entry.prepareError != nil {
+		return nil, entry.prepareError
 	}
-	_, requireEnabled := cfg.Directives.ByName("require")
-	return flowformatter.NewWithParserTables(cfg.Operators, cfg.PrimariesFor(metadata), requireEnabled, cfg.Directives.All()...), nil
+	_, requireEnabled := entry.config.Directives.ByName("require")
+	return flowformatter.NewWithParserTables(entry.config.Operators, entry.config.PrimariesFor(entry.prepared.Metadata()), requireEnabled, entry.config.Directives.All()...), nil
 }
 
 func lspRequirementError(err error) error {
@@ -589,7 +655,7 @@ func lspRequirementError(err error) error {
 	return err
 }
 
-func (s *flowLanguageServer) completions(position lspPosition, triggerKind int, triggerCharacter string) map[string]any {
+func (s *flowLanguageServer) completions(uri, source string, position lspPosition, triggerKind int, triggerCharacter string) map[string]any {
 	items := make([]map[string]any, 0, len(flowSnippets))
 	for _, snippet := range flowSnippets {
 		start := position
@@ -603,11 +669,12 @@ func (s *flowLanguageServer) completions(position lspPosition, triggerKind int, 
 			"insertText":       snippet.insertText,
 			"insertTextFormat": 2,
 			"textEdit": map[string]any{
-				"newText": snippet.insertText,
-				"range":   lspRange{Start: start, End: position},
+				lspNewTextKey: snippet.insertText,
+				lspRangeKey:   lspRange{Start: start, End: position},
 			},
 		})
 	}
+	items = append(items, s.schemaCompletions(uri, source, position)...)
 	return map[string]any{"isIncomplete": false, "items": items}
 }
 

@@ -21,7 +21,7 @@ import (
 // `@pipeline name` with no modifiers is valid and behaves exactly as it
 // did before modifiers were supported.
 var Directive = compiler.Directive{
-	Name:    "pipeline",
+	Name:    ID,
 	Example: "@pipeline pack:route=\"POST /pack\"\n  src -> dst\n@end",
 	Handler: handleDirective,
 }
@@ -36,31 +36,53 @@ type AppliedModifier struct {
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 	pos := compiler.Position{File: req.File, Line: req.I + 1}
-	name, mods, next, err := compiler.ParseDeclarationHeader(req, "pipeline")
+	header, err := compiler.ParseDeclarationHeaderWithSpans(req, ID)
 	if err != nil {
 		return compiler.DirectiveRes{}, err
 	}
+	name, mods, next := header.Name, header.Modifiers, header.Next
+	keywordSpan, nameSpan, headerSpan := header.KeywordSpan, header.NameSpan, header.HeaderSpan
 
 	canonical := name
 	if !strings.Contains(canonical, ".") {
 		canonical = "pipeline." + canonical
 	}
-	if declareErr := req.Declare("pipeline", canonical); declareErr != nil {
-		return compiler.DirectiveRes{}, declareErr
-	}
-	applied, err := expandProfiles(mods, req.Out, pos, name)
-	if err != nil {
-		return compiler.DirectiveRes{}, err
-	}
 
 	var bodyLines []string
+	bodyStart := next
+	endLine := -1
 	for next < len(req.Lines) {
 		if strings.TrimSpace(req.Lines[next]) == "@end" {
+			endLine = next
 			next++
 			break
 		}
 		bodyLines = append(bodyLines, req.Lines[next])
 		next++
+	}
+	blockEnd := req.Offset(len(req.Lines), 0)
+	bodyEnd := blockEnd
+	if endLine >= 0 {
+		terminator := req.LineSpan(endLine)
+		blockEnd = terminator.End
+		bodyEnd = terminator.Start
+	}
+	req.RecordBlock(compiler.SourceBlock{
+		Kind:       ID,
+		Span:       compiler.SourceSpan{Start: keywordSpan.Start, End: blockEnd},
+		HeaderSpan: headerSpan,
+		BodySpan:   compiler.SourceSpan{Start: req.Offset(bodyStart, 0), End: bodyEnd},
+	})
+	req.RecordDeclaration(compiler.SourceDeclaration{
+		Kind: ID, Name: canonical, KeywordSpan: keywordSpan, NameSpan: nameSpan, Span: headerSpan,
+	})
+	if declareErr := req.DeclareAt(ID, canonical, keywordSpan, nameSpan, headerSpan); declareErr != nil {
+		return compiler.DirectiveRes{Next: next}, declareErr
+	}
+
+	applied, err := expandProfiles(mods, req.Out, pos, name)
+	if err != nil {
+		return compiler.DirectiveRes{Next: next}, err
 	}
 
 	pipelines, _ := req.Out["pipelines"].(map[string]string)
@@ -110,7 +132,7 @@ func expandProfiles(mods []string, meta map[string]any, pos compiler.Position, p
 		return nil, nil
 	}
 
-	localSource := compiler.ModifierSource{Kind: "pipeline", Label: pipelineName}
+	localSource := compiler.ModifierSource{Kind: ID, Label: pipelineName}
 
 	var expanded []AppliedModifier
 	index := make(map[string]int)

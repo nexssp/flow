@@ -13,11 +13,12 @@ func NewLexer(src string) *Lexer { return &Lexer{src: src, line: 1} }
 func (l *Lexer) Next() Token {
 	l.skipSpaceAndComments()
 	if l.pos >= len(l.src) {
-		return Token{Type: TokEOF, Line: l.line, Offset: l.pos}
+		return Token{Type: TokEOF, Line: l.line, Offset: l.pos, EndOffset: l.pos}
 	}
 	offset := l.pos
 	tok := l.nextToken()
 	tok.Offset = offset
+	tok.EndOffset = l.pos
 	return tok
 }
 
@@ -156,12 +157,41 @@ func (l *Lexer) quoteCanStart(pos, start int) bool {
 	return true
 }
 
+func (l *Lexer) scanQuotedAtPromptByte(quote byte) byte {
+	c := l.src[l.pos]
+	if c == '\\' && l.pos+1 < len(l.src) {
+		if l.src[l.pos+1] == '\n' {
+			l.line++
+		}
+		l.pos += 2
+		return quote
+	}
+	if c == quote {
+		quote = 0
+	}
+	if c == '\n' {
+		l.line++
+	}
+	l.pos++
+	return quote
+}
+
 func (l *Lexer) scanAtPrompt() Token {
 	startLine := l.line
 	l.pos++
 	start := l.pos
+	var quote byte
 	for l.pos < len(l.src) {
 		c := l.src[l.pos]
+		if quote != 0 {
+			quote = l.scanQuotedAtPromptByte(quote)
+			continue
+		}
+		if c == '"' || c == '\'' || c == '`' {
+			quote = c
+			l.pos++
+			continue
+		}
 		if c == '\n' || c == '(' || c == ')' || c == '|' || c == '&' ||
 			c == '?' || c == ':' || c == '{' || c == '}' {
 			break

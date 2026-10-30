@@ -51,6 +51,14 @@ func (p *PreparedSource) SourceIdentity() (name, sha256Hex string) {
 	return p.name, hex.EncodeToString(sum[:])
 }
 
+// CleanSource returns the preprocessed source that will be compiled.
+func (p *PreparedSource) CleanSource() string {
+	if p == nil {
+		return ""
+	}
+	return p.clean
+}
+
 // ActionIntrospectionEnabled reports whether this source was prepared with
 // Kernel composition capture requested.
 func (p *PreparedSource) ActionIntrospectionEnabled() bool {
@@ -104,6 +112,16 @@ func PreprocessContributionsFromMeta(meta map[string]any, opts ...CompileOption)
 func PrepareSource(ctx context.Context, dt *DirectiveTable, source, name string, opts ...CompileOption) (*PreparedSource, error) {
 	cfg := applyCompileOptions(opts)
 	return prepareSource(ctx, dt, source, name, cfg, nil)
+}
+
+// PreparedSourceFromPreprocessed binds an existing preprocessing result to its
+// original source and computes compile-time contributions without parsing or
+// preprocessing the source again.
+func PreparedSourceFromPreprocessed(source, name, clean string, meta map[string]any, opts ...CompileOption) *PreparedSource {
+	cfg := applyCompileOptions(opts)
+	prepared := &PreparedSource{source: source, name: name, clean: clean, meta: meta, actionIntrospection: cfg.actionIntrospection}
+	prepareContributions(prepared, cfg)
+	return prepared
 }
 
 // PreprocessWithOptions preprocesses source with compile-time bundle sources

@@ -60,5 +60,6 @@ type Token struct {
 	Lit          string
 	Line         int
 	Offset       int
+	EndOffset    int
 	Unterminated bool
 }

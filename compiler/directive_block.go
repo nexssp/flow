@@ -6,6 +6,21 @@ import (
 	"strings"
 )
 
+// BlockEntry is one top-level comma-separated block entry and its source span.
+type BlockEntry struct {
+	Text string
+	Span SourceSpan
+}
+
+// BlockRead contains the entries and parser-derived spans for a directive block.
+type BlockRead struct {
+	Body     []string
+	Entries  []BlockEntry
+	Next     int
+	Span     SourceSpan
+	BodySpan SourceSpan
+}
+
 // ReadBlock extracts the raw body of a `{ ... }` block starting at
 // lines[start]. Handles all three shapes uniformly:
 //
@@ -24,44 +39,140 @@ import (
 //
 // Comments (`#`, `//`) and blank lines inside the block are dropped.
 func ReadBlock(lines []string, start int) (body []string, next int, err error) {
+	block, err := ReadBlockWithSpans(lines, start)
+	if err != nil {
+		return nil, block.Next, err
+	}
+	return block.Body, block.Next, nil
+}
+
+// ReadBlockWithSpans is ReadBlock with source-coordinate spans for each entry,
+// the full block and its body. On an unclosed block it returns the partial body
+// and a span ending at EOF alongside the same error as ReadBlock.
+func ReadBlockWithSpans(lines []string, start int) (BlockRead, error) {
+	if start < 0 || start >= len(lines) {
+		return BlockRead{Next: start}, errors.New("expected '{'")
+	}
+	offsets := sourceLineOffsets(lines)
 	line := lines[start]
-	_, after, ok := strings.Cut(line, "{")
-	if !ok {
-		return nil, start, errors.New("expected '{'")
+	open := strings.IndexByte(line, '{')
+	if open < 0 {
+		return BlockRead{Next: start}, errors.New("expected '{'")
 	}
-
-	afterOpen := after
-
-	// Inline: closing brace on the same line.
-	if content, _, found := strings.CutLast(afterOpen, "}"); found {
-		return splitEntries(content), start + 1, nil
+	afterOpen := line[open+1:]
+	block := BlockRead{Next: start + 1}
+	block.Span.Start = offsets[start] + open
+	block.BodySpan.Start = offsets[start] + open + 1
+	depth := 1
+	firstDepth, closeAt, comment := scanBlockLine(afterOpen, depth)
+	if closeAt >= 0 {
+		content := afterOpen[:closeAt]
+		block.Body = splitEntries(content)
+		block.Entries = blockEntries(content, offsets[start]+open+1)
+		block.Span.End = offsets[start] + open + 1 + closeAt + 1
+		block.BodySpan.End = offsets[start] + open + 1 + closeAt
+		if rest := strings.TrimSpace(afterOpen[closeAt+1:]); rest != "" && !strings.HasPrefix(rest, "#") && !strings.HasPrefix(rest, "//") {
+			return block, fmt.Errorf("unexpected content after '}': %q", rest)
+		}
+		return block, nil
 	}
-
-	body = splitEntries(afterOpen)
+	depth = firstDepth
+	content := afterOpen[:comment]
+	block.Body = splitEntries(content)
+	block.Entries = blockEntries(content, offsets[start]+open+1)
 
 	for i := start + 1; i < len(lines); i++ {
-		trimmed := strings.TrimSpace(lines[i])
-		if trimmed == "" || strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		line := lines[i]
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
 			continue
 		}
-		if trimmed == "}" {
-			return body, i + 1, nil
-		}
-		if strings.HasPrefix(trimmed, "}") {
-			if rest := strings.TrimSpace(trimmed[1:]); rest != "" {
-				return nil, 0, fmt.Errorf("unexpected content after '}': %q", rest)
+		newDepth, closeAt, comment := scanBlockLine(line, depth)
+		if closeAt >= 0 {
+			bodyPart := line[:closeAt]
+			if strings.TrimSpace(bodyPart) != "" {
+				block.Body = append(block.Body, splitEntries(strings.TrimSpace(bodyPart))...)
+				block.Entries = append(block.Entries, blockEntries(bodyPart, offsets[i])...)
 			}
-			return body, i + 1, nil
-		}
-		if before, ok := strings.CutSuffix(trimmed, "}"); ok {
-			if t := strings.TrimSpace(before); t != "" {
-				body = append(body, splitEntries(t)...)
+			rest := strings.TrimSpace(line[closeAt+1:])
+			if rest != "" && !strings.HasPrefix(rest, "#") && !strings.HasPrefix(rest, "//") {
+				return block, fmt.Errorf("unexpected content after '}': %q", rest)
 			}
-			return body, i + 1, nil
+			block.Next = i + 1
+			block.Span.End = offsets[i] + closeAt + 1
+			block.BodySpan.End = offsets[i] + closeAt
+			return block, nil
 		}
-		body = append(body, splitEntries(trimmed)...)
+		depth = newDepth
+		bodyPart := line[:comment]
+		if strings.TrimSpace(bodyPart) == "" {
+			continue
+		}
+		block.Body = append(block.Body, splitEntries(strings.TrimSpace(bodyPart))...)
+		block.Entries = append(block.Entries, blockEntries(bodyPart, offsets[i])...)
 	}
-	return nil, 0, errors.New("unclosed '{'")
+	block.Next = 0
+	block.Span.End = offsets[len(lines)-1] + len(lines[len(lines)-1])
+	block.BodySpan.End = block.Span.End
+	return block, errors.New("unclosed '{'")
+}
+
+func scanBlockLine(line string, depth int) (nextDepth, closeAt, comment int) {
+	var quote byte
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+		if quote != 0 {
+			if c == '\\' && i+1 < len(line) {
+				i++
+				continue
+			}
+			if c == quote {
+				quote = 0
+			}
+			continue
+		}
+		if c == '"' || c == '\'' || c == '`' {
+			quote = c
+			continue
+		}
+		if c == '/' && i+1 < len(line) && line[i+1] == '/' {
+			return depth, -1, i
+		}
+		if c == '#' && (i == 0 || line[i-1] == ' ' || line[i-1] == '\t' || line[i-1] == '\r') {
+			return depth, -1, i
+		}
+		switch c {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return depth, i, len(line)
+			}
+		}
+	}
+	return depth, -1, len(line)
+}
+
+func blockEntries(content string, base int) []BlockEntry {
+	parts := SplitTopLevel(content, ',')
+	entries := make([]BlockEntry, 0, len(parts))
+	searchFrom := 0
+	for _, part := range parts {
+		start := searchFrom
+		end := start + len(part)
+		searchFrom = end + 1
+		leading := len(part) - len(strings.TrimLeft(part, " \t\r\n"))
+		text := strings.TrimSpace(part)
+		if text == "" {
+			continue
+		}
+		entries = append(entries, BlockEntry{
+			Text: text,
+			Span: SourceSpan{Start: base + start + leading, End: base + start + leading + len(text)},
+		})
+	}
+	return entries
 }
 
 // splitEntries splits s on top-level commas and trims each segment.

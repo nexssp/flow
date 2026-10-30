@@ -48,6 +48,44 @@ func ParseDeclarationHeader(req DirectiveReq, directive string) (name string, mo
 	return name, mods, next, nil
 }
 
+// ParseDeclarationHeaderWithSpans is ParseDeclarationHeader plus source spans
+// for the directive keyword, declared name, and parsed header. The existing
+// parser remains the single authority for header grammar and continuation rules.
+
+type DeclarationHeader struct {
+	Name        string
+	Modifiers   []string
+	Next        int
+	KeywordSpan SourceSpan
+	NameSpan    SourceSpan
+	HeaderSpan  SourceSpan
+}
+
+func ParseDeclarationHeaderWithSpans(req DirectiveReq, directive string) (DeclarationHeader, error) {
+	name, mods, next, err := ParseDeclarationHeader(req, directive)
+	if err != nil {
+		return DeclarationHeader{Next: next}, err
+	}
+	header := DeclarationHeader{Name: name, Modifiers: mods, Next: next}
+	line := req.Lines[req.I]
+	keyword := "@" + directive
+	keywordStart := strings.Index(line, keyword)
+	if keywordStart < 0 {
+		return header, nil
+	}
+	header.KeywordSpan = SourceSpan{Start: req.Offset(req.I, keywordStart), End: req.Offset(req.I, keywordStart+len(keyword))}
+	nameStart := keywordStart + len(keyword)
+	for nameStart < len(line) && (line[nameStart] == ' ' || line[nameStart] == '\t') {
+		nameStart++
+	}
+	if strings.HasPrefix(line[nameStart:], name) {
+		header.NameSpan = SourceSpan{Start: req.Offset(req.I, nameStart), End: req.Offset(req.I, nameStart+len(name))}
+	}
+	headerEndLine := min(max(next-1, req.I), len(req.Lines)-1)
+	header.HeaderSpan = SourceSpan{Start: header.KeywordSpan.Start, End: req.Offset(headerEndLine, len(req.Lines[headerEndLine]))}
+	return header, nil
+}
+
 func headerIndent(line string) int {
 	return len(line) - len(strings.TrimLeft(line, " \t"))
 }

@@ -68,6 +68,16 @@ func CompileWithOptions(ctx context.Context, cfg Config, src, name string, opts 
 	return compilePrepared(ctx, cfg, prepared)
 }
 
+// CompilePrepared compiles a source that has already completed preprocessing.
+// It is useful when a caller must inspect the same directive metadata before
+// compiling and should not repeat the preprocessing pass.
+func CompilePrepared(ctx context.Context, cfg Config, prepared *compiler.PreparedSource) (Compilation, error) {
+	if prepared == nil {
+		return Compilation{}, errors.New("runner: prepared source is required")
+	}
+	return compilePrepared(ctx, cfg, prepared)
+}
+
 func Preflight(ctx context.Context, cfg Config, src, name string) (*compiler.PreparedSource, error) {
 	return compiler.PrepareSource(ctx, cfg.Directives, src, name, cfg.CompileOpts...)
 }

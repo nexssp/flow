@@ -193,6 +193,19 @@ func (inv *invocation) requirementsForHarness(ctx context.Context, path string) 
 // with those bundles available so @include can load exported bundle modules.
 // It repeats only when a local include contributes additional requirements.
 func (inv *invocation) prepareRequiredSource(ctx context.Context, source, name string) (cleanSource string, metadata map[string]any, config runner.Config, err error) {
+	return inv.prepareRequiredSourceData(ctx, source, name)
+}
+
+func (inv *invocation) prepareRequiredPreparedSource(ctx context.Context, source, name string) (*compiler.PreparedSource, runner.Config, error) {
+	clean, metadata, cfg, err := inv.prepareRequiredSourceData(ctx, source, name)
+	if err != nil {
+		return nil, runner.Config{}, err
+	}
+	prepared := compiler.PreparedSourceFromPreprocessed(source, name, clean, metadata, cfg.CompileOpts...)
+	return prepared, cfg, nil
+}
+
+func (inv *invocation) prepareRequiredSourceData(ctx context.Context, source, name string) (cleanSource string, metadata map[string]any, config runner.Config, err error) {
 	requirements, err := inv.discoverRootRequirements(ctx, source, name)
 	if err != nil {
 		return "", nil, runner.Config{}, err

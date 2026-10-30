@@ -24,6 +24,11 @@ type DirectiveReq struct {
 
 	// Import parses a module in its own source scope. It never merges Out.
 	Import func(target, namespace string) error
+	// ImportAt is Import with parser-provided source spans for the import and
+	// namespace. Directive handlers should prefer it when source offsets exist.
+	ImportAt func(target, namespace string, span, targetSpan, namespaceSpan SourceSpan) error
+
+	lineOffsets []int
 }
 
 type DirectiveRes struct {
