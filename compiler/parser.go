@@ -424,6 +424,7 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 			if err != nil {
 				return nil, err
 			}
+			a.HasArgumentObject = true
 			if a.Args == nil {
 				a.Args = args
 			} else {

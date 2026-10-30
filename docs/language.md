@@ -373,6 +373,23 @@ For symbol declaration syntax, include behavior, namespace precedence, and suppo
 {} -> pipeline.fetch_user
 ```
 
+Named pipeline arguments can be provided at the call site. The argument values are evaluated at runtime against the current input, and the named fields alone become the pipeline's request object:
+
+```nflow
+@schema LookupRequest {
+  Request map[string]any `json:"request" validate:"required"`
+  Region  string          `json:"region" validate:"required"`
+}
+@pipeline lookup :request-schema=!LookupRequest
+  { query: .request.search_text, region: .region }
+@end
+
+{ search_text: "Flow", trace: "caller metadata" }
+-> pipeline.lookup @{ request: ., region: "eu" }
+```
+
+The pipeline's `:request-schema` validates that constructed object. Generic action calls retain their existing merge behavior, and the object-to-pipeline form `{ ... } -> pipeline.NAME` remains supported; executable examples are in [`extensions/pipeline/nflows/`](../extensions/pipeline/nflows/).
+
 Header modifiers may be written on the declaration line or on continuation lines indented farther than the directive, containing only modifiers. Blank lines and whole-line `#` or `//` comments may separate header modifiers. The first other significant line permanently begins the body (even a macro invocation); trivia after the last modifier belongs to the body. Same-line syntax remains valid, and line breaks are not rewritten. For example:
 ```nflow
 @pipeline fetch_user

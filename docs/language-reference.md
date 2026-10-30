@@ -80,6 +80,8 @@ The core parser obtains operators from the active table. In the shipped standard
 
 Operator parsing is registry-driven: consult [`extensions/syntax/`](../extensions/syntax/) and [`compiler/operator.go`](../compiler/operator.go). The `parallel` and `race` keywords are supplied by the standard `syntax` bundle, not by a bare parser with no extensions. Parallel branch failure propagates without a partial result map. A race may take longer to return if a launched branch does not cooperate with cancellation. Further syntax discussion is in [`docs/language.md`](language.md) and exact fixtures are in [`extensions/syntax/nflows/`](../extensions/syntax/nflows/).
 
+For a named pipeline, `pipeline.NAME @{ field: value, ... }` passes the named fields as that pipeline's complete input object. Argument values such as `.search_text` and `.` are evaluated at runtime against the incoming state; request-schema defaults and validation then apply to the resulting object. This differs from `@{...}` on a generic action, which continues to merge its fields into the incoming object. The existing `{ ... } -> pipeline.NAME` form is unchanged. See the executable [`named_args_runtime_refs.nflow`](../extensions/pipeline/nflows/named_args_runtime_refs.nflow) and [`named_args_legacy_compat.nflow`](../extensions/pipeline/nflows/named_args_legacy_compat.nflow) fixtures.
+
 `match` chooses the first matching arm. It accepts predicate arms against the current input, or a subject expression with literal/pattern arms; subject-relative relational arms (`>`, `>=`, `<`, `<=`) compare the evaluated subject with the arm expression. `_` is the default arm:
 
 ```nflow

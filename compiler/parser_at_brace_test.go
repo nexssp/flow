@@ -91,6 +91,39 @@ func TestParseAtBrace_References(t *testing.T) {
 	}
 }
 
+func TestParseAtBraceRecordsObjectPresence(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		src  string
+		want bool
+	}{
+		{name: "pipeline call", src: `pipeline.lookup @{ request: ., region: "eu" }`, want: true},
+		{name: "imported pipeline call", src: `billing.pipeline.lookup @{ request: . }`, want: true},
+		{name: "empty pipeline call", src: `pipeline.lookup @{ }`, want: true},
+		{name: "generic action", src: `runtime.noop @{ request: . }`, want: true},
+		{name: "call without an object", src: `pipeline.lookup`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			expr, err := newTestParser(t, tc.src).Parse()
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			atom, ok := expr.(*Atom)
+			if !ok {
+				t.Fatalf("parsed expression has type %T, want *Atom", expr)
+			}
+			if atom.HasArgumentObject != tc.want {
+				t.Errorf("HasArgumentObject = %t, want %t", atom.HasArgumentObject, tc.want)
+			}
+			if atom.NamedPipelineArgs {
+				t.Error("parser should leave pipeline-specific lowering to the pipeline extension")
+			}
+		})
+	}
+}
+
 func TestParseAtBrace_Empty(t *testing.T) {
 	t.Parallel()
 	p := newTestParser(t, `wrap @{ }`)

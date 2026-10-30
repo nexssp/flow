@@ -741,9 +741,21 @@ func hasInjections(a *Atom) bool {
 }
 
 func wrapWithInjections(inner action.AnyAction, a *Atom) action.AnyAction {
+	return wrapWithPayloadBuilder(inner, a, buildPayload)
+}
+
+func wrapWithNamedPipelineArgs(inner action.AnyAction, a *Atom) action.AnyAction {
+	return wrapWithPayloadBuilder(inner, a, buildNamedPipelinePayload)
+}
+
+func wrapWithPayloadBuilder(
+	inner action.AnyAction,
+	a *Atom,
+	build func(context.Context, any, *Atom) map[string]any,
+) action.AnyAction {
 	pos := a.Pos
 	return action.New(a.Name, func(ctx context.Context, in any) (any, error) {
-		payload := buildPayload(ctx, in, a)
+		payload := build(ctx, in, a)
 		res, err := action.InvokeAny(ctx, inner, payload)
 		if err != nil {
 			// Attach pos to the error when not already tagged with that file.
@@ -883,6 +895,28 @@ func buildPayload(ctx context.Context, in any, a *Atom) map[string]any {
 		merged["excludes"] = a.Excludes
 	}
 	return merged
+}
+
+func buildNamedPipelinePayload(ctx context.Context, in any, a *Atom) map[string]any {
+	state, _ := in.(map[string]any)
+	out := make(map[string]any, len(a.Params)+len(a.ParamValues)+len(a.Args)+3)
+	for key, value := range a.Params {
+		out[key] = value
+	}
+	maps.Copy(out, a.ParamValues)
+	for key, value := range a.Args {
+		out[key] = resolveValue(ctx, value, state)
+	}
+	if a.Prompt != "" {
+		out["prompt"] = a.Prompt
+	}
+	if len(a.Targets) > 0 {
+		out["targets"] = a.Targets
+	}
+	if len(a.Excludes) > 0 {
+		out["excludes"] = a.Excludes
+	}
+	return out
 }
 
 func resolveValue(ctx context.Context, v *Value, state map[string]any) any {
@@ -1272,10 +1306,14 @@ func runAtomAdvisers(a *Atom, act action.AnyAction, bCtx *BuildContext, advisers
 }
 
 func finalizeAtomAction(a *Atom, bCtx *BuildContext, act action.AnyAction) (action.AnyAction, error) {
-	injected := hasInjections(a)
+	injected := hasInjections(a) || a.NamedPipelineArgs
 	if injected {
 		inner := act
-		act = inspectBuiltChild(bCtx, wrapWithInjections(inner, a), "injection", action.IntrospectionChild{
+		wrap := wrapWithInjections
+		if a.NamedPipelineArgs {
+			wrap = wrapWithNamedPipelineArgs
+		}
+		act = inspectBuiltChild(bCtx, wrap(inner, a), "injection", action.IntrospectionChild{
 			Node: inner, Relation: IntrospectionKindWraps, Role: IntrospectionKindAction,
 		})
 	}

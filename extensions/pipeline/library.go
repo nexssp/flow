@@ -16,6 +16,7 @@ import (
 	"embed"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/nexssp/kernel/action"
 
@@ -36,6 +37,7 @@ func Bundle(_ map[string]string) compiler.Bundle {
 		ID:          ID,
 		Libraries:   []action.Library{{Name: ID}},
 		Directives:  []compiler.Directive{Directive, EndDirective},
+		AtomAdvise:  adviseNamedPipelineArgs,
 		Materialize: materialize,
 		SelfTest: func() []compiler.SelfTestSection {
 			return []compiler.SelfTestSection{{
@@ -71,4 +73,14 @@ func Bundle(_ map[string]string) compiler.Bundle {
 			},
 		},
 	}
+}
+
+func adviseNamedPipelineArgs(atom *compiler.Atom, _ *action.Builder[any, any]) error {
+	if !atom.HasArgumentObject {
+		return nil
+	}
+	if strings.HasPrefix(atom.Name, ID+".") || strings.Contains(atom.Name, "."+ID+".") {
+		atom.NamedPipelineArgs = true
+	}
+	return nil
 }

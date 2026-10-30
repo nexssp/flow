@@ -1,0 +1,16 @@
+@description "Literal named arguments form the pipeline request object and pass a strict schema boundary"
+@schema LookupRequest {
+  Request map[string]any `json:"request" validate:"required"`
+  Region  string          `json:"region"  default:"eu" validate:"oneof=eu us"`
+}
+@pipeline lookup :request-schema=!LookupRequest
+  {
+    query: .request.search_text,
+    region: .region
+  }
+@end
+@assert {
+  .query == "from literal arguments"
+  .region == "us"
+}
+pipeline.lookup @{ request: { search_text: "from literal arguments" }, region: "us" }

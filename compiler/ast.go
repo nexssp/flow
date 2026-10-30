@@ -33,16 +33,20 @@ func (l *LiteralExpr) Build(_ context.Context, bCtx *BuildContext) (action.AnyAc
 
 // Atom is a single runtime action call.
 type Atom struct {
-	Name            string
-	Params          map[string]string
-	ParamValues     map[string]any // native symbol values; takes precedence over Params
-	Modifiers       []string
-	ModifierValues  []ModifierValue  // parallel to Modifiers for quoted or native values
-	ModifierSources []ModifierSource // parallel to Modifiers; same length
-	Args            map[string]*Value
-	Prompt          string
-	Targets         []string
-	Excludes        []string
+	Name              string
+	Params            map[string]string
+	ParamValues       map[string]any // native symbol values; takes precedence over Params
+	Modifiers         []string
+	ModifierValues    []ModifierValue  // parallel to Modifiers for quoted or native values
+	ModifierSources   []ModifierSource // parallel to Modifiers; same length
+	Args              map[string]*Value
+	HasArgumentObject bool // true when the atom used @{...}, including an empty object
+	// NamedPipelineArgs marks `pipeline.NAME @{...}` as a complete request object.
+	// The pipeline extension sets this; values are resolved against state at runtime.
+	NamedPipelineArgs bool
+	Prompt            string
+	Targets           []string
+	Excludes          []string
 	// ConfigInject marks an atom written as `op @config`. For stream
 	// sources and operators, fields matching @config.<json_name> values
 	// are injected into their parameters at build time.

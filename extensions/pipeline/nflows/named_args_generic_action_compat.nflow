@@ -1,0 +1,7 @@
+@description "Generic action argument objects continue to merge with incoming state"
+@assert {
+  .inherited == "preserved"
+  .override == "new value"
+}
+{ inherited: "preserved", override: "old value" }
+-> with @{ override: "new value" }

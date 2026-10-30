@@ -1,0 +1,12 @@
+@description "Existing object construction followed by a pipeline call remains supported"
+@pipeline lookup
+  { query, locale }
+@end
+@pipeline page
+  { query: .search_text, locale: "en" } -> pipeline.lookup
+@end
+@assert {
+  .query == "from existing call syntax"
+  .locale == "en"
+}
+{ search_text: "from existing call syntax" } -> pipeline.page
