@@ -1,0 +1,12 @@
+@description "spec: projection shorthand bare fields"
+
+{
+  name: "Ada",
+  email: "ada@example.test",
+  extra: "discard"
+}
+-> { name, email }
+
+@assert: result.name == "Ada"
+@assert: result.email == "ada@example.test"
+@assert: !("extra" in result)

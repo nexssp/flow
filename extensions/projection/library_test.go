@@ -32,6 +32,7 @@ func TestFixtures_Discoverable(t *testing.T) {
 	t.Parallel()
 	b := Bundle(nil)
 	var count int
+	seen := make(map[string]bool)
 	walkErr := fs.WalkDir(b.Fixtures, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -39,6 +40,7 @@ func TestFixtures_Discoverable(t *testing.T) {
 		if !strings.HasSuffix(p, ".nflow") {
 			return nil
 		}
+		seen[p] = true
 		content, readErr := fs.ReadFile(b.Fixtures, p)
 		ktest.RequireNoError(t, readErr)
 		ktest.RequireCondition(t, strings.Contains(string(content), "@description"),
@@ -48,4 +50,12 @@ func TestFixtures_Discoverable(t *testing.T) {
 	})
 	ktest.RequireNoError(t, walkErr)
 	ktest.RequireCondition(t, count >= 4, "expected at least 4 fixtures, got %d", count)
+	for _, fixture := range []string{
+		"nflows/shorthand.nflow",
+		"nflows/explicit_projection.nflow",
+		"nflows/mixed_shorthand.nflow",
+		"nflows/shorthand_spread.nflow",
+	} {
+		ktest.RequireCondition(t, seen[fixture], "expected projection fixture %q to be discoverable", fixture)
+	}
 }

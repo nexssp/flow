@@ -1,0 +1,22 @@
+@description "spec: projection shorthand with spread"
+
+{
+  name: "Ada",
+  email: "ada@example.test",
+  status: "pending",
+  version: 1,
+  extra: "preserved"
+}
+-> {
+  ...,
+  name,
+  email,
+  status: "active",
+  version: .version + 1
+}
+
+@assert: result.name == "Ada"
+@assert: result.email == "ada@example.test"
+@assert: result.status == "active"
+@assert: result.version == 2
+@assert: result.extra == "preserved"

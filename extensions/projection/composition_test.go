@@ -16,6 +16,48 @@ import (
 	"github.com/nexssp/flow/runner"
 )
 
+func TestProjectionShorthandForms(t *testing.T) {
+	t.Parallel()
+	cfg, err := runner.BuildConfig(native.Bundles())
+	ktest.RequireNoError(t, err)
+	cases := []struct {
+		name   string
+		source string
+		assert []string
+	}{
+		{
+			name:   "bare-only",
+			source: `{ name: "Ada", email: "ada@example.test", extra: "discard" } -> { name, email }`,
+			assert: []string{`result.name == "Ada"`, `result.email == "ada@example.test"`, `!("extra" in result)`},
+		},
+		{
+			name:   "explicit-only",
+			source: `{ name: "Ada", email: "ada@example.test" } -> { display: .name, address: .email }`,
+			assert: []string{`result.display == "Ada"`, `result.address == "ada@example.test"`},
+		},
+		{
+			name:   "mixed",
+			source: `{ name: "Ada", email: "ada@example.test", canbehere: { everything: "nested" }, another: "copied", canbe: { something: "explicit" } } -> { name, email, somethingelse: .canbehere.everything, another, other: .canbe.something }`,
+			assert: []string{`result.name == "Ada"`, `result.email == "ada@example.test"`, `result.somethingelse == "nested"`, `result.another == "copied"`, `result.other == "explicit"`},
+		},
+		{
+			name:   "generic object argument stays explicit",
+			source: `const @{ value: { name: "Ada", email: "ada@example.test" } }`,
+			assert: []string{`result.name == "Ada"`, `result.email == "ada@example.test"`},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			execution, execErr := runner.Execute(t.Context(), cfg, tc.source, "projection-shorthand.nflow", nil)
+			ktest.RequireNoError(t, execErr)
+			ktest.RequireEqual(t, len(runner.EvaluateAssertions(execution.Output, tc.assert)), 0)
+		})
+	}
+	_, err = runner.Compile(t.Context(), cfg, `const @{ value: { name } }`, "generic-object-no-shorthand.nflow")
+	ktest.RequireCondition(t, err != nil, "generic @{} object unexpectedly accepted projection shorthand")
+}
+
 func TestProjectionControlValues(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

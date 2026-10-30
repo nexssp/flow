@@ -270,10 +270,15 @@ A `{ ... }` at the top of a pipeline reshapes the current value:
 
 ```nflow
 { id: 1, name: "Maksymilian", extra: "discard" }
--> { name: .name, greeting: "Hello, " + .name }
+-> { name, greeting: "Hello, " + .name }
 ```
 
 Result: `{ "name": "Maksymilian", "greeting": "Hello, Maksymilian" }`.
+A bare projection entry such as `name` copies `.name` into the output key `name`.
+Use `key: value` when the output key differs or the value needs an expression;
+the two forms can be mixed in one projection. This shorthand is specific to
+projections and does not change the explicit `key: value` syntax of `@{ ... }`
+action-argument objects.
 
 Projections can spread the whole input with `...`:
 

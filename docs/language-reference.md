@@ -46,9 +46,15 @@ Atoms can also carry extension-consumed annotations: `#target1,target2`, `~exclu
 A projection transforms the current value into a new object. Inside it, `.field` means a field on the current input; `...` spreads the current object before the listed replacements:
 
 ```nflow
+{ name, email }
 { id: .user.id, display_name: .user.name }
+{ name, email, label: .profile.display_name }
 { ..., status: "ready" }
 ```
+
+In projection object-entry position, a bare field name is shorthand for the same key copied from the current input: `{ name }` is equivalent to `{ name: .name }`. Shorthand entries can be mixed with explicit `key: value` entries; explicit values keep their existing projection expression syntax, such as `.profile.display_name` or a literal. This shorthand applies only to projection bodies. Structured action arguments such as `@{ name: "Ada" }` remain data objects and still require explicit `key: value` pairs.
+
+The extension self-test runs fixtures for [shorthand-only](../extensions/projection/nflows/shorthand.nflow), [explicit-only](../extensions/projection/nflows/explicit_projection.nflow), [mixed member expressions](../extensions/projection/nflows/mixed_shorthand.nflow), and [shorthand with spread](../extensions/projection/nflows/shorthand_spread.nflow).
 
 Projection expressions and runtime condition expressions are evaluated using `expr-lang`, with Flow's leading-dot input notation rewritten for the evaluator. For example, supported fixtures use arithmetic, comparisons, boolean operators, object construction, and expression-library functions such as `filter` and `sortBy`; the accepted functions depend on the evaluator environment. Do not confuse this expression language with the literal/action-argument parser. Projection implementation and fixtures: [`extensions/projection/`](../extensions/projection/); expression preprocessing: [`compiler/expr.go`](../compiler/expr.go).
 

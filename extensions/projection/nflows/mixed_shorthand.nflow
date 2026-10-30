@@ -1,0 +1,22 @@
+@description "spec: mixed projection shorthand and expressions"
+
+{
+  name: "Ada",
+  email: "ada@example.test",
+  canbehere: { everything: "nested" },
+  another: "copied",
+  canbe: { something: "explicit" }
+}
+-> {
+  name,
+  email,
+  somethingelse: .canbehere.everything,
+  another,
+  other: .canbe.something
+}
+
+@assert: result.name == "Ada"
+@assert: result.email == "ada@example.test"
+@assert: result.somethingelse == "nested"
+@assert: result.another == "copied"
+@assert: result.other == "explicit"

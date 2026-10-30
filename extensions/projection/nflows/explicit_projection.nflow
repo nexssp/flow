@@ -1,0 +1,13 @@
+@description "spec: explicit-only projection fields remain supported"
+
+{
+  name: "Ada",
+  email: "ada@example.test"
+}
+-> {
+  name: .name,
+  email: .email
+}
+
+@assert: result.name == "Ada"
+@assert: result.email == "ada@example.test"
