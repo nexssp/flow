@@ -59,7 +59,7 @@ name; they do not become unqualified declarations in the importing module. If
 @include "./memory_types.nflow" AS memory
 @pipeline memory_search
   :in-schema=!memory.ChatTurn
-  runtime.noop
+  noop
 @end
 ```
 

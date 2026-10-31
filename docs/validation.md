@@ -91,11 +91,11 @@ Flow:
 @config:strict=true
 
 # ✅ passes
-{ name: "Maksymilian", email: "ada@nexss.dev" } -> create_user
+{ name: "Maksymilian", email: "julia@nexss.dev" } -> create_user
 
 # ❌ runtime: [Validation] validation failed
 #    field "name": failed 'min' check (expected 3)
-{ name: "Al", email: "ada@nexss.dev" } -> create_user
+{ name: "Al", email: "julia@nexss.dev" } -> create_user
 
 # ❌ runtime: "email" field missing
 { name: "Maksymilian" } -> create_user

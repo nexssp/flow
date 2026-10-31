@@ -112,7 +112,7 @@ type Bundle struct {
 | `Operators` | Binary pipeline operators (rare; the syntax bundle uses this). |
 | `Primaries` | Parser extensions that intercept a token or keyword. |
 | `Materialize` | Mount additional actions from `meta` after preprocessing. |
-| `MaterializePhase` | Selects `MaterializeDeclarations` (the zero value) or `MaterializeCompositions`; order is stable within each phase. See the [materialization lifecycle](materializer-lifecycle.md). |
+| `MaterializePhase` | Selects `MaterializeDeclarations` (the zero value) or `MaterializeCompositions`; order is stable within each phase. |
 | `OnPreprocess` | Contribute additional primaries or compile options after preprocessing. |
 | `AtomAdvise` | Mutate an atom's builder before it runs. |
 | `WrapPipeline` | Wrap the compiled program (catch errors, install hooks, publish context). |
@@ -283,7 +283,7 @@ compiler.Modifier{
         if err != nil {
             return err
         }
-        return b.Adaptive(action.AdaptiveConfig{Budget: limit})
+        return b.Juliaptive(action.JuliaptiveConfig{Budget: limit})
     },
 }
 ```
@@ -358,7 +358,7 @@ With that declaration:
 
 ```nflow
 distribute.map @{ action: noop, items: [1, 2] }     # valid
-distribute.map @{ action: runtime.noop, items: [1] } # valid
+distribute.map @{ action: noop, items: [1] } # valid
 distribute.map @{ action: "noop", items: [1] }       # compile error
 distribute.map @{ action: missing, items: [1] }      # compile error
 ```
@@ -438,8 +438,7 @@ recommended shape for options with more than two fields.
 
 ## 9. Fixtures vs SelfTest
 
-See [AGENTS.md §3](../AGENTS.md#3-extension-rule) for the per-feature fixture
-requirement and the allowed Go-test exceptions. Fixtures are executable
+Each feature should have an executable fixture. Fixtures are executable
 conformance cases, not snippets: `nflow self test` runs the fixtures contributed
 by `native.SelftestBundles()` through the real compiler and runtime. Give each
 fixture an `@description` and assert meaningful behavior. Keep every
@@ -721,7 +720,7 @@ See `extensions/pool/materialize.go` for a full example.
 
 ## Related
 
-- [Language syntax](../docs/language.md)
-- [CLI and runtime](../docs/cli.md)
+- [Language syntax](language.md)
+- [CLI and runtime](cli.md)
 - [Kernel action builders](https://pkg.go.dev/github.com/nexssp/kernel/action)
 - [`extensions/README.md`](../extensions/README.md) — in-tree browsing shortcut

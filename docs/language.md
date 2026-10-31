@@ -3,7 +3,9 @@
 A `.nflow` file is a graph of actions with typed policies and reusable
 patterns. This page is a syntax walkthrough. For the authoritative,
 implementation-backed language and runtime reference, see
-[language-reference.md](language-reference.md); for the CLI, see [cli.md](cli.md).
+[language-reference.md](language-reference.md). For a compact reference, see
+[syntax-cheatsheet.md](syntax-cheatsheet.md); for practical recipes, see
+[cookbook.md](cookbook.md). For the CLI, see [cli.md](cli.md).
 
 The snippets demonstrate syntax and control-flow behavior. Examples that call
 capabilities such as `http.request`, `service.primary`, or `distribute.map`
@@ -147,7 +149,7 @@ For an object result, its fields can usually be written directly, without the
 extra `value` wrapper:
 
 ```nflow
-const @{ name: "Ada", active: true }
+const @{ name: "Julia", active: true }
 ```
 
 The runtime unwraps a top-level `value` field (and currently accepts `val` as
@@ -317,7 +319,7 @@ Flow control—the control receives the projection root.
   branches: parallel {
     first: { peak: .peak, keep: .keep },
     second: race {
-      runtime.fail @{ kind: "Unavailable", message: "try next" },
+      fail @{ kind: "Unavailable", message: "try next" },
       const @{ value: { peak: .peak, keep: .keep } }
     }
   },

@@ -95,10 +95,10 @@ func Bundle() compiler.Bundle {
 func Modifiers() []compiler.Modifier {
     return []compiler.Modifier{
         compiler.Int("breaker_failures", func(b *action.Builder[any, any], n int) *action.Builder[any, any] {
-            return b.Adaptive(action.AdaptiveConfig{FailureThreshold: n})
+            return b.Juliaptive(action.JuliaptiveConfig{FailureThreshold: n})
         }),
         compiler.Duration("breaker_cooldown", func(b *action.Builder[any, any], d time.Duration) *action.Builder[any, any] {
-            return b.Adaptive(action.AdaptiveConfig{ResetTimeout: d})
+            return b.Juliaptive(action.JuliaptiveConfig{ResetTimeout: d})
         }),
     }
 }
