@@ -1,6 +1,6 @@
 # Nexss Flow documentation
 
-This folder documents Flow `v0.59.0` as a domainless orchestration language. Flow provides the syntax, compiler, runner, schemas, policies, composition, and lifecycle. Domain capabilities are added through mounted bundles or `@require` modules.
+This folder documents Flow as a domainless orchestration language. Flow provides the syntax, compiler, runner, schemas, policies, composition, and lifecycle. Domain capabilities are added through mounted bundles or `@require` modules.
 
 ## Start here
 

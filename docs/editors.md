@@ -2,10 +2,10 @@
 
 The official editor integration is maintained in [nexssp/flow-editor-support](https://github.com/nexssp/flow-editor-support). It supports `.nflow` files through the Flow core language server and formatter.
 
-Install Flow `v0.59.0` or newer for this documentation set:
+Install the latest stable NFlow release:
 
 ```sh
-go install github.com/nexssp/flow/cmd/nflow@v0.59.0
+go install github.com/nexssp/flow/cmd/nflow@latest
 nflow --version
 ```
 

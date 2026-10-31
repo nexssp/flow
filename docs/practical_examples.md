@@ -675,7 +675,7 @@ orders.create @{ customer_id: .customer_id, items: .items }
 ### Constrain compiler version
 
 ```exs
-@nflow_version ">=0.59.0 <0.60.0"
+@nflow_version ">=0.60.0"
 
 orders.get @{ order_id: .order_id }
 ```
@@ -1105,7 +1105,7 @@ http.request :timeout=5s :retry=3 :rate_limit=100 :circuit_breaker="payments" @{
 ### Order intake
 
 ```exs
-@nflow_version ">=0.59.0 <0.60.0"
+@nflow_version ">=0.60.0"
 
 @schema OrderRequest {
   CustomerID string `json:"customer_id" validate:"required"`
