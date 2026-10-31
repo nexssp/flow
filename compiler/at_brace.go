@@ -6,16 +6,17 @@ import (
 	"strings"
 )
 
-func parseAtBrace(raw string, base Position) (map[string]*Value, error) {
+func parseAtBrace(raw string, base Position) (map[string]*Value, []*Value, error) {
 	if strings.TrimSpace(raw) == "" {
-		return map[string]*Value{}, nil
+		return map[string]*Value{}, nil, nil
 	}
 	b := &braceScanner{src: raw, base: base}
 	out := make(map[string]*Value)
-	if err := b.parseEntries(out); err != nil {
-		return nil, err
+	var spreads []*Value
+	if err := b.parseEntries(out, &spreads); err != nil {
+		return nil, nil, err
 	}
-	return out, nil
+	return out, spreads, nil
 }
 
 type braceScanner struct {
@@ -45,53 +46,115 @@ func (b *braceScanner) skipWS() {
 			b.advance()
 			continue
 		}
+		if b.skipComment() {
+			continue
+		}
 		return
 	}
 }
 
-func (b *braceScanner) parseEntries(dst map[string]*Value) error {
+func (b *braceScanner) skipComment() bool {
+	if !b.commentStarts() {
+		return false
+	}
+	if b.peek() == '/' {
+		for !b.eof() && b.peek() != '\n' {
+			b.advance()
+		}
+		return true
+	}
+	if b.peek() != '#' || !b.hashStartsComment() {
+		return false
+	}
+	for !b.eof() && b.peek() != '\n' {
+		b.advance()
+	}
+	return true
+}
+
+func (b *braceScanner) commentStarts() bool {
+	return !b.eof() && ((b.peek() == '/' && b.pos+1 < len(b.src) && b.src[b.pos+1] == '/') ||
+		(b.peek() == '#' && b.hashStartsComment()))
+}
+
+func (b *braceScanner) hashStartsComment() bool {
+	if b.pos+1 < len(b.src) {
+		next := b.src[b.pos+1]
+		if next == ' ' || next == '\t' || next == '\r' || next == '\n' {
+			return true
+		}
+	}
+	for i := b.pos - 1; i >= 0 && b.src[i] != '\n'; i-- {
+		if b.src[i] != ' ' && b.src[i] != '\t' && b.src[i] != '\r' {
+			return false
+		}
+	}
+	return true
+}
+
+func (b *braceScanner) parseEntries(dst map[string]*Value, spreads *[]*Value) error {
 	for {
 		b.skipWS()
 		if b.eof() {
 			return nil
+		}
+		if strings.HasPrefix(b.src[b.pos:], "...") {
+			b.pos += 3
+			value, err := b.readValue()
+			if err != nil {
+				return err
+			}
+			*spreads = append(*spreads, value)
+			if err := b.consumeEntryDelimiter(); err != nil {
+				return err
+			}
+			continue
 		}
 		key, err := b.readKey()
 		if err != nil {
 			return err
 		}
 		b.skipWS()
-		if b.peek() != ':' {
-			return b.errf("expected ':' after key %q", key)
-		}
-		b.advance()
-		val, err := b.readValue()
-		if err != nil {
-			return err
+		var val *Value
+		switch {
+		case b.peek() == ':':
+			b.advance()
+			val, err = b.readValue()
+			if err != nil {
+				return err
+			}
+		case b.eof() || b.peek() == ',' || b.peek() == '}':
+			val = &Value{Kind: ValueRef, Ref: key}
+		default:
+			return b.errf("expected ':' or map-entry delimiter after key %q", key)
 		}
 		if _, exists := dst[key]; exists {
 			return b.errf("duplicate key %q", key)
 		}
 		dst[key] = val
-		b.skipWS()
-		if b.eof() {
-			return nil
-		}
-		switch b.peek() {
-		case ',':
-			b.advance()
-		case '}':
-			return nil
-		default:
-			return b.errf("expected ',' or '}', got %q", string(b.peek()))
+		if err := b.consumeEntryDelimiter(); err != nil {
+			return err
 		}
 	}
+}
+
+func (b *braceScanner) consumeEntryDelimiter() error {
+	b.skipWS()
+	if b.eof() || b.peek() == '}' {
+		return nil
+	}
+	if b.peek() == ',' {
+		b.advance()
+		return nil
+	}
+	return b.errf("expected ',' or '}', got %q", string(b.peek()))
 }
 
 func (b *braceScanner) readKey() (string, error) {
 	start := b.pos
 	for !b.eof() {
 		c := b.peek()
-		if c == ':' || c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+		if c == ':' || c == ',' || c == ' ' || c == '\t' || c == '\n' || c == '\r' {
 			break
 		}
 		b.advance()
@@ -147,13 +210,18 @@ func (b *braceScanner) readObject() (*Value, error) {
 			return nil, err
 		}
 		b.skipWS()
-		if b.peek() != ':' {
-			return nil, b.errf("expected ':' in nested object")
-		}
-		b.advance()
-		val, err := b.readValue()
-		if err != nil {
-			return nil, err
+		var val *Value
+		switch b.peek() {
+		case ':':
+			b.advance()
+			val, err = b.readValue()
+			if err != nil {
+				return nil, err
+			}
+		case ',', '}':
+			val = &Value{Kind: ValueRef, Ref: key}
+		default:
+			return nil, b.errf("expected ':' or map-entry delimiter in nested object")
 		}
 		if _, exists := keys[key]; exists {
 			return nil, b.errf("duplicate key %q in nested object", key)
@@ -278,6 +346,9 @@ func (b *braceScanner) readBareToken() string {
 	for !b.eof() {
 		c := b.peek()
 		if c == ',' || c == '}' || c == ']' {
+			break
+		}
+		if b.commentStarts() {
 			break
 		}
 		b.advance()

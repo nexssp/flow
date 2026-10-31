@@ -420,11 +420,16 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 			if p.Cur().Unterminated {
 				return nil, p.errorf(p.Cur().Line, "unterminated argument block; expected '}'")
 			}
-			args, err := parseAtBrace(p.Cur().Lit, p.Position())
+			raw, err := p.expandArgumentMap(p.Cur().Lit)
+			if err != nil {
+				return nil, err
+			}
+			args, spreads, err := parseAtBrace(raw, p.Position())
 			if err != nil {
 				return nil, err
 			}
 			a.HasArgumentObject = true
+			a.ArgSpreads = append(a.ArgSpreads, spreads...)
 			if a.Args == nil {
 				a.Args = args
 			} else {
@@ -443,6 +448,21 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 			return a, nil
 		}
 	}
+}
+
+func (p *Parser) expandArgumentMap(raw string) (string, error) {
+	for _, extension := range p.primaries.All() {
+		expander, ok := extension.(ArgumentMapExpander)
+		if !ok {
+			continue
+		}
+		var err error
+		raw, err = expander.ExpandArgumentMap(p, raw)
+		if err != nil {
+			return "", err
+		}
+	}
+	return raw, nil
 }
 
 func (p *Parser) parseAtom() (Expr, error) {

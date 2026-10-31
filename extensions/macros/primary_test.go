@@ -86,6 +86,58 @@ func TestReadArgs(t *testing.T) {
 	}
 }
 
+func TestArgumentMapMacroSplicesEntries(t *testing.T) {
+	t.Parallel()
+	byName := map[string]Declaration{
+		"stats_config": {
+			Name:   "stats_config",
+			Params: []string{"field"},
+			Body:   "$field: @config.stats_$field",
+		},
+	}
+	parsed, err := newTestParser(t, byName,
+		`runtime.const @{ @stats_config(tree_only), @stats_config(full_tree) }`).Parse()
+	ktest.RequireNoError(t, err)
+	atom, ok := parsed.(*compiler.Atom)
+	ktest.RequireCondition(t, ok, "expected atom, got %T", parsed)
+	ktest.RequireEqual(t, atom.Args["tree_only"].Kind, compiler.ValueRef)
+	ktest.RequireEqual(t, atom.Args["tree_only"].Ref, "config.stats_tree_only")
+	ktest.RequireEqual(t, atom.Args["full_tree"].Ref, "config.stats_full_tree")
+}
+
+func TestArgumentMapMacroExpansionSkipsStringsAndComments(t *testing.T) {
+	t.Parallel()
+	byName := map[string]Declaration{
+		"field": {Name: "field", Params: []string{"key"}, Body: "$key: 7"},
+	}
+	parsed, err := newTestParser(t, byName, "runtime.const @{\n"+
+		`  text: "@field(hidden) # }",`+"\n"+
+		"  # @field(commented) }\n"+
+		"  @field(real)\n"+
+		"}").Parse()
+	ktest.RequireNoError(t, err)
+	atom, ok := parsed.(*compiler.Atom)
+	ktest.RequireCondition(t, ok, "expected atom, got %T", parsed)
+	ktest.RequireEqual(t, atom.Args["text"].Str, "@field(hidden) # }")
+	ktest.RequireEqual(t, atom.Args["real"].Num, float64(7))
+	ktest.RequireEqual(t, len(atom.Args), 2)
+}
+
+func TestArgumentMapMacroDuplicateKeyStillFails(t *testing.T) {
+	t.Parallel()
+	byName := map[string]Declaration{
+		"field": {Name: "field", Params: []string{"key"}, Body: "$key: 7"},
+	}
+	_, err := newTestParser(t, byName, `runtime.const @{ @field(foo), foo: 8 }`).Parse()
+	ktest.RequireErrorContains(t, err, "duplicate key \"foo\"")
+}
+
+func TestArgumentMapMacroReportsUnknownInvocation(t *testing.T) {
+	t.Parallel()
+	_, err := newTestParser(t, nil, `runtime.const @{ @missing() }`).Parse()
+	ktest.RequireErrorContains(t, err, "unknown macro @missing")
+}
+
 func TestPrimary_FlagRefIsNotReportedAsMacro(t *testing.T) {
 	t.Parallel()
 	_, err := newTestParser(t, map[string]Declaration{}, `@flag.endpoint`).Parse()

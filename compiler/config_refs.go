@@ -188,6 +188,11 @@ func walkAtomValues(atom *Atom, visit func(raw, where string) error) error {
 			return err
 		}
 	}
+	for i, value := range atom.ArgSpreads {
+		if err := walkValueStrings(value, "argument-map spread "+strconv.Itoa(i+1), visit); err != nil {
+			return err
+		}
+	}
 	return walkModifierValues(atom.Modifiers, visit)
 }
 

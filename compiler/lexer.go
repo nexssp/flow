@@ -105,20 +105,7 @@ func (l *Lexer) scanAtBrace() Token {
 	for l.pos < len(l.src) {
 		c := l.src[l.pos]
 		if quote != 0 {
-			if c == '\\' && l.pos+1 < len(l.src) {
-				if l.src[l.pos+1] == '\n' {
-					l.line++
-				}
-				l.pos += 2
-				continue
-			}
-			switch c {
-			case quote:
-				quote = 0
-			case '\n':
-				l.line++
-			}
-			l.pos++
+			quote = l.scanAtBraceQuotedByte(quote)
 			continue
 		}
 		if (c == '"' || c == '\'' || c == '`') && l.quoteCanStart(l.pos, start) {
@@ -126,22 +113,62 @@ func (l *Lexer) scanAtBrace() Token {
 			l.pos++
 			continue
 		}
-		switch c {
-		case '{':
-			depth++
-		case '}':
-			depth--
-			if depth == 0 {
-				content := l.src[start:l.pos]
-				l.pos++
-				return Token{Type: TokAtBrace, Lit: content, Line: startLine}
-			}
-		case '\n':
-			l.line++
+		if l.skipAtBraceComment() {
+			continue
 		}
-		l.pos++
+		if token, done := l.scanAtBraceDelimiter(start, startLine, &depth); done {
+			return token
+		}
 	}
 	return Token{Type: TokAtBrace, Lit: l.src[start:], Line: startLine, Unterminated: true}
+}
+
+func (l *Lexer) scanAtBraceQuotedByte(quote byte) byte {
+	c := l.src[l.pos]
+	if c == '\\' && l.pos+1 < len(l.src) {
+		if l.src[l.pos+1] == '\n' {
+			l.line++
+		}
+		l.pos += 2
+		return quote
+	}
+	switch c {
+	case quote:
+		quote = 0
+	case '\n':
+		l.line++
+	}
+	l.pos++
+	return quote
+}
+
+func (l *Lexer) skipAtBraceComment() bool {
+	c := l.src[l.pos]
+	if (c == '/' && l.peek() == '/') || (c == '#' && l.hashStartsComment()) {
+		for l.pos < len(l.src) && l.src[l.pos] != '\n' {
+			l.pos++
+		}
+		return true
+	}
+	return false
+}
+
+func (l *Lexer) scanAtBraceDelimiter(start, startLine int, depth *int) (Token, bool) {
+	switch l.src[l.pos] {
+	case '{':
+		*depth++
+	case '}':
+		*depth--
+		if *depth == 0 {
+			content := l.src[start:l.pos]
+			l.pos++
+			return Token{Type: TokAtBrace, Lit: content, Line: startLine}, true
+		}
+	case '\n':
+		l.line++
+	}
+	l.pos++
+	return Token{}, false
 }
 
 // quoteCanStart distinguishes quoted values from apostrophes embedded in bare
@@ -248,6 +275,16 @@ func (l *Lexer) isAtLineStart() bool {
 		}
 	}
 	return true
+}
+
+func (l *Lexer) hashStartsComment() bool {
+	if l.pos+1 < len(l.src) {
+		next := l.src[l.pos+1]
+		if next == ' ' || next == '\t' || next == '\r' || next == '\n' {
+			return true
+		}
+	}
+	return l.isAtLineStart()
 }
 
 func (l *Lexer) peek() byte {

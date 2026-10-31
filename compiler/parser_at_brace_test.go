@@ -91,6 +91,73 @@ func TestParseAtBrace_References(t *testing.T) {
 	}
 }
 
+func TestParseAtBrace_SameNameFieldShorthand(t *testing.T) {
+	t.Parallel()
+	parsed, err := newTestParser(t, `wrap @{ name, email, profile: { account_id } }`).Parse()
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	atom, ok := parsed.(*Atom)
+	if !ok {
+		t.Fatalf("parsed expression has type %T, want *Atom", parsed)
+	}
+	for _, key := range []string{"name", "email"} {
+		value := atom.Args[key]
+		if value == nil || value.Kind != ValueRef || value.Ref != key {
+			t.Errorf("%s = %+v, want same-name reference", key, value)
+		}
+	}
+	profile := atom.Args["profile"]
+	if profile == nil || profile.Kind != ValueMap || len(profile.Map) != 1 ||
+		profile.Map[0].Key != "account_id" || profile.Map[0].Value.Kind != ValueRef || profile.Map[0].Value.Ref != "account_id" {
+		t.Fatalf("profile = %+v, want nested same-name reference", profile)
+	}
+}
+
+func TestParseAtBrace_CollectsArgumentMapSpreads(t *testing.T) {
+	t.Parallel()
+	parsed, err := newTestParser(t, `wrap @{ ... .defaults, url: .url }`).Parse()
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	atom, ok := parsed.(*Atom)
+	if !ok {
+		t.Fatalf("parsed expression has type %T, want *Atom", parsed)
+	}
+	if len(atom.ArgSpreads) != 1 || atom.ArgSpreads[0].Kind != ValueRef || atom.ArgSpreads[0].Ref != "defaults" {
+		t.Fatalf("spreads = %+v, want one .defaults spread", atom.ArgSpreads)
+	}
+	if value := atom.Args["url"]; value == nil || value.Kind != ValueRef || value.Ref != "url" {
+		t.Fatalf("url = %+v, want .url reference", value)
+	}
+}
+
+func TestParseAtBrace_CommentsAndQuotedCommentMarkers(t *testing.T) {
+	t.Parallel()
+	src := "wrap @{\n" +
+		"  full_tree: true, # closing brace here must not end the map }\n" +
+		"  text: \"# literal // literal }\", // } also ignored\n" +
+		"  depth: 3 # final value comment\n" +
+		"}"
+	parsed, err := newTestParser(t, src).Parse()
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	atom, ok := parsed.(*Atom)
+	if !ok {
+		t.Fatalf("parsed expression has type %T, want *Atom", parsed)
+	}
+	if atom.Args["full_tree"].Kind != ValueBool || !atom.Args["full_tree"].Bool {
+		t.Errorf("full_tree = %+v, want true", atom.Args["full_tree"])
+	}
+	if atom.Args["text"].Str != "# literal // literal }" {
+		t.Errorf("text = %q, want quoted comment markers", atom.Args["text"].Str)
+	}
+	if atom.Args["depth"].Num != 3 {
+		t.Errorf("depth = %+v, want 3", atom.Args["depth"])
+	}
+}
+
 func TestParseAtBraceRecordsObjectPresence(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -162,7 +229,7 @@ func TestParseAtBrace_AfterModifier(t *testing.T) {
 func TestParseAtBrace_RejectsMalformed(t *testing.T) {
 	t.Parallel()
 	cases := []string{
-		`wrap @{ key }`,
+		`wrap @{ key value }`,
 		`wrap @{ key: }`,
 		`wrap @{ : "v" }`,
 	}
@@ -192,6 +259,7 @@ func TestParseAtBrace_QuotedBracesAndDuplicateKeys(t *testing.T) {
 	for _, src := range []string{
 		`wrap @{ key: 1, key: 2 }`,
 		`wrap @{ outer: { key: 1, key: 2 } }`,
+		`wrap @{ key, key: 2 }`,
 		`wrap @{ key: 1 } @{ key: 2 }`,
 		`wrap(key=1, key=2)`,
 	} {

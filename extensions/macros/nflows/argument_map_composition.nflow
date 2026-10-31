@@ -1,0 +1,41 @@
+@description "Argument-map composition and readable map entries"
+@config:stats_tree_only=true
+@config:stats_full_tree=false
+@config:stats_tree_files=128
+@config:stats_depth=4
+@macro stats_config(field) {
+  $field: @config.stats_$field
+}
+
+@assert: result.tree_only == "true"
+@assert: result.full_tree == "false"
+@assert: result.tree_files == "128"
+@assert: result.depth == "4"
+@assert: result.name == "Keon"
+@assert: result.email == "keon@example.test"
+@assert: result.account_id == "acct-42"
+@assert: result.timeout == 5
+@assert: result.retries == 2
+@assert: result.url == "/v1"
+@assert: result.profile.account_id == "acct-42"
+@assert: result.text == "# literal // remains text"
+runtime.const @{
+  name: "Keon",
+  email: "keon@example.test",
+  account_id: "acct-42",
+  defaults: { timeout: 5, retries: 2 },
+  url: "/v1"
+}
+-> runtime.const @{
+  @stats_config(tree_only),
+  @stats_config(full_tree),
+  @stats_config(tree_files),
+  @stats_config(depth),
+  name,
+  email,
+  account_id,
+  ... .defaults,
+  url: .url, # URL remains explicit after spreading defaults
+  profile: { account_id },
+  text: "# literal // remains text", // Comment markers in quotes are literal,
+}

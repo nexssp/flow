@@ -105,7 +105,7 @@ func renderASTNode(w io.Writer, expr compiler.Expr, indent string, useColor bool
 			indent,
 			cyan("Atom", useColor),
 			cyan(n.Name, useColor),
-			formatASTArgs(n.Args, useColor),
+			formatASTArgs(n.Args, n.ArgSpreads, useColor),
 		)
 
 	case *compiler.LiteralExpr:
@@ -179,8 +179,8 @@ func renderASTNode(w io.Writer, expr compiler.Expr, indent string, useColor bool
 	}
 }
 
-func formatASTArgs(args map[string]*compiler.Value, useColor bool) string {
-	if len(args) == 0 {
+func formatASTArgs(args map[string]*compiler.Value, spreads []*compiler.Value, useColor bool) string {
+	if len(args) == 0 && len(spreads) == 0 {
 		return ""
 	}
 	keys := make([]string, 0, len(args))
@@ -191,14 +191,24 @@ func formatASTArgs(args map[string]*compiler.Value, useColor bool) string {
 
 	var b strings.Builder
 	b.WriteString("  @{")
+	first := true
+	for _, spread := range spreads {
+		if !first {
+			b.WriteString(",")
+		}
+		b.WriteString(" ... ")
+		b.WriteString(formatASTValue(spread))
+		first = false
+	}
 	for i, k := range keys {
-		if i > 0 {
+		if !first || i > 0 {
 			b.WriteString(",")
 		}
 		b.WriteString(" ")
 		b.WriteString(k)
 		b.WriteString(": ")
 		b.WriteString(formatASTValue(args[k]))
+		first = false
 	}
 	b.WriteString(" }")
 	return dim(b.String(), useColor)
@@ -244,8 +254,9 @@ type ASTNode struct {
 	Kind string       `json:"kind"`
 	Pos  *ASTPosition `json:"pos,omitempty"`
 
-	Name string         `json:"name,omitempty"`
-	Args map[string]any `json:"args,omitempty"`
+	Name    string         `json:"name,omitempty"`
+	Args    map[string]any `json:"args,omitempty"`
+	Spreads []any          `json:"spreads,omitempty"`
 
 	Raw       string `json:"raw,omitempty"`
 	Condition string `json:"condition,omitempty"`
@@ -317,7 +328,14 @@ func buildASTNode(expr compiler.Expr) *ASTNode {
 				args[k] = valueToAny(v)
 			}
 		}
-		return &ASTNode{Kind: "Atom", Name: n.Name, Args: args}
+		var spreads []any
+		if len(n.ArgSpreads) > 0 {
+			spreads = make([]any, len(n.ArgSpreads))
+			for i, spread := range n.ArgSpreads {
+				spreads[i] = valueToAny(spread)
+			}
+		}
+		return &ASTNode{Kind: "Atom", Name: n.Name, Args: args, Spreads: spreads}
 
 	case *compiler.LiteralExpr:
 		return &ASTNode{Kind: "Literal", Name: fmt.Sprintf("%v", n.Val)}

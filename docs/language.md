@@ -138,7 +138,7 @@ Both forms are valid; prefer the keyword.
 `nflow explain` output, but a bundle cannot register an action named
 `const` — the mount rejects it.
 
-`const` takes named arguments; `@{ ... }` has no positional-value shorthand.
+`@{ ... }` also accepts a bare field name as a same-name input reference, such as `name` for `.name`.
 Use `value` when the result should be a scalar or array:
 
 ```nflow
@@ -225,10 +225,19 @@ Inside `@{ }`:
 | `key: { a: 1 }` | Nested object |
 | `key: .path.to.field` | Reference to the current input |
 | `key: .` | The whole input |
+| `name` | Same-name reference to `.name` |
+| `... .defaults` | Spread the referenced object into the argument map |
 | `key: noop` | A capability reference (see §4) |
 
 References read from the current pipeline state — the value flowing
 into this atom.
+
+Argument-map spreads are available at the top level of `@{ ... }`; they are
+useful for shared defaults. If two spreads, or a spread and an explicit field,
+provide the same key, execution fails with a collision error rather than
+silently choosing one value. A spread value must resolve to an object. Inside
+an argument map, `#` and `//` start line comments; quoted strings keep those
+characters as data.
 
 ---
 
@@ -278,9 +287,10 @@ A `{ ... }` at the top of a pipeline reshapes the current value:
 Result: `{ "name": "Maksymilian", "greeting": "Hello, Maksymilian" }`.
 A bare projection entry such as `name` copies `.name` into the output key `name`.
 Use `key: value` when the output key differs or the value needs an expression;
-the two forms can be mixed in one projection. This shorthand is specific to
-projections and does not change the explicit `key: value` syntax of `@{ ... }`
-action-argument objects.
+the two forms can be mixed in one projection. Both projections and action
+argument maps accept a same-name shorthand, but their evaluation models differ:
+projections are expr-lang expressions, while `@{ ... }` shorthand means a
+reference to the current pipeline input.
 
 Projections can spread the whole input with `...`:
 
@@ -569,6 +579,23 @@ const @{ value: { name: "Maksymilian" } } -> wrap @{ key: "card" }
 }
 @labeled("total", 42)
 ```
+
+Macros can also splice complete argument-map entries before map parsing. This
+is useful when a setting name and its config key share a parameter:
+
+```nflow
+@macro stats_config(field) {
+  $field: @config.stats_$field
+}
+
+runtime.const @{
+  @stats_config(tree_only),
+  @stats_config(full_tree)
+}
+```
+
+The entries expand to `tree_only: @config.stats_tree_only` and
+`full_tree: @config.stats_full_tree`. Strings and comments are left untouched.
 
 **Expanding to multiple atoms:**
 

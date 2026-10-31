@@ -198,7 +198,7 @@ func buildSegmented(
 		action.IntrospectionChild{Node: rightAct, Relation: "sequence", Role: "right"}), nil
 }
 
-func atomStreamParams(ctx context.Context, atom *Atom) map[string]any {
+func atomStreamParams(ctx context.Context, atom *Atom) (map[string]any, error) {
 	params := ModifiersToMap(atom.Modifiers)
 	if len(atom.Params) > 0 {
 		if params == nil {
@@ -222,11 +222,24 @@ func atomStreamParams(ctx context.Context, atom *Atom) map[string]any {
 		}
 		for key, value := range atom.Args {
 			if _, exists := params[key]; !exists {
-				params[key] = resolveValue(ctx, value, nil)
+				resolved, err := resolveValue(ctx, value, nil)
+				if err != nil {
+					return nil, err
+				}
+				params[key] = resolved
 			}
 		}
 	}
-	return params
+	spreads, err := resolveArgumentSpreads(ctx, nil, atom)
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range spreads {
+		if _, exists := params[key]; !exists {
+			params[key] = value
+		}
+	}
+	return params, nil
 }
 
 func buildStreamSource(
@@ -251,10 +264,12 @@ func buildStreamSource(
 		return nil, xerr.NotFound(headAtom.Name + " is not a registered stream source")
 	}
 
-	headParams := atomStreamParams(ctx, headAtom)
+	headParams, err := atomStreamParams(ctx, headAtom)
+	if err != nil {
+		return nil, err
+	}
 	if headAtom.ConfigInject {
 		cfg, _ := compileConfigFromCtx(ctx)
-		var err error
 		headParams, err = injectConfigIntoParams(headParams, src.ReqPayload(), cfg)
 		if err != nil {
 			return nil, xerr.Validation("stream source "+headAtom.Name+": "+err.Error(), err)
@@ -279,10 +294,12 @@ func buildStreamSource(
 			return nil, xerr.NotFound(atom.Name + " is not a registered stream operator")
 		}
 
-		params := atomStreamParams(ctx, atom)
+		params, err := atomStreamParams(ctx, atom)
+		if err != nil {
+			return nil, err
+		}
 		if atom.ConfigInject {
 			cfg, _ := compileConfigFromCtx(ctx)
-			var err error
 			params, err = injectConfigIntoParams(params, named.ConfigType, cfg)
 			if err != nil {
 				return nil, xerr.Validation("operator "+atom.Name+": "+err.Error(), err)
@@ -717,6 +734,9 @@ func resolveConfigRefsInAtom(ctx context.Context, a *Atom) {
 	for _, value := range a.Args {
 		resolveConfigRefsInValue(cfg, cliArgs, value)
 	}
+	for _, value := range a.ArgSpreads {
+		resolveConfigRefsInValue(cfg, cliArgs, value)
+	}
 	for i, raw := range a.Modifiers {
 		a.Modifiers[i] = resolveConfigRefsInModifier(cfg, cliArgs, raw)
 		if i < len(a.ModifierValues) {
@@ -739,7 +759,7 @@ func resolveConfigRefsInModifier(cfg map[string]string, cliArgs []string, raw st
 }
 
 func hasInjections(a *Atom) bool {
-	return len(a.Params) > 0 || len(a.Args) > 0 ||
+	return len(a.Params) > 0 || len(a.Args) > 0 || len(a.ArgSpreads) > 0 ||
 		a.Prompt != "" || len(a.Targets) > 0 || len(a.Excludes) > 0
 }
 
@@ -754,11 +774,17 @@ func wrapWithNamedPipelineArgs(inner action.AnyAction, a *Atom) action.AnyAction
 func wrapWithPayloadBuilder(
 	inner action.AnyAction,
 	a *Atom,
-	build func(context.Context, any, *Atom) map[string]any,
+	build func(context.Context, any, *Atom) (map[string]any, error),
 ) action.AnyAction {
 	pos := a.Pos
 	return action.New(a.Name, func(ctx context.Context, in any) (any, error) {
-		payload := build(ctx, in, a)
+		payload, err := build(ctx, in, a)
+		if err != nil {
+			if pos.File != "" && !strings.Contains(err.Error(), pos.File+":") {
+				return nil, SourceError(pos, "%w", err)
+			}
+			return nil, err
+		}
 		res, err := action.InvokeAny(ctx, inner, payload)
 		if err != nil {
 			// Attach pos to the error when not already tagged with that file.
@@ -859,7 +885,7 @@ func resolveConfigRefsInValue(cfg map[string]string, cliArgs []string, value *Va
 	}
 }
 
-func buildPayload(ctx context.Context, in any, a *Atom) map[string]any {
+func buildPayload(ctx context.Context, in any, a *Atom) (map[string]any, error) {
 	m, _ := in.(map[string]any)
 
 	// runtime.const is a generator: it resolves references against input m (e.g. .id),
@@ -870,10 +896,19 @@ func buildPayload(ctx context.Context, in any, a *Atom) map[string]any {
 			out[k] = v
 		}
 		maps.Copy(out, a.ParamValues)
-		for k, v := range a.Args {
-			out[k] = resolveValue(ctx, v, m)
+		spreads, err := resolveArgumentSpreads(ctx, m, a)
+		if err != nil {
+			return nil, err
 		}
-		return out
+		maps.Copy(out, spreads)
+		for k, v := range a.Args {
+			resolved, err := resolveValue(ctx, v, m)
+			if err != nil {
+				return nil, err
+			}
+			out[k] = resolved
+		}
+		return out, nil
 	}
 
 	merged := make(map[string]any, len(m)+len(a.Params)+len(a.Args)+4)
@@ -885,8 +920,17 @@ func buildPayload(ctx context.Context, in any, a *Atom) map[string]any {
 		merged[k] = v
 	}
 	maps.Copy(merged, a.ParamValues)
+	spreads, err := resolveArgumentSpreads(ctx, m, a)
+	if err != nil {
+		return nil, err
+	}
+	maps.Copy(merged, spreads)
 	for k, v := range a.Args {
-		merged[k] = resolveValue(ctx, v, m)
+		resolved, err := resolveValue(ctx, v, m)
+		if err != nil {
+			return nil, err
+		}
+		merged[k] = resolved
 	}
 	if a.Prompt != "" {
 		merged["prompt"] = a.Prompt
@@ -897,18 +941,27 @@ func buildPayload(ctx context.Context, in any, a *Atom) map[string]any {
 	if len(a.Excludes) > 0 {
 		merged["excludes"] = a.Excludes
 	}
-	return merged
+	return merged, nil
 }
 
-func buildNamedPipelinePayload(ctx context.Context, in any, a *Atom) map[string]any {
+func buildNamedPipelinePayload(ctx context.Context, in any, a *Atom) (map[string]any, error) {
 	state, _ := in.(map[string]any)
 	out := make(map[string]any, len(a.Params)+len(a.ParamValues)+len(a.Args)+3)
 	for key, value := range a.Params {
 		out[key] = value
 	}
 	maps.Copy(out, a.ParamValues)
+	spreads, err := resolveArgumentSpreads(ctx, state, a)
+	if err != nil {
+		return nil, err
+	}
+	maps.Copy(out, spreads)
 	for key, value := range a.Args {
-		out[key] = resolveValue(ctx, value, state)
+		resolved, err := resolveValue(ctx, value, state)
+		if err != nil {
+			return nil, err
+		}
+		out[key] = resolved
 	}
 	if a.Prompt != "" {
 		out["prompt"] = a.Prompt
@@ -919,49 +972,96 @@ func buildNamedPipelinePayload(ctx context.Context, in any, a *Atom) map[string]
 	if len(a.Excludes) > 0 {
 		out["excludes"] = a.Excludes
 	}
-	return out
+	return out, nil
 }
 
-func resolveValue(ctx context.Context, v *Value, state map[string]any) any {
+func resolveArgumentSpreads(ctx context.Context, state map[string]any, a *Atom) (map[string]any, error) {
+	if len(a.ArgSpreads) == 0 {
+		return map[string]any{}, nil
+	}
+	spreadValues := make(map[string]any)
+	seen := make(map[string]struct{})
+	for _, spread := range a.ArgSpreads {
+		resolved, err := resolveValue(ctx, spread, state)
+		if err != nil {
+			return nil, err
+		}
+		var object map[string]any
+		switch value := resolved.(type) {
+		case map[string]any:
+			object = value
+		case map[string]string:
+			object = make(map[string]any, len(value))
+			for key, item := range value {
+				object[key] = item
+			}
+		default:
+			return nil, xerr.Validation("argument-map spread must resolve to an object")
+		}
+		for key, value := range object {
+			if _, exists := seen[key]; exists {
+				return nil, xerr.Validation(fmt.Sprintf("argument-map spread collision for key %q", key))
+			}
+			seen[key] = struct{}{}
+			spreadValues[key] = value
+		}
+	}
+	for key := range a.Args {
+		if _, exists := seen[key]; exists {
+			return nil, xerr.Validation(fmt.Sprintf("argument-map spread collision for key %q", key))
+		}
+	}
+	return spreadValues, nil
+}
+
+func resolveValue(ctx context.Context, v *Value, state map[string]any) (any, error) {
 	if v == nil {
-		return nil
+		return nil, nil //nolint:nilnil // A missing Value preserves the existing null resolution.
 	}
 	switch v.Kind {
 	case ValueString:
-		return v.Str
+		return v.Str, nil
 	case ValueTyped:
-		return v.Typed
+		return v.Typed, nil
 	case ValueBare:
 		if val, ok := lookupSymbolValue(ctx, v.Str); ok {
-			return RuntimeSymbolValue(val)
+			return RuntimeSymbolValue(val), nil
 		}
-		return v.Str
+		return v.Str, nil
 	case ValueNumber:
-		return v.Num
+		return v.Num, nil
 	case ValueBool:
-		return v.Bool
+		return v.Bool, nil
 	case ValueNull:
-		return nil
+		return nil, nil //nolint:nilnil // Null is a valid resolved argument value.
 	case ValueRef:
 		if v.Ref == "" {
-			return state
+			return state, nil
 		}
 		val, _ := lookupPath(state, v.Ref)
-		return val
+		return val, nil
 	case ValueMap:
 		out := make(map[string]any, len(v.Map))
 		for _, e := range v.Map {
-			out[e.Key] = resolveValue(ctx, e.Value, state)
+			resolved, err := resolveValue(ctx, e.Value, state)
+			if err != nil {
+				return nil, err
+			}
+			out[e.Key] = resolved
 		}
-		return out
+		return out, nil
 	case ValueSlice:
 		out := make([]any, len(v.Slice))
 		for i, e := range v.Slice {
-			out[i] = resolveValue(ctx, e, state)
+			resolved, err := resolveValue(ctx, e, state)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = resolved
 		}
-		return out
+		return out, nil
 	}
-	return nil
+	return nil, xerr.Validation(fmt.Sprintf("unsupported argument value kind %d", v.Kind))
 }
 
 func resolveSymbolsInAtom(ctx context.Context, a *Atom) {
@@ -978,6 +1078,9 @@ func resolveSymbolsInAtom(ctx context.Context, a *Atom) {
 		}
 	}
 	for _, value := range a.Args {
+		resolveSymbolsInValue(ctx, value)
+	}
+	for _, value := range a.ArgSpreads {
 		resolveSymbolsInValue(ctx, value)
 	}
 	a.ModifierValues = resolveTypedModifierValues(ctx, a.Modifiers, a.ModifierValues)

@@ -54,8 +54,10 @@ func TestProjectionShorthandForms(t *testing.T) {
 			ktest.RequireEqual(t, len(runner.EvaluateAssertions(execution.Output, tc.assert)), 0)
 		})
 	}
-	_, err = runner.Compile(t.Context(), cfg, `const @{ value: { name } }`, "generic-object-no-shorthand.nflow")
-	ktest.RequireCondition(t, err != nil, "generic @{} object unexpectedly accepted projection shorthand")
+	execution, err := runner.Execute(t.Context(), cfg,
+		`{ name: "Ada" } -> const @{ value: { name } }`, "argument-map-shorthand.nflow", nil)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, len(runner.EvaluateAssertions(execution.Output, []string{`result.name == "Ada"`})), 0)
 }
 
 func TestProjectionControlValues(t *testing.T) {

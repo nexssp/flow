@@ -45,7 +45,7 @@ func TestBundle_FixturesDiscoverable(t *testing.T) {
 	sections := Bundle(nil).AllSelfTests()
 	ktest.RequireLen(t, sections, 1)
 	ktest.RequireEqual(t, sections[0].Name, ID)
-	ktest.RequireLen(t, sections[0].Features, 9)
+	ktest.RequireLen(t, sections[0].Features, 10)
 	for _, feature := range sections[0].Features {
 		ktest.RequireCondition(t, feature.Name != "", "fixture has no name: %#v", feature)
 		ktest.RequireCondition(t, feature.DSL != "", "fixture %q has no DSL", feature.Name)

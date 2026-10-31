@@ -40,7 +40,8 @@ type Atom struct {
 	ModifierValues    []ModifierValue  // parallel to Modifiers for quoted or native values
 	ModifierSources   []ModifierSource // parallel to Modifiers; same length
 	Args              map[string]*Value
-	HasArgumentObject bool // true when the atom used @{...}, including an empty object
+	ArgSpreads        []*Value // runtime maps spread into @{...} arguments
+	HasArgumentObject bool     // true when the atom used @{...}, including an empty object
 	// NamedPipelineArgs marks `pipeline.NAME @{...}` as a complete request object.
 	// The pipeline extension sets this; values are resolved against state at runtime.
 	NamedPipelineArgs bool

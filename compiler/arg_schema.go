@@ -56,6 +56,11 @@ func resolveArgSchema(resolver CapabilityResolver, atom *Atom, schema []ArgField
 	for _, field := range schema {
 		value, present := atom.Args[field.Name]
 		if !present {
+			if len(atom.ArgSpreads) > 0 {
+				// The compiler cannot know the keys in a runtime spread. Defer
+				// required-field validation to the capability receiving it.
+				continue
+			}
 			if isCapabilityRefKind(field.Kind) && !field.Optional {
 				return missingCapabilityFieldError(atom, field)
 			}
