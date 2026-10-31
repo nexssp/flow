@@ -2,12 +2,14 @@ package compiler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"iter"
 	"reflect"
 	"testing"
 
 	"github.com/nexssp/kernel/action"
+	kernelstream "github.com/nexssp/kernel/stream"
 )
 
 type streamSourceConfig struct {
@@ -162,6 +164,56 @@ func TestConfiguredSourceMergesTypedRequestAndConfig(t *testing.T) {
 				t.Fatalf("items = %#v, want [%q]", got, test.want)
 			}
 		})
+	}
+}
+
+func TestPipelineCollectStopsWhenContextCanceledAndSourceIgnoresContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	produced := 0
+	source := action.NewStream("test.ignores_context", func(_ context.Context, _ struct{}) (iter.Seq2[any, error], error) {
+		return func(yield func(any, error) bool) {
+			for item := range 4 {
+				produced++
+				if !yield(item, nil) {
+					return
+				}
+				if item == 0 {
+					cancel()
+				}
+			}
+		}, nil
+	})
+	collect := action.NewTypedStreamOperator("stream.collect", kernelstream.Collect[any](3))
+	pipeline := newPipelineStream("test.collect", source, []action.StreamOperator{collect})
+
+	output, err := pipeline.DoStreamAny(ctx, struct{}{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var (
+		values    []any
+		streamErr error
+	)
+	output(func(item any, err error) bool {
+		if err != nil {
+			streamErr = err
+			return false
+		}
+		values = append(values, item)
+		return true
+	})
+
+	if !errors.Is(streamErr, context.Canceled) {
+		t.Fatalf("stream error = %v, want context.Canceled", streamErr)
+	}
+	if len(values) != 0 {
+		t.Fatalf("collected values = %#v, want no partial result", values)
+	}
+	if produced != 2 {
+		t.Fatalf("source produced %d items after cancellation, want it stopped at the next yield", produced)
 	}
 }
 

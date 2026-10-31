@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"iter"
 	"maps"
 	"reflect"
 	"slices"
@@ -14,6 +15,7 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/builtin"
 	"github.com/nexssp/kernel/action"
+	kernelstream "github.com/nexssp/kernel/stream"
 	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xfile"
 )
@@ -399,6 +401,7 @@ func (p *pipelineStream) DoStreamAny(ctx context.Context, req any) (action.AnySt
 	if err != nil {
 		return nil, err
 	}
+	up = action.AnyStream(kernelstream.WithContext[any](ctx)(iter.Seq2[any, error](up)))
 	for _, op := range p.ops {
 		up, err = op.Apply(up)
 		if err != nil {
