@@ -29,6 +29,7 @@ import (
 	"github.com/nexssp/flow/extensions/external"
 	"github.com/nexssp/flow/extensions/flow_version"
 	"github.com/nexssp/flow/extensions/fs"
+	funcs "github.com/nexssp/flow/extensions/func"
 	"github.com/nexssp/flow/extensions/hook"
 	"github.com/nexssp/flow/extensions/include"
 	"github.com/nexssp/flow/extensions/io"
@@ -96,6 +97,7 @@ func bundles(retryBundle compiler.Bundle) []compiler.Bundle {
 		flow_version.Bundle(nil),
 		schema.Bundle(nil),
 		projection.Bundle(nil),
+		funcs.Bundle(nil),
 		progress.Bundle(nil),
 		description.Bundle(nil),
 		include.Bundle(nil),

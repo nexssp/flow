@@ -62,6 +62,12 @@ func RunAssertionsContext(ctx context.Context, w io.Writer, result any, duration
 // matching source position in each failure when one is available. Positions
 // are aligned by assertion index; zero positions are treated as unknown.
 func RunAssertionsContextWithPositions(ctx context.Context, w io.Writer, result any, durationMS int64, actions, asserts []string, positions []compiler.Position, verbosity int, localSymbols ...map[string]compiler.SymbolNamespace) int {
+	return RunAssertionsContextWithExpressionCompiler(ctx, w, result, durationMS, actions, asserts, positions, nil, verbosity, localSymbols...)
+}
+
+// RunAssertionsContextWithExpressionCompiler evaluates assertions using the
+// source-local compiler attached to the prepared Flow source.
+func RunAssertionsContextWithExpressionCompiler(ctx context.Context, w io.Writer, result any, durationMS int64, actions, asserts []string, positions []compiler.Position, expressionCompiler compiler.ExpressionCompiler, verbosity int, localSymbols ...map[string]compiler.SymbolNamespace) int {
 	if len(asserts) == 0 {
 		return 0
 	}
@@ -77,7 +83,7 @@ func RunAssertionsContextWithPositions(ctx context.Context, w io.Writer, result 
 	failed := 0
 	for i, src := range asserts {
 		location := assertionSourcePrefix(positions, i)
-		out, phase, err := evaluateAssertion(src, env)
+		out, phase, err := evaluateAssertion(ctx, src, env, expressionCompiler)
 		if err != nil {
 			if phase == "runtime" {
 				_, _ = fmt.Fprintf(w, "  %s %s%s  (runtime: %v)\n",
@@ -128,6 +134,12 @@ func EvaluateAssertionsContext(ctx context.Context, result any, asserts []string
 // EvaluateAssertionsContextWithPositions evaluates assertions without
 // rendering output and prefixes failures with their source position when known.
 func EvaluateAssertionsContextWithPositions(ctx context.Context, result any, asserts []string, positions []compiler.Position, localSymbols ...map[string]compiler.SymbolNamespace) []error {
+	return EvaluateAssertionsContextWithExpressionCompiler(ctx, result, asserts, positions, nil, localSymbols...)
+}
+
+// EvaluateAssertionsContextWithExpressionCompiler is the non-rendering variant
+// of RunAssertionsContextWithExpressionCompiler.
+func EvaluateAssertionsContextWithExpressionCompiler(ctx context.Context, result any, asserts []string, positions []compiler.Position, expressionCompiler compiler.ExpressionCompiler, localSymbols ...map[string]compiler.SymbolNamespace) []error {
 	if len(asserts) == 0 {
 		return nil
 	}
@@ -135,7 +147,7 @@ func EvaluateAssertionsContextWithPositions(ctx context.Context, result any, ass
 	var failures []error
 	for i, src := range asserts {
 		location := assertionSourcePrefix(positions, i)
-		out, phase, err := evaluateAssertion(src, env)
+		out, phase, err := evaluateAssertion(ctx, src, env, expressionCompiler)
 		if err != nil {
 			failures = append(failures, fmt.Errorf("%sassert %q %s: %w", location, src, phase, err))
 			continue
@@ -180,11 +192,22 @@ func firstSymbolNamespace(namespaces []map[string]compiler.SymbolNamespace) map[
 	return namespaces[0]
 }
 
-func evaluateAssertion(src string, env map[string]any) (value any, phase string, err error) {
+func evaluateAssertion(ctx context.Context, src string, env map[string]any, expressionCompiler compiler.ExpressionCompiler) (value any, phase string, err error) {
 	trimmed := strings.TrimSpace(compiler.StripExprComments(src))
 	cleanExpr := trimmed
 	if strings.HasPrefix(trimmed, ".") {
 		cleanExpr = compiler.PreprocessDots(trimmed)
+	}
+	if expressionCompiler != nil {
+		program, compileErr := compiler.CompileRuntimeExpression(cleanExpr, compiler.Position{}, expressionCompiler)
+		if compileErr != nil {
+			return nil, "syntax", compileErr
+		}
+		output, runErr := program.EvaluateEnvironment(ctx, env)
+		if runErr != nil {
+			return nil, "runtime", runErr
+		}
+		return output, "", nil
 	}
 	program, err := compiler.CompileExpression(cleanExpr, expr.Env(env))
 	if err != nil {

@@ -27,6 +27,7 @@ type OnPreprocessFunc func(meta map[string]any) PreprocessContributions
 type compileConfig struct {
 	advisors            []AtomAdviseFunc
 	wrappers            []PipelineWrapFunc
+	expressionCompiler  ExpressionCompiler
 	validators          []ASTValidateFunc
 	contextValidators   []ASTContextValidateFunc
 	onPreprocess        []OnPreprocessFunc
@@ -96,6 +97,16 @@ func WithAtomAdvisors(fns ...AtomAdviseFunc) CompileOption {
 func WithPipelineWrappers(fns ...PipelineWrapFunc) CompileOption {
 	return func(c *compileConfig) {
 		c.wrappers = append(c.wrappers, fns...)
+	}
+}
+
+// WithExpressionCompiler installs a source-local compiler for expressions
+// lowered as part of this compilation.
+func WithExpressionCompiler(expressionCompiler ExpressionCompiler) CompileOption {
+	return func(c *compileConfig) {
+		if expressionCompiler != nil {
+			c.expressionCompiler = expressionCompiler
+		}
 	}
 }
 

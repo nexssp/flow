@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/expr-lang/expr/vm"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
@@ -72,13 +71,13 @@ func (m *Expr) Build(ctx context.Context, bCtx *compiler.BuildContext) (action.A
 		children = make([]action.IntrospectionChild, 0, len(m.Cases))
 	}
 
-	var subjectProg *vm.Program
+	var subjectProgram compiler.ExpressionProgram
 	if m.Subject != "" {
-		prog, err := CompileCondition(m.Subject)
+		prog, err := bCtx.CompileExpression(m.Subject, compiler.Position{})
 		if err != nil {
 			return nil, xerr.Validation("match: invalid subject expression: "+m.Subject, err)
 		}
-		subjectProg = prog
+		subjectProgram = prog
 	}
 
 	for i, c := range m.Cases {
@@ -95,11 +94,11 @@ func (m *Expr) Build(ctx context.Context, bCtx *compiler.BuildContext) (action.A
 		if !c.IsDefault {
 			condText := matchConditionExpression(m.Subject, c.Condition)
 
-			prog, err := CompileCondition(condText)
+			prog, err := bCtx.CompileExpression(condText, compiler.Position{})
 			if err != nil {
 				return nil, xerr.Validation("match: invalid case condition: "+c.Condition, err)
 			}
-			conditionCases[i].Program = prog
+			conditionCases[i].Expression = prog
 		}
 
 		compiledCases[i] = cc
@@ -118,15 +117,15 @@ func (m *Expr) Build(ctx context.Context, bCtx *compiler.BuildContext) (action.A
 	program := action.New("match.evaluate", func(execCtx context.Context, in any) (any, error) {
 		env := WithSymbolEnvironment(execCtx, compiler.BuildEnv(in))
 
-		if subjectProg != nil {
-			subjVal, err := EvaluateProgram(subjectProg, env)
+		if subjectProgram != nil {
+			subjVal, err := subjectProgram.Evaluate(execCtx, in)
 			if err != nil {
 				return nil, xerr.BadRequest("match: failed to evaluate subject: "+m.Subject, err)
 			}
 			env["__match_subject__"] = subjVal
 		}
 
-		caseIndex := FirstMatchingCase(conditionCases, env)
+		caseIndex := FirstMatchingCaseContext(execCtx, conditionCases, env)
 		if caseIndex >= 0 {
 			return action.InvokeAny(execCtx, compiledCases[caseIndex].bodyAct, in)
 		}

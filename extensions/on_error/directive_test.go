@@ -21,6 +21,11 @@ func runDirective(tb testing.TB, lines ...string) (map[string]any, error) {
 	return out, err
 }
 
+func resolveTarget(cfg Config, env map[string]any) string {
+	conditions := compileRulesWithExpressionCompiler(cfg, nil)
+	return resolveTargetWithConditionsContext(context.Background(), cfg, env, conditions)
+}
+
 func TestDirective_SingleRule(t *testing.T) {
 	t.Parallel()
 	out, err := runDirective(t,

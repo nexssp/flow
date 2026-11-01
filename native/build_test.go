@@ -38,6 +38,10 @@ func TestPlanBuildSelectsProgressAndActualDirectiveAndSourceTokens(t *testing.T)
 	ktest.RequireNoError(t, err)
 	ktest.RequireCondition(t, slices.Contains(idsOf(got), "pipeline"), "pipeline directive should select pipeline")
 	ktest.RequireCondition(t, slices.Contains(idsOf(got), "fs"), "child source action token should select fs")
+
+	got, err = native.PlanBuild([]compiler.BuildSource{{Directives: []string{"func"}}}, nil, false)
+	ktest.RequireNoError(t, err)
+	ktest.RequireCondition(t, slices.Contains(idsOf(got), "func"), "@func directive should select its compile-time bundle")
 }
 
 func TestPlanBuildOptionalExtensionsRequireExplicitRequirement(t *testing.T) {

@@ -1,0 +1,32 @@
+@description "A typed helper can be reused by schema-bound pipelines"
+@func commerce.baseShippingMinor(subtotalMinor int) int = subtotalMinor >= 5000 ? 0 : 599
+@func commerce.shippingFeeMinor(subtotalMinor int, destinationZone string) int = destinationZone == "domestic" ? commerce.baseShippingMinor(subtotalMinor) : 999
+@schema ShippingRequest {
+  subtotal_minor int    `json:"subtotal_minor" default:"3000" validate:"gte=0"`
+  destination_zone string `json:"destination_zone" default:"domestic" validate:"required"`
+}
+@schema ShippingQuote {
+  subtotal_minor int `json:"subtotal_minor" validate:"gte=0"`
+  shipping_minor int `json:"shipping_minor" validate:"gte=0"`
+}
+@pipeline quote
+  :request-schema=ShippingRequest
+  :response-schema=ShippingQuote
+  {
+    subtotal_minor: .subtotal_minor,
+    shipping_minor: commerce.shippingFeeMinor(.subtotal_minor, .destination_zone)
+  }
+@end
+@pipeline quote_again
+  :request-schema=ShippingRequest
+  :response-schema=ShippingQuote
+  {
+    subtotal_minor: .subtotal_minor,
+    shipping_minor: commerce.shippingFeeMinor(.subtotal_minor, .destination_zone)
+  }
+@end
+{} -> pipeline.quote -> pipeline.quote_again
+@assert {
+  result.subtotal_minor == 3000
+  result.shipping_minor == 599
+}

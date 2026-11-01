@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	compiler "github.com/nexssp/flow/compiler"
-	"github.com/nexssp/flow/extensions/match"
+	"github.com/nexssp/flow/extensions/func"
 )
 
 type Rule struct {
@@ -95,7 +95,7 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 				lineSearchStart, entrySearchStart = nextLineSearchStart, nextEntrySearchStart
 			}
 			conditionPos := compiler.Position{File: req.File, Line: lineNumber}
-			if _, err := match.CompileCondition(condition); err != nil {
+			if _, err := compiler.CompileRuntimeExpression(condition, conditionPos, funcs.ExpressionCompilerFromMeta(req.Out)); err != nil {
 				return compiler.DirectiveRes{}, compiler.SourceError(conditionPos, "@on_error: invalid when condition: %v", err)
 			}
 			cfg.Rules = append(cfg.Rules, Rule{Condition: condition, Target: target})

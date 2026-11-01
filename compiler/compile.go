@@ -353,7 +353,7 @@ func buildProgram(
 		)
 	}
 
-	program, err := buildAction(ctx, resolver, mt, ast, cfg.actionIntrospection, advisors...)
+	program, err := buildAction(ctx, resolver, mt, ast, cfg.actionIntrospection, cfg.expressionCompiler, advisors...)
 	if err != nil {
 		return nil, err
 	}

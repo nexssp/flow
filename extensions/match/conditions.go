@@ -24,8 +24,9 @@ func init() {
 // ConditionCase is one ordered expression condition, or a default branch.
 // A nil Program is skipped unless IsDefault is true.
 type ConditionCase struct {
-	Program   *vm.Program
-	IsDefault bool
+	Program    *vm.Program
+	Expression compiler.ExpressionProgram
+	IsDefault  bool
 }
 
 // CompileCondition compiles an expression using Flow's input-dot syntax.
@@ -42,14 +43,27 @@ func EvaluateProgram(program *vm.Program, env map[string]any) (any, error) {
 // the first default case reached in order. Evaluation failures are skipped,
 // matching the existing match and @on_error behavior.
 func FirstMatchingCase(cases []ConditionCase, env map[string]any) int {
+	return FirstMatchingCaseContext(context.Background(), cases, env)
+}
+
+// FirstMatchingCaseContext evaluates each predicate using the supplied
+// execution context so source-local function programs retain cancellation and
+// symbol namespace state.
+func FirstMatchingCaseContext(ctx context.Context, cases []ConditionCase, env map[string]any) int {
 	for i, current := range cases {
 		if current.IsDefault {
 			return i
 		}
-		if current.Program == nil {
+		if current.Expression == nil && current.Program == nil {
 			continue
 		}
-		value, err := EvaluateProgram(current.Program, env)
+		var value any
+		var err error
+		if current.Expression != nil {
+			value, err = current.Expression.EvaluateEnvironment(ctx, env)
+		} else {
+			value, err = EvaluateProgram(current.Program, env)
+		}
 		if err == nil && isTruthy(value) {
 			return i
 		}

@@ -132,7 +132,7 @@ func (g *ErrorGuardExpr) Build(ctx context.Context, buildCtx *compiler.BuildCont
 		}
 
 		env := recoveryEnvironment(execCtx, request, primaryErr)
-		caseIndex := match.FirstMatchingCase(conditionCases, env)
+		caseIndex := match.FirstMatchingCaseContext(execCtx, conditionCases, env)
 		if caseIndex < 0 {
 			return nil, primaryErr
 		}

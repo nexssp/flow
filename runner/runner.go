@@ -188,7 +188,7 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 	}
 
 	asserts, positions := collectAsserts(ex.Meta, opts.Asserts)
-	return RunAssertionsContextWithPositions(
+	return RunAssertionsContextWithExpressionCompiler(
 		ctx,
 		stderr,
 		ex.Output,
@@ -196,6 +196,7 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 		observer.ActionNames(),
 		asserts,
 		positions,
+		compiler.ExpressionCompilerFromMeta(ex.Meta),
 		opts.Verbosity,
 		compiler.SymbolsFromMeta(ex.Meta),
 	)

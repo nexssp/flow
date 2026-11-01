@@ -6,6 +6,7 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/compiler/contracts"
 	"github.com/nexssp/flow/extensions/match"
 )
@@ -15,11 +16,11 @@ func wrapFromMeta(meta map[string]any, inner action.AnyAction) (action.AnyAction
 	if len(cfg.Rules) == 0 && cfg.ElseTarget == "" {
 		return inner, nil
 	}
-	return wrap("on_error", inner, cfg), nil
+	return wrapWithExpressionCompiler("on_error", inner, cfg, compiler.ExpressionCompilerFromMeta(meta)), nil
 }
 
-func wrap(name string, protected action.AnyAction, cfg Config) action.AnyAction {
-	conditions := compileRules(cfg)
+func wrapWithExpressionCompiler(name string, protected action.AnyAction, cfg Config, expressionCompiler compiler.ExpressionCompiler) action.AnyAction {
+	conditions := compileRulesWithExpressionCompiler(cfg, expressionCompiler)
 	return action.CatchAny(name, protected, func(ctx context.Context, req any, err error) (any, error) {
 		return recoverFn(ctx, req, err, cfg, conditions)
 	}).Build()
@@ -38,7 +39,7 @@ func recoverFn(
 	errKind := string(xerr.From(err).Kind)
 	env := pipelineErrorEnvironment(ctx, req, err)
 
-	target := resolveTargetWithConditions(cfg, env, conditions)
+	target := resolveTargetWithConditionsContext(ctx, cfg, env, conditions)
 	if target == "" {
 		return nil, err
 	}
@@ -57,26 +58,22 @@ func recoverFn(
 	return action.InvokeAny(recoveryCtx, targetAction, req)
 }
 
-func resolveTarget(cfg Config, env map[string]any) string {
-	return resolveTargetWithConditions(cfg, env, compileRules(cfg))
-}
-
-func compileRules(cfg Config) []match.ConditionCase {
+func compileRulesWithExpressionCompiler(cfg Config, expressionCompiler compiler.ExpressionCompiler) []match.ConditionCase {
 	conditions := make([]match.ConditionCase, len(cfg.Rules))
 	for i, rule := range cfg.Rules {
-		program, err := match.CompileCondition(rule.Condition)
+		program, err := compiler.CompileRuntimeExpression(rule.Condition, compiler.Position{}, expressionCompiler)
 		if err == nil {
-			conditions[i].Program = program
+			conditions[i].Expression = program
 		}
 	}
 	return conditions
 }
 
-func resolveTargetWithConditions(cfg Config, env map[string]any, conditions []match.ConditionCase) string {
+func resolveTargetWithConditionsContext(ctx context.Context, cfg Config, env map[string]any, conditions []match.ConditionCase) string {
 	// on_error is deliberately tolerant: a condition that cannot be
 	// evaluated against the current payload is treated as no-match, and
 	// routing falls through to the next rule or to the else target.
-	index := match.FirstMatchingCase(conditions, env)
+	index := match.FirstMatchingCaseContext(ctx, conditions, env)
 	if index >= 0 && index < len(cfg.Rules) {
 		return cfg.Rules[index].Target
 	}

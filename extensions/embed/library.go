@@ -548,7 +548,7 @@ func validateValue(value *compiler.Value, validate func(string) error) error {
 				return err
 			}
 		}
-	case compiler.ValueString, compiler.ValueNumber, compiler.ValueBool, compiler.ValueNull, compiler.ValueRef, compiler.ValueTyped:
+	case compiler.ValueString, compiler.ValueNumber, compiler.ValueBool, compiler.ValueNull, compiler.ValueRef, compiler.ValueTyped, compiler.ValueExpression:
 		return nil
 	default:
 		return nil

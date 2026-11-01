@@ -240,6 +240,8 @@ func formatASTValue(v *compiler.Value) string {
 		return "[...]"
 	case compiler.ValueTyped:
 		return fmt.Sprintf("<typed %T>", v.Typed)
+	case compiler.ValueExpression:
+		return "expr(" + v.Expression + ")"
 	}
 	return "?"
 }
@@ -489,6 +491,8 @@ func valueToAny(v *compiler.Value) any {
 		return s
 	case compiler.ValueTyped:
 		return fmt.Sprintf("<typed %T>", v.Typed)
+	case compiler.ValueExpression:
+		return map[string]any{"$expression": v.Expression}
 	}
 	return nil
 }

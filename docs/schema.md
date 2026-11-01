@@ -27,6 +27,36 @@ after the pipeline body without applying defaults. Response schemas must not
 declare any `default` tag; the compiler reports a clear error before execution
 if one is present, even when its value is empty.
 
+## Schemas, pipeline arguments, and functions
+
+These features describe different layers. A request schema defines the shape,
+defaults, and validation rules for a pipeline's incoming object; a response
+schema defines the returned-object contract. A named pipeline argument map
+constructs that incoming object at the call site. `@func` is a complementary
+helper for a small pure calculation used in a projection, condition, or
+argument map—it does not replace a pipeline or either schema boundary. An
+included function library can be reused under its `@include` namespace, but
+request defaults are still supplied by the request schema. Defaults are applied
+before the pipeline body runs, so a function sees the effective defaulted input.
+
+```nflow
+@func pricing.taxMinor(subtotalMinor int, ratePercent int) int = subtotalMinor * ratePercent / 100
+@schema CheckoutRequest {
+  subtotal_minor int `json:"subtotal_minor" default:"2500" validate:"gte=0"`
+}
+@pipeline checkout
+  :request-schema=CheckoutRequest
+  { subtotal_minor: .subtotal_minor, tax_minor: pricing.taxMinor(.subtotal_minor, 8) }
+@end
+
+{} -> pipeline.checkout
+```
+
+Function parameters/results support `int`, `int64`, `float64`, `string`, and
+`bool`; function bodies are single expr-lang expressions, not Go blocks. See the
+[function language reference](language-reference.md#expressions-projections-and-symbols)
+for scope and compile-time rules.
+
 Response checks accept typed Go structs as well as maps. The boundary validates
 an inspection view produced by `schema.NormalizeObject` and returns the original
 Go value unchanged, so a typed result remains typed for callers and later

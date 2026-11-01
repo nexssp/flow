@@ -7,6 +7,7 @@ import (
 	"github.com/expr-lang/expr"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/extensions/func"
 )
 
 const assertionPositionsKey = "asserts.positions"
@@ -153,8 +154,14 @@ func appendAssert(out map[string]any, expression string, pos compiler.Position) 
 	if strings.HasPrefix(clean, ".") {
 		clean = compiler.PreprocessDots(clean)
 	}
-	if _, err := compiler.CompileExpression(clean, expr.AllowUndefinedVariables()); err != nil {
-		return compiler.SourceError(pos, "@assert: invalid expression: %v", err)
+	var validationErr error
+	if expressionCompiler := funcs.ExpressionCompilerFromMeta(out); expressionCompiler != nil {
+		_, validationErr = expressionCompiler.Compile(clean, pos)
+	} else {
+		_, validationErr = compiler.CompileExpression(clean, expr.AllowUndefinedVariables())
+	}
+	if validationErr != nil {
+		return compiler.SourceError(pos, "@assert: invalid expression: %v", validationErr)
 	}
 
 	existing, _ := out["asserts"].([]string)

@@ -10,10 +10,11 @@ import (
 // into a runnable action. It is deliberately a small value struct: the
 // AST knows how to Build itself, core just provides the pieces.
 type BuildContext struct {
-	Resolver   CapabilityResolver
-	Modifiers  *ModifierTable
-	Advisers   []AtomAdviseFunc
-	Introspect bool
+	Resolver           CapabilityResolver
+	Modifiers          *ModifierTable
+	Advisers           []AtomAdviseFunc
+	ExpressionCompiler ExpressionCompiler
+	Introspect         bool
 }
 
 // Build lowers an AST into runnable action composition, resolving every
@@ -30,7 +31,7 @@ func Build(
 	e Expr,
 	advisers ...AtomAdviseFunc,
 ) (action.AnyAction, error) {
-	return buildAction(ctx, resolver, modifiers, e, false, advisers...)
+	return buildAction(ctx, resolver, modifiers, e, false, nil, advisers...)
 }
 
 func buildAction(
@@ -39,13 +40,15 @@ func buildAction(
 	modifiers *ModifierTable,
 	e Expr,
 	introspect bool,
+	expressionCompiler ExpressionCompiler,
 	advisers ...AtomAdviseFunc,
 ) (action.AnyAction, error) {
 	bCtx := &BuildContext{
-		Resolver:   resolver,
-		Modifiers:  modifiers,
-		Advisers:   advisers,
-		Introspect: introspect,
+		Resolver:           resolver,
+		Modifiers:          modifiers,
+		Advisers:           advisers,
+		ExpressionCompiler: expressionCompiler,
+		Introspect:         introspect,
 	}
 	return e.Build(ctx, bCtx)
 }

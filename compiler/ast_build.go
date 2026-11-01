@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/builtin"
 	"github.com/nexssp/kernel/action"
 	kernelstream "github.com/nexssp/kernel/stream"
@@ -31,6 +30,9 @@ func (a *Atom) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction,
 	}
 	resolveConfigRefsInAtom(ctx, a)
 	resolveSymbolsInAtom(ctx, a)
+	if err := compileArgumentExpressions(a, bCtx); err != nil {
+		return nil, err
+	}
 
 	act, ok := bCtx.Resolver.Action(a.Name)
 	if !ok {
@@ -56,6 +58,52 @@ func (a *Atom) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction,
 	}
 
 	return finalizeAtomAction(a, bCtx, act)
+}
+
+func compileArgumentExpressions(atom *Atom, bCtx *BuildContext) error {
+	compileValue := func(value *Value) error { return compileArgumentValue(value, atom.Pos, bCtx) }
+	for _, value := range atom.Args {
+		if err := compileValue(value); err != nil {
+			return err
+		}
+	}
+	for _, value := range atom.ArgSpreads {
+		if err := compileValue(value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func compileArgumentValue(value *Value, position Position, bCtx *BuildContext) error {
+	if value == nil {
+		return nil
+	}
+	switch value.Kind {
+	case ValueExpression:
+		if value.Program != nil {
+			return nil
+		}
+		program, err := bCtx.CompileExpression(value.Expression, position)
+		if err != nil {
+			return SourceError(position, "argument-map expression %q: %v", value.Expression, err)
+		}
+		value.Program = program
+	case ValueMap:
+		for _, entry := range value.Map {
+			if err := compileArgumentValue(entry.Value, position, bCtx); err != nil {
+				return err
+			}
+		}
+	case ValueSlice:
+		for _, element := range value.Slice {
+			if err := compileArgumentValue(element, position, bCtx); err != nil {
+				return err
+			}
+		}
+	case ValueString, ValueBare, ValueNumber, ValueBool, ValueNull, ValueRef, ValueTyped:
+	}
+	return nil
 }
 
 func (p *PipeExpr) Analyze(r CapabilityResolver) error {
@@ -264,6 +312,9 @@ func buildStreamSource(
 		return nil, xerr.NotFound(headAtom.Name + " is not a registered stream source")
 	}
 
+	if err := compileArgumentExpressions(headAtom, bCtx); err != nil {
+		return nil, err
+	}
 	headParams, err := atomStreamParams(ctx, headAtom)
 	if err != nil {
 		return nil, err
@@ -288,6 +339,9 @@ func buildStreamSource(
 
 		resolveConfigRefsInAtom(ctx, atom)
 		resolveSymbolsInAtom(ctx, atom)
+		if err := compileArgumentExpressions(atom, bCtx); err != nil {
+			return nil, err
+		}
 
 		named, ok := bCtx.Resolver.Operator(atom.Name)
 		if !ok {
@@ -677,13 +731,12 @@ func (l *LoopExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAct
 	if err != nil {
 		return nil, err
 	}
-	compiledCondition := PreprocessDots(l.Until)
-	prog, err := CompileExpression(compiledCondition, expr.AllowUndefinedVariables())
+	prog, err := bCtx.CompileExpression(l.Until, l.Pos)
 	if err != nil {
 		return nil, xerr.Validation("loop: invalid condition "+l.Until, err)
 	}
 	until := func(out any) bool {
-		val, runErr := expr.Run(prog, MergeSymbolNamespaces(ctx, BuildEnv(out)))
+		val, runErr := prog.Evaluate(ctx, out)
 		if runErr != nil {
 			return false
 		}
@@ -706,13 +759,12 @@ func (l *LoopExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAct
 func (*AssertExpr) Analyze(CapabilityResolver) error { return nil }
 
 func (a *AssertExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction, error) {
-	cleanCondition := PreprocessDots(a.Condition)
-	prog, err := CompileExpression(cleanCondition, expr.AllowUndefinedVariables())
+	prog, err := bCtx.CompileExpression(a.Condition, a.Pos)
 	if err != nil {
 		return nil, xerr.Validation("assert: invalid expression "+a.Condition, err)
 	}
 	predicate := func(input any) bool {
-		val, runErr := expr.Run(prog, MergeSymbolNamespaces(ctx, BuildEnv(input)))
+		val, runErr := prog.Evaluate(ctx, input)
 		if runErr != nil {
 			return false
 		}
@@ -881,7 +933,7 @@ func resolveConfigRefsInValue(cfg map[string]string, cliArgs []string, value *Va
 		for _, item := range value.Slice {
 			resolveConfigRefsInValue(cfg, cliArgs, item)
 		}
-	case ValueNumber, ValueBool, ValueNull, ValueBare, ValueTyped:
+	case ValueNumber, ValueBool, ValueNull, ValueBare, ValueTyped, ValueExpression:
 	}
 }
 
@@ -1040,6 +1092,11 @@ func resolveValue(ctx context.Context, v *Value, state map[string]any) (any, err
 		}
 		val, _ := lookupPath(state, v.Ref)
 		return val, nil
+	case ValueExpression:
+		if v.Program == nil {
+			return nil, xerr.Internal("argument-map expression was not compiled")
+		}
+		return v.Program.Evaluate(ctx, state)
 	case ValueMap:
 		out := make(map[string]any, len(v.Map))
 		for _, e := range v.Map {
@@ -1161,7 +1218,7 @@ func resolveSymbolsInValue(ctx context.Context, value *Value) {
 		for _, item := range value.Slice {
 			resolveSymbolsInValue(ctx, item)
 		}
-	case ValueString, ValueNumber, ValueBool, ValueNull, ValueRef, ValueTyped:
+	case ValueString, ValueNumber, ValueBool, ValueNull, ValueRef, ValueTyped, ValueExpression:
 	}
 }
 

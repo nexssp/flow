@@ -11,12 +11,25 @@ import (
 // dispatches on the opening brace and scans the raw source up to the
 // matching close, tracking quotes so braces inside strings are
 // ignored.
-type Extension struct{}
+type Extension struct {
+	functions *FunctionSet
+}
+
+// MergeWith carries a source-local function set into the existing projection
+// parser. The compiler merges it only into compilations that declared or
+// inherited those functions.
+func (e Extension) MergeWith(older compiler.PrimaryExtension) compiler.PrimaryExtension {
+	previous, ok := older.(Extension)
+	if !ok {
+		return e
+	}
+	return Extension{functions: MergeFunctionSets(previous.functions, e.functions)}
+}
 
 func (Extension) Name() string                  { return "projection" }
 func (Extension) TokenType() compiler.TokenType { return compiler.TokLBrace }
 
-func (Extension) Parse(p *compiler.Parser) (compiler.Expr, error) {
+func (e Extension) Parse(p *compiler.Parser) (compiler.Expr, error) {
 	open := p.Cur()
 	if open.Type != compiler.TokLBrace {
 		return nil, p.Fail(open.Line, "projection: expected '{'")
@@ -31,7 +44,7 @@ func (Extension) Parse(p *compiler.Parser) (compiler.Expr, error) {
 		return nil, p.Fail(open.Line, "%v", err)
 	}
 
-	return parseProjectionBody(p, closeIndex, p.Position())
+	return parseProjectionBody(p, closeIndex, p.Position(), e.functions)
 }
 
 // stripHashComments removes `#`-to-EOL comments from a projection body.

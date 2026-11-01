@@ -157,17 +157,20 @@ const (
 	ValueMap
 	ValueSlice
 	ValueTyped
+	ValueExpression
 )
 
 type Value struct {
-	Kind  ValueKind
-	Str   string
-	Num   float64
-	Bool  bool
-	Ref   string
-	Map   []MapEntry
-	Slice []*Value
-	Typed any
+	Kind       ValueKind
+	Str        string
+	Num        float64
+	Bool       bool
+	Ref        string
+	Map        []MapEntry
+	Slice      []*Value
+	Typed      any
+	Expression string
+	Program    ExpressionProgram
 }
 
 type MapEntry struct {

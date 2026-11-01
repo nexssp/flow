@@ -16,10 +16,11 @@ import (
 // composedProjection keeps Flow values as real AST children. The surrounding
 // object stays an expr-lang expression, including its lazy conditional semantics.
 type composedProjection struct {
-	raw      string
-	bindings []projectionBinding
-	pos      compiler.Position
-	ctxName  string
+	raw       string
+	bindings  []projectionBinding
+	functions *FunctionSet
+	pos       compiler.Position
+	ctxName   string
 }
 
 type projectionBinding struct {
@@ -52,6 +53,16 @@ func (*composedProjection) DescribeActionGraph() compiler.ActionGraphDescription
 
 func (p *composedProjection) Build(ctx context.Context, bCtx *compiler.BuildContext) (action.AnyAction, error) {
 	options := []expr.Option{expr.AllowUndefinedVariables(), spreadMergeOption}
+	if p.functions != nil {
+		if err := p.functions.prepare(); err != nil {
+			return nil, err
+		}
+		functionOptions, err := p.functions.expressionOptions()
+		if err != nil {
+			return nil, err
+		}
+		options = append(options, functionOptions...)
+	}
 	children := make([]action.IntrospectionChild, 0, len(p.bindings))
 	for _, binding := range p.bindings {
 		child, err := binding.node.Build(ctx, bCtx)
@@ -72,6 +83,9 @@ func (p *composedProjection) Build(ctx context.Context, bCtx *compiler.BuildCont
 	source, err := buildProgramSource(p.raw)
 	if err != nil {
 		return nil, compiler.SourceError(p.pos, "projection: %v", err)
+	}
+	if p.functions != nil {
+		source, _ = p.functions.rewriteCalls(source)
 	}
 	program, err := compiler.CompileExpression(source, options...)
 	if err != nil {
@@ -102,7 +116,7 @@ func (p *composedProjection) Build(ctx context.Context, bCtx *compiler.BuildCont
 // parseProjectionBody walks the original parser, not a second grammar. A Flow
 // primary in value position is parsed by its registered extension, preserving
 // source positions, inherited modifiers, capability discovery and nested syntax.
-func parseProjectionBody(p *compiler.Parser, closeIndex int, pos compiler.Position) (compiler.Expr, error) {
+func parseProjectionBody(p *compiler.Parser, closeIndex int, pos compiler.Position, functions *FunctionSet) (compiler.Expr, error) {
 	src := p.Src()
 	start := p.Cur().Offset + 1
 	cursor := start
@@ -143,10 +157,10 @@ func parseProjectionBody(p *compiler.Parser, closeIndex int, pos compiler.Positi
 		p.Next()
 	}
 	raw := stripHashComments(rewritten.String())
-	if len(bindings) == 0 {
+	if len(bindings) == 0 && functions == nil {
 		return &compiler.ProjectionExpr{Raw: raw, Pos: pos}, nil
 	}
-	return &composedProjection{raw: raw, bindings: bindings, pos: pos, ctxName: ctxName}, nil
+	return &composedProjection{raw: raw, bindings: bindings, functions: functions, pos: pos, ctxName: ctxName}, nil
 }
 
 func isFlowValue(p *compiler.Parser) bool {

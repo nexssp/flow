@@ -311,6 +311,27 @@ Projections run through `expr-lang`, so array functions like `filter`,
 -> { top: items | filter(#.severity == "high") | sortBy(#.line, "desc") | take(1) }
 ```
 
+For a calculation reused across Flow expressions, declare a small pure
+expression function. The signature uses Go-style parameter and result types;
+the body is expr-lang syntax, not a Go block:
+
+```nflow
+@func pricing.taxMinor(subtotalMinor int, ratePercent int) int = subtotalMinor * ratePercent / 100
+{ subtotal_minor: .subtotal_minor, tax_minor: pricing.taxMinor(.subtotal_minor, 8) }
+```
+
+`@func` calls work in projections, match/loop/assertion/error conditions, and
+expression-valued entries in `@{ ... }` argument maps. Functions are
+source-local and may call other visible functions, but recursion and side
+effects are not supported. `@pipeline` remains the construct for reusing a
+sequence or composition of actions. Import a function module with `@include`;
+the include alias is prepended to the function's declared qualified name, so a
+child declaration `@func commerce.taxMinor(...)` imported as `pricing` is called
+as `pricing.commerce.taxMinor(...)`. Nested include aliases compose the same
+way. Functions calculate values; they do not replace request/response schemas
+or their defaults. See the [schema guide](schema.md#schemas-pipeline-arguments-and-functions)
+and the [reusable imported shipping example](../extensions/func/nflows/reusable_shipping_fee.nflow).
+
 `{ ... }` is data. `noop` inside a projection is a variable lookup, not
 a capability. Use `@{ }` for capability references.
 
@@ -369,11 +390,11 @@ the pipeline is compiled.
 | `@on_error { when ... -> target }` | Route a runtime error to a recovery target |
 | `@hook:name` | Attach a Kernel hook to the compiled program |
 | `@schema NAME { Field Type `tags` }` | Runtime payload validation and defaults; see [schema documentation](schema.md) |
+| `@func namespace.name(arg Type, ...) Result = expression` | Declare a pure, typed helper for projections, conditions, and argument maps |
 | `@approval NAME { ... }` | Declare a named human-approval gate; see [pause and resume](approval-resume.md) |
 ---
 
-`@include "payments.nflow" AS billing` imports the file as a separate source module; its pipeline is called as `billing.pipeline.charge`, a schema as `billing.StatsRequest`, and a symbol as `billing.output.text`. Macros are callable in expressions under the same alias, using `billing.@stats_config(tree_only)` (also inside an argument map), but not in declaration or modifier positions. Nested imports keep their path, so a macro in `billing` can call a nested helper as `helpers.@format(value)`. Without `AS`, the filename stem is the namespace. Imports are not textual inlining or a metadata merger: declarations stay in their module, local references resolve there, and a clean imported body remains a compiled module call rather than being pasted into the parent source. A declaration-only import contributes no execution atom. Distinct namespaces may use the same leaf name; qualify imported calls to select the intended declaration, while an unqualified call selects a local macro. Constants and profiles keep their existing local/preprocessor behavior and are not exported. `@require` continues to load bundles independently of `@include`.
-
+`@include "payments.nflow" AS billing` imports the file as a separate source module; its pipeline is called as `billing.pipeline.charge`, a schema as `billing.StatsRequest`, and a symbol as `billing.output.text`. Macros are callable in expressions under the same alias, using `billing.@stats_config(tree_only)` (also inside an argument map), but not in declaration or modifier positions. A function declared in the child, such as `@func commerce.taxMinor(...)`, is called from the parent as `billing.commerce.taxMinor(...)`. Nested imports keep their path, so a macro in `billing` can call a nested helper as `helpers.@format(value)`, and functions in nested modules retain the composed namespace. Without `AS`, the filename stem is the namespace. Imports are not textual inlining or a metadata merger: declarations stay in their module and local references resolve there; a clean imported body remains a compiled module call rather than being pasted into the parent source. A declaration-only import contributes no execution atom. Distinct namespaces may use the same leaf name; qualify imported calls to select the intended declaration, while an unqualified call selects a local macro. Constants and profiles keep their existing local/preprocessor behavior and are not exported. `@require` continues to load bundles independently of `@include`.
 For symbol declaration syntax, include behavior, namespace precedence, and supported expression contexts, see [Symbols](symbols.md).
 
 ## 7. `@pipeline` — reusable fragments
