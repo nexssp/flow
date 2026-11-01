@@ -312,11 +312,15 @@ Projections run through `expr-lang`, so array functions like `filter`,
 ```
 
 For a calculation reused across Flow expressions, declare a small pure
-expression function. The signature uses Go-style parameter and result types;
-the body is expr-lang syntax, not a Go block:
+expression function. The signature uses Go-style parameter and result types.
+Keep a short expression on one line after `=` or use braces for a readable
+multiline expression body. Braces group one expr-lang expression; they do not
+introduce statements, `return`, I/O, or workflow actions:
 
 ```nflow
-@func pricing.taxMinor(subtotalMinor int, ratePercent int) int = subtotalMinor * ratePercent / 100
+@func pricing.taxMinor(subtotalMinor int, ratePercent int) int {
+  subtotalMinor * ratePercent / 100
+}
 { subtotal_minor: .subtotal_minor, tax_minor: pricing.taxMinor(.subtotal_minor, 8) }
 ```
 
@@ -330,7 +334,8 @@ child declaration `@func commerce.taxMinor(...)` imported as `pricing` is called
 as `pricing.commerce.taxMinor(...)`. Nested include aliases compose the same
 way. Functions calculate values; they do not replace request/response schemas
 or their defaults. See the [schema guide](schema.md#schemas-pipeline-arguments-and-functions)
-and the [reusable imported shipping example](../extensions/func/nflows/reusable_shipping_fee.nflow).
+and the practical examples in [`extensions/func/nflows/`](../extensions/func/nflows/README.md), including order pricing, shipping, refund eligibility,
+invoice status, and support priority.
 
 `{ ... }` is data. `noop` inside a projection is a variable lookup, not
 a capability. Use `@{ }` for capability references.
@@ -390,7 +395,7 @@ the pipeline is compiled.
 | `@on_error { when ... -> target }` | Route a runtime error to a recovery target |
 | `@hook:name` | Attach a Kernel hook to the compiled program |
 | `@schema NAME { Field Type `tags` }` | Runtime payload validation and defaults; see [schema documentation](schema.md) |
-| `@func namespace.name(arg Type, ...) Result = expression` | Declare a pure, typed helper for projections, conditions, and argument maps |
+| `@func namespace.name(arg Type, ...) Result = expression` or `Result { expression }` | Declare a pure, typed helper; braced bodies can span lines but contain one expression |
 | `@approval NAME { ... }` | Declare a named human-approval gate; see [pause and resume](approval-resume.md) |
 ---
 

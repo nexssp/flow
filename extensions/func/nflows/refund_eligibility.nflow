@@ -1,0 +1,18 @@
+@description "Check refund eligibility using a return window and item conditions"
+@func refunds.eligible(daysSincePurchase int, itemReturned bool, finalSale bool) bool {
+  daysSincePurchase >= 0
+    && daysSincePurchase <= 30
+    && itemReturned
+    && !finalSale
+}
+{
+  let days_since_purchase = .days_since_purchase ?? 20;
+  let item_returned = .item_returned ?? true;
+  let final_sale = .final_sale ?? false;
+  refund_eligible: refunds.eligible(
+    days_since_purchase,
+    (item_returned),
+    final_sale
+  )
+}
+@assert: result.refund_eligible == true

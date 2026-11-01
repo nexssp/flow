@@ -75,6 +75,66 @@ func TestFuncFixtureUsesSchemaDefaultsAndCanBeReusedByPipelines(t *testing.T) {
 	}
 }
 
+func TestFuncPracticalExamples(t *testing.T) {
+	t.Parallel()
+	cfg := nativeConfig(t)
+	cases := []struct {
+		name  string
+		input map[string]any
+		want  map[string]any
+	}{
+		{
+			name:  "order_pricing.nflow",
+			input: map[string]any{"quantity": 3, "unit_price_minor": 1299, "customer_tier": "gold", "tax_rate_percent": 8},
+			want:  map[string]any{"subtotal_minor": 3897, "discount_minor": 389, "tax_minor": 280, "total_minor": 3788},
+		},
+		{
+			name:  "shipping_quote.nflow",
+			input: map[string]any{"subtotal_minor": 7000, "destination": "domestic"},
+			want:  map[string]any{"free_shipping": true, "shipping_minor": 0},
+		},
+		{
+			name:  "refund_eligibility.nflow",
+			input: map[string]any{"days_since_purchase": 20, "item_returned": true, "final_sale": false},
+			want:  map[string]any{"refund_eligible": true},
+		},
+		{
+			name:  "invoice_status.nflow",
+			input: map[string]any{"is_paid": false, "days_until_due": -2},
+			want:  map[string]any{"status": "overdue"},
+		},
+		{
+			name:  "support_priority.nflow",
+			input: map[string]any{"impact": 5, "production_down": true},
+			want:  map[string]any{"priority": "P1", "response_minutes": 15},
+		},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			source, err := fs.ReadFile(funcext.Bundle(nil).Fixtures, "nflows/"+test.name)
+			if err != nil {
+				t.Fatalf("read example: %v", err)
+			}
+			for _, input := range []map[string]any{test.input, nil} {
+				execution, err := runner.Execute(t.Context(), cfg, string(source), filepath.Join(t.TempDir(), test.name), input)
+				if err != nil {
+					t.Fatalf("execute example with input %#v: %v", input, err)
+				}
+				result, ok := execution.Output.(map[string]any)
+				if !ok {
+					t.Fatalf("output = %T (%#v), want map[string]any", execution.Output, execution.Output)
+				}
+				for key, want := range test.want {
+					if got := result[key]; got != want {
+						t.Errorf("with input %#v, %s = %#v, want %#v", input, key, got, want)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestFuncSupportsForwardReferencesAndNestedCalls(t *testing.T) {
 	t.Parallel()
 	cfg := nativeConfig(t)
@@ -91,6 +151,32 @@ func TestFuncSupportsForwardReferencesAndNestedCalls(t *testing.T) {
 	}
 	if got, want := result["fee"], 35; got != want {
 		t.Errorf("fee = %#v (%T), want %d", got, got, want)
+	}
+}
+
+func TestFuncSupportsMultilineAndInlineBracedBodies(t *testing.T) {
+	t.Parallel()
+	cfg := nativeConfig(t)
+	source := `@func pricing.discountMinor(subtotal int, tier string) int {
+	  tier == "gold"
+	    ? subtotal / 10
+	    : (tier == "silver" ? subtotal / 20 : 0)
+	}
+@func pricing.double(value int) int { value * 2 }
+@func text.closeBrace() string { "}" }
+{ discount: pricing.discountMinor(.subtotal, .tier), doubled: pricing.double(.subtotal), marker: text.closeBrace() }`
+	execution, err := runner.Execute(t.Context(), cfg, source, "braced-functions.nflow", map[string]any{"subtotal": 12000, "tier": "gold"})
+	if err != nil {
+		t.Fatalf("execute braced functions: %v", err)
+	}
+	result, ok := execution.Output.(map[string]any)
+	if !ok {
+		t.Fatalf("output = %T (%#v), want map[string]any", execution.Output, execution.Output)
+	}
+	for key, want := range map[string]any{"discount": 1200, "doubled": 24000, "marker": "}"} {
+		if got := result[key]; got != want {
+			t.Errorf("%s = %#v, want %#v", key, got, want)
+		}
 	}
 }
 
@@ -291,6 +377,11 @@ func TestFuncCompileDiagnostics(t *testing.T) {
 			name: "nondeterministic builtin",
 			src:  "@func commerce.clock() int = int(now())\n{ value: commerce.clock() }",
 			want: "now",
+		},
+		{
+			name: "unclosed braced body",
+			src:  "@func commerce.bad(value int) int {\n  value + 1\n",
+			want: "unclosed function body",
 		},
 	}
 	for _, test := range cases {

@@ -1,0 +1,19 @@
+@description "Quote domestic and international shipping, including a free-shipping threshold"
+@func shipping.freeEligible(subtotalMinor int, destination string) bool {
+  destination == "domestic" && subtotalMinor >= 5000
+}
+@func shipping.feeMinor(subtotalMinor int, destination string) int {
+  shipping.freeEligible(subtotalMinor, destination)
+    ? 0
+    : (destination == "domestic" ? 599 : 1299)
+}
+{
+  let subtotal_minor = .subtotal_minor ?? 7000;
+  let destination = .destination ?? "domestic";
+  free_shipping: shipping.freeEligible(subtotal_minor, destination),
+  shipping_minor: shipping.feeMinor(subtotal_minor, destination)
+}
+@assert {
+  result.free_shipping == true
+  result.shipping_minor == 0
+}

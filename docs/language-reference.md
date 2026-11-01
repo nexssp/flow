@@ -62,14 +62,18 @@ Payload field names do not need to avoid expression builtins: `.count > 4`, `.ty
 
 The standard projection bundle validates statically known projection bodies during compilation, so `nflow lint` can reject malformed expressions before actions run. Loop, assertion, match and error-handler conditions also compile their expressions before execution. If a failed expression actually resolves a bare name such as `count` to a builtin value, its diagnostic suggests `.count` for payload access. This is a hint on an existing compile failure, not a blanket ban on builtin names or function values. Dynamic payload types, missing fields and projection bodies supplied dynamically to an action still require runtime checks; compilation cannot prove all data-dependent behavior.
 
-`@func` declares a pure, file-local helper for Flow expressions. Its signature follows Go's name-then-type style, while its body is one expr-lang expression:
+`@func` declares a pure, file-local helper for Flow expressions. Its signature follows Go's name-then-type style. The compact `= expression` form remains supported; for longer calculations, a braced body can span lines but must still contain exactly one expr-lang expression:
 
 ```nflow
-@func commerce.shippingFeeMinor(subtotalMinor int, destinationZone string) int = subtotalMinor >= 5000 && destinationZone == "domestic" ? 0 : 599
+@func commerce.shippingFeeMinor(subtotalMinor int, destinationZone string) int {
+  destinationZone == "domestic" && subtotalMinor >= 5000
+    ? 0
+    : (destinationZone == "domestic" ? 599 : 1299)
+}
 { shipping_minor: commerce.shippingFeeMinor(.subtotal_minor, .destination_zone) }
 ```
 
-Supported parameter and result types are `int`, `int64`, `float64`, `string`, and `bool`; an `int` parameter accepts integral numeric input. Calls use a qualified name, may refer forward to other visible functions, and are checked for argument count and type. Duplicate names, invalid bodies/results, unknown body variables, and recursive cycles fail compilation. The body is not Go code, cannot perform I/O or invoke actions, and disables the nondeterministic `now()` builtin. Functions are available in projections, match/loop/assertion/error conditions, and expression-valued `@{...}` entries. A function remains local to its source module; importing that module with `@include "fees.nflow" AS pricing` exposes a declaration named `commerce.shippingFeeMinor` as `pricing.commerce.shippingFeeMinor`. Nested include aliases compose in the same way. Functions package calculations only—they do not define request/response fields or defaults, which remain the job of schemas and pipelines. See the [shipping fixture](../extensions/func/nflows/reusable_shipping_fee.nflow) and its [function-library sidecar](../extensions/func/nflows/reusable_shipping_fee--reusable_shipping_fee_library.nflow); the fixture uses the sidecar's actual filename and can be run directly from the repository root.
+Supported parameter and result types are `int`, `int64`, `float64`, `string`, and `bool`; an `int` parameter accepts integral numeric input. Calls use a qualified name, may refer forward to other visible functions, and are checked for argument count and type. Duplicate names, invalid bodies/results, unknown body variables, and recursive cycles fail compilation. The body is not Go code, cannot perform I/O or invoke actions, and disables the nondeterministic `now()` builtin. Functions are available in projections, match/loop/assertion/error conditions, and expression-valued `@{...}` entries. A function remains local to its source module; importing that module with `@include "fees.nflow" AS pricing` exposes a declaration named `commerce.shippingFeeMinor` as `pricing.commerce.shippingFeeMinor`. Nested include aliases compose in the same way. Functions package calculations only—they do not define request/response fields or defaults, which remain the job of schemas and pipelines. See the [practical `@func` example catalog](../extensions/func/nflows/README.md), including the [reusable shipping fixture](../extensions/func/nflows/reusable_shipping_fee.nflow).
 
 `@symbols NAME { ... }` declares a file-local namespace of string values. In expression positions, refer to them as `NAME.member`; in data positions, an unquoted known symbol resolves to its declared string. Local namespaces shadow same-named global namespaces; current input values take precedence on collisions in expression environments. An included module's public namespace is addressed through its import qualifier, for example `billing.queues.review`; its unqualified declarations remain local to that module. See [`docs/symbols.md`](symbols.md) and [`extensions/symbols/`](../extensions/symbols/).
 
@@ -130,7 +134,7 @@ Directives are preprocessed declarations, not ordinary action calls. The stock C
 |---|---|
 | `@description` | `@description "text"`; descriptive metadata. |
 | `@assert` | `@assert: result.ok == true`, `@assert { ... }`, or `@assert: { expr1, expr2 }`; post-run assertions, evaluated after execution in source order. |
-| `@func` | `@func namespace.name(arg Type, ...) Result = expression`; declares a pure, source-local typed helper callable from projections, conditions, and argument maps. |
+| `@func` | `@func namespace.name(arg Type, ...) Result = expression` or `Result { expression }`; the braced form may span lines but remains one pure expression. |
 | `@pipeline` / `@end` | `@pipeline NAME` followed by header modifiers and a Flow expression, then `@end`; declares callable `pipeline.NAME`. Header modifiers may be same-line or on indented colon-only lines. `@end` alone is an error. |
 | `@scope` | `@scope :timeout=5s :retry=3 {` newline, scoped source, then `}`; applies inheritable modifiers within its source span. An atom's own modifier wins; nested scopes override by name. |
 | `@profile` | `@profile reliable` with same-line or indented colon-only modifier lines; reusable policy set, optionally inheriting `:parent=NAME`. Define it before use; unknown/cyclic profiles fail compilation. |

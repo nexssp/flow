@@ -1,0 +1,31 @@
+@description "Calculate an order's subtotal, tier discount, tax, and final total"
+@func pricing.discountMinor(subtotal int, tier string) int {
+  tier == "gold"
+    ? subtotal * 10 / 100
+    : (tier == "silver" ? subtotal * 5 / 100 : 0)
+}
+@func pricing.taxMinor(taxable int, ratePercent int) int {
+  taxable * ratePercent / 100
+}
+@func pricing.totalMinor(subtotal int, discount int, tax int) int {
+  subtotal - discount + tax
+}
+{
+  let quantity = .quantity ?? 3;
+  let unit_price_minor = .unit_price_minor ?? 1299;
+  let customer_tier = .customer_tier ?? "gold";
+  let tax_rate_percent = .tax_rate_percent ?? 8;
+  let subtotal = quantity * unit_price_minor;
+  let discount = pricing.discountMinor(subtotal, customer_tier);
+  let tax = pricing.taxMinor(subtotal - discount, tax_rate_percent);
+  subtotal_minor: subtotal,
+  discount_minor: discount,
+  tax_minor: tax,
+  total_minor: pricing.totalMinor(subtotal, (discount), tax)
+}
+@assert {
+  result.subtotal_minor == 3897
+  result.discount_minor == 389
+  result.tax_minor == 280
+  result.total_minor == 3788
+}

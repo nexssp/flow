@@ -1,0 +1,21 @@
+@description "Assign a support priority and response target from impact and outage state"
+@func support.isP1(impact int, productionDown bool) bool {
+  productionDown || impact >= 5
+}
+@func support.priority(impact int, productionDown bool) string {
+  support.isP1(impact, productionDown)
+    ? "P1"
+    : (impact >= 3 ? "P2" : "P3")
+}
+{
+  let impact = .impact ?? 5;
+  let production_down = .production_down ?? true;
+  priority: support.priority(impact, production_down),
+  response_minutes: support.priority(impact, production_down) == "P1"
+    ? 15
+    : (support.priority(impact, production_down) == "P2" ? 60 : 240)
+}
+@assert {
+  result.priority == "P1"
+  result.response_minutes == 15
+}

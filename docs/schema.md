@@ -53,7 +53,8 @@ before the pipeline body runs, so a function sees the effective defaulted input.
 ```
 
 Function parameters/results support `int`, `int64`, `float64`, `string`, and
-`bool`; function bodies are single expr-lang expressions, not Go blocks. See the
+`bool`; a body may use `= expression` or a braced, multiline expression block.
+The braces group one expr-lang expression; they are not Go statement blocks. See the
 [function language reference](language-reference.md#expressions-projections-and-symbols)
 for scope and compile-time rules.
 

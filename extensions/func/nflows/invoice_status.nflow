@@ -1,0 +1,14 @@
+@description "Classify an invoice as paid, open, due soon, or overdue"
+@func billing.status(isPaid bool, daysUntilDue int) string {
+  isPaid
+    ? "paid"
+    : (daysUntilDue < 0
+      ? "overdue"
+      : (daysUntilDue <= 3 ? "due_soon" : "open"))
+}
+{
+  let is_paid = .is_paid ?? false;
+  let days_until_due = .days_until_due ?? -2;
+  status: billing.status(is_paid, days_until_due)
+}
+@assert: result.status == "overdue"
