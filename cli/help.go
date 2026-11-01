@@ -169,6 +169,7 @@ Self bench:
 			`nflow self test --json > report.json # CI-friendly output`,
 			`nflow self test --syntax-only        # compile fixtures only; no runtime execution`,
 			`nflow self bench                    # benchmark built-in scenarios`,
+			`nflow self bench resilience         # benchmark NFlow resilience patterns`,
 			`nflow self bench api --iterations 100 --warmup 5`,
 			`nflow self bench --path ./flows --list`,
 		},

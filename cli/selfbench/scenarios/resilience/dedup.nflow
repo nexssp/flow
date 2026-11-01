@@ -1,0 +1,8 @@
+@description "Dedup benchmark: local in-flight dedup middleware on sequential repeated calls"
+@assert: result == "ok"
+@pipeline benchmark
+  :dedup
+  const @{ value: "ok" }
+@end
+{}
+-> pipeline.benchmark

@@ -1,0 +1,4 @@
+@description "Fallback benchmark: recover a local error with the sequential fallback operator"
+@assert: result == "recovered"
+fail @{ kind: "BadRequest", message: "deterministic fallback benchmark failure" }
+|| const @{ value: "recovered" }

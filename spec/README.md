@@ -7,6 +7,7 @@
 1. **[Order intake](01_order_intake/main.nflow)** validates an order, normalizes the customer's email, calculates a safe subtotal, applies a bounded retry policy, enforces a macro invariant, and returns an explicit accepted-order record. The separate **[email normalization check](01_order_intake/normalize.nflow)** sends a lowercase email with surrounding spaces directly to `order.normalize`, bypassing schema validation so its assertion isolates whitespace trimming; the main scenario retains uppercase-to-lowercase coverage.
 2. **[Support triage](02_support_triage/happy.nflow)** validates and classifies a duplicate-charge ticket, routes it to the billing escalation queue, and creates a reply draft without sending a customer message. The [unavailable-upstream case](02_support_triage/fallback.nflow) preserves the ticket for manual review and explicitly keeps the reply unsent.
 3. **[Payment reconciliation](03_reconciliation/main.nflow)** matches payment and bank references, reports mismatches and bank-only rows as audit exceptions, calculates totals in integer cents, and asserts that the batch variance is zero.
+4. **[Resilience benchmark](04_resilience_benchmark/)** pairs a plain local workflow with the same workflow under timeout, retry, breaker, and concurrency middleware. For immediate per-pattern CLI measurements, run `nflow self bench resilience`; its built-in scenarios also cover the other NFlow-exposed modifiers and recovery operators. The companion Go benchmark reports `ns/op` and allocations for the aggregate profile in compile-plus-run and precompiled-runtime modes.
 
 ## Structure and conventions
 
@@ -35,3 +36,11 @@ nflow test ./spec
 ```sh
 task self
 ```
+
+Run the focused performance benchmark from the repository root with:
+
+```sh
+go test ./spec/04_resilience_benchmark -run '^$' -bench '^BenchmarkResilienceWorkflow$' -benchmem -count=3
+```
+
+`compiled_runtime` measures repeated execution after one compile; `compile_and_run` includes preprocessing and compilation on every iteration. The benchmark is an offline runtime comparison, not an end-to-end service-latency or production-capacity claim. Results vary with Go version and hardware; compare variants on the same machine and toolchain.

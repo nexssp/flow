@@ -1,0 +1,125 @@
+@description "Checkout: validate an order, fetch a quote, reserve stock, and authorize payment using stage-specific profiles"
+@require resilience {
+  default_max: "2"
+  backoff: "constant"
+  min_backoff: "1ms"
+  max_backoff: "1ms"
+  retry_all: "false"
+  failure_threshold: "3"
+  reset_timeout: "30s"
+}
+@schema CheckoutRequest struct {
+  OrderID  string `json:"order_id" validate:"required"`
+  SKU      string `json:"sku" validate:"required"`
+  Quantity int    `json:"quantity" validate:"gte=1"`
+  Currency string `json:"currency" validate:"required,oneof=USD EUR"`
+}
+# These profiles are reusable sets of action modifiers, not remote service
+# configuration. Keep them on the stage pipeline that owns each dependency.
+@profile provider_read
+  :timeout=250ms
+  :retry=2
+  :circuit_breaker=pricing-provider
+  :concurrency=8
+  :rate_limit=20
+  :cache=5s
+@profile replay_safe_write
+  :timeout=1s
+  :idempotent
+@profile payment_authorization
+  :parent=replay_safe_write
+  :timeout=2s
+  :retry=2
+# The built-in const action is an offline stand-in for a pricing adapter.
+# Bare fields copy same-named input values; direct-object mode emits only these fields.
+@pipeline fetch_live_quote
+  :profile=provider_read
+  const @{
+    order_id,
+    sku,
+    quantity,
+    currency,
+    unit_price_minor: 1299,
+    quote_status: "fresh",
+    quote_source: "pricing-provider"
+  }
+@end
+# In production, pass .order_id as the stable operation key for the real
+# provider/database to enforce across restarts. The local stub reports that
+# key in its output; :idempotent itself is only process-local state.
+@pipeline reserve_inventory
+  :profile=replay_safe_write
+  const @{
+    order_id,
+    sku,
+    quantity,
+    currency,
+    unit_price_minor,
+    quote_status,
+    quote_source,
+    reservation_id: .order_id,
+    inventory_idempotency_key: .order_id,
+    inventory_status: "reserved"
+  }
+@end
+@pipeline authorize_payment
+  :profile=payment_authorization
+  const @{
+    order_id,
+    sku,
+    quantity,
+    currency,
+    unit_price_minor,
+    quote_status,
+    quote_source,
+    reservation_id,
+    inventory_status,
+    inventory_idempotency_key,
+    payment_id: .order_id,
+    payment_idempotency_key: .order_id,
+    payment_status: "authorized"
+  }
+@end
+@pipeline checkout
+  CheckoutRequest.validate
+  -> pipeline.fetch_live_quote
+  -> pipeline.reserve_inventory
+  -> pipeline.authorize_payment
+  -> {
+    order_id,
+    sku,
+    quantity,
+    currency,
+    unit_price_minor,
+    total_minor: .unit_price_minor * .quantity,
+    quote_source,
+    reservation_id,
+    inventory_idempotency_key,
+    payment_id,
+    payment_idempotency_key,
+    status: "accepted",
+    payment_status
+  }
+@end
+@assert {
+  result.order_id == "SO-2048"
+  result.sku == "NOTEBOOK-01"
+  result.quantity == 2
+  result.currency == "USD"
+  result.unit_price_minor == 1299
+  result.total_minor == 2598
+  result.quote_source == "pricing-provider"
+  result.reservation_id == "SO-2048"
+  result.inventory_idempotency_key == "SO-2048"
+  result.payment_id == "SO-2048"
+  result.payment_idempotency_key == "SO-2048"
+  result.status == "accepted"
+  result.payment_status == "authorized"
+}
+{
+  order_id: "SO-2048",
+  sku: "NOTEBOOK-01",
+  quantity: 2,
+  currency: "USD"
+}
+-> pipeline.checkout

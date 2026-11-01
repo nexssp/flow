@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/nexssp/flow/cli/selfbench"
+	"github.com/nexssp/flow/extensions/require"
 	"github.com/nexssp/flow/runner"
 )
 
@@ -80,7 +81,12 @@ func runSelfBench(ctx context.Context, inv *invocation, args []string) int {
 	if parsed.options.List {
 		return selfbench.Run(ctx, runner.Config{}, scenarios, parsed.options)
 	}
-	cfg, err := inv.buildConfig(nil)
+	requirements, err := selfBenchRequirements(ctx, inv, scenarios)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "self bench: requirements: %v\n", err)
+		return 1
+	}
+	cfg, err := inv.buildConfig(requirements)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "self bench: config: %v\n", err)
 		return 1
@@ -93,4 +99,32 @@ func runSelfBench(ctx context.Context, inv *invocation, args []string) int {
 		defer func() { os.Stdout = stdout }()
 	}
 	return selfbench.Run(ctx, cfg, scenarios, parsed.options)
+}
+
+func selfBenchRequirements(ctx context.Context, inv *invocation, scenarios []selfbench.Scenario) ([]require.Requirement, error) {
+	var requirements []require.Requirement
+	seen := make(map[string]string)
+	for _, scenario := range scenarios {
+		discovered, err := inv.discoverRootRequirements(ctx, scenario.Source, scenario.File)
+		if err != nil {
+			return nil, fmt.Errorf("scenario %s: %w", scenario.Name, err)
+		}
+		for index := range discovered {
+			requirement := &discovered[index]
+			if requirement.IsLocal() {
+				return nil, fmt.Errorf("scenario %s uses local @require %q; self bench requires registered in-process bundles", scenario.Name, requirement.Import)
+			}
+			id := require.NormalizeID(requirement.Import)
+			key := sourceRequirementKey(*requirement)
+			if previous, ok := seen[id]; ok {
+				if previous != key {
+					return nil, fmt.Errorf("scenarios use conflicting @require configurations for %q", requirement.Import)
+				}
+				continue
+			}
+			seen[id] = key
+			requirements = append(requirements, *requirement)
+		}
+	}
+	return requirements, nil
 }

@@ -152,10 +152,12 @@ extra `value` wrapper:
 const @{ name: "Julia", active: true }
 ```
 
-The runtime unwraps a top-level `value` field (and currently accepts `val` as
-an alias), and direct-object mode omits `__root__`. If the object you want
-returned has one of those top-level fields, wrap the whole object under
-`value` instead.
+Direct-object mode emits only the fields listed here; it does not pass through
+unspecified input fields. Bare names copy the same-named value from the current
+input, so `const @{ order_id, quantity, unit_price_minor: 1299 }` builds an
+object from two input fields and one literal. A top-level `value` (or `val`) is
+treated as the unwrap field; use `value: { ... }` when returning a scalar or
+array, or when the object itself needs a top-level `value` or `val` field.
 
 ---
 

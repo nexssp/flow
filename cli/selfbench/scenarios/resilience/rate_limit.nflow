@@ -1,0 +1,8 @@
+@description "Rate-limit benchmark: local token-bucket check with a non-depleting benchmark limit"
+@assert: result == "ok"
+@pipeline benchmark
+  :rate_limit=1000000
+  const @{ value: "ok" }
+@end
+{}
+-> pipeline.benchmark

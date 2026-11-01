@@ -1,0 +1,8 @@
+@description "Concurrency benchmark: successful local const under an uncontended bulkhead"
+@assert: result == "ok"
+@pipeline benchmark
+  :concurrency=4
+  const @{ value: "ok" }
+@end
+{}
+-> pipeline.benchmark

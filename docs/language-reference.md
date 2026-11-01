@@ -52,7 +52,7 @@ A projection transforms the current value into a new object. Inside it, `.field`
 { ..., status: "ready" }
 ```
 
-In projection object-entry position, a bare field name is shorthand for the same key copied from the current input: `{ name }` is equivalent to `{ name: .name }`. Shorthand entries can be mixed with explicit `key: value` entries; explicit values keep their existing projection expression syntax, such as `.profile.display_name` or a literal. This shorthand applies only to projection bodies. Structured action arguments such as `@{ name: "Julia" }` remain data objects and still require explicit `key: value` pairs.
+In projection object-entry position, a bare field name is shorthand for the same key copied from the current input: `{ name }` is equivalent to `{ name: .name }`. Shorthand entries can be mixed with explicit `key: value` entries; explicit values keep their existing projection expression syntax, such as `.profile.display_name` or a literal. Structured action arguments also accept a bare field name, for example `@{ name }` is equivalent to `@{ name: .name }`. Both forms read from the current pipeline input, but projections are expression objects while action arguments use the literal/reference map syntax described above.
 
 The extension self-test runs fixtures for [shorthand-only](../extensions/projection/nflows/shorthand.nflow), [explicit-only](../extensions/projection/nflows/explicit_projection.nflow), [mixed member expressions](../extensions/projection/nflows/mixed_shorthand.nflow), and [shorthand with spread](../extensions/projection/nflows/shorthand_spread.nflow).
 
@@ -193,8 +193,7 @@ Important schema rules:
 - `required` uses the validator's non-zero-value semantics for scalar types, so it rejects values such as `0`, `false`, or `""`, not merely an absent key. Account for that when zero/false is a valid business value.
 - Defaults apply only when a key is absent. Explicit `null`, zero, `false`, or an empty string is not replaced; composite defaults replace the whole value rather than deep-merging.
 - Extra input keys are allowed and preserved unless that request or response boundary uses the `!` strictness marker.
-- Pipeline headers accept `:schema=NAME` as shorthand for applying one schema to both request and response boundaries; the shared schema cannot contain defaults because response validation does not apply them.
-  Use separate `:request-schema=NAME` and `:response-schema=NAME` when the shapes differ or only one boundary should be checked. For bodyless GET pipelines, use only `:response-schema=NAME` to keep the request nil. Do not combine `:schema` with boundary-specific selectors in one header. A direct `NAME.validate` action provides an explicit mid-pipeline validation step.
+- Pipeline boundaries use separate `:request-schema=NAME` and `:response-schema=NAME` modifiers; the former pipeline-header alias `:schema=NAME` is removed. A direct `NAME.validate` action provides an explicit mid-pipeline validation step.
 - The atom modifier `:schema=NAME` by itself only adds a `schema:NAME` metadata tag; it does not insert a validation action or validate that atom's request. Do not substitute it for a pipeline header or `NAME.validate`; see [`SchemaModifier`](../extensions/schema/library.go#L73-L79).
 - `@const.load ... :schema=Name` validates loaded compile-time JSON during preprocessing, not a future runtime request.
 

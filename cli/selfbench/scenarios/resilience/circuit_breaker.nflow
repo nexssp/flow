@@ -1,0 +1,13 @@
+@require resilience {
+  default_max: "1"
+  backoff: "constant"
+  min_backoff: "1ms"
+  max_backoff: "1ms"
+  retry_all: "true"
+  failure_threshold: "1"
+  reset_timeout: "30s"
+}
+@description "Circuit-breaker benchmark: trip once, then measure the open-circuit fallback path"
+@assert: result == "recovered"
+fail @{ kind: "Unavailable", message: "deterministic breaker benchmark failure" } :circuit_breaker=bench-open
+|| const @{ value: "recovered" }

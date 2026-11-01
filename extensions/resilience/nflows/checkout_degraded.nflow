@@ -1,0 +1,91 @@
+@description "Checkout outage: use the last quote as an estimate, but hold the order before inventory or payment side effects"
+@require resilience {
+  default_max: "2"
+  backoff: "constant"
+  min_backoff: "1ms"
+  max_backoff: "1ms"
+  retry_all: "false"
+  failure_threshold: "3"
+  reset_timeout: "30s"
+}
+@schema CheckoutRequest struct {
+  OrderID  string `json:"order_id" validate:"required"`
+  SKU      string `json:"sku" validate:"required"`
+  Quantity int    `json:"quantity" validate:"gte=1"`
+  Currency string `json:"currency" validate:"required,oneof=USD EUR"`
+}
+@profile provider_read
+  :timeout=250ms
+  :retry=2
+  :circuit_breaker=pricing-provider
+  :concurrency=8
+  :rate_limit=20
+  :cache=5s
+# Simulates an unavailable pricing adapter. In production, replace only this
+# action with the mounted provider call; the profile and recovery boundary stay.
+@pipeline fetch_live_quote
+  :profile=provider_read
+  fail @{ kind: "Unavailable", message: "pricing provider returned HTTP 503" }
+@end
+@pipeline last_known_quote
+  const @{
+    order_id,
+    sku,
+    quantity,
+    currency,
+    unit_price_minor: 1249,
+    quote_status: "stale",
+    quote_source: "last-known-snapshot"
+  }
+@end
+# Only expected provider-availability failures may use stale data. Validation,
+# authorization, and unexpected failures remain failures.
+@pipeline resolve_quote
+  pipeline.fetch_live_quote
+  ? on_error {
+    xerr.KindUnavailable
+      -> pipeline.last_known_quote,
+    xerr.KindTimeout
+      -> pipeline.last_known_quote,
+    else
+      -> error.reraise
+  }
+@end
+@pipeline checkout
+  CheckoutRequest.validate
+  -> pipeline.resolve_quote
+  -> {
+    order_id,
+    sku,
+    quantity,
+    currency,
+    estimated_unit_price_minor: .unit_price_minor,
+    estimated_total_minor: .unit_price_minor * .quantity,
+    quote_source,
+    quote_status,
+    status: "awaiting_price_confirmation",
+    inventory_status: "not_reserved",
+    payment_status: "not_started",
+    customer_confirmation_required: true
+  }
+@end
+@assert {
+  result.order_id == "SO-2049"
+  result.sku == "USB-C-02"
+  result.quantity == 3
+  result.estimated_unit_price_minor == 1249
+  result.estimated_total_minor == 3747
+  result.quote_status == "stale"
+  result.quote_source == "last-known-snapshot"
+  result.status == "awaiting_price_confirmation"
+  result.inventory_status == "not_reserved"
+  result.payment_status == "not_started"
+  result.customer_confirmation_required == true
+}
+{
+  order_id: "SO-2049",
+  sku: "USB-C-02",
+  quantity: 3,
+  currency: "USD"
+}
+-> pipeline.checkout

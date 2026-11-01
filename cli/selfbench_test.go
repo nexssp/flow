@@ -49,6 +49,29 @@ func TestSelfBenchDispatch(t *testing.T) {
 	}
 }
 
+func TestSelfBenchResolvesRequiredResilienceBundle(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "required.nflow")
+	source := `@require resilience {
+  failure_threshold: "1"
+  reset_timeout: "30s"
+}
+@assert: result == "ok"
+@pipeline bench
+  :circuit_breaker=self-bench-required
+  const @{ value: "ok" }
+@end
+{}
+-> pipeline.bench
+`
+	xtest.RequireNoError(t, os.WriteFile(file, []byte(source), 0o600))
+	code := -1
+	output, _ := captureIO(t, func() {
+		code = RunContext(context.Background(), []string{"self", "bench", "--path", file, "--iterations=1", "--warmup=0", "--json"})
+	})
+	xtest.RequireEqual(t, code, 0)
+	xtest.RequireCondition(t, json.Valid([]byte(output)), "required resilience scenario must produce a JSON report")
+}
+
 func TestSelfBenchJSONRedirectsScenarioOutput(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "print.nflow")
 	xtest.RequireNoError(t, os.WriteFile(file, []byte(`{ value: "scenario-noise", stream: "stdout" } -> runtime.print`), 0o600))

@@ -1,0 +1,6 @@
+@description "Race benchmark: run two local const candidates; this is not delayed hedging"
+@assert: result == "winner"
+race {
+  const @{ value: "winner" },
+  const @{ value: "winner" }
+}

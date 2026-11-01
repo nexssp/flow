@@ -1,0 +1,8 @@
+@description "Coalescing benchmark: local request-coalescing middleware on sequential repeated calls"
+@assert: result == "ok"
+@pipeline benchmark
+  :coalesce
+  const @{ value: "ok" }
+@end
+{}
+-> pipeline.benchmark

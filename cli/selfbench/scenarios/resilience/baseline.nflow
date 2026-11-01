@@ -1,0 +1,7 @@
+@description "Resilience benchmark baseline: one local const action without policy middleware"
+@assert: result == "ok"
+@pipeline benchmark
+  const @{ value: "ok" }
+@end
+{}
+-> pipeline.benchmark

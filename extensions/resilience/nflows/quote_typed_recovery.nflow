@@ -1,0 +1,11 @@
+@require resilience
+@description "Route only an unavailable quote provider to a deferred result"
+@assert {
+  result.status == "deferred"
+  result.error_kind == "Unavailable"
+}
+fail @{ kind: "Unavailable", message: "quote provider is temporarily offline" }
+? on_error {
+  xerr.KindUnavailable -> const @{ status: "deferred", error_kind: "Unavailable" },
+  else                 -> error.reraise
+}

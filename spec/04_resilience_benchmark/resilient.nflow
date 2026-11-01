@@ -1,0 +1,21 @@
+@description "Benchmark resilience: the same local workflow with timeout, retry, breaker, and concurrency middleware"
+@require resilience {
+  default_max: "1"
+  backoff: "constant"
+  min_backoff: "1ms"
+  max_backoff: "1ms"
+  failure_threshold: "3"
+  reset_timeout: "30s"
+}
+@profile benchmark_read
+  :timeout=5s
+  :retry=1
+  :circuit_breaker=benchmark-read
+  :concurrency=4
+@pipeline benchmark :profile=benchmark_read
+  const @{ status: "ok", scenario: "resilient" }
+@end
+@assert: result.status == "ok"
+@assert: result.scenario == "resilient"
+{}
+-> pipeline.benchmark

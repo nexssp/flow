@@ -5,6 +5,11 @@ is its name and filter key. No Go registration or manifest is needed. Rebuild
 `nflow` to refresh embedded files, then use `nflow self bench --list` to see it.
 For a custom suite without rebuilding, use `nflow self bench --path FILE_OR_DIR`.
 
+Run the resilience-focused built-ins immediately with `nflow self bench resilience`
+or list their names with `nflow self bench resilience --list`. Their coverage and
+the Kernel-only patterns that are intentionally not measured are documented in
+the sibling `resilience/README.md`.
+
 Keep the default suite deterministic and local: no public services, network
 access, external processes, credentials, sleeps, or persistent writes. Each file
 should create its own representative input and produce a result without printing.

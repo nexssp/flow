@@ -1,0 +1,8 @@
+@description "Response-cache benchmark: repeated identical calls use the local warm cache"
+@assert: result == "ok"
+@pipeline benchmark
+  :cache=1m
+  const @{ value: "ok" }
+@end
+{}
+-> pipeline.benchmark

@@ -1,0 +1,8 @@
+@description "Idempotency benchmark: repeated identical local requests reuse the in-memory result"
+@assert: result == "ok"
+@pipeline benchmark
+  :idempotent
+  const @{ value: "ok" }
+@end
+{}
+-> pipeline.benchmark

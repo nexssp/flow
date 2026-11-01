@@ -12,6 +12,7 @@ import (
 	"github.com/nexssp/kernel/xerr"
 	xtest "github.com/nexssp/kernel/xtest/ktest"
 
+	"github.com/nexssp/flow/extensions/resilience"
 	"github.com/nexssp/flow/native"
 	"github.com/nexssp/flow/runner"
 )
@@ -19,7 +20,28 @@ import (
 func TestDiscover(t *testing.T) {
 	scenarios, err := Discover("", nil)
 	xtest.RequireNoError(t, err)
-	xtest.RequireCondition(t, len(scenarios) >= 4, "built-in suite must include common workloads")
+	xtest.RequireCondition(t, len(scenarios) >= 17, "built-in suite must include common workloads and resilience patterns")
+	resilienceScenarios, err := Discover("", []string{"resilience/"})
+	xtest.RequireNoError(t, err)
+	wantResilience := []string{
+		"resilience/baseline.nflow",
+		"resilience/cache.nflow",
+		"resilience/circuit_breaker.nflow",
+		"resilience/coalesce.nflow",
+		"resilience/concurrency.nflow",
+		"resilience/dedup.nflow",
+		"resilience/fallback.nflow",
+		"resilience/idempotent.nflow",
+		"resilience/race.nflow",
+		"resilience/rate_limit.nflow",
+		"resilience/retry.nflow",
+		"resilience/timeout.nflow",
+		"resilience/typed_recovery.nflow",
+	}
+	xtest.RequireEqual(t, len(resilienceScenarios), len(wantResilience))
+	for i, name := range wantResilience {
+		xtest.RequireEqual(t, resilienceScenarios[i].Name, name)
+	}
 	filtered, err := Discover("", []string{"API", "parallel"})
 	xtest.RequireNoError(t, err)
 	xtest.RequireCondition(t, len(filtered) >= 2, "filters should select API and parallel scenarios")
@@ -59,7 +81,20 @@ func TestDiscoverRejectsSymlinks(t *testing.T) {
 
 func withConfig(t *testing.T, fn func(context.Context, runner.Config)) {
 	t.Helper()
-	bundles := native.Bundles()
+	bundles := native.SelftestBundles()
+	for i := range bundles {
+		if bundles[i].ID == resilience.ID {
+			bundles[i] = resilience.Bundle(map[string]string{
+				"default_max":       "1",
+				"backoff":           "constant",
+				"min_backoff":       "1ms",
+				"max_backoff":       "1ms",
+				"retry_all":         "true",
+				"failure_threshold": "1",
+				"reset_timeout":     "30s",
+			})
+		}
+	}
 	host := runner.NewHost()
 	xtest.RequireNoError(t, host.OwnAll(bundles))
 	xtest.RequireNoError(t, host.Run(context.Background(), func(ctx context.Context) error {

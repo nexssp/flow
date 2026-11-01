@@ -1,0 +1,10 @@
+@description "Typed-recovery benchmark: handle only an Unavailable error and preserve its classification"
+@assert {
+  result.status == "recovered"
+  result.error_kind == "Unavailable"
+}
+fail @{ kind: "Unavailable", message: "deterministic typed-recovery benchmark failure" }
+? on_error {
+  xerr.KindUnavailable -> const @{ status: "recovered", error_kind: "Unavailable" },
+  else                 -> error.reraise
+}

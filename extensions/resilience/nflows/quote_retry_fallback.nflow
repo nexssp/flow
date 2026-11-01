@@ -1,0 +1,11 @@
+@require resilience {
+  default_max: "2"
+  backoff: "constant"
+  min_backoff: "1ms"
+  max_backoff: "1ms"
+  retry_all: "false"
+}
+@description "Retry a simulated quote-service outage, then return the last saved quote"
+@assert: result == "ACME/USD 41.90 (cached)"
+fail @{ kind: "Unavailable", message: "quote service returned HTTP 503" } :retry=2
+|| const @{ value: "ACME/USD 41.90 (cached)" }

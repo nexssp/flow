@@ -1,0 +1,14 @@
+@require resilience {
+  default_max: "1"
+  backoff: "constant"
+  min_backoff: "1ms"
+  max_backoff: "1ms"
+}
+@description "Cancel a slow simulated quote call and return a cached snapshot"
+@assert: result.source == "cached"
+sleep :timeout=20ms @{ duration_ms: 200 }
+|| const @{
+  source: "cached",
+  symbol: "ACME/USD",
+  price: 41.90
+}
