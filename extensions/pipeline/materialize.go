@@ -362,10 +362,20 @@ type schemaSelection struct {
 func splitSchemaModifiers(pipelineName string, modifiers []string) (request, response schemaSelection, compileModifiers []string, err error) {
 	compileModifiers = make([]string, 0, len(modifiers))
 	requestSpelling, responseSpelling := "", ""
+	var shared schemaSelection
+	hasShared := false
 	for _, raw := range modifiers {
 		modifierName := compiler.ModifierName(raw)
 		if modifierName == schemaext.SchemaModifierName {
-			return schemaSelection{}, schemaSelection{}, nil, fmt.Errorf("@pipeline %q: :schema is no longer supported; use :%s=Name", pipelineName, schemaext.RequestSchemaModifierName)
+			selection, parseErr := parseSchemaSelection(pipelineName, modifierName, raw)
+			if parseErr != nil {
+				return schemaSelection{}, schemaSelection{}, nil, parseErr
+			}
+			if hasShared && shared != selection {
+				return schemaSelection{}, schemaSelection{}, nil, fmt.Errorf("@pipeline %q: conflicting :schema selections %q and %q", pipelineName, shared.name, selection.name)
+			}
+			shared, hasShared = selection, true
+			continue
 		}
 		isRequest := modifierName == schemaext.RequestSchemaModifierName || modifierName == schemaext.InSchemaModifierName
 		isResponse := modifierName == schemaext.ResponseSchemaModifierName || modifierName == schemaext.OutSchemaModifierName
@@ -374,19 +384,10 @@ func splitSchemaModifiers(pipelineName string, modifiers []string) (request, res
 			continue
 		}
 
-		_, selected, hasValue := strings.Cut(raw, "=")
-		if !hasValue || selected == "" {
-			return schemaSelection{}, schemaSelection{}, nil, fmt.Errorf("@pipeline %q: :%s requires a name (use :%s=Name)", pipelineName, modifierName, modifierName)
+		selection, parseErr := parseSchemaSelection(pipelineName, modifierName, raw)
+		if parseErr != nil {
+			return schemaSelection{}, schemaSelection{}, nil, parseErr
 		}
-		selection := schemaSelection{}
-		if strings.HasPrefix(selected, "!") {
-			selection.strict = true
-			selected = strings.TrimPrefix(selected, "!")
-		}
-		if selected == "" {
-			return schemaSelection{}, schemaSelection{}, nil, fmt.Errorf("@pipeline %q: :%s requires a schema name after the strictness marker", pipelineName, modifierName)
-		}
-		selection.name = selected
 
 		target := &request
 		spelling := &requestSpelling
@@ -403,7 +404,30 @@ func splitSchemaModifiers(pipelineName string, modifiers []string) (request, res
 		*target = selection
 		*spelling = modifierName
 	}
+	if hasShared {
+		if request.name != "" || response.name != "" {
+			return schemaSelection{}, schemaSelection{}, nil, fmt.Errorf("@pipeline %q: :schema cannot be combined with boundary-specific schema modifiers", pipelineName)
+		}
+		request, response = shared, shared
+	}
 	return request, response, compileModifiers, nil
+}
+
+func parseSchemaSelection(pipelineName, modifierName, raw string) (schemaSelection, error) {
+	_, selected, hasValue := strings.Cut(raw, "=")
+	if !hasValue || selected == "" {
+		return schemaSelection{}, fmt.Errorf("@pipeline %q: :%s requires a name (use :%s=Name)", pipelineName, modifierName, modifierName)
+	}
+	selection := schemaSelection{}
+	if strings.HasPrefix(selected, "!") {
+		selection.strict = true
+		selected = strings.TrimPrefix(selected, "!")
+	}
+	if selected == "" {
+		return schemaSelection{}, fmt.Errorf("@pipeline %q: :%s requires a schema name after the strictness marker", pipelineName, modifierName)
+	}
+	selection.name = selected
+	return selection, nil
 }
 
 func wrapWithSchemaBoundary(

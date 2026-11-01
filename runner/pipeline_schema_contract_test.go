@@ -138,17 +138,20 @@ func TestPipelineResponseSchemaDefaultsRejectedBeforeExecution(t *testing.T) {
 
 	for _, testCase := range []struct {
 		name       string
+		modifier   string
 		defaultTag string
 	}{
-		{name: "empty tag", defaultTag: `default:""`},
-		{name: "nonempty tag", defaultTag: `default:"response-default"`},
+		{name: "empty response tag", modifier: ":response-schema=Response", defaultTag: `default:""`},
+		{name: "nonempty response tag", modifier: ":response-schema=Response", defaultTag: `default:"response-default"`},
+		{name: "empty shared tag", modifier: ":schema=Response", defaultTag: `default:""`},
+		{name: "nonempty shared tag", modifier: ":schema=Response", defaultTag: `default:"response-default"`},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			source := `@schema Response {
   Name string ` + "`json:\"name\" " + testCase.defaultTag + "`" + `
 }
 @pipeline handle
-  :response-schema=Response
+  ` + testCase.modifier + `
   test.response_default_guard
 @end
 `
@@ -247,28 +250,122 @@ func TestPipelineSchemaStrictnessIsPerBoundary(t *testing.T) {
 	}
 }
 
-func TestPipelineSchemaLegacyHeaderAliasRejected(t *testing.T) {
+func TestPipelineSchemaSharedAliasValidatesBothBoundaries(t *testing.T) {
+	var calls atomic.Int32
+	handler := action.New("test.shared_schema", func(_ context.Context, input any) (any, error) {
+		calls.Add(1)
+		request, ok := input.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("input = %T, want map[string]any", input)
+		}
+		if request["name"] == "invalid-response" {
+			return map[string]any{"name": 42}, nil
+		}
+		return map[string]any{"name": request["name"]}, nil
+	}).Build()
 	cfg, err := BuildConfig([]compiler.Bundle{
 		schema.Bundle(nil),
 		pipeline.Bundle(nil),
 		runtimeext.Bundle(nil),
+		{ID: "shared-pipeline-schema-test", Libraries: []action.Library{{Name: "test", Actions: []action.AnyAction{handler}}}},
 	})
 	if err != nil {
 		t.Fatalf("BuildConfig: %v", err)
 	}
-	source := `@schema Request {
-  Name string ` + "`json:\"name\"`" + `
+	source := `@schema Shared {
+	  Name string ` + "`json:\"name\" validate:\"required\"`" + `
 }
-@pipeline old_style:schema=Request
-  runtime.noop
+@pipeline handle
+	  :schema=Shared
+	  test.shared_schema
 @end
 `
-	_, err = Compile(t.Context(), cfg, source, "legacy-pipeline-schema.nflow")
-	if err == nil {
-		t.Fatal("legacy :schema pipeline header was accepted")
+	prepared, err := Preflight(t.Context(), cfg, source, "shared-pipeline-schema.nflow")
+	if err != nil {
+		t.Fatalf("Preflight: %v", err)
 	}
-	if !strings.Contains(err.Error(), ":schema is no longer supported") {
-		t.Fatalf("error = %v, want removed-alias diagnostic", err)
+	result, err := ExecutePrepared(t.Context(), cfg, prepared, EntryPoint{
+		Name:    "pipeline.handle",
+		Payload: map[string]any{"name": "Ada"},
+	})
+	if err != nil {
+		t.Fatalf("ExecutePrepared valid request and response: %v", err)
+	}
+	output, ok := result.Output.(map[string]any)
+	if !ok || output["name"] != "Ada" {
+		t.Fatalf("output = %#v, want shared-schema map for Ada", result.Output)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("handler calls = %d, want 1", got)
+	}
+	_, err = ExecutePrepared(t.Context(), cfg, prepared, EntryPoint{
+		Name:    "pipeline.handle",
+		Payload: map[string]any{},
+	})
+	if err == nil {
+		t.Fatal("shared schema accepted a request missing the required name")
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("handler ran after invalid shared-schema request: calls = %d, want 1", got)
+	}
+	_, err = ExecutePrepared(t.Context(), cfg, prepared, EntryPoint{
+		Name:    "pipeline.handle",
+		Payload: map[string]any{"name": "invalid-response"},
+	})
+	if err == nil {
+		t.Fatal("shared schema accepted an invalid response")
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("handler calls after invalid response = %d, want 2", got)
+	}
+}
+
+func TestPipelineResponseOnlySchemaPreservesNilRequest(t *testing.T) {
+	var calls atomic.Int32
+	handler := action.New("test.bodyless_get", func(_ context.Context, input any) (any, error) {
+		calls.Add(1)
+		if input != nil {
+			return nil, fmt.Errorf("input = %#v, want nil request", input)
+		}
+		return map[string]any{"status": "ok"}, nil
+	}).Build()
+	cfg, err := BuildConfig([]compiler.Bundle{
+		schema.Bundle(nil),
+		pipeline.Bundle(nil),
+		runtimeext.Bundle(nil),
+		{ID: "response-only-schema-test", Libraries: []action.Library{{Name: "test", Actions: []action.AnyAction{handler}}}},
+	})
+	if err != nil {
+		t.Fatalf("BuildConfig: %v", err)
+	}
+	source := `@schema HealthResponse {
+	  Status string ` + "`json:\"status\" validate:\"required\"`" + `
+}
+@pipeline health
+	  :response-schema=HealthResponse
+	  test.bodyless_get
+@end
+`
+	prepared, err := Preflight(t.Context(), cfg, source, "bodyless-get-response-schema.nflow")
+	if err != nil {
+		t.Fatalf("Preflight: %v", err)
+	}
+	result, err := ExecutePrepared(t.Context(), cfg, prepared, EntryPoint{
+		Name:    "pipeline.health",
+		Payload: nil,
+	})
+	if err != nil {
+		t.Fatalf("ExecutePrepared bodyless request: %v", err)
+	}
+	response, ok := result.Output.(map[string]any)
+	if !ok {
+		t.Fatalf("response = %T, want map[string]any", result.Output)
+	}
+	if got := response["status"]; got != "ok" {
+		t.Fatalf("response status = %#v, want ok", got)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("handler calls = %d, want 1", got)
 	}
 }
 

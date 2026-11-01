@@ -11,9 +11,9 @@ import (
 	"github.com/nexssp/flow/compiler"
 )
 
-func TestFmtWriteDoesNotRewriteInvalidSource(t *testing.T) {
-	original := []byte("@pipeline create_task:schema=TaskRequest\n  runtime.noop\n@end\n")
-	path := filepath.Join(t.TempDir(), "legacy.nflow")
+func TestFmtWriteAcceptsSharedPipelineSchemaAlias(t *testing.T) {
+	original := []byte("@schema TaskRequest {\n  Name string `json:\"name\"`\n}\n\n@pipeline create_task:schema=TaskRequest\n  runtime.noop\n@end\n")
+	path := filepath.Join(t.TempDir(), "shared-schema.nflow")
 	if err := os.WriteFile(path, original, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -25,15 +25,15 @@ func TestFmtWriteDoesNotRewriteInvalidSource(t *testing.T) {
 	code := runInvocation(context.Background(), inv, func(ctx context.Context) int {
 		return runFmt(ctx, inv, []string{"--write", path})
 	})
-	if code == 0 {
-		t.Fatal("fmt --write succeeded for a deprecated :schema modifier")
+	if code != 0 {
+		t.Fatal("fmt --write rejected a valid shared :schema modifier")
 	}
 	after, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile after fmt --write: %v", err)
 	}
-	if !bytes.Equal(after, original) {
-		t.Fatalf("fmt --write changed invalid source:\n got %q\nwant %q", after, original)
+	if !bytes.Contains(after, []byte(":schema=TaskRequest")) {
+		t.Fatalf("fmt --write removed the shared schema alias: %q", after)
 	}
 }
 

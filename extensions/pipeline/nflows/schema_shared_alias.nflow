@@ -1,0 +1,10 @@
+@description "spec: :schema applies the same schema to request and response boundaries"
+@schema SharedMessage {
+  Name string `json:"name" validate:"required"`
+}
+@pipeline echo
+  :schema=SharedMessage
+  { name: .name }
+@end
+{ name: "same contract" } -> pipeline.echo
+@assert: result.name == "same contract"

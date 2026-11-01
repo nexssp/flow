@@ -56,10 +56,7 @@ func validatePipelineSchemaModifiers(meta map[string]any) error {
 	for pipelineName, modifiers := range pipelineMods {
 		for _, raw := range modifiers {
 			modifierName := compiler.ModifierName(raw)
-			if modifierName == SchemaModifierName {
-				return fmt.Errorf("@pipeline %q: :schema is no longer supported; use :%s=Name", pipelineName, RequestSchemaModifierName)
-			}
-			if modifierName != RequestSchemaModifierName && modifierName != ResponseSchemaModifierName && modifierName != InSchemaModifierName && modifierName != OutSchemaModifierName {
+			if modifierName != SchemaModifierName && modifierName != RequestSchemaModifierName && modifierName != ResponseSchemaModifierName && modifierName != InSchemaModifierName && modifierName != OutSchemaModifierName {
 				continue
 			}
 			_, schemaName, hasValue := strings.Cut(raw, "=")

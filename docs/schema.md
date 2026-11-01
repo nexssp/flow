@@ -42,8 +42,14 @@ By default, fields not listed in a request or response schema are allowed and
 preserved. Prefix a schema name with `!` to make only that boundary reject
 unknown fields, for example `:request-schema=!PackInput` or
 `:response-schema=!PackOutput`. Request and response strictness are independent.
-The former pipeline-header alias `:schema=PackInput` is no longer supported;
-use `:request-schema=PackInput` instead.
+In a pipeline header, `:schema=Name` applies the same schema to both request and
+response boundaries; `:schema=!Name` makes both strict. A shared schema must not
+declare defaults because response validation never applies them. Use
+`:request-schema` and `:response-schema` when the shapes differ or only one
+boundary should be validated. For a bodyless GET pipeline, use only
+`:response-schema=Name` to preserve the nil request; `:schema` also validates the
+request boundary. Do not combine `:schema` with boundary-specific selectors in
+one header; Flow rejects the ambiguous combination.
 
 For shorter headers, `:in-schema=PackInput` is an additive alias for
 `:request-schema=PackInput`, and `:out-schema=PackOutput` aliases

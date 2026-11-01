@@ -449,7 +449,6 @@ func TestLanguageServerSchemaDiagnosticsAndQuickFixes(t *testing.T) {
 
 	issues := server.schemaIssues(uri, source)
 	unknownOffset := strings.Index(source, "Requset")
-	deprecatedOffset := strings.Index(source, ":schema=Request")
 	missingOffset := strings.Index(source, ":request-schema=!") + len(":request-schema=!")
 	byCode := make(map[string]lspSchemaIssue)
 	for _, issue := range issues {
@@ -465,12 +464,8 @@ func TestLanguageServerSchemaDiagnosticsAndQuickFixes(t *testing.T) {
 	if !strings.Contains(unknown.diagnostic.Message, `did you mean "Request"?`) || unknown.fixText != "Request" {
 		t.Fatalf("unknown schema issue = %#v, want a unique Request suggestion", unknown)
 	}
-	deprecated, ok := byCode["schema.deprecated-modifier"]
-	if !ok || deprecated.diagnostic.Severity != 2 || deprecated.fixText != ":request-schema" {
-		t.Fatalf("deprecated schema issue = %#v, want warning and migration fix", deprecated)
-	}
-	if deprecated.diagnostic.Range != lspRangeForByteOffsets(source, deprecatedOffset, deprecatedOffset+len(":schema")) {
-		t.Fatalf("deprecated modifier diagnostic range = %#v", deprecated.diagnostic.Range)
+	if _, ok := byCode["schema.deprecated-modifier"]; ok {
+		t.Fatal("supported pipeline :schema alias produced a deprecation diagnostic")
 	}
 	if _, ok := byCode["schema.missing-name"]; !ok {
 		t.Fatalf("schema issues = %#v, want diagnostic for empty strict reference", issues)
@@ -490,10 +485,6 @@ func TestLanguageServerSchemaDiagnosticsAndQuickFixes(t *testing.T) {
 	}
 	if got, want := unknownActions[0].Edit.Changes[uri][0].Range, lspRangeForByteOffsets(source, unknownOffset, unknownOffset+len("Requset")); got != want {
 		t.Fatalf("unknown-name quick-fix range = %#v, want %#v", got, want)
-	}
-	deprecatedActions := requestSchemaCodeActions(t, server, &output, uri, source, deprecatedOffset, deprecatedOffset+len(":schema"))
-	if len(deprecatedActions) != 1 || deprecatedActions[0].Title != "Replace with :request-schema" || deprecatedActions[0].Edit.Changes[uri][0].NewText != ":request-schema" {
-		t.Fatalf("deprecated-modifier quick fixes = %#v, want request-schema migration", deprecatedActions)
 	}
 	missingActions := requestSchemaCodeActions(t, server, &output, uri, source, missingOffset, missingOffset)
 	if len(missingActions) != 0 {

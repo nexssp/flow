@@ -1,8 +1,9 @@
 // Package schema provides the `@schema NAME { Field Type `json:"..."
 // default:"..." validate:"..."` ... }` directive. The declaration lands in
-// meta["schemas"]. `:request-schema=NAME` (`:in-schema=NAME`) and
-// `:response-schema=NAME` (`:out-schema=NAME`) attach explicit pipeline boundary
-// contracts; prefixing the name with `!` rejects
+// meta["schemas"]. Pipeline headers can use `:schema=NAME` for one shared
+// request/response contract, or `:request-schema=NAME` (`:in-schema=NAME`) and
+// `:response-schema=NAME` (`:out-schema=NAME`) for separate boundaries. Prefixing
+// a selected name with `!` rejects
 // undeclared fields at that boundary. Requests receive defaults before
 // validation; response schemas are validated without defaults and must not
 // declare any `default` tags. Such declarations fail before execution. Extra
@@ -14,7 +15,7 @@
 //	  Name string `json:"name" default:"guest" validate:"required"`
 //	}
 //	@pipeline greet
-//	  :request-schema=TestUser
+//	  :schema=TestUser
 //	  runtime.noop
 //	@end
 //
@@ -87,8 +88,8 @@ const (
 	OutSchemaModifierName      = "out-schema"
 )
 
-// SchemaModifier attaches schema metadata to an atom. Pipeline boundaries use
-// the explicit request-schema and response-schema header modifiers instead.
+// SchemaModifier attaches schema metadata to an atom. Pipeline headers use
+// schema selections at the request and response boundaries.
 var SchemaModifier = compiler.String(SchemaModifierName,
 	func(b *action.Builder[any, any], name string) *action.Builder[any, any] {
 		return b.Tag("schema:" + name)

@@ -720,7 +720,7 @@ func (s *flowLanguageServer) handleSchemaHover(uri string, position lspPosition)
 
 func (s *flowLanguageServer) schemaIssues(uri, source string) []lspSchemaIssue {
 	entry := s.schemaCacheEntry(uri, source)
-	references, deprecatedHeaders := lspSchemaReferencesFromIndex(entry.sourceIndex)
+	references := lspSchemaReferencesFromIndex(entry.sourceIndex)
 	if len(references) == 0 {
 		return nil
 	}
@@ -745,23 +745,6 @@ func (s *flowLanguageServer) schemaIssues(uri, source string) []lspSchemaIssue {
 
 	issues := make([]lspSchemaIssue, 0)
 	for _, reference := range references {
-		if reference.modifier == lspSourceKindSchema {
-			if _, deprecated := deprecatedHeaders[reference.start]; deprecated {
-				issues = append(issues, lspSchemaIssue{
-					diagnostic: lspDiagnostic{
-						Range:    lspRangeForByteOffsets(source, reference.start, reference.start+len(":"+reference.modifier)),
-						Severity: 2,
-						Code:     "schema.deprecated-modifier",
-						Source:   lspSource,
-						Message:  ":schema is deprecated in a pipeline header; use :request-schema=Name",
-					},
-					fixTitle: "Replace with :request-schema",
-					fixStart: reference.start,
-					fixEnd:   reference.start + len(":schema"),
-					fixText:  ":request-schema",
-				})
-			}
-		}
 		if !reference.nameExists {
 			code := "schema.missing-name"
 			message := fmt.Sprintf("schema reference :%s is missing a schema name", reference.modifier)
@@ -808,19 +791,7 @@ func (s *flowLanguageServer) schemaIssues(uri, source string) []lspSchemaIssue {
 	return issues
 }
 
-func lspSchemaReferencesFromIndex(index compiler.SourceIndex) (references []lspSchemaReference, deprecatedHeaders map[int]struct{}) {
-	deprecatedHeaders = make(map[int]struct{})
-	for _, block := range index.Blocks {
-		if block.Kind != lspSourceKindPipeline {
-			continue
-		}
-		for _, reference := range index.References {
-			if reference.Kind == lspSourceKindSchema && reference.Modifier == lspSourceKindSchema &&
-				reference.ModifierSpan.Start >= block.HeaderSpan.Start && reference.ModifierSpan.End <= block.HeaderSpan.End {
-				deprecatedHeaders[reference.ModifierSpan.Start] = struct{}{}
-			}
-		}
-	}
+func lspSchemaReferencesFromIndex(index compiler.SourceIndex) (references []lspSchemaReference) {
 	for _, reference := range index.References {
 		if reference.Kind != lspSourceKindSchema {
 			continue
@@ -836,7 +807,7 @@ func lspSchemaReferencesFromIndex(index compiler.SourceIndex) (references []lspS
 			nameExists: reference.HasName,
 		})
 	}
-	return references, deprecatedHeaders
+	return references
 }
 
 func lspClosestSchemaName(name string, candidates []string) (string, bool) {

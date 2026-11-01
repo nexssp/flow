@@ -378,8 +378,13 @@ The shorter boundary aliases are also supported:
 @end
 ```
 
-Pipeline-level `:schema=...` is not a current alias. At the atom level it is
-metadata; use `NAME.validate` for an explicit mid-pipeline validation step.
+Pipeline headers also accept `:schema=NAME` to apply one schema at both request
+and response boundaries; use it only for shared shapes without defaults.
+Choose `:request-schema` and `:response-schema` when the shapes differ or when
+only one boundary should be validated. For a bodyless GET, use only
+`:response-schema=NAME` to preserve the nil request. At the atom level,
+`:schema=NAME` remains metadata; use `NAME.validate` for an explicit
+mid-pipeline validation step.
 
 Schemas validate supported scalar, slice, map, pointer, and nested struct-shaped values at the relevant pipeline/action boundary. Schema tags are parsed by the Flow schema extension.
 

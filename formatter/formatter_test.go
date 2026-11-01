@@ -127,44 +127,44 @@ func TestFormatReportsExpressionParseLocation(t *testing.T) {
 	}
 }
 
-func TestFormatReportsDeprecatedPipelineSchemaAtModifierLocation(t *testing.T) {
+func TestFormatAcceptsSharedPipelineSchemaAlias(t *testing.T) {
 	tests := []struct {
-		name   string
-		source string
-		line   int
+		name         string
+		source       string
+		wantModifier string
 	}{
 		{
-			name:   "inline",
-			source: "@pipeline create_task:profile=worker:schema=TaskRequest\n  runtime.noop\n@end\n",
-			line:   1,
+			name:         "inline",
+			source:       "@pipeline create_task:profile=worker:schema=TaskRequest\n  runtime.noop\n@end\n",
+			wantModifier: ":schema=TaskRequest",
 		},
 		{
-			name:   "continuation",
-			source: "@pipeline create_task\n  :profile=worker\n  :schema=TaskRequest\n@end\n",
-			line:   3,
+			name:         "continuation",
+			source:       "@pipeline create_task\n  :profile=worker\n  :schema=!TaskRequest\n@end\n",
+			wantModifier: ":schema=!TaskRequest",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := testFormatter().Format(t.Context(), tt.source, "legacy.nflow")
-			if err == nil {
-				t.Fatal("Format() accepted deprecated :schema modifier")
+			got, err := testFormatter().Format(t.Context(), tt.source, "shared-schema.nflow")
+			if err != nil {
+				t.Fatalf("Format() rejected shared :schema modifier: %v", err)
 			}
-			want := compiler.Position{File: "legacy.nflow", Line: tt.line}
-			line := strings.Split(tt.source, "\n")[tt.line-1]
-			want.Col = strings.Index(line, ":schema") + 1
-			got, ok := compiler.PositionOf(err)
-			if !ok || got != want {
-				t.Fatalf("PositionOf(error) = %+v, %t; want %+v (error: %v)", got, ok, want, err)
+			if !strings.Contains(got, tt.wantModifier) {
+				t.Fatalf("Format() = %q, want preserved modifier %q", got, tt.wantModifier)
 			}
-			if !strings.Contains(err.Error(), ":schema is no longer supported; use :request-schema=Name") {
-				t.Fatalf("error %q lacks actionable migration hint", err)
+			second, err := testFormatter().Format(t.Context(), got, "shared-schema.nflow")
+			if err != nil {
+				t.Fatalf("Format() rejected its own output: %v", err)
+			}
+			if second != got {
+				t.Fatalf("format is not idempotent: %q != %q", second, got)
 			}
 		})
 	}
 }
 
-func TestFormatPastedTaskAPIExampleReportsLegacySchemaAfterValidRequireBlocks(t *testing.T) {
+func TestFormatPastedTaskAPIExampleKeepsSharedSchemaAfterValidRequireBlocks(t *testing.T) {
 	source, err := os.ReadFile("testdata/taskapi_http_nats.nflow")
 	if err != nil {
 		t.Fatal(err)
@@ -175,27 +175,12 @@ func TestFormatPastedTaskAPIExampleReportsLegacySchemaAfterValidRequireBlocks(t 
 		t.Fatalf("the real @require directive rejected the example options: %v", err)
 	}
 
-	_, err = testFormatter().Format(t.Context(), string(source), filename)
-	if err == nil {
-		t.Fatal("Format() accepted the pasted example's deprecated pipeline :schema modifiers")
+	formatted, err := testFormatter().Format(t.Context(), string(source), filename)
+	if err != nil {
+		t.Fatalf("Format() rejected the shared-schema example after valid @require blocks: %v", err)
 	}
-	if !strings.Contains(err.Error(), ":schema is no longer supported; use :request-schema=Name") {
-		t.Fatalf("Format() reported the wrong error before reaching the legacy modifier: %v", err)
-	}
-	sourceText := string(source)
-	firstSchema := strings.Index(sourceText, ":schema=")
-	if firstSchema < 0 {
-		t.Fatal("fixture no longer contains its documented legacy :schema modifier")
-	}
-	lineStart := strings.LastIndex(sourceText[:firstSchema], "\n") + 1
-	want := compiler.Position{
-		File: filename,
-		Line: strings.Count(sourceText[:firstSchema], "\n") + 1,
-		Col:  firstSchema - lineStart + 1,
-	}
-	got, ok := compiler.PositionOf(err)
-	if !ok || got != want {
-		t.Fatalf("PositionOf(error) = %+v, %t; want %+v (error: %v)", got, ok, want, err)
+	if !strings.Contains(formatted, ":schema=") {
+		t.Fatal("formatter removed the pipeline's shared schema modifier")
 	}
 }
 

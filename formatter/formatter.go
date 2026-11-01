@@ -422,9 +422,6 @@ func (f *Formatter) validateDeclaration(ctx context.Context, lines []string, ind
 		return index + 1, err
 	}
 	if directive == "pipeline" {
-		if err := rejectDeprecatedPipelineSchema(lines, index, next, file); err != nil {
-			return index + 1, err
-		}
 		state.pipeline = true
 	}
 	return next, nil
@@ -466,92 +463,6 @@ func validateAssertion(assertion, file string, index int) error {
 func (f *Formatter) parseRequireOptions(lines []string, start int, file string) (int, error) {
 	_, next, err := requireext.ParseDirectiveOptions(lines, start, file)
 	return next, err
-}
-
-func rejectDeprecatedPipelineSchema(lines []string, start, end int, file string) error {
-	for lineIndex := start; lineIndex < end && lineIndex < len(lines); lineIndex++ {
-		if column := deprecatedSchemaModifierColumn(lines[lineIndex]); column > 0 {
-			return compiler.SourceError(compiler.Position{
-				File: file,
-				Line: lineIndex + 1,
-				Col:  column,
-			}, ":schema is no longer supported; use :request-schema=Name")
-		}
-	}
-	return nil
-}
-
-// deprecatedSchemaModifierColumn returns the one-based byte column of a real
-// :schema modifier in a declaration header. It ignores quoted values and
-// trailing comments, matching the declaration-header grammar.
-func deprecatedSchemaModifierColumn(line string) int {
-	var quote byte
-	for i := 0; i < len(line); i++ {
-		var handled bool
-		quote, i, handled = advanceHeaderQuote(line, i, quote)
-		if handled {
-			continue
-		}
-		switch line[i] {
-		case '#':
-			return 0
-		case '/':
-			if hasHeaderLineComment(line, i) {
-				return 0
-			}
-		case ':':
-			if isDeprecatedSchemaModifier(line, i) {
-				return i + 1
-			}
-		}
-	}
-	return 0
-}
-
-func advanceHeaderQuote(line string, index int, quote byte) (nextQuote byte, nextIndex int, handled bool) {
-	char := line[index]
-	if quote != 0 {
-		if char == '\\' && index+1 < len(line) {
-			return quote, index + 1, true
-		}
-		if char == quote {
-			return 0, index, true
-		}
-		return quote, index, true
-	}
-	if char == '\'' || char == '"' || char == '`' {
-		return char, index, true
-	}
-	return 0, index, false
-}
-
-func hasHeaderLineComment(line string, index int) bool {
-	return index+1 < len(line) && line[index+1] == '/'
-}
-
-func isDeprecatedSchemaModifier(line string, index int) bool {
-	keyStart := index + 1
-	keyEnd := keyStart
-	for keyEnd < len(line) && declarationHeaderKeyByte(line[keyEnd], keyEnd == keyStart) {
-		keyEnd++
-	}
-	if line[keyStart:keyEnd] != "schema" {
-		return false
-	}
-	if keyEnd == len(line) {
-		return true
-	}
-	switch line[keyEnd] {
-	case '=', ':', ' ', '\t', '\r', '\n', '#', '/':
-		return true
-	default:
-		return false
-	}
-}
-
-func declarationHeaderKeyByte(c byte, first bool) bool {
-	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' ||
-		!first && (c >= '0' && c <= '9' || c == '-' || c == '.')
 }
 
 func declarationDirective(line string) (string, bool) {
