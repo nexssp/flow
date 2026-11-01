@@ -39,43 +39,61 @@ func (m *macroPrimary) Name() string { return "macros.expand" }
 func (m *macroPrimary) TokenType() compiler.TokenType { return compiler.TokAtPrompt }
 
 func (m *macroPrimary) Parse(p *compiler.Parser) (compiler.Expr, error) {
+	return m.parse(p, "")
+}
+
+func (m *macroPrimary) ParseQualified(p *compiler.Parser, qualifier string) (compiler.Expr, error) {
+	return m.parse(p, qualifier+".")
+}
+
+func (m *macroPrimary) parse(p *compiler.Parser, qualifier string) (compiler.Expr, error) {
 	nameTok := p.Current()
 	if nameTok.Type != compiler.TokAtPrompt {
 		return nil, p.Fail(nameTok.Line, "internal: macros.expand called on %s", nameTok.Type)
 	}
 	invokeLine := nameTok.Line
+	name := qualifier + nameTok.Lit
 
 	if m.depth >= maxMacroDepth {
 		return nil, p.Fail(nameTok.Line,
-			"macro @%s: expansion depth exceeded (%d)", nameTok.Lit, maxMacroDepth)
+			"macro @%s: expansion depth exceeded (%d)", name, maxMacroDepth)
 	}
 
-	declaration, ok := m.byName[nameTok.Lit]
+	declaration, ok := m.byName[name]
 	if !ok {
 		// User-declared macros take precedence; the built-ins are only a
 		// fallback so that a flow can rely on `@check_required(...)` etc.
 		// without having to redeclare them, while a user macro with the
 		// same name still shadows the built-in.
 		for _, builtin := range DefaultBuiltinMacros {
-			if builtin.Name == nameTok.Lit {
+			if builtin.Name == name {
 				declaration, ok = builtin, true
 				break
 			}
 		}
 	}
 	if !ok {
-		if prefix, isReserved := reservedDirectivePrefix(nameTok.Lit); isReserved {
+		if prefix, isReserved := reservedDirectivePrefix(name); isReserved {
 			return nil, p.Fail(nameTok.Line,
 				"@%s is a %s reference, not a macro; write it as a string: \"@%s\"",
-				nameTok.Lit, prefix, nameTok.Lit)
+				name, prefix, name)
 		}
-		return nil, p.Fail(nameTok.Line, "unknown macro @%s", nameTok.Lit)
+		return nil, p.Fail(nameTok.Line, "unknown macro @%s", name)
 	}
 
 	p.Advance() // consume @name
 
 	args, err := readArgs(p)
 	if err != nil {
+		return nil, err
+	}
+	if len(args) != len(declaration.Params) {
+		return nil, compiler.SourceError(
+			compiler.Position{File: p.File(), Line: invokeLine},
+			"macro @%s: received %d arguments, want exactly %d",
+			name, len(args), len(declaration.Params))
+	}
+	if err := validateTypedArguments(p, name, invokeLine, declaration, args); err != nil {
 		return nil, err
 	}
 
@@ -91,7 +109,7 @@ func (m *macroPrimary) Parse(p *compiler.Parser) (compiler.Expr, error) {
 	// the body and the error together so the caller does not need to
 	// step through a debugger to find the failing token.
 	recordExpansion(p, Expansion{
-		Macro:      nameTok.Lit,
+		Macro:      name,
 		DefLine:    declaration.DefLine,
 		InvokeLine: invokeLine,
 		Where:      whereFromContext(p.Context()),
@@ -100,7 +118,7 @@ func (m *macroPrimary) Parse(p *compiler.Parser) (compiler.Expr, error) {
 	})
 
 	if subErr != nil {
-		return nil, wrapMacroError(subErr, p, nameTok.Lit, invokeLine, declaration)
+		return nil, wrapMacroError(subErr, p, name, invokeLine, declaration)
 	}
 	return expr, nil
 }
@@ -146,6 +164,10 @@ func whereFromContext(ctx context.Context) string {
 // contributes one definition line to the chain.
 func wrapMacroError(err error, p *compiler.Parser, name string, invokeLine int, decl Declaration) error {
 	file := p.File()
+	definitionFile := decl.DefFile
+	if definitionFile == "" {
+		definitionFile = file
+	}
 
 	// Already wrapped by an inner macro: the inner remap has already
 	// converted the position to file-relative. Prefix this macro's
@@ -154,7 +176,7 @@ func wrapMacroError(err error, p *compiler.Parser, name string, invokeLine int, 
 		return compiler.SourceError(
 			compiler.Position{File: file, Line: invokeLine},
 			"in macro @%s (defined at %s:%d): %s",
-			name, file, decl.DefLine, err.Error())
+			name, definitionFile, decl.DefLine, err.Error())
 	}
 
 	// First (innermost) wrap: remap the body-relative line to a
@@ -164,14 +186,113 @@ func wrapMacroError(err error, p *compiler.Parser, name string, invokeLine int, 
 		return compiler.SourceError(
 			compiler.Position{File: file, Line: invokeLine},
 			"in macro @%s (defined at %s:%d): %s",
-			name, file, decl.DefLine, err.Error())
+			name, definitionFile, decl.DefLine, err.Error())
 	}
 	actualLine := decl.BodyLine + bodyLine - 1
 	cleanMsg := stripFileLinePrefix(err, file)
 	return compiler.SourceError(
-		compiler.Position{File: file, Line: actualLine},
+		compiler.Position{File: definitionFile, Line: actualLine},
 		"in macro @%s (defined at %s:%d): %s",
-		name, file, decl.DefLine, cleanMsg)
+		name, definitionFile, decl.DefLine, cleanMsg)
+}
+
+func validateTypedArguments(p *compiler.Parser, macroName string, invokeLine int, declaration Declaration, args []string) error {
+	for i, argument := range args {
+		if i >= len(declaration.ParamKinds) || declaration.ParamKinds[i] == "" {
+			continue
+		}
+		kind := declaration.ParamKinds[i]
+		valid := false
+		switch kind {
+		case "Identifier":
+			valid = singleIdentifier(argument)
+		case "String":
+			valid = singleTokenOfType(argument, compiler.TokString)
+		case "Integer":
+			valid = singleIntegerLiteral(argument)
+		case "Expr":
+			_, err := p.SubParse(argument)
+			if err == nil {
+				valid = true
+			} else {
+				return compiler.SourceError(
+					compiler.Position{File: p.File(), Line: invokeLine},
+					"macro @%s: argument %d (%s) must be a valid Flow Expr: %v",
+					macroName, i+1, declaration.Params[i], err)
+			}
+		case "ActionRef":
+			if singleTokenOfType(argument, compiler.TokIdent) {
+				// Parse only to confirm this is an action atom. Resolver lookup is
+				// deliberately deferred to the normal post-expansion Build phase.
+				parsed, err := p.SubParse(argument)
+				if err == nil {
+					_, valid = parsed.(*compiler.Atom)
+				}
+			}
+		}
+		if !valid {
+			requirement := typedArgumentRequirement(kind)
+			return compiler.SourceError(
+				compiler.Position{File: p.File(), Line: invokeLine},
+				"macro @%s: argument %d (%s) must be %s",
+				macroName, i+1, declaration.Params[i], requirement)
+		}
+	}
+	return nil
+}
+
+func typedArgumentRequirement(kind string) string {
+	switch kind {
+	case "Identifier":
+		return "a bare Identifier"
+	case "String":
+		return "a quoted String"
+	case "Integer":
+		return "an Integer literal"
+	case "Expr":
+		return "a valid Flow Expr"
+	case "ActionRef":
+		return "one bare or qualified ActionRef capability name"
+	default:
+		return "a " + kind
+	}
+}
+
+func singleIdentifier(source string) bool {
+	token, ok := singleToken(source)
+	return ok && token.Type == compiler.TokIdent && validIdentifier(token.Lit)
+}
+
+func singleIntegerLiteral(source string) bool {
+	token, ok := singleToken(source)
+	if !ok || token.Type != compiler.TokNumber {
+		return false
+	}
+	literal := token.Lit
+	literal = strings.TrimPrefix(literal, "-")
+	if literal == "" {
+		return false
+	}
+	for i := range len(literal) {
+		if literal[i] < '0' || literal[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func singleTokenOfType(source string, want compiler.TokenType) bool {
+	token, ok := singleToken(source)
+	return ok && token.Type == want
+}
+
+func singleToken(source string) (compiler.Token, bool) {
+	lexer := compiler.NewLexer(strings.TrimSpace(source))
+	token := lexer.Next()
+	if token.Type == compiler.TokEOF || token.Unterminated {
+		return token, false
+	}
+	return token, lexer.Next().Type == compiler.TokEOF
 }
 
 // parseBodyLine extracts the line number from an error of the form
@@ -262,27 +383,45 @@ func readArgs(p *compiler.Parser) ([]string, error) {
 	parts := compiler.SplitTopLevel(inner, ',')
 	out := make([]string, 0, len(parts))
 	for _, a := range parts {
-		if a = strings.TrimSpace(a); a != "" {
-			out = append(out, a)
+		a = strings.TrimSpace(a)
+		if a == "" {
+			return nil, p.Fail(p.Current().Line, "macros: empty argument in macro call")
 		}
+		out = append(out, a)
 	}
 	return out, nil
 }
 
-// substituteParams replaces $name placeholders with the caller's
-// arguments. Missing arguments become the empty string. Arguments are
-// passed verbatim (quotes included), so a macro body must not wrap
+// substituteParams replaces $name placeholders with the caller's arguments.
+// Arguments are passed verbatim (quotes included), so a macro body must not wrap
 // $param in its own quotes: write `value: $v`, not `value: "$v"`.
 func substituteParams(body string, params, args []string) string {
-	out := body
+	values := make(map[string]string, len(params))
 	for i, param := range params {
-		arg := ""
 		if i < len(args) {
-			arg = args[i]
+			values[param] = args[i]
 		}
-		out = strings.ReplaceAll(out, "$"+param, arg)
 	}
-	return out
+	var out strings.Builder
+	out.Grow(len(body))
+	for i := 0; i < len(body); {
+		if body[i] != '$' || i+1 >= len(body) || !isMacroNameStart(body[i+1]) {
+			out.WriteByte(body[i])
+			i++
+			continue
+		}
+		end := i + 2
+		for end < len(body) && isMacroNameCont(body[end]) {
+			end++
+		}
+		if value, ok := values[body[i+1:end]]; ok {
+			out.WriteString(value)
+		} else {
+			out.WriteString(body[i:end])
+		}
+		i = end
+	}
+	return out.String()
 }
 
 // MergeWith implements compiler.MergeablePrimary. The argument is the

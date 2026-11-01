@@ -54,11 +54,17 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	}
 
 	name := strings.TrimSpace(rest[:openParen])
-	if name == "" {
+	if !validMacroName(name) {
+		if name != "" {
+			return compiler.DirectiveRes{}, compiler.SourceError(pos, "@macro: invalid name %q", name)
+		}
 		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@macro: name is required")
 	}
 
-	params := splitParams(rest[openParen+1 : closeParen])
+	params, paramKinds, err := parseParams(rest[openParen+1:closeParen], pos, name)
+	if err != nil {
+		return compiler.DirectiveRes{}, err
+	}
 
 	body, bodyLine, next, err := readBody(req.Lines, req.I, openBrace)
 	if err != nil {
@@ -69,19 +75,15 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	if err := req.Declare("macro", name); err != nil {
 		return compiler.DirectiveRes{}, err
 	}
-	for _, prior := range existing {
-		if prior.Name == name {
-			return compiler.DirectiveRes{}, compiler.SourceError(pos,
-				"@macro %s: duplicate declaration", name)
-		}
-	}
 
 	decl := Declaration{
-		Name:     name,
-		Params:   params,
-		Body:     body,
-		DefLine:  pos.Line,
-		BodyLine: bodyLine,
+		Name:       name,
+		Params:     params,
+		ParamKinds: paramKinds,
+		Body:       body,
+		DefFile:    req.File,
+		DefLine:    pos.Line,
+		BodyLine:   bodyLine,
 	}
 	if err := validateMacroDeclaration(decl, existing, pos); err != nil {
 		return compiler.DirectiveRes{}, err
@@ -195,7 +197,7 @@ func readMacroRefAt(s string, i int) (ref string, next int) {
 		return "", i + 1
 	}
 	j := i + 1
-	for j < len(s) && isMacroNameCont(s[j]) {
+	for j < len(s) && (isMacroNameCont(s[j]) || s[j] == '-' || s[j] == '.') {
 		j++
 	}
 	return s[i+1 : j], j
@@ -238,14 +240,67 @@ func detectCycle(graph map[string][]string, start string) []string {
 	return walk(start)
 }
 
-func splitParams(raw string) []string {
-	var out []string
-	for p := range strings.SplitSeq(raw, ",") {
-		if p = strings.TrimSpace(p); p != "" {
-			out = append(out, p)
+func parseParams(raw string, pos compiler.Position, macroName string) (params, kinds []string, err error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil, nil
+	}
+	parts := strings.Split(raw, ",")
+	params = make([]string, 0, len(parts))
+	kinds = make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return nil, nil, compiler.SourceError(pos, "@macro %s: empty parameter", macroName)
+		}
+		name, kind, typed := strings.Cut(part, ":")
+		name = strings.TrimSpace(name)
+		if !validIdentifier(name) {
+			return nil, nil, compiler.SourceError(pos, "@macro %s: invalid parameter name %q", macroName, name)
+		}
+		if _, exists := seen[name]; exists {
+			return nil, nil, compiler.SourceError(pos, "@macro %s: duplicate parameter %q", macroName, name)
+		}
+		seen[name] = struct{}{}
+		parameterKind := ""
+		if typed {
+			parameterKind = strings.TrimSpace(kind)
+			switch parameterKind {
+			case "Identifier", "String", "Integer", "Expr", "ActionRef":
+			default:
+				return nil, nil, compiler.SourceError(pos,
+					"@macro %s: parameter %s has unsupported kind %q (want Identifier, String, Integer, Expr, or ActionRef)",
+					macroName, name, parameterKind)
+			}
+		}
+		params = append(params, name)
+		kinds = append(kinds, parameterKind)
+	}
+	return params, kinds, nil
+}
+
+func validIdentifier(name string) bool {
+	if name == "" || !isMacroNameStart(name[0]) {
+		return false
+	}
+	for i := 1; i < len(name); i++ {
+		if !isMacroNameCont(name[i]) {
+			return false
 		}
 	}
-	return out
+	return true
+}
+
+func validMacroName(name string) bool {
+	if name == "" || !isMacroNameStart(name[0]) {
+		return false
+	}
+	for i := 1; i < len(name); i++ {
+		if !isMacroNameCont(name[i]) && name[i] != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // readBody reads the body of a `@macro ... { ... }` declaration.

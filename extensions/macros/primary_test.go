@@ -45,8 +45,9 @@ func TestSubstituteParams(t *testing.T) {
 	}{
 		{"single", `runtime.const @{ value: $v }`, []string{"v"}, []string{`"hi"`}, `runtime.const @{ value: "hi" }`},
 		{"multiple", `$a -> $b`, []string{"a", "b"}, []string{"runtime.noop", "runtime.debug"}, `runtime.noop -> runtime.debug`},
-		{"missing arg", `$a -> $b`, []string{"a", "b"}, []string{"noop"}, `noop -> `},
+		{"missing arg", `$a -> $b`, []string{"a", "b"}, []string{"noop"}, `noop -> $b`},
 		{"repeated", `$v + $v`, []string{"v"}, []string{"1"}, `1 + 1`},
+		{"name boundary", `$v + $value`, []string{"v"}, []string{"1"}, `1 + $value`},
 		{"no params", `noop`, nil, nil, `noop`},
 	}
 	for _, c := range cases {
@@ -59,30 +60,60 @@ func TestSubstituteParams(t *testing.T) {
 
 func TestReadArgs(t *testing.T) {
 	t.Parallel()
-
-	// The macro body is chosen per case: parameterless calls cannot
-	// substitute $v (it would become `runtime.const @{ value:  }`, invalid
-	// DSL) so they use a body that ignores the parameter.
 	cases := []struct {
 		name   string
 		source string
 		body   string
+		params []string
 	}{
-		{"no parens", `@echo`, `runtime.const @{ value: "default" }`},
-		{"empty parens", `@echo()`, `runtime.const @{ value: "default" }`},
-		{"single arg", `@echo("x")`, `runtime.const @{ value: $v }`},
-		{"comma in quotes", `@echo("a,b")`, `runtime.const @{ value: $v }`},
+		{"no parens", `@echo`, `runtime.const @{ value: "default" }`, nil},
+		{"empty parens", `@echo()`, `runtime.const @{ value: "default" }`, nil},
+		{"single arg", `@echo("x")`, `runtime.const @{ value: $v }`, []string{"v"}},
+		{"comma in quotes", `@echo("a,b")`, `runtime.const @{ value: $v }`, []string{"v"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			byName := map[string]Declaration{
-				"echo": {Name: "echo", Params: []string{"v"}, Body: c.body},
+				"echo": {Name: "echo", Params: c.params, Body: c.body},
 			}
 			expr, err := newTestParser(t, byName, c.source).Parse()
 			ktest.RequireNoError(t, err)
 			ktest.RequireCondition(t, expr != nil, "nil expr")
 		})
+	}
+}
+
+func TestPrimaryQualifiedMacroCall(t *testing.T) {
+	t.Parallel()
+	byName := map[string]Declaration{
+		"reporting.echo": {
+			Name:   "echo",
+			Params: []string{"value"},
+			Body:   `runtime.const @{ value: $value }`,
+		},
+	}
+	expr, err := newTestParser(t, byName, `reporting.@echo("qualified")`).Parse()
+	ktest.RequireNoError(t, err)
+	atom, ok := expr.(*compiler.Atom)
+	ktest.RequireCondition(t, ok, "expected atom, got %T", expr)
+	ktest.RequireEqual(t, atom.Args["value"].Str, "qualified")
+}
+
+func TestPrimaryMacroRequiresExactArity(t *testing.T) {
+	t.Parallel()
+	byName := map[string]Declaration{
+		"echo": {Name: "echo", Params: []string{"value"}, Body: `runtime.noop`},
+	}
+	for _, tc := range []struct {
+		source string
+		want   string
+	}{
+		{source: `@echo()`, want: "received 0 arguments, want exactly 1"},
+		{source: `@echo("one", "two")`, want: "received 2 arguments, want exactly 1"},
+	} {
+		_, err := newTestParser(t, byName, tc.source).Parse()
+		ktest.RequireErrorContains(t, err, tc.want)
 	}
 }
 
@@ -103,6 +134,23 @@ func TestArgumentMapMacroSplicesEntries(t *testing.T) {
 	ktest.RequireEqual(t, atom.Args["tree_only"].Kind, compiler.ValueRef)
 	ktest.RequireEqual(t, atom.Args["tree_only"].Ref, "config.stats_tree_only")
 	ktest.RequireEqual(t, atom.Args["full_tree"].Ref, "config.stats_full_tree")
+}
+
+func TestArgumentMapQualifiedMacroSplicesEntries(t *testing.T) {
+	t.Parallel()
+	byName := map[string]Declaration{
+		"reporting.stats_config": {
+			Name:       "stats_config",
+			Params:     []string{"field"},
+			ParamKinds: []string{"Identifier"},
+			Body:       `$field: 7`,
+		},
+	}
+	parsed, err := newTestParser(t, byName, `runtime.const @{ reporting.@stats_config(tree_only) }`).Parse()
+	ktest.RequireNoError(t, err)
+	atom, ok := parsed.(*compiler.Atom)
+	ktest.RequireCondition(t, ok, "expected atom, got %T", parsed)
+	ktest.RequireEqual(t, atom.Args["tree_only"].Num, float64(7))
 }
 
 func TestArgumentMapMacroExpansionSkipsStringsAndComments(t *testing.T) {

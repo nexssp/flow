@@ -270,6 +270,10 @@ func (p *Parser) parsePrimary() (Expr, error) {
 }
 
 func (p *Parser) parsePrimaryInner() (Expr, error) {
+	if expr, ok, err := p.parseQualifiedTokenPrimary(); ok {
+		return expr, err
+	}
+
 	if ext, ok := p.primaries.ByToken(p.Cur().Type); ok {
 		return ext.Parse(p)
 	}
@@ -338,6 +342,24 @@ func (p *Parser) parsePrimaryInner() (Expr, error) {
 		return nil, p.errorf(p.Cur().Line, "expected expression, got end of input")
 	}
 	return nil, p.errorf(p.Cur().Line, "unexpected token %q", p.Cur().Lit)
+}
+
+func (p *Parser) parseQualifiedTokenPrimary() (Expr, bool, error) {
+	if p.Cur().Type != TokIdent || !strings.HasSuffix(p.Cur().Lit, ".") || p.Peek(1).Type != TokAtPrompt {
+		return nil, false, nil
+	}
+	ext, ok := p.primaries.ByToken(TokAtPrompt)
+	if !ok {
+		return nil, false, nil
+	}
+	qualified, ok := ext.(QualifiedTokenPrimary)
+	if !ok {
+		return nil, false, nil
+	}
+	qualifier := strings.TrimSuffix(p.Cur().Lit, ".")
+	p.Next()
+	expr, err := qualified.ParseQualified(p, qualifier)
+	return expr, true, err
 }
 
 func (p *Parser) parsePostfixModifiers(expr Expr) (Expr, error) {

@@ -15,6 +15,7 @@ package macros
 
 import (
 	"embed"
+	"maps"
 
 	"github.com/nexssp/kernel/action"
 
@@ -39,11 +40,13 @@ var fixturesFS embed.FS
 // used to remap parse errors from inside the expanded body back to
 // the correct file position so diagnostics are clickable.
 type Declaration struct {
-	Name     string
-	Params   []string
-	Body     string
-	DefLine  int
-	BodyLine int
+	Name       string
+	Params     []string
+	ParamKinds []string // aligned with Params; empty kinds preserve legacy raw substitution
+	Body       string
+	DefFile    string
+	DefLine    int
+	BodyLine   int
 }
 
 func init() {
@@ -63,15 +66,19 @@ func Bundle(_ map[string]string) compiler.Bundle {
 			//
 			// Sub-pipelines inherit the parent's macro primary through
 			// CompileReq.InheritedPrimaries and also contribute their own here.
-			// NewPrimaryExtensionTable detects the duplicate TokAtPrompt handler
-			// and, because *macroPrimary implements compiler.MergeablePrimary,
-			// calls MergeWith to fold the two declaration maps together. The
-			// parent's macros stay visible in the sub-source; the sub-source's
-			// own declarations shadow on name collision.
+			// Ordinary source imports remain separate modules; only their macro
+			// declarations are made callable through the existing include alias.
 			declarations, _ := meta[DeclarationKey].([]Declaration)
 			byName := make(map[string]Declaration, len(declarations))
 			for _, declaration := range declarations {
 				byName[declaration.Name] = declaration
+			}
+			for _, imported := range compiler.SourceImports(meta) {
+				if imported.Source == nil {
+					continue
+				}
+				// Imported keys are alias-qualified; local macro names are validated as unqualified identifiers.
+				maps.Copy(byName, importedMacroDeclarations(imported.Source.Metadata(), imported.Namespace))
 			}
 			return compiler.PreprocessContributions{
 				Primaries: []compiler.PrimaryExtension{&macroPrimary{byName: byName}},

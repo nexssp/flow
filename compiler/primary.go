@@ -13,6 +13,13 @@ type TokenPrimary interface {
 	TokenType() TokenType
 }
 
+// QualifiedTokenPrimary handles a token primary preceded by a qualifier, such
+// as `module.@macro(...)`. The parser passes the qualifier without its final dot.
+type QualifiedTokenPrimary interface {
+	PrimaryExtension
+	ParseQualified(p *Parser, qualifier string) (Expr, error)
+}
+
 // KeywordPrimary is the keyword-dispatch contract.
 type KeywordPrimary interface {
 	PrimaryExtension

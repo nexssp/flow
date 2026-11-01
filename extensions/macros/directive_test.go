@@ -34,6 +34,7 @@ func TestDirective_InlineBody(t *testing.T) {
 	ktest.RequireEqual(t, decls[0].Name, "hi")
 	ktest.RequireEqual(t, decls[0].Body, `runtime.const @{ value: "hi" }`)
 	ktest.RequireEqual(t, len(decls[0].Params), 0)
+	ktest.RequireEqual(t, decls[0].DefFile, "<test>")
 }
 
 func TestDirective_MultiLineBody(t *testing.T) {
@@ -54,27 +55,38 @@ func TestDirective_MultiLineBody(t *testing.T) {
 	ktest.RequireEqual(t, decls[0].Body, `runtime.const @{ value: $v }`)
 }
 
-func TestDirective_MultipleParams(t *testing.T) {
+func TestDirective_ExactTypedParamKindSet(t *testing.T) {
 	t.Parallel()
-	out, _, err := runDirective(t, `@macro pair(k, v) { $k -> $v }`)
+	out, _, err := runDirective(t, `@macro pair(key: Identifier, label: String, count: Integer, value: Expr, action: ActionRef) { $key: $value }`)
 	ktest.RequireNoError(t, err)
 
 	decls, _ := out[DeclarationKey].([]Declaration)
-	ktest.RequireEqual(t, decls[0].Params, []string{"k", "v"})
+	ktest.RequireEqual(t, decls[0].Params, []string{"key", "label", "count", "value", "action"})
+	ktest.RequireEqual(t, decls[0].ParamKinds, []string{"Identifier", "String", "Integer", "Expr", "ActionRef"})
 }
 
-func TestDirective_DuplicateName(t *testing.T) {
+func TestDirective_HyphenatedMacroName(t *testing.T) {
 	t.Parallel()
-	out := map[string]any{
-		DeclarationKey: []Declaration{{Name: "dup"}},
-	}
-	_, err := handleDirective(context.Background(), compiler.DirectiveReq{
+	out, _, err := runDirective(t, `@macro build-report() { runtime.noop }`)
+	ktest.RequireNoError(t, err)
+	decls, _ := out[DeclarationKey].([]Declaration)
+	ktest.RequireEqual(t, decls[0].Name, "build-report")
+}
+
+func TestDirective_DuplicateNameUsesCompilerRegistry(t *testing.T) {
+	t.Parallel()
+	out := map[string]any{}
+	req := compiler.DirectiveReq{
 		Lines: []string{`@macro dup() { noop }`},
 		I:     0,
 		Out:   out,
 		File:  "<test>",
-	})
-	ktest.RequireErrorContains(t, err, "duplicate")
+	}
+	_, err := handleDirective(context.Background(), req)
+	ktest.RequireNoError(t, err)
+	_, err = handleDirective(context.Background(), req)
+	ktest.RequireErrorContains(t, err, `duplicate declaration @macro "dup"`)
+	ktest.RequireErrorContains(t, err, "first declared at")
 }
 
 func TestDirective_Errors(t *testing.T) {
@@ -87,6 +99,12 @@ func TestDirective_Errors(t *testing.T) {
 		{"missing brace", []string{`@macro x() const`}, "expected"},
 		{"missing parens", []string{`@macro x { noop }`}, "expected"},
 		{"empty name", []string{`@macro () { noop }`}, "name is required"},
+		{"qualified name", []string{`@macro report.echo() { noop }`}, "invalid name"},
+		{"invalid parameter", []string{`@macro f(bad-name) { noop }`}, "invalid parameter name"},
+		{"duplicate parameter", []string{`@macro f(value, value) { noop }`}, "duplicate parameter"},
+		{"unsupported parameter kind", []string{`@macro f(value:number) { noop }`}, "unsupported kind"},
+		{"lowercase kind is unsupported", []string{`@macro f(value:expr) { noop }`}, "unsupported kind"},
+		{"PipelineRef is deferred", []string{`@macro f(value:PipelineRef) { noop }`}, "unsupported kind"},
 		{"unclosed", []string{`@macro x() {`, `  noop`}, "unclosed"},
 	}
 	for _, c := range cases {

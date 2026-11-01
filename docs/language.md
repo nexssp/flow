@@ -372,7 +372,7 @@ the pipeline is compiled.
 | `@approval NAME { ... }` | Declare a named human-approval gate; see [pause and resume](approval-resume.md) |
 ---
 
-`@include "payments.nflow" AS billing` imports the file as a separate source module; its exported pipeline is called as `billing.pipeline.charge`. Without `AS`, the filename stem is the namespace, so the same file is called as `payments.pipeline.charge`. Imports are not textual inlining or a metadata merger: declarations stay in their module, local references resolve there, and a clean imported body remains a compiled module call rather than being pasted into the parent source. A declaration-only import contributes no execution atom. Nested imports carry their own namespace. Constants, profiles, macros, and schemas remain module-local; do not rely on imported macros or schemas in parent modifiers/declarations. `@require` continues to load bundles independently of `@include`.
+`@include "payments.nflow" AS billing` imports the file as a separate source module; its pipeline is called as `billing.pipeline.charge`, a schema as `billing.StatsRequest`, and a symbol as `billing.output.text`. Macros are callable in expressions under the same alias, using `billing.@stats_config(tree_only)` (also inside an argument map), but not in declaration or modifier positions. Nested imports keep their path, so a macro in `billing` can call a nested helper as `helpers.@format(value)`. Without `AS`, the filename stem is the namespace. Imports are not textual inlining or a metadata merger: declarations stay in their module, local references resolve there, and a clean imported body remains a compiled module call rather than being pasted into the parent source. A declaration-only import contributes no execution atom. Distinct namespaces may use the same leaf name; qualify imported calls to select the intended declaration, while an unqualified call selects a local macro. Constants and profiles keep their existing local/preprocessor behavior and are not exported. `@require` continues to load bundles independently of `@include`.
 
 For symbol declaration syntax, include behavior, namespace precedence, and supported expression contexts, see [Symbols](symbols.md).
 
@@ -546,7 +546,15 @@ Metadata modifiers stay on the atom or wrapper where they're declared:
 ## 11. `@macro` — compile-time patterns
 
 A macro is a named expansion. The compiler substitutes parameters and
-re-parses the body as if it were written at the call site.
+re-parses the body as if it were written at the call site. Bodies are Flow
+expressions only; a macro cannot create declarations. Calls must supply exactly
+the declared number of arguments. Parameters may optionally use the exact,
+case-sensitive kinds `: Identifier`, `: String`, `: Integer`, `: Expr`, and
+`: ActionRef`; untyped parameters retain raw substitution. `Identifier` accepts
+a bare name, `String` quoted text, `Integer` an integer literal, and `Expr` any
+valid Flow expression. `ActionRef` accepts one bare or qualified capability
+name syntactically; the normal compiler resolver checks whether it is registered
+after macro expansion.
 
 ```nflow
 @macro user_card(name) {

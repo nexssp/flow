@@ -66,6 +66,15 @@ func (m *macroPrimary) expandMapMacro(
 	declaration Declaration,
 ) (string, error) {
 	invokeLine := p.Position().Line
+	if len(args) != len(declaration.Params) {
+		return "", compiler.SourceError(
+			compiler.Position{File: p.File(), Line: invokeLine},
+			"macro @%s: received %d arguments, want exactly %d",
+			name, len(args), len(declaration.Params))
+	}
+	if err := validateTypedArguments(p, name, invokeLine, declaration, args); err != nil {
+		return "", err
+	}
 	if m.depth >= maxMacroDepth {
 		return "", compiler.SourceError(
 			compiler.Position{File: p.File(), Line: invokeLine},
@@ -95,15 +104,20 @@ func (m *macroPrimary) expandMapMacro(
 // entry (aside from leading/trailing whitespace and line comments).
 func readMapMacroCall(entry string) (name string, args []string, ok bool, err error) {
 	i := skipMapTrivia(entry, 0)
-	if i >= len(entry) || entry[i] != '@' || i+1 >= len(entry) || !isMacroNameStart(entry[i+1]) {
+	if i >= len(entry) {
 		return "", nil, false, nil
 	}
-	start := i + 1
-	i++
-	for i < len(entry) && isMacroNameCont(entry[i]) {
-		i++
+	if qualified, next, found := readQualifiedMacroRefAt(entry, i); found {
+		name, i = qualified, next
+	} else {
+		if entry[i] != '@' {
+			return "", nil, false, nil
+		}
+		name, i = readMacroRefAt(entry, i)
+		if name == "" {
+			return "", nil, false, nil
+		}
 	}
-	name = entry[start:i]
 	i = skipMapSpace(entry, i)
 	if i < len(entry) && entry[i] == '(' {
 		end, inner, balanced := readCallBody(entry, i)
