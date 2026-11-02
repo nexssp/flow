@@ -1,0 +1,13 @@
+@description "spec: projection path shorthand and path spread preserve fields with explicit overrides"
+{
+  user: { current: { attempt: { attempt_id: "attempt-7", model: "router-v2" } } },
+  state: { keep: true, override: "old" }
+}
+-> {
+  ... .state,
+  .user.current.attempt.attempt_id,
+  override: "new"
+}
+@assert: result.attempt_id == "attempt-7"
+@assert: result.keep == true
+@assert: result.override == "new"

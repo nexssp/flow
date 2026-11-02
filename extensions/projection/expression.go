@@ -25,6 +25,9 @@ func buildProgramSource(raw string) (string, error) {
 	if err := validateProjectionLetReferences(bindings); err != nil {
 		return "", err
 	}
+	if err := validateProjectionObjectKeys("{" + body + "}"); err != nil {
+		return "", err
+	}
 
 	var object string
 	state, rest, hasSpread := splitSpread(body)
@@ -339,6 +342,8 @@ func (s *projectionShorthandScanner) rewriteAt(index int) int {
 		s.rewritten.WriteByte(c)
 		s.lastSignificant = c
 		return index + 1
+	case c == '.' && s.isObjectEntryStart():
+		return s.copyPathShorthand(index)
 	case isProjectionIdentifierStart(c):
 		return s.copyIdentifier(index)
 	default:
@@ -383,8 +388,23 @@ func (s *projectionShorthandScanner) copyIdentifier(index int) int {
 }
 
 func (s *projectionShorthandScanner) isBareField(end int) bool {
-	startsEntry := s.lastSignificant == '{' || s.lastSignificant == ','
-	return startsEntry && projectionEntryEndsAt(s.raw, end, s.parenDepth)
+	return s.isObjectEntryStart() && projectionEntryEndsAt(s.raw, end, s.parenDepth)
+}
+
+func (s *projectionShorthandScanner) isObjectEntryStart() bool {
+	return s.lastSignificant == '{' || s.lastSignificant == ','
+}
+
+func (s *projectionShorthandScanner) copyPathShorthand(index int) int {
+	end, key, ok := projectionPathAt(s.raw, index)
+	if !ok || !projectionEntryEndsAt(s.raw, end, s.parenDepth) {
+		return s.copyByte(index)
+	}
+	s.rewritten.WriteString(key)
+	s.rewritten.WriteString(": ")
+	s.rewritten.WriteString(s.raw[index:end])
+	s.lastSignificant = s.raw[end-1]
+	return end
 }
 
 func (s *projectionShorthandScanner) copyByte(index int) int {
@@ -430,6 +450,158 @@ func projectionEntryEndsAt(raw string, index, parenDepth int) bool {
 	return true // EOF is the closing edge of the outer projection object.
 }
 
+func projectionPathAt(raw string, index int) (end int, key string, ok bool) {
+	if index >= len(raw) || raw[index] != '.' {
+		return index, "", false
+	}
+	position := index + 1
+	for {
+		start := position
+		if position >= len(raw) || !isProjectionIdentifierStart(raw[position]) {
+			return index, "", false
+		}
+		position++
+		for position < len(raw) && (isProjectionIdentifierContinue(raw[position]) || raw[position] == '-') {
+			position++
+		}
+		key = raw[start:position]
+		if position >= len(raw) || raw[position] != '.' {
+			return position, key, true
+		}
+		position++
+	}
+}
+
+// validateProjectionObjectKeys rejects duplicates after path shorthand has
+// derived their output keys, matching the argument-map duplicate policy.
+func validateProjectionObjectKeys(raw string) error {
+	scanner := projectionObjectKeyScanner{raw: raw}
+	for position := 0; position < len(raw); {
+		next, err := scanner.advance(position)
+		if err != nil {
+			return err
+		}
+		position = next
+	}
+	return nil
+}
+
+type projectionObjectFrame struct {
+	parenDepth   int
+	bracketDepth int
+	keys         map[string]struct{}
+}
+
+type projectionObjectKeyScanner struct {
+	raw          string
+	frames       []projectionObjectFrame
+	quote        byte
+	parenDepth   int
+	bracketDepth int
+}
+
+func (s *projectionObjectKeyScanner) advance(position int) (int, error) {
+	current := s.raw[position]
+	if s.quote != 0 {
+		next, quote := advanceProjectionQuote(s.raw, position, s.quote)
+		s.quote = quote
+		return next, nil
+	}
+	if isProjectionQuote(current) {
+		s.quote = current
+		return position + 1, nil
+	}
+	if current == '#' && s.parenDepth == 0 {
+		return skipProjectionComment(s.raw, position), nil
+	}
+	switch current {
+	case '(':
+		s.parenDepth++
+	case ')':
+		if s.parenDepth > 0 {
+			s.parenDepth--
+		}
+	case '[':
+		s.bracketDepth++
+	case ']':
+		if s.bracketDepth > 0 {
+			s.bracketDepth--
+		}
+	case '{':
+		frame := projectionObjectFrame{
+			parenDepth:   s.parenDepth,
+			bracketDepth: s.bracketDepth,
+			keys:         make(map[string]struct{}),
+		}
+		s.frames = append(s.frames, frame)
+		return position + 1, s.addKey(&s.frames[len(s.frames)-1], position+1)
+	case '}':
+		if len(s.frames) > 0 {
+			s.frames = s.frames[:len(s.frames)-1]
+		}
+	case ',':
+		if len(s.frames) > 0 {
+			frame := &s.frames[len(s.frames)-1]
+			if s.parenDepth == frame.parenDepth && s.bracketDepth == frame.bracketDepth {
+				return position + 1, s.addKey(frame, position+1)
+			}
+		}
+	}
+	return position + 1, nil
+}
+
+func (s *projectionObjectKeyScanner) addKey(frame *projectionObjectFrame, position int) error {
+	key, ok := projectionObjectEntryKey(s.raw, position)
+	if !ok {
+		return nil
+	}
+	if _, exists := frame.keys[key]; exists {
+		return fmt.Errorf("projection: duplicate key %q", key)
+	}
+	frame.keys[key] = struct{}{}
+	return nil
+}
+
+func projectionObjectEntryKey(raw string, position int) (string, bool) {
+	position = skipProjectionTrivia(raw, position)
+	key, position, ok := projectionObjectEntryKeyAt(raw, position)
+	if !ok {
+		return "", false
+	}
+	position = skipProjectionTrivia(raw, position)
+	if position >= len(raw) {
+		return key, true
+	}
+	switch raw[position] {
+	case ':', ',', '}':
+		return key, true
+	default:
+		return "", false
+	}
+}
+
+func projectionObjectEntryKeyAt(raw string, position int) (key string, next int, ok bool) {
+	if position >= len(raw) || strings.HasPrefix(raw[position:], "...") {
+		return "", position, false
+	}
+	switch {
+	case raw[position] == '.':
+		end, key, ok := projectionPathAt(raw, position)
+		if !ok {
+			return "", position, false
+		}
+		return key, end, true
+	case isProjectionIdentifierStart(raw[position]):
+		start := position
+		for position < len(raw) && isProjectionIdentifierContinue(raw[position]) {
+			position++
+		}
+		return raw[start:position], position, true
+	default:
+		return "", position, false
+	}
+}
+
 func isProjectionIdentifierStart(c byte) bool {
 	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
@@ -451,7 +623,14 @@ func splitSpread(raw string) (stateRef, rest string, hasSpread bool) {
 		return "", raw, false
 	}
 	after = strings.TrimLeft(after, " \t\n")
+	if end, _, path := projectionPathAt(after, 0); path && (end == len(after) || isProjectionWhitespace(after[end]) || after[end] == ',') {
+		stateRef = after[:end]
+		after = after[end:]
+	} else {
+		stateRef = "__root__"
+	}
+	after = strings.TrimLeft(after, " \t\n")
 	after = strings.TrimPrefix(after, ",")
 	after = strings.TrimLeft(after, " \t\n")
-	return "__root__", after, true
+	return stateRef, after, true
 }

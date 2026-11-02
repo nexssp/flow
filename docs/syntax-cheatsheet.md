@@ -24,7 +24,7 @@ const @{ count: 3, enabled: true, tags: ["a", "b"] }
 request.action :timeout=3s :retry=2 @{ id: .id, payload: . }
 ```
 
-`@{ ... }` is a structured data block. Use explicit `key: value` pairs. Values can be literals, arrays, nested objects, `.`, and input paths such as `.user.id`.
+`@{ ... }` is a structured data block. Values can be literals, arrays, nested objects, `.`, and input paths such as `.user.id`. A path entry `.user.id,` derives the key `id`; bare fields such as `name` still mean `name: .name`. Duplicate keys fail.
 
 Modifiers and `@{ ... }` may be combined on the same action. Modifiers come
 before the argument block; both compact and spaced colon forms are accepted:
@@ -83,7 +83,9 @@ parallel {
 ```nflow
 { id: .user.id, name: .user.name }
 { id, name, email }
+{ .user.id, .user.profile.email }
 { ..., status: "ready" }
+{ ... .state, status: "ready" }
 { let total = .price * .quantity; ..., total: total }
 pick @{ field: "user.id" }
 wrap @{ key: "data" }

@@ -1,0 +1,13 @@
+@description "spec: []Schema elements are recursively checked as nested objects"
+@schema Candidate {
+  ID string `json:"id" validate:"required"`
+}
+@schema Request {
+  Candidates []Candidate `json:"candidates" validate:"required,min=1,dive,required"`
+}
+{ candidates: ["not-an-object"] }
+-> Request.validate ? on_error {
+  xerr.KindValidation -> { rejected: true },
+  else -> error.reraise
+}
+@assert: result.rejected == true

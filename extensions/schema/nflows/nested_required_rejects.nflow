@@ -1,0 +1,13 @@
+@description "spec: nested @schema fields enforce required tags recursively"
+@schema Attempt {
+  AttemptID string `json:"attempt_id" validate:"required"`
+}
+@schema Candidate {
+  Attempt Attempt `json:"attempt" validate:"required"`
+}
+{ attempt: {} }
+-> Candidate.validate ? on_error {
+  xerr.KindValidation -> { rejected: true },
+  else -> error.reraise
+}
+@assert: result.rejected == true

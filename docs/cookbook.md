@@ -62,11 +62,26 @@ Projection shorthand copies a field with the same name:
 { id, name, email }
 ```
 
-Spread the current object before overriding fields:
+To select a nested value without writing a separate key, use the path shorthand;
+the final path segment becomes the output key:
+
+```nflow
+{ .user.id, .user.profile.email }
+```
+
+This produces `{ id: .user.id, email: .user.profile.email }`. Duplicate keys
+between shorthand and explicit entries are rejected.
+
+Spread the current object—or a nested object—before overriding fields:
 
 ```nflow
 { ..., status: "normalized" }
+{ ... .state, status: "normalized" }
 ```
+
+Fields written after a spread override matching source fields. Argument-map
+path shorthand also works inside `@{ ... }`, for example
+`request.action @{ .user.id }` derives the argument key `id`.
 
 Local bindings are supported in projection bodies:
 

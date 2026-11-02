@@ -114,17 +114,29 @@ func (b *braceScanner) parseEntries(dst map[string]*Value, spreads *[]*Value) er
 		if err != nil {
 			return err
 		}
+		derivedKey, pathRef, pathShorthand, err := argumentPathShorthand(key)
+		if err != nil {
+			return b.errf("%v", err)
+		}
 		b.skipWS()
 		var val *Value
 		switch {
 		case b.peek() == ':':
+			if pathShorthand {
+				return b.errf("path shorthand %q must not have an explicit ':' value", key)
+			}
 			b.advance()
 			val, err = b.readValue()
 			if err != nil {
 				return err
 			}
 		case b.eof() || b.peek() == ',' || b.peek() == '}':
-			val = &Value{Kind: ValueRef, Ref: key}
+			if pathShorthand {
+				key = derivedKey
+				val = &Value{Kind: ValueRef, Ref: pathRef}
+			} else {
+				val = &Value{Kind: ValueRef, Ref: key}
+			}
 		default:
 			return b.errf("expected ':' or map-entry delimiter after key %q", key)
 		}
@@ -136,6 +148,27 @@ func (b *braceScanner) parseEntries(dst map[string]*Value, spreads *[]*Value) er
 			return err
 		}
 	}
+}
+
+// argumentPathShorthand recognizes a standalone input path such as
+// `.current.attempt.attempt_id` and returns its final segment as the key.
+func argumentPathShorthand(path string) (key, ref string, shorthand bool, err error) {
+	if !strings.HasPrefix(path, ".") {
+		return "", "", false, nil
+	}
+	ref = strings.TrimPrefix(path, ".")
+	segments := strings.Split(ref, ".")
+	for _, segment := range segments {
+		if segment == "" || !isFunctionIdentifierStart(segment[0]) {
+			return "", "", true, fmt.Errorf("invalid path shorthand %q", path)
+		}
+		for i := 1; i < len(segment); i++ {
+			if !isFunctionIdentifierContinue(segment[i]) && segment[i] != '-' {
+				return "", "", true, fmt.Errorf("invalid path shorthand %q", path)
+			}
+		}
+	}
+	return segments[len(segments)-1], ref, true, nil
 }
 
 func (b *braceScanner) consumeEntryDelimiter() error {
@@ -362,17 +395,29 @@ func (b *braceScanner) readObject() (*Value, error) {
 		if err != nil {
 			return nil, err
 		}
+		derivedKey, pathRef, pathShorthand, err := argumentPathShorthand(key)
+		if err != nil {
+			return nil, b.errf("%v", err)
+		}
 		b.skipWS()
 		var val *Value
 		switch b.peek() {
 		case ':':
+			if pathShorthand {
+				return nil, b.errf("path shorthand %q must not have an explicit ':' value", key)
+			}
 			b.advance()
 			val, err = b.readValue()
 			if err != nil {
 				return nil, err
 			}
 		case ',', '}':
-			val = &Value{Kind: ValueRef, Ref: key}
+			if pathShorthand {
+				key = derivedKey
+				val = &Value{Kind: ValueRef, Ref: pathRef}
+			} else {
+				val = &Value{Kind: ValueRef, Ref: key}
+			}
 		default:
 			return nil, b.errf("expected ':' or map-entry delimiter in nested object")
 		}

@@ -293,3 +293,59 @@ func TestParseLimitsNestedArgumentDepth(t *testing.T) {
 		t.Fatalf("Parse(deep argument) error = %v, want parse-depth diagnostic", err)
 	}
 }
+
+func TestParseAtBrace_PathShorthandDerivesFinalSegment(t *testing.T) {
+	t.Parallel()
+	parsed, err := newTestParser(t, `wrap @{ .current.attempt.attempt_id, nested: { .user.profile.email } }`).Parse()
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	atom, ok := parsed.(*Atom)
+	if !ok {
+		t.Fatalf("Parse() returned %T, want *Atom", parsed)
+	}
+	value := atom.Args["attempt_id"]
+	if value == nil || value.Kind != ValueRef || value.Ref != "current.attempt.attempt_id" {
+		t.Fatalf("attempt_id = %+v, want reference current.attempt.attempt_id", value)
+	}
+	nested := atom.Args["nested"]
+	if nested == nil || nested.Kind != ValueMap || len(nested.Map) != 1 || nested.Map[0].Key != "email" || nested.Map[0].Value.Ref != "user.profile.email" {
+		t.Fatalf("nested = %+v, want email reference user.profile.email", nested)
+	}
+}
+
+func TestParseAtBrace_PathShorthandRejectsDuplicateDerivedKeys(t *testing.T) {
+	t.Parallel()
+	for _, source := range []string{
+		`wrap @{ .user.id, id: .other }`,
+		`wrap @{ id: .other, .user.id }`,
+		`wrap @{ nested: { .user.id, id: .other } }`,
+	} {
+		t.Run(source, func(t *testing.T) {
+			t.Parallel()
+			_, err := newTestParser(t, source).Parse()
+			if err == nil || !strings.Contains(err.Error(), `duplicate key "id"`) {
+				t.Fatalf("parse error = %v, want duplicate derived key", err)
+			}
+		})
+	}
+}
+
+func TestParseAtBrace_PathShorthandPreservesArgumentSpread(t *testing.T) {
+	t.Parallel()
+	parsed, err := newTestParser(t, `wrap @{ ... .defaults, .current.attempt.attempt_id }`).Parse()
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	atom, ok := parsed.(*Atom)
+	if !ok {
+		t.Fatalf("Parse() returned %T, want *Atom", parsed)
+	}
+	if len(atom.ArgSpreads) != 1 || atom.ArgSpreads[0].Kind != ValueRef || atom.ArgSpreads[0].Ref != "defaults" {
+		t.Fatalf("spreads = %+v, want the existing .defaults spread", atom.ArgSpreads)
+	}
+	value := atom.Args["attempt_id"]
+	if value == nil || value.Kind != ValueRef || value.Ref != "current.attempt.attempt_id" {
+		t.Fatalf("attempt_id = %+v, want reference current.attempt.attempt_id", value)
+	}
+}

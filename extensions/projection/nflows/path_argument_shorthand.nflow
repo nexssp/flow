@@ -1,0 +1,4 @@
+@description "spec: argument-map path shorthand derives its key from the final path segment"
+{ user: { id: "arg-17" } }
+-> const @{ value: { .user.id } }
+@assert: result.id == "arg-17"

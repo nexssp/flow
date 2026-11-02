@@ -46,6 +46,7 @@ type Field struct {
 	Embed           string
 	TypedDefault    any
 	HasTypedDefault bool
+	NestedSchema    *Schema `json:"-"`
 	Position        compiler.Position
 }
 
@@ -136,7 +137,10 @@ func ValidateWithoutDefaults(ctx context.Context, schema Schema, payload any) er
 	if !ok {
 		return xerr.Validation(fmt.Sprintf("schema %s: expected object, got %T", schema.Name, payload))
 	}
-	return validateValues(ctx, schema, values)
+	if err := validateValues(ctx, schema, values); err != nil {
+		return err
+	}
+	return validateNestedFields(ctx, schema, values, false)
 }
 
 // ApplyDefaultsAndValidate returns the effective payload after applying
@@ -147,10 +151,108 @@ func ApplyDefaultsAndValidate(ctx context.Context, schema Schema, payload any) (
 	if err != nil {
 		return nil, err
 	}
+	if err := validateNestedFields(ctx, schema, m, true); err != nil {
+		return nil, err
+	}
 	if err := validateValues(ctx, schema, m); err != nil {
 		return nil, err
 	}
 	return m, nil
+}
+
+// validateNestedFields recursively checks fields whose type names an earlier
+// @schema declaration. In defaulting mode it replaces nested values with their
+// effective maps so nested defaults are visible to downstream actions.
+func validateNestedFields(ctx context.Context, schema Schema, values map[string]any, applyDefaults bool) error {
+	for index := range schema.Fields {
+		field := &schema.Fields[index]
+		if field.NestedSchema == nil {
+			continue
+		}
+		value, present := values[field.JSONName]
+		if !present {
+			continue
+		}
+		if field.Slice {
+			items, ok := sliceValue(value)
+			if !ok {
+				continue // The field-kind check reports the container mismatch.
+			}
+			effective := make([]any, len(items))
+			for index, item := range items {
+				object, err := nestedObject(ctx, schema, field, item, fmt.Sprintf("%s[%d]", field.JSONName, index), applyDefaults)
+				if err != nil {
+					return err
+				}
+				effective[index] = object
+			}
+			if applyDefaults {
+				values[field.JSONName] = preserveNestedSliceType(value, effective)
+			}
+			continue
+		}
+		object, isObject := value.(map[string]any)
+		if !isObject {
+			continue // The field-kind check reports the object mismatch.
+		}
+		effective, err := nestedObject(ctx, schema, field, object, field.JSONName, applyDefaults)
+		if err != nil {
+			return err
+		}
+		if applyDefaults {
+			values[field.JSONName] = effective
+		}
+	}
+	return nil
+}
+
+func nestedObject(ctx context.Context, parent Schema, field *Field, value any, path string, applyDefaults bool) (map[string]any, error) {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return nil, xerr.Validation(fmt.Sprintf("schema %s: field %q must be an object (got %s)", parent.Name, path, friendlyType(value)))
+	}
+	var (
+		effective map[string]any
+		err       error
+	)
+	if applyDefaults {
+		effective, err = ApplyDefaultsAndValidate(ctx, *field.NestedSchema, object)
+	} else {
+		err = ValidateWithoutDefaults(ctx, *field.NestedSchema, object)
+		effective = object
+	}
+	if err != nil {
+		return nil, fmt.Errorf("schema %s field %q: %w", parent.Name, path, err)
+	}
+	return effective, nil
+}
+
+func sliceValue(value any) ([]any, bool) {
+	reflected := reflect.ValueOf(value)
+	if !reflected.IsValid() || reflected.Kind() != reflect.Slice {
+		return nil, false
+	}
+	items := make([]any, reflected.Len())
+	for index := range reflected.Len() {
+		items[index] = reflected.Index(index).Interface()
+	}
+	return items, true
+}
+
+func preserveNestedSliceType(original any, values []any) any {
+	reflected := reflect.ValueOf(original)
+	if !reflected.IsValid() || reflected.Kind() != reflect.Slice {
+		return values
+	}
+	result := reflect.MakeSlice(reflected.Type(), len(values), len(values))
+	for index, value := range values {
+		item := reflect.ValueOf(value)
+		if !item.IsValid() || !item.Type().AssignableTo(reflected.Type().Elem()) {
+			return values
+		}
+		result.Index(index).Set(item)
+	}
+	return result.Interface()
 }
 
 func validateValues(ctx context.Context, schema Schema, m map[string]any) error {
@@ -250,7 +352,8 @@ func checkFieldKind(field Field, value any) (xerr.ValidationDetail, bool) {
 	case field.Slice:
 		// Preserve the caller's concrete slice type. Element constraints are
 		// handled by validation tags such as `dive,required` below.
-		if reflect.ValueOf(value).Kind() != reflect.Slice {
+		reflected := reflect.ValueOf(value)
+		if !reflected.IsValid() || reflected.Kind() != reflect.Slice {
 			detail.Validation = "slice"
 			detail.Value = fmt.Sprintf("must be an array (got %s)", friendlyType(value))
 			return detail, true

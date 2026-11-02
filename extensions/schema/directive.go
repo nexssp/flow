@@ -103,12 +103,33 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	if err != nil {
 		return compiler.DirectiveRes{Next: next}, err
 	}
+	resolveNestedSchemaTypes(fields, existing)
 	if len(fields) == 0 {
 		return compiler.DirectiveRes{Next: next}, compiler.SourceError(pos, "@schema %s: at least one field is required", name)
 	}
 
 	req.Out["schemas"] = append(existing, Schema{Name: name, Fields: fields})
 	return compiler.DirectiveRes{Next: next}, nil
+}
+
+// resolveNestedSchemaTypes links named @schema types to earlier declarations.
+// This preserves declaration ordering while enabling recursive validation for
+// both `Child` and `[]Child` fields.
+func resolveNestedSchemaTypes(fields []Field, declared []Schema) {
+	byName := make(map[string]Schema, len(declared))
+	for _, schema := range declared {
+		byName[schema.Name] = schema
+	}
+	for index := range fields {
+		field := &fields[index]
+		if field.Map || field.ElemType == "" {
+			continue
+		}
+		if nested, ok := byName[field.ElemType]; ok {
+			nestedSchema := nested
+			field.NestedSchema = &nestedSchema
+		}
+	}
 }
 
 func parseSchemaEntries(entries []compiler.BlockEntry, body []string, req compiler.DirectiveReq, pos compiler.Position, schemaName string) ([]Field, []compiler.SourceReference, error) {

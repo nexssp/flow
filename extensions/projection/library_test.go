@@ -55,6 +55,8 @@ func TestFixtures_Discoverable(t *testing.T) {
 		"nflows/explicit_projection.nflow",
 		"nflows/mixed_shorthand.nflow",
 		"nflows/shorthand_spread.nflow",
+		"nflows/path_shorthand_spread.nflow",
+		"nflows/path_argument_shorthand.nflow",
 		"nflows/local_let_single.nflow",
 		"nflows/local_let_multiple.nflow",
 		"nflows/local_let_spread.nflow",

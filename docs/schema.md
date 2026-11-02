@@ -111,6 +111,32 @@ are applied before validation, so a defaulted field can satisfy
 field's type and validation rules. Malformed defaults are rejected when the
 `@schema` declaration is compiled.
 
+## Nested schemas
+
+Declare a schema before using its name as a field type. Flow applies its tags
+recursively to nested objects and to each element of a `[]Schema` field:
+
+```nflow
+@schema Attempt {
+  AttemptID string `json:"attempt_id" validate:"required"`
+  ExpectedCurrency string `json:"expected_currency" default:"USD" validate:"required"`
+}
+@schema Candidate {
+  Attempt Attempt `json:"attempt" validate:"required"`
+}
+@schema Request {
+  Candidates []Candidate `json:"candidates" validate:"required,min=1,dive,required"`
+}
+```
+
+The `expected_currency` default is added when it is absent inside a candidate's
+`attempt`, before that nested object is validated. Required tags and other
+validation rules are checked at every level, including list elements. A nested
+value with the wrong shape (for example, a string where a `Candidate` object is
+expected) fails validation. Map payloads such as `map[string]any` remain
+intentionally open-ended: Flow does not treat their contents as a named nested
+schema.
+
 Schema `default` and `validate` tag values can reference previously declared
 symbols. This lets the same values drive both application logic and typed
 validation:
@@ -142,9 +168,11 @@ tag value, parsed according to the declared field type. For example:
 string. For example, `default:"true"` is a boolean and `default:"fast"` is a
 string.
 - Slice fields accept Go slice values such as `[]string` and `[]any` without
-converting or replacing the supplied value. The schema checks the container
-kind; use validation tags such as `validate:"dive,required"` when element
-constraints are needed.
+  converting or replacing the supplied value. The schema checks the container
+  kind; use validation tags such as `validate:"dive,required"` for scalar
+  element constraints. When the slice element type names a previously declared
+  `@schema`, each element is also checked recursively and may receive nested
+  defaults.
 
 Composite defaults are values, not deep merges: a supplied object or array
 replaces the missing field as a whole. Other input fields are preserved.
