@@ -18,9 +18,19 @@ func TestBuildProgramSource_PathShorthandAndPathSpread(t *testing.T) {
 			want: `{ attempt_id: state.current.attempt.attempt_id, model: state.current.attempt.model }`,
 		},
 		{
-			name: "path spread with explicit override",
+			name: "current-value path spread with explicit override",
 			raw:  `... .state, status: "active"`,
 			want: `__spread__(state, { status: "active" })`,
+		},
+		{
+			name: "input path spread with explicit override",
+			raw:  `...input.state, status: "active"`,
+			want: `__spread__(input.state, { status: "active" })`,
+		},
+		{
+			name: "input path spread without overrides",
+			raw:  `...input.state`,
+			want: `input.state`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -33,6 +43,15 @@ func TestBuildProgramSource_PathShorthandAndPathSpread(t *testing.T) {
 				t.Fatalf("buildProgramSource = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestBuildProgramSourceRejectsWhitespaceBeforeInputPathSpread(t *testing.T) {
+	t.Parallel()
+	for _, raw := range []string{`... input.state`, "...\tinput.state"} {
+		if _, err := buildProgramSource(raw); err == nil || !strings.Contains(err.Error(), "no whitespace") {
+			t.Errorf("buildProgramSource(%q) error = %v, want input-path spread whitespace error", raw, err)
+		}
 	}
 }
 

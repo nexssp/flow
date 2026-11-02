@@ -43,7 +43,7 @@ Atoms can also carry extension-consumed annotations: `#target1,target2`, `~exclu
 
 ## Expressions, projections, and symbols
 
-A projection transforms the current value into a new object. Inside it, `.field` means a field on the current input; `...` spreads the current object, while `... .state` spreads a nested object before the listed replacements:
+A projection transforms the current value into a new object. Inside it, `.field` means a field on the current input; `...` spreads the current object, while `... .state` (with a space) spreads a nested path from that current value:
 
 ```nflow
 { name, email }
@@ -51,9 +51,12 @@ A projection transforms the current value into a new object. Inside it, `.field`
 { name, email, label: .profile.display_name }
 { ..., status: "ready" }
 { ... .state, .current.attempt.attempt_id, status: "ready" }
+{ ...input.state, status: "ready" }
 ```
 
-In projection object-entry position, a bare field name is shorthand for the same key copied from the current input: `{ name }` is equivalent to `{ name: .name }`. A path entry such as `.current.attempt.attempt_id,` derives the final key `attempt_id` and copies that nested path. Shorthand entries can be mixed with explicit `key: value` entries; duplicate output keys within the object are rejected. For a spread, explicit object fields intentionally override matching fields from the spread source. Structured action arguments also accept path entries, for example `@{ .user.id }` is equivalent to `@{ id: .user.id }`; duplicate keys are rejected there too. Both forms read from the current pipeline input, but projections are expression objects while action arguments use the literal/reference map syntax described above.
+`...input.state` (with no space after `...`) instead spreads that path from the original pipeline input, even after earlier pipeline steps have changed the current projection value. The roots are distinct: `... input.state` is rejected, and `... .state` keeps its existing current-value meaning. Explicit fields after either spread override matching copied fields. See the runnable [input-rooted spread fixture](../extensions/projection/nflows/input_path_spread.nflow) and the existing [current-value spread fixture](../extensions/projection/nflows/path_shorthand_spread.nflow).
+
+In projection object-entry position, a bare field name is shorthand for the same key copied from the current input: `{ name }` is equivalent to `{ name: .name }`. A path entry such as `.current.attempt.attempt_id,` derives the final key `attempt_id` and copies that nested path. Shorthand entries can be mixed with explicit `key: value` entries; duplicate output keys within the object are rejected. Structured action arguments also accept path entries, for example `@{ .user.id }` is equivalent to `@{ id: .user.id }`; duplicate keys are rejected there too. Both forms read from the current pipeline input, but projections are expression objects while action arguments use the literal/reference map syntax described above.
 
 The extension self-test runs fixtures for [shorthand-only](../extensions/projection/nflows/shorthand.nflow), [explicit-only](../extensions/projection/nflows/explicit_projection.nflow), [mixed member expressions](../extensions/projection/nflows/mixed_shorthand.nflow), and [shorthand with spread](../extensions/projection/nflows/shorthand_spread.nflow).
 

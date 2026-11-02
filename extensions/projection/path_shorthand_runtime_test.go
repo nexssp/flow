@@ -28,6 +28,16 @@ func TestProjectionPathSyntaxFixtures(t *testing.T) {
 			},
 		},
 		{
+			fixture: "nflows/input_path_spread.nflow",
+			asserts: []string{
+				`result.request == "keep me"`,
+				`result.status == "success"`,
+				`result.candidate_id == "candidate-1"`,
+				`result.answer == "candidate answer"`,
+				`result.stop == false`,
+			},
+		},
+		{
 			fixture: "nflows/path_argument_shorthand.nflow",
 			asserts: []string{`result.id == "arg-17"`},
 		},

@@ -98,10 +98,15 @@ parallel {
 { .user.id, .user.profile.email }
 { ..., status: "ready" }
 { ... .state, status: "ready" }
+{ ...input.state, status: "ready" }
 { let total = .price * .quantity; ..., total: total }
 pick @{ field: "user.id" }
 wrap @{ key: "data" }
 ```
+`... .state` reads from the current projection value; `...input.state` reads
+from the original pipeline request. These roots have different meanings, so
+keep the space in the former and omit it in the latter; `... input.state` is
+rejected. Fields after either spread override copied fields with the same key.
 
 ## Match and loops
 

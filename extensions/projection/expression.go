@@ -25,6 +25,9 @@ func buildProgramSource(raw string) (string, error) {
 	if err := validateProjectionLetReferences(bindings); err != nil {
 		return "", err
 	}
+	if err := validateProjectionInputSpreadSpacing(body); err != nil {
+		return "", err
+	}
 	if err := validateProjectionObjectKeys("{" + body + "}"); err != nil {
 		return "", err
 	}
@@ -472,6 +475,36 @@ func projectionPathAt(raw string, index int) (end int, key string, ok bool) {
 	}
 }
 
+func projectionInputPathAt(raw string) (end int, ok bool) {
+	const root = "input"
+	if len(raw) <= len(root) || !strings.HasPrefix(raw, root) || raw[len(root)] != '.' {
+		return 0, false
+	}
+	end, _, ok = projectionPathAt(raw, len(root))
+	return end, ok
+}
+
+func projectionSpreadRefEndsAt(raw string, end int) bool {
+	return end == len(raw) || isProjectionWhitespace(raw[end]) || raw[end] == ','
+}
+
+func validateProjectionInputSpreadSpacing(raw string) error {
+	trimmed := strings.TrimSpace(raw)
+	if !strings.HasPrefix(trimmed, "...") {
+		return nil
+	}
+	after := trimmed[3:]
+	if after == "" || !isProjectionWhitespace(after[0]) {
+		return nil
+	}
+	after = strings.TrimLeft(after, " \t\n\r")
+	end, ok := projectionInputPathAt(after)
+	if ok && projectionSpreadRefEndsAt(after, end) {
+		return errors.New(`projection: original-input spreads must use "...input.path" with no whitespace after "..."`)
+	}
+	return nil
+}
+
 // validateProjectionObjectKeys rejects duplicates after path shorthand has
 // derived their output keys, matching the argument-map duplicate policy.
 func validateProjectionObjectKeys(raw string) error {
@@ -619,15 +652,21 @@ func splitSpread(raw string) (stateRef, rest string, hasSpread bool) {
 		return "", raw, false
 	}
 	after := trimmed[3:]
-	if after != "" && after[0] != ',' && after[0] != ' ' && after[0] != '\t' {
-		return "", raw, false
-	}
-	after = strings.TrimLeft(after, " \t\n")
-	if end, _, path := projectionPathAt(after, 0); path && (end == len(after) || isProjectionWhitespace(after[end]) || after[end] == ',') {
+	if end, path := projectionInputPathAt(after); path && projectionSpreadRefEndsAt(after, end) {
 		stateRef = after[:end]
 		after = after[end:]
 	} else {
-		stateRef = "__root__"
+		if after != "" && after[0] != ',' && after[0] != ' ' && after[0] != '\t' {
+			return "", raw, false
+		}
+		after = strings.TrimLeft(after, " \t\n")
+		end, _, path := projectionPathAt(after, 0)
+		if path && projectionSpreadRefEndsAt(after, end) {
+			stateRef = after[:end]
+			after = after[end:]
+		} else {
+			stateRef = "__root__"
+		}
 	}
 	after = strings.TrimLeft(after, " \t\n")
 	after = strings.TrimPrefix(after, ",")
