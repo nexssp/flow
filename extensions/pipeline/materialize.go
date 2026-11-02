@@ -151,6 +151,7 @@ func materializePipeline(req compiler.MaterializeReq, definition pipelineDefinit
 	if requestSelection.name != "" || responseSelection.name != "" {
 		act = wrapWithSchemaBoundary(act, requestSelection, requestSchema, responseSelection, responseSchema, schemaext.VisibleSchemasFromMeta(req.Meta))
 	}
+	act = compiler.WithExpressionScopeAction(act)
 	if req.Introspection {
 		act = action.WithComposition(act, action.IntrospectionComposition{
 			Kind: ID,

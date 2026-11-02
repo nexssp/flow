@@ -189,5 +189,5 @@ func MergeSymbolNamespaces(ctx context.Context, env map[string]any) map[string]a
 		out[name] = RuntimeSymbolValue(ns.Symbols)
 	}
 	maps.Copy(out, env)
-	return out
+	return mergeExpressionScope(ctx, out)
 }

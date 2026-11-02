@@ -132,6 +132,7 @@ func ExecutePrepared(
 	}
 
 	ctx = withExecutionContext(ctx, cfg, compiled.Resolver, compiled.Meta)
+	ctx = compiler.WithExpressionScope(ctx, entry.Payload)
 
 	runStart := time.Now()
 	preparedName, preparedSourceHash := prepared.SourceIdentity()
@@ -364,6 +365,7 @@ func executeCompiled(
 	}
 
 	ctx = withExecutionContext(ctx, cfg, compiled.Resolver, compiled.Meta)
+	ctx = compiler.WithExpressionScope(ctx, payload)
 	runStart := time.Now()
 	output, suspension, err := runApprovalAware(
 		ctx,

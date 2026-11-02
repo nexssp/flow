@@ -85,6 +85,7 @@ func (m *Expr) Build(ctx context.Context, bCtx *compiler.BuildContext) (action.A
 		if err != nil {
 			return nil, err
 		}
+		act = compiler.WithChildExpressionScopeAction(act)
 
 		cc := compiledCase{
 			bodyAct: act,

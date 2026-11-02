@@ -94,6 +94,18 @@ The core parser obtains operators from the active table. In the shipped standard
 
 Operator parsing is registry-driven: consult [`extensions/syntax/`](../extensions/syntax/) and [`compiler/operator.go`](../compiler/operator.go). The `parallel` and `race` keywords are supplied by the standard `syntax` bundle, not by a bare parser with no extensions. Parallel branch failure propagates without a partial result map. A race may take longer to return if a launched branch does not cooperate with cancellation. Further syntax discussion is in [`docs/language.md`](language.md) and exact fixtures are in [`extensions/syntax/nflows/`](../extensions/syntax/nflows/).
 
+Append `as name` to a pipeline step to give its successful output an additional lexical name for later steps:
+
+```nflow
+request -> ai.cost.estimate as estimate
+  -> { known: estimate.Known, original_request: input.query, current_known: .Known }
+
+request -> ai.decide as decision
+  -> { choice: decision.Answers[0].Choice, original_request: input.prompt }
+```
+
+The alias names the immediately preceding step's output; it does not wrap or rewrite the value passed by `->` (or `|`). A binding is immutable, must be one identifier, and is visible only to later expressions in that pipeline invocation. Duplicate names in one pipeline fail during compilation. The initial request remains available as `input`, while the usual map shorthand, `__root__`, and `__state__` keep their existing meanings. A binding is not added to the pipeline result: return it explicitly in a projection if callers need it. Declared pipelines receive fresh scopes, so their names do not leak to callers. Loop iterations get fresh body-local scopes; they can read earlier outer bindings, but body bindings do not escape the loop. A later `? on_error` handler can read aliases from successful earlier steps; a step that fails does not create its own binding. See the runnable built-in-action example [`named_bindings.nflow`](../extensions/syntax/nflows/named_bindings.nflow) and the [decision-router adaptation](examples/named-bindings-from-decision-router.md).
+
 For a named pipeline, `pipeline.NAME @{ field: value, ... }` passes the named fields as that pipeline's complete input object. Argument values such as `.search_text` and `.` are evaluated at runtime against the incoming state; request-schema defaults and validation then apply to the resulting object. This differs from `@{...}` on a generic action, which continues to merge its fields into the incoming object. The existing `{ ... } -> pipeline.NAME` form is unchanged. See the executable [`named_args_runtime_refs.nflow`](../extensions/pipeline/nflows/named_args_runtime_refs.nflow) and [`named_args_legacy_compat.nflow`](../extensions/pipeline/nflows/named_args_legacy_compat.nflow) fixtures.
 
 `match` chooses the first matching arm. It accepts predicate arms against the current input, or a subject expression with literal/pattern arms; subject-relative relational arms (`>`, `>=`, `<`, `<=`) compare the evaluated subject with the arm expression. `_` is the default arm:

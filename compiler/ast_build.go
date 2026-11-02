@@ -108,17 +108,34 @@ func compileArgumentValue(value *Value, position Position, bCtx *BuildContext) e
 
 func (p *PipeExpr) Analyze(r CapabilityResolver) error {
 	nodes := flattenPipe(p)
+	bindings := make(map[string]struct{})
+	for _, node := range nodes {
+		_, binding := unwrapBinding(node)
+		if binding == nil {
+			continue
+		}
+		if err := ValidateExpressionBindingName(binding.Name); err != nil {
+			return SourceError(binding.Pos, "%v", err)
+		}
+		if _, exists := bindings[binding.Name]; exists {
+			return SourceError(binding.Pos, "duplicate pipeline binding %q", binding.Name)
+		}
+		bindings[binding.Name] = struct{}{}
+	}
 	if idx, _ := findBoundary(nodes); idx >= 0 {
 		return analyzeStreamSegment(r, nodes[:idx])
 	}
 	for _, node := range nodes {
-		if err := node.Analyze(r); err != nil {
+		inner, _ := unwrapBinding(node)
+		if err := inner.Analyze(r); err != nil {
 			return err
 		}
 	}
 	for i := 1; i < len(nodes); i++ {
-		left, leftOK := contractForExpr(r, nodes[i-1])
-		right, rightOK := contractForExpr(r, nodes[i])
+		leftExpr, _ := unwrapBinding(nodes[i-1])
+		rightExpr, _ := unwrapBinding(nodes[i])
+		left, leftOK := contractForExpr(r, leftExpr)
+		right, rightOK := contractForExpr(r, rightExpr)
 		if !leftOK || !rightOK {
 			continue
 		}
@@ -135,7 +152,8 @@ func (p *PipeExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAct
 	idx, spec := findBoundary(nodes)
 	if idx < 0 {
 		if len(nodes) > 0 {
-			if head, ok := nodes[0].(*Atom); ok {
+			headExpr, _ := unwrapBinding(nodes[0])
+			if head, ok := headExpr.(*Atom); ok {
 				if _, isStream := bCtx.Resolver.Stream(head.Name); isStream {
 					if collect, found := BoundaryByName("collect"); found {
 						return buildSegmented(ctx, bCtx, nodes, len(nodes), collect)
@@ -179,6 +197,7 @@ func rebuildPipe(nodes []Expr) Expr {
 
 func findBoundary(nodes []Expr) (int, BoundarySpec) {
 	for i, n := range nodes {
+		n, _ = unwrapBinding(n)
 		atom, ok := n.(*Atom)
 		if !ok {
 			continue
@@ -204,6 +223,15 @@ func buildSegmented(
 	}
 
 	leftNodes := nodes[:idx]
+	for _, node := range leftNodes {
+		if _, binding := unwrapBinding(node); binding != nil {
+			return nil, xerr.Validation("pipeline bindings are not supported on stream sources or operators before a stream boundary")
+		}
+	}
+	var boundaryBinding *BindingExpr
+	if idx < len(nodes) {
+		_, boundaryBinding = unwrapBinding(nodes[idx])
+	}
 	var rightNodes []Expr
 	if idx < len(nodes) {
 		rightNodes = nodes[idx+1:]
@@ -224,7 +252,13 @@ func buildSegmented(
 		return nil, err
 	}
 
-	consumer := spec.Consume(stream).Build()
+	var consumer action.AnyAction = spec.Consume(stream).Build()
+	if boundaryBinding != nil {
+		consumer, err = buildBindingAction(bCtx, boundaryBinding, consumer)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if len(rightNodes) == 0 {
 		program := action.Dynamic(consumer).Build()
@@ -244,6 +278,59 @@ func buildSegmented(
 	return inspectBuiltPair(bCtx, ComposedPipe(consumerAction, rightAct), "sequence",
 		action.IntrospectionChild{Node: consumerAction, Relation: "sequence", Role: "left"},
 		action.IntrospectionChild{Node: rightAct, Relation: "sequence", Role: "right"}), nil
+}
+
+func unwrapBinding(expr Expr) (Expr, *BindingExpr) {
+	binding, ok := expr.(*BindingExpr)
+	if !ok {
+		return expr, nil
+	}
+	return binding.Inner, binding
+}
+
+func (b *BindingExpr) Analyze(r CapabilityResolver) error {
+	if b == nil || b.Inner == nil {
+		return xerr.Validation("pipeline binding has no preceding expression")
+	}
+	if err := ValidateExpressionBindingName(b.Name); err != nil {
+		return SourceError(b.Pos, "%v", err)
+	}
+	return b.Inner.Analyze(r)
+}
+
+func (b *BindingExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction, error) {
+	if b == nil || b.Inner == nil {
+		return nil, xerr.Validation("pipeline binding has no preceding expression")
+	}
+	inner, err := b.Inner.Build(ctx, bCtx)
+	if err != nil {
+		return nil, err
+	}
+	return buildBindingAction(bCtx, b, inner)
+}
+
+func buildBindingAction(bCtx *BuildContext, binding *BindingExpr, inner action.AnyAction) (action.AnyAction, error) {
+	if err := ValidateExpressionBindingName(binding.Name); err != nil {
+		return nil, SourceError(binding.Pos, "%v", err)
+	}
+	wrapped := action.Dynamic(inner).UseFirst(func(next action.Fn[any, any]) action.Fn[any, any] {
+		return func(ctx context.Context, request any) (any, error) {
+			if !HasExpressionScope(ctx) {
+				ctx = WithExpressionScope(ctx, request)
+			}
+			output, err := next(ctx, request)
+			if err != nil {
+				return nil, err
+			}
+			if err := BindExpressionValue(ctx, binding.Name, output); err != nil {
+				return nil, xerr.Validation(err.Error())
+			}
+			return output, nil
+		}
+	}).Build()
+	return inspectBuiltChild(bCtx, wrapped, "pipeline_binding", action.IntrospectionChild{
+		Node: inner, Relation: "binds", Role: "output", Label: binding.Name,
+	}), nil
 }
 
 func atomStreamParams(ctx context.Context, atom *Atom) (map[string]any, error) {
@@ -544,7 +631,7 @@ func (p *ParallelExpr) Build(ctx context.Context, bCtx *BuildContext) (action.An
 		if err != nil {
 			return nil, err
 		}
-		branches[i] = act
+		branches[i] = WithChildExpressionScopeAction(act)
 	}
 	disambiguateParallelBranchKeys(branches)
 	program := action.ParallelAny("parallel", branches...).Build()
@@ -659,6 +746,8 @@ func (f *FallbackExpr) Build(ctx context.Context, bCtx *BuildContext) (action.An
 	if err != nil {
 		return nil, err
 	}
+	left = WithChildExpressionScopeAction(left)
+	right = WithChildExpressionScopeAction(right)
 	return inspectBuiltPair(bCtx, action.FirstSuccessAny("fallback", left, right).Build(), "fallback",
 		action.IntrospectionChild{Node: left, Relation: "candidate", Role: "primary"},
 		action.IntrospectionChild{Node: right, Relation: "candidate", Role: "fallback"}), nil
@@ -703,6 +792,11 @@ func (c *ConditionalExpr) Build(ctx context.Context, bCtx *BuildContext) (action
 			return nil, err
 		}
 	}
+	cond = WithChildExpressionScopeAction(cond)
+	thenBranch = WithChildExpressionScopeAction(thenBranch)
+	if elseBranch != nil {
+		elseBranch = WithChildExpressionScopeAction(elseBranch)
+	}
 	program := action.TernaryAny("conditional", cond, thenBranch, elseBranch).Build()
 	if !bCtx.Introspect {
 		return program, nil
@@ -735,15 +829,30 @@ func (l *LoopExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAct
 	if err != nil {
 		return nil, xerr.Validation("loop: invalid condition "+l.Until, err)
 	}
-	until := func(out any) bool {
-		val, runErr := prog.Evaluate(ctx, out)
-		if runErr != nil {
-			return false
+	program := action.New("loop", func(runCtx context.Context, input any) (any, error) {
+		if !HasExpressionScope(runCtx) {
+			runCtx = WithExpressionScope(runCtx, input)
 		}
-		satisfied, ok := val.(bool)
-		return ok && satisfied
-	}
-	program := action.LoopAny("loop", body, until, 15).Build()
+		current := input
+		for turn := 1; turn <= 15; turn++ {
+			if err := runCtx.Err(); err != nil {
+				return nil, err
+			}
+			iterationCtx := WithChildExpressionScope(runCtx)
+			output, runErr := action.InvokeAny(iterationCtx, body, current)
+			if runErr != nil {
+				return nil, runErr
+			}
+			value, evalErr := prog.Evaluate(runCtx, output)
+			if evalErr == nil {
+				if satisfied, ok := value.(bool); ok && satisfied {
+					return output, nil
+				}
+			}
+			current = output
+		}
+		return nil, xerr.Timeout("loop [loop]: exceeded 15 turns")
+	}).Tag("loop", "dynamic").Build()
 	if !bCtx.Introspect {
 		return program, nil
 	}
@@ -758,20 +867,24 @@ func (l *LoopExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAct
 
 func (*AssertExpr) Analyze(CapabilityResolver) error { return nil }
 
-func (a *AssertExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction, error) {
+func (a *AssertExpr) Build(_ context.Context, bCtx *BuildContext) (action.AnyAction, error) {
 	prog, err := bCtx.CompileExpression(a.Condition, a.Pos)
 	if err != nil {
 		return nil, xerr.Validation("assert: invalid expression "+a.Condition, err)
 	}
-	predicate := func(input any) bool {
-		val, runErr := prog.Evaluate(ctx, input)
-		if runErr != nil {
-			return false
+	program := action.New("assert", func(runCtx context.Context, input any) (any, error) {
+		value, evalErr := prog.Evaluate(runCtx, input)
+		passed, ok := value.(bool)
+		if evalErr != nil || !ok || !passed {
+			message := a.Message
+			if message == "" {
+				message = "assertion [assert] failed"
+			}
+			return nil, xerr.Validation(message)
 		}
-		passed, ok := val.(bool)
-		return ok && passed
-	}
-	return inspectBuiltComposition(bCtx, action.AssertAny("assert", predicate, a.Message).Build(),
+		return input, nil
+	}).Tag("guard", "assert").Build()
+	return inspectBuiltComposition(bCtx, program,
 		action.IntrospectionComposition{
 			Kind: "assertion", Opaque: true,
 			Notes: []string{"assertion predicate is closure-captured and omitted"},

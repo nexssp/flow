@@ -126,6 +126,7 @@ func (e *NamedParallelExpr) Build(ctx context.Context, bCtx *compiler.BuildConte
 		if err != nil {
 			return nil, err
 		}
+		compiled = compiler.WithChildExpressionScopeAction(compiled)
 		routes[branch.label] = compiled
 		if bCtx.Introspect {
 			children = append(children, action.IntrospectionChild{

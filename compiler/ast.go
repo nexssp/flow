@@ -82,6 +82,17 @@ type PipeExpr struct {
 func (*PipeExpr) Node()              {}
 func (p *PipeExpr) Children() []Expr { return []Expr{p.L, p.R} }
 
+// BindingExpr names the output of one pipeline step without changing the
+// value passed to the next step. The syntax extension parses `step as name`.
+type BindingExpr struct {
+	Inner Expr
+	Name  string
+	Pos   Position
+}
+
+func (*BindingExpr) Node()              {}
+func (b *BindingExpr) Children() []Expr { return []Expr{b.Inner} }
+
 // ParallelExpr: N branches executed concurrently.
 type ParallelExpr struct {
 	Branches []Expr

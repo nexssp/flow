@@ -68,6 +68,18 @@ condition ? yes : no
 - `race` returns the first successful candidate.
 - The ternary else arm is optional.
 
+Name a step's output with a postfix `as name`. The following action still receives the ordinary output of the previous step; the name is an additional immutable lexical binding for later steps:
+
+```nflow
+request -> ai.cost.estimate as estimate
+  -> { known: estimate.Known, request: input.query }
+
+request -> ai.decide as decision
+  -> { choice: decision.Answers[0].Choice }
+```
+
+Bindings are pipeline-local, do not become result-map fields unless explicitly returned, and duplicate names fail compilation. `input` remains the original request; map shorthand, `__root__`, and `__state__` are unchanged. See the [complete binding guide](language-reference.md#pipeline-operators-and-control-flow) and [runnable fixture](../extensions/syntax/nflows/named_bindings.nflow).
+
 Named parallel branches may use direct literal values. Use `const` when a
 branch needs action arguments or modifiers:
 

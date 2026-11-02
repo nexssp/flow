@@ -258,6 +258,19 @@ func (p *Parser) parsePrimary() (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
+	for p.Cur().Type != TokQuestion {
+		postfix, ok := p.primaries.ByPostfix(p.Cur().Type)
+		if !ok || !postfix.MatchesPostfix(p) {
+			break
+		}
+		expr, err = postfix.ParsePostfix(p, expr)
+		if err != nil {
+			return nil, err
+		}
+		if expr == nil {
+			return nil, p.errorf(p.Cur().Line, "postfix extension returned a nil expression")
+		}
+	}
 	if expr == nil {
 		return nil, p.errorf(p.Cur().Line, "postfix extension returned a nil expression")
 	}

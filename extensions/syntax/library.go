@@ -30,7 +30,7 @@ func Bundle(_ map[string]string) compiler.Bundle {
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID}},
 		Operators: []compiler.Operator{pipe, pipeAlias, parallel, fallback},
-		Primaries: []compiler.PrimaryExtension{namedParallelKeyword{}, raceKeyword{}},
+		Primaries: []compiler.PrimaryExtension{namedParallelKeyword{}, raceKeyword{}, namedBindingPostfix{}},
 		Fixtures:  fixturesFS,
 	}
 }

@@ -83,6 +83,8 @@ func (b *actionGraphBuilder) build(expr Expr) (actionGraphSegment, error) {
 	switch node := expr.(type) {
 	case *Atom:
 		return b.buildAtom(node), nil
+	case *BindingExpr:
+		return b.build(node.Inner)
 	case *PipeExpr:
 		return b.buildPipe(node)
 	case *ParallelExpr:

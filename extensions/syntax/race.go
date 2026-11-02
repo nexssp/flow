@@ -99,6 +99,7 @@ func (e *RaceExpr) Build(ctx context.Context, bCtx *compiler.BuildContext) (acti
 		if err != nil {
 			return nil, err
 		}
+		compiled = compiler.WithChildExpressionScopeAction(compiled)
 		candidates[i] = compiled
 		if bCtx.Introspect {
 			children = append(children, action.IntrospectionChild{
