@@ -20,6 +20,8 @@ func TestLibrary_HasSourceAndOperators(t *testing.T) {
 	t.Parallel()
 	lib := Library()
 	ktest.RequireEqual(t, len(lib.Sources), 1)
+	ktest.RequireEqual(t, len(lib.Actions), 1)
+	ktest.RequireEqual(t, lib.Actions[0].Describe().Name, "fs.download")
 
 	wantOperators := map[string]bool{
 		"fs.filter": false, "fs.read": false, "fs.write": false,

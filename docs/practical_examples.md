@@ -899,6 +899,30 @@ fs.walk @{ root: "./incoming" }
 -> out.file @{ path: "./out/records.jsonl" }
 ```
 
+### Download files with byte progress and resume
+
+`fs.download` streams response bodies directly to disk instead of buffering them
+in memory. Give it a single `url`/`path` pair or a `files` manifest; each path
+must be relative to `output_dir`. It verifies `expected_bytes` when supplied,
+retains an interrupted `.part` file, resumes with HTTP Range, and can write a
+JSON receipt with caller-provided provenance.
+
+```nflow
+fs.download @{
+  output_dir: "./models/LFM3-1.7B",
+  files: [
+    { url: .config_url, path: "config.json", expected_bytes: .config_bytes },
+    { url: .weights_url, path: "model.safetensors", expected_bytes: .weights_bytes }
+  ],
+  receipt_path: ".download-receipt.json",
+  provenance: { repo_id: .repo_id, resolved_commit: .resolved_commit }
+}
+```
+
+This action is generic filesystem/network infrastructure; repository metadata,
+download consent, commit pinning, and any model-specific checks belong in the
+calling `.nflow` workflow.
+
 ### Write a result file
 
 ```exs

@@ -1,6 +1,6 @@
-// Package fs ships the file-system stream source and operators:
-// fs.walk as a source; fs.filter, fs.read, fs.sort, fs.write, and
-// the terminal sinks out.stdout and out.file as stream operators.
+// Package fs ships the native file-system action fs.download, the fs.walk
+// stream source, and fs.filter, fs.read, fs.sort, fs.write, and the terminal
+// sinks out.stdout and out.file as stream operators.
 //
 // The pipeline carries fs.FileMeta between stages; fs.read replaces it
 // with fs.FileContent (metadata + bytes) so downstream stages can
@@ -39,6 +39,9 @@ func Bundle(_ map[string]string) compiler.Bundle {
 func Library() action.Library {
 	return action.Library{
 		Name: ID,
+		Actions: []action.AnyAction{
+			Download,
+		},
 		Sources: []action.AnyStreamAction{
 			WalkSource(),
 		},
