@@ -26,6 +26,7 @@ import (
 )
 
 const (
+	lspInitialize      = "initialize"
 	lspSource          = "nflow"
 	lspRangeKey        = "range"
 	lspNewTextKey      = "newText"
@@ -123,11 +124,7 @@ func runLSP(ctx context.Context, inv *invocation, args []string) int {
 	if len(args) != 0 {
 		return fatalf("usage: nflow lsp (stdio)")
 	}
-	server := newFlowLanguageServer(ctx, inv)
-	if err := server.serve(os.Stdin, os.Stdout); err != nil {
-		return fatalf("nflow lsp: %v", err)
-	}
-	return server.exitCode
+	return serveLSPWithProjectRequirements(ctx, inv, os.Stdin, os.Stdout)
 }
 
 func newFlowLanguageServer(ctx context.Context, inv *invocation) *flowLanguageServer {
@@ -271,7 +268,7 @@ func (s *flowLanguageServer) validateMethodKind(message lspMessage) (bool, error
 		if len(message.ID) != 0 {
 			return false, s.respondError(message.ID, -32600, message.Method+" is a notification and must not have an id")
 		}
-	case "initialize", "shutdown", "textDocument/completion", "textDocument/hover", "textDocument/definition", "textDocument/references", "textDocument/rename", "textDocument/documentSymbol", "textDocument/foldingRange", "textDocument/semanticTokens/full", "workspace/symbol", "textDocument/formatting", "textDocument/codeAction":
+	case lspInitialize, "shutdown", "textDocument/completion", "textDocument/hover", "textDocument/definition", "textDocument/references", "textDocument/rename", "textDocument/documentSymbol", "textDocument/foldingRange", "textDocument/semanticTokens/full", "workspace/symbol", "textDocument/formatting", "textDocument/codeAction":
 		if len(message.ID) == 0 {
 			slog.Warn("ignoring LSP request method sent as a notification", "method", message.Method)
 			return false, nil
@@ -281,7 +278,7 @@ func (s *flowLanguageServer) validateMethodKind(message lspMessage) (bool, error
 }
 
 func (s *flowLanguageServer) validateLifecycle(message lspMessage) (bool, error) {
-	if message.Method != "initialize" && message.Method != "$/cancelRequest" && !s.initialized {
+	if message.Method != lspInitialize && message.Method != "$/cancelRequest" && !s.initialized {
 		if len(message.ID) != 0 {
 			return false, s.respondError(message.ID, -32002, "server not initialized")
 		}
@@ -300,7 +297,7 @@ func (s *flowLanguageServer) validateLifecycle(message lspMessage) (bool, error)
 
 func (s *flowLanguageServer) dispatch(message lspMessage) error {
 	switch message.Method {
-	case "initialize":
+	case lspInitialize:
 		if s.initialized {
 			if len(message.ID) != 0 {
 				return s.respondError(message.ID, -32600, "initialize may only be requested once")
@@ -650,7 +647,7 @@ func (s *flowLanguageServer) formatterFor(uri, source string) (*flowformatter.Fo
 
 func lspRequirementError(err error) error {
 	if strings.Contains(err.Error(), "is not registered in this binary") {
-		return fmt.Errorf("%w; nflow lsp only supports bundles linked into this binary; save the file and run `nflow lint <file>` for full @require validation", err)
+		return fmt.Errorf("%w; save the workspace @require declaration and restart the language server so its cached bundle-linked process can be rebuilt; run `nflow lint <file>` to verify requirement resolution", err)
 	}
 	return err
 }

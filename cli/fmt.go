@@ -10,6 +10,8 @@ import (
 
 	"github.com/nexssp/kernel/xfs"
 
+	"github.com/nexssp/flow/builder"
+	"github.com/nexssp/flow/extensions/require"
 	flowformatter "github.com/nexssp/flow/formatter"
 )
 
@@ -42,10 +44,58 @@ func runFmt(ctx context.Context, inv *invocation, args []string) int {
 		fmt.Fprintf(os.Stderr, "nflow fmt: %v\n", validationErr)
 		return 2
 	}
+	if code, handled := formatWithExternalHarness(ctx, inv, args, options); handled {
+		return code
+	}
 	if isFmtStdin(options) {
 		return formatStdin(ctx, inv)
 	}
 	return formatFiles(ctx, inv, options.files, options.mode())
+}
+
+func formatWithExternalHarness(ctx context.Context, inv *invocation, args []string, options fmtOptions) (int, bool) {
+	return formatWithExternalHarnessUsing(ctx, inv, args, options, builder.EnsureHarnessCLIContext, builder.ExecHarnessContext)
+}
+
+type fmtHarnessEnsurer func(
+	context.Context,
+	[]require.Requirement,
+	...string,
+) (string, error)
+type fmtHarnessExecutor func(context.Context, string, []string) int
+
+func formatWithExternalHarnessUsing(ctx context.Context, inv *invocation, args []string, options fmtOptions, ensure fmtHarnessEnsurer, execute fmtHarnessExecutor) (int, bool) {
+	if inv == nil || os.Getenv(harnessEnv) != "" || isFmtStdin(options) {
+		return 0, false
+	}
+
+	var requirements []require.Requirement
+	var buildFiles []string
+	for _, path := range options.files {
+		fileRequirements, err := inv.requirementsForHarness(ctx, path)
+		if err != nil {
+			// Preserve fmt's per-file error handling for malformed or unreadable
+			// inputs; valid files can still contribute requirements to the harness.
+			continue
+		}
+		requirements = append(requirements, fileRequirements...)
+		buildFiles = append(buildFiles, path)
+	}
+	if !requirementsNeedExternalHarness(inv, requirements) || len(buildFiles) == 0 {
+		return 0, false
+	}
+
+	if ensure == nil {
+		ensure = builder.EnsureHarnessCLIContext
+	}
+	if execute == nil {
+		execute = builder.ExecHarnessContext
+	}
+	binary, err := ensure(ctx, requirements, buildFiles...)
+	if err != nil {
+		return fatalf("nflow fmt: %v", err), true
+	}
+	return execute(ctx, binary, append([]string{"fmt"}, args...)), true
 }
 
 func parseFmtOptions(args []string) (fmtOptions, error) {

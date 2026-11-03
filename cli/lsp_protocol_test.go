@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -24,10 +26,12 @@ func TestLSPProtocolSubprocessHelper(_ *testing.T) {
 func TestLSPStdioChildProcessProtocolIntegration(t *testing.T) {
 	const uri = "file:///tmp/lsp-protocol.nflow"
 	const invalidSource = "'😀' true"
+	workspace := t.TempDir()
+	rootURI := (&url.URL{Scheme: "file", Path: filepath.ToSlash(workspace)}).String()
 	var input bytes.Buffer
 	writeLSPTestMessage(t, &input, map[string]any{
 		"jsonrpc": "2.0", "id": nil, "method": "initialize",
-		"params": map[string]any{"rootUri": "file:///tmp"},
+		"params": map[string]any{"rootUri": rootURI},
 	})
 	writeLSPTestMessage(t, &input, map[string]any{
 		"jsonrpc": "2.0", "method": "textDocument/didOpen",

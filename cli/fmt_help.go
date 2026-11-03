@@ -2,7 +2,7 @@ package cli
 
 func init() {
 	helpRegistry["fmt"] = helpText{
-		Summary: "Format .nflow source without running it. Preprocessing discovers required grammar; use `nflow lint` for full compiler validation, including unlinked @require bundles.",
+		Summary: "Format .nflow source without running it. Named files resolve and cache external @require bundles; use `nflow lint` for full compiler validation.",
 		Usage:   "nflow fmt [--write | --check] [--stdin] [FILE ...]",
 		Flags: `      --write   atomically rewrite named files
       --check   exit non-zero if named files need formatting

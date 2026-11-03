@@ -21,7 +21,7 @@ The editor-support launcher requires Flow `v0.44.2` or newer. The current Flow r
 | Notepad++ | Yes | No | No | No | NppExec command | UDL and formatter command |
 | JetBrains IDEs | Yes | No | No | No | External Tool or File Watcher | TextMate bundle and formatter command |
 
-The LSP provides document diagnostics, completion, hover, and formatting. Project-wide compilation and external `@require` checks still use `nflow lint`.
+The LSP provides document diagnostics, completion, hover, and formatting. At startup it scans the workspace's saved `.nflow` files and uses the same resolver as `nflow lint` to fetch and cache external `@require` bundles. Restart the language server after adding or changing a requirement so the linked editor process can be rebuilt. `nflow lint` remains the full project-wide validation command.
 
 ## Executable selection
 
@@ -141,7 +141,7 @@ The plugin provides diagnostics and code intelligence for `.nflow` files. It kee
 /flowfmt
 ```
 
-The plugin does not reimplement Flow parsing or formatting. Use `nflow lint` for checks that depend on external bundles or project-wide capability resolution.
+The plugin does not reimplement Flow parsing or formatting. The LSP loads workspace requirements for editor features; use `nflow lint` for full project-wide validation.
 
 ## Notepad++
 
@@ -199,9 +199,9 @@ nflow show flow.nflow
 
 ## LSP and project-check boundaries
 
-The LSP analyzes the open document. A bundle required by `@require` but not linked into the running Flow executable may need a project `nflow lint` instead of relying only on the editor diagnostics.
+The LSP analyzes open documents and loads saved workspace `@require` declarations into a cached, bundle-linked process. New or changed requirements take effect after the language server restarts. Unsaved declarations may not be available to editor features until saved and restarted.
 
-Use the LSP for interactive document feedback and `nflow lint` for the authoritative project check. Use `nflow fmt --write` for explicit, repeatable formatting in CI or editor automation.
+Use the LSP for interactive document feedback and `nflow lint` for the authoritative project check. Named-file `nflow fmt` requests also resolve and cache external bundles; use `nflow fmt --write` for explicit, repeatable formatting in CI or editor automation.
 
 ## Official source
 

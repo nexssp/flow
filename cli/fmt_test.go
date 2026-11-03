@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/extensions/require"
 )
 
 func TestFmtWriteAcceptsSharedPipelineSchemaAlias(t *testing.T) {
@@ -92,6 +93,56 @@ func TestFmtUsesRequiredPrimaryExtensionsForFilesAndStdin(t *testing.T) {
 			t.Fatalf("fmt stdin with required primary: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 		}
 	})
+}
+
+func TestFmtUsesSharedHarnessForNamedExternalRequirements(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "external.nflow")
+	if err := os.WriteFile(path, []byte("@require example.com/acme/format v1.2.3\ntrue\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	inv, err := newNativeInvocation(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	options := fmtOptions{writeMode: true, files: []string{path}}
+	var (
+		ensuredRequirements []require.Requirement
+		ensuredFiles        []string
+		executedArgs        []string
+		code                int
+		handled             bool
+	)
+	ensure := func(_ context.Context, requirements []require.Requirement, files ...string) (string, error) {
+		ensuredRequirements = append([]require.Requirement(nil), requirements...)
+		ensuredFiles = append([]string(nil), files...)
+		return "cached-test-harness", nil
+	}
+	execute := func(_ context.Context, binary string, args []string) int {
+		if binary != "cached-test-harness" {
+			t.Errorf("harness binary = %q, want cached-test-harness", binary)
+		}
+		executedArgs = append([]string(nil), args...)
+		return 17
+	}
+	err = inv.host.Run(t.Context(), func(ctx context.Context) error {
+		code, handled = formatWithExternalHarnessUsing(ctx, inv, []string{"--write", path}, options, ensure, execute)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !handled || code != 17 {
+		t.Fatalf("external fmt handoff: handled=%t code=%d, want true and 17", handled, code)
+	}
+	if len(ensuredRequirements) != 1 || ensuredRequirements[0].Import != "example.com/acme/format" || ensuredRequirements[0].Version != "v1.2.3" {
+		t.Fatalf("harness requirements = %#v, want example.com/acme/format@v1.2.3", ensuredRequirements)
+	}
+	if len(ensuredFiles) != 1 || ensuredFiles[0] != path {
+		t.Fatalf("harness source files = %#v, want [%q]", ensuredFiles, path)
+	}
+	if len(executedArgs) != 3 || executedArgs[0] != "fmt" || executedArgs[1] != "--write" || executedArgs[2] != path {
+		t.Fatalf("harness fmt arguments = %#v, want [fmt --write %s]", executedArgs, path)
+	}
 }
 
 func TestFmtStdinResolvesRelativeRequireFromWorkingDirectory(t *testing.T) {
