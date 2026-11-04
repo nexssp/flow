@@ -260,6 +260,60 @@ func TestDownloadRejectsTraversalAndSymlinkPaths(t *testing.T) {
 	}
 }
 
+func TestDownloadReplacesExactTargetSymlink(t *testing.T) {
+	const contents = "new"
+	var requested atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requested.Store(true)
+		_, _ = io.WriteString(w, contents)
+	}))
+	defer server.Close()
+
+	outputDir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.bin")
+	if err := os.WriteFile(outside, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(outputDir, "artifact.bin")
+	if err := os.Symlink(outside, target); err != nil {
+		t.Skipf("symlink creation unavailable: %v", err)
+	}
+
+	result, err := invokeDownload(t.Context(), map[string]any{
+		"url":            server.URL,
+		"path":           "artifact.bin",
+		"output_dir":     outputDir,
+		"expected_bytes": int64(len(contents)),
+	})
+	if err != nil {
+		t.Fatalf("fs.download returned error: %v", err)
+	}
+	if !requested.Load() || len(result.Files) != 1 || result.Files[0].Skipped {
+		t.Fatalf("download result = %#v, requested = %t; want a fetched file", result, requested.Load())
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != contents {
+		t.Fatalf("downloaded file = %q, want %q", got, contents)
+	}
+	gotOutside, err := os.ReadFile(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotOutside) != "old" {
+		t.Fatalf("outside target changed to %q", gotOutside)
+	}
+	info, err := os.Lstat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Mode().IsRegular() {
+		t.Fatalf("download target mode = %s, want regular file", info.Mode())
+	}
+}
+
 func TestDownloadManifestWritesProvenanceReceipt(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

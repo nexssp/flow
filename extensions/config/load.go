@@ -39,7 +39,10 @@ func handleConfigLoad(_ context.Context, req compiler.DirectiveReq) (compiler.Di
 		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@config.load: malformed directive")
 	}
 
-	spec := parseConfigLoadSpec(rest)
+	spec, err := parseConfigLoadSpec(rest)
+	if err != nil {
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@config.load: %v", err)
+	}
 	if spec.Path == "" {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos,
 			`@config.load: path is required (use: @config.load:path="file.yml")`)
@@ -84,37 +87,104 @@ func stripDirectivePrefix(line, prefix string) (string, bool) {
 	return "", false
 }
 
-// parseConfigLoadSpec reads `:key="value"` tokens. Only path, prefix,
-// and required are meaningful; other tokens are ignored.
-func parseConfigLoadSpec(spec string) configLoadSpec {
+// parseConfigLoadSpec reads `:key="value"` tokens. Unknown options are ignored.
+func parseConfigLoadSpec(spec string) (configLoadSpec, error) {
 	parsed := configLoadSpec{Required: true}
 	spec = strings.TrimSpace(spec)
+	if spec == "" {
+		return parsed, nil
+	}
 	if !strings.HasPrefix(spec, ":") {
 		spec = ":" + spec
 	}
-	for token := range strings.FieldsSeq(spec) {
+	tokens, err := splitConfigLoadOptions(spec)
+	if err != nil {
+		return parsed, err
+	}
+	seen := make(map[string]struct{}, 3)
+	for _, token := range tokens {
 		if !strings.HasPrefix(token, ":") {
 			continue
 		}
-		raw := token[1:]
-		before, after, ok := strings.Cut(raw, "=")
+		key, value, ok := strings.Cut(token[1:], "=")
+		key = strings.ToLower(strings.TrimSpace(key))
 		if !ok {
+			switch key {
+			case "path", "prefix", "required":
+				return parsed, fmt.Errorf("option %q requires a value", key)
+			}
 			continue
 		}
-		key := strings.ToLower(strings.TrimSpace(before))
-		value := compiler.TrimQuotes(strings.TrimSpace(after))
+		value = strings.TrimSpace(value)
+		if value != "" && strings.ContainsRune("\"'`", rune(value[0])) && compiler.TrimQuotes(value) == value {
+			return parsed, fmt.Errorf("option %q has an unterminated quoted value", key)
+		}
+		value = compiler.TrimQuotes(value)
+		switch key {
+		case "path", "prefix", "required":
+			if _, exists := seen[key]; exists {
+				return parsed, fmt.Errorf("option %q is repeated", key)
+			}
+			seen[key] = struct{}{}
+		}
 		switch key {
 		case "path":
 			parsed.Path = value
 		case "prefix":
 			parsed.Prefix = value
 		case "required":
-			if b, err := strconv.ParseBool(value); err == nil {
-				parsed.Required = b
+			b, err := strconv.ParseBool(value)
+			if err != nil {
+				return parsed, fmt.Errorf("invalid required value %q", value)
+			}
+			parsed.Required = b
+		}
+	}
+	return parsed, nil
+}
+
+func splitConfigLoadOptions(spec string) ([]string, error) {
+	var tokens []string
+	var quote byte
+	start := -1
+	escaped := false
+	for i := range len(spec) {
+		current := spec[i]
+		if quote != 0 {
+			if quote == '"' && current == '\\' && !escaped {
+				escaped = true
+				continue
+			}
+			if current == quote && !escaped {
+				quote = 0
+			}
+			escaped = false
+			continue
+		}
+		switch current {
+		case '"', '\'', '`':
+			if start < 0 {
+				start = i
+			}
+			quote = current
+		case ' ', '\t', '\r', '\n':
+			if start >= 0 {
+				tokens = append(tokens, spec[start:i])
+				start = -1
+			}
+		default:
+			if start < 0 {
+				start = i
 			}
 		}
 	}
-	return parsed
+	if quote != 0 {
+		return nil, errors.New("unterminated quoted value")
+	}
+	if start >= 0 {
+		tokens = append(tokens, spec[start:])
+	}
+	return tokens, nil
 }
 
 // DecodeFile dispatches by extension: .json → encoding/json, .toml → the
@@ -189,38 +259,85 @@ func joinPrefix(prefix, key string) string {
 func parseSimpleTOML(data []byte) (map[string]any, error) {
 	result := make(map[string]any)
 	current := result
+	sections := make(map[string]struct{})
 
 	scanner := bufio.NewScanner(bytes.NewReader(data))
+	lineNumber := 0
 	for scanner.Scan() {
+		lineNumber++
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			current = ensureNestedMap(result, strings.TrimSpace(line[1:len(line)-1]))
-			continue
+		var err error
+		current, err = parseSimpleTOMLLine(line, lineNumber, result, current, sections)
+		if err != nil {
+			return nil, err
 		}
-		eq := strings.IndexByte(line, '=')
-		if eq <= 0 {
-			continue
-		}
-		key := strings.TrimSpace(line[:eq])
-		value := compiler.TrimQuotes(strings.TrimSpace(line[eq+1:]))
-		current[key] = value
 	}
-	return result, scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("line %d: %w", lineNumber+1, err)
+	}
+	return result, nil
 }
 
-func ensureNestedMap(root map[string]any, section string) map[string]any {
+func parseSimpleTOMLLine(line string, lineNumber int, root, current map[string]any, sections map[string]struct{}) (map[string]any, error) {
+	if strings.HasPrefix(line, "[") || strings.HasSuffix(line, "]") {
+		if len(line) < 3 || !strings.HasPrefix(line, "[") || !strings.HasSuffix(line, "]") {
+			return current, fmt.Errorf("line %d: malformed table header", lineNumber)
+		}
+		section := strings.TrimSpace(line[1 : len(line)-1])
+		if section == "" || strings.ContainsAny(section, "[]\"'`") {
+			return current, fmt.Errorf("line %d: unsupported table name %q", lineNumber, section)
+		}
+		if _, exists := sections[section]; exists {
+			return current, fmt.Errorf("line %d: duplicate table %q", lineNumber, section)
+		}
+		nested, err := ensureNestedMap(root, section)
+		if err != nil {
+			return current, fmt.Errorf("line %d: %w", lineNumber, err)
+		}
+		sections[section] = struct{}{}
+		return nested, nil
+	}
+	eq := strings.IndexByte(line, '=')
+	if eq <= 0 {
+		return current, fmt.Errorf("line %d: expected key = value", lineNumber)
+	}
+	key := strings.TrimSpace(line[:eq])
+	value := strings.TrimSpace(line[eq+1:])
+	if key == "" || value == "" {
+		return current, fmt.Errorf("line %d: key and value are required", lineNumber)
+	}
+	if strings.HasPrefix(value, "[") || strings.HasPrefix(value, "{") {
+		return current, fmt.Errorf("line %d: arrays and inline tables are unsupported", lineNumber)
+	}
+	if strings.ContainsRune("\"'", rune(value[0])) && compiler.TrimQuotes(value) == value {
+		return current, fmt.Errorf("line %d: malformed quoted value", lineNumber)
+	}
+	if _, exists := current[key]; exists {
+		return current, fmt.Errorf("line %d: duplicate key %q", lineNumber, key)
+	}
+	current[key] = compiler.TrimQuotes(value)
+	return current, nil
+}
+
+func ensureNestedMap(root map[string]any, section string) (map[string]any, error) {
 	current := root
 	for part := range strings.SplitSeq(section, ".") {
+		if part == "" {
+			return nil, errors.New("table name contains an empty component")
+		}
 		if child, ok := current[part].(map[string]any); ok {
 			current = child
 			continue
+		}
+		if _, exists := current[part]; exists {
+			return nil, fmt.Errorf("table %q conflicts with a value", part)
 		}
 		child := make(map[string]any)
 		current[part] = child
 		current = child
 	}
-	return current
+	return current, nil
 }

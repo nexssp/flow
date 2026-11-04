@@ -62,10 +62,10 @@ func TestLoad_TOML(t *testing.T) {
 }
 
 func TestLoad_Prefix(t *testing.T) {
-	path := writeFixture(t, "a.json", `{"x":1}`)
-	cfg, err := runLoad(t, "", `@config.load:path="`+path+`" :prefix="app"`)
+	path := writeFixture(t, "a file.json", `{"x":1}`)
+	cfg, err := runLoad(t, "", `@config.load:path="`+path+`" :prefix="my app"`)
 	ktest.RequireNoError(t, err)
-	ktest.RequireEqual(t, cfg["app.x"], "1")
+	ktest.RequireEqual(t, cfg["my app.x"], "1")
 }
 
 func TestLoad_MissingOptional(t *testing.T) {
@@ -77,6 +77,11 @@ func TestLoad_MissingOptional(t *testing.T) {
 func TestLoad_MissingRequired(t *testing.T) {
 	_, err := runLoad(t, "", `@config.load:path="/nonexistent/x.json"`)
 	ktest.RequireErrorContains(t, err, "read")
+}
+
+func TestLoad_InvalidRequired(t *testing.T) {
+	_, err := runLoad(t, "", `@config.load:path="/nonexistent/x.json" :required=maybe`)
+	ktest.RequireErrorContains(t, err, "invalid required value")
 }
 
 func TestLoad_RelativeToBaseDir(t *testing.T) {
@@ -112,13 +117,56 @@ func TestParseSpec(t *testing.T) {
 	}{
 		{"path only", `:path="a.yml"`, configLoadSpec{Path: "a.yml", Required: true}},
 		{"path prefix", `:path="a.yml" :prefix="x"`, configLoadSpec{Path: "a.yml", Prefix: "x", Required: true}},
+		{"quoted spaces", `:path="a file.yml" :prefix="my app"`, configLoadSpec{Path: "a file.yml", Prefix: "my app", Required: true}},
 		{"optional", `:path="a.yml" :required=false`, configLoadSpec{Path: "a.yml", Required: false}},
 		{"no leading colon", `path="a.yml"`, configLoadSpec{Path: "a.yml", Required: true}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			ktest.RequireEqual(t, parseConfigLoadSpec(c.in), c.want)
+			got, err := parseConfigLoadSpec(c.in)
+			ktest.RequireNoError(t, err)
+			ktest.RequireEqual(t, got, c.want)
+		})
+	}
+}
+
+func TestParseSpecRejectsInvalidKnownOptions(t *testing.T) {
+	t.Parallel()
+	for _, input := range []string{
+		`:required=maybe`,
+		`:required`,
+		`:required=true :required=false`,
+		`:path="unterminated`,
+	} {
+		t.Run(input, func(t *testing.T) {
+			t.Parallel()
+			_, err := parseConfigLoadSpec(input)
+			if err == nil {
+				t.Fatal("parseConfigLoadSpec succeeded for invalid option")
+			}
+		})
+	}
+}
+
+func TestDecodeFileRejectsMalformedTOML(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"malformed line", "[db]\nhost = \"db\"\nport 5432\n", "expected key = value"},
+		{"duplicate key", "[db]\nhost = \"first\"\nhost = \"second\"\n", "duplicate key"},
+		{"duplicate table", "[db]\nhost = \"db\"\n[db]\n", "duplicate table"},
+		{"malformed table", "[db\nhost = \"db\"\n", "malformed table header"},
+		{"table value conflict", "db = 1\n[db.child]\nx = 2\n", "conflicts with a value"},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := DecodeFile([]byte(test.input), ".toml")
+			ktest.RequireErrorContains(t, err, test.want)
 		})
 	}
 }

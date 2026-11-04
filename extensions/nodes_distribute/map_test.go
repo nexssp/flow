@@ -3,12 +3,15 @@ package nodes_distribute
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
 
 	"github.com/nexssp/flow/compiler/contracts"
 )
@@ -89,6 +92,66 @@ func TestDistributeMapUsesKernelFanOutAndPreservesResultOrder(t *testing.T) {
 	}
 	if maximum.Load() > 2 {
 		t.Fatalf("maximum concurrent workers = %d, want at most 2", maximum.Load())
+	}
+}
+
+func TestMapTimeoutDurationChecksLimits(t *testing.T) {
+	maxTimeoutMS := int64(math.MaxInt64) / int64(time.Millisecond)
+	if got, err := mapTimeoutDuration(0); err != nil || got != 0 {
+		t.Fatalf("zero timeout = %s, %v; want 0, nil", got, err)
+	}
+	if got, err := mapTimeoutDuration(maxTimeoutMS); err != nil || got <= 0 {
+		t.Fatalf("maximum timeout = %s, %v; want positive duration, nil", got, err)
+	}
+	for _, timeout := range []int64{-1, maxTimeoutMS + 1} {
+		_, err := mapTimeoutDuration(timeout)
+		if got := xerr.KindFrom(err); got != xerr.KindBadRequest {
+			t.Fatalf("timeout %d error kind = %s, want %s: %v", timeout, got, xerr.KindBadRequest, err)
+		}
+	}
+}
+
+func TestDistributeMapRejectsInvalidTimeoutBeforeEmptyResult(t *testing.T) {
+	maxTimeoutMS := int64(math.MaxInt64) / int64(time.Millisecond)
+	for _, timeout := range []int64{-1, maxTimeoutMS + 1} {
+		_, err := DistributeMap.Do(t.Context(), DistributeMapReq{
+			Action:    "test.worker",
+			TimeoutMs: timeout,
+		})
+		if got := xerr.KindFrom(err); got != xerr.KindBadRequest {
+			t.Fatalf("timeout %d error kind = %s, want %s: %v", timeout, got, xerr.KindBadRequest, err)
+		}
+	}
+}
+
+func TestDistributeMapAppliesTimeoutMS(t *testing.T) {
+	observedDeadline := make(chan time.Duration, 1)
+	target := action.New("test.worker", func(ctx context.Context, _ any) (any, error) {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			return nil, errors.New("worker context has no deadline")
+		}
+		observedDeadline <- time.Until(deadline)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}).Build()
+
+	parentCtx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	ctx := contracts.WithActionResolver(parentCtx, mapTestResolver{target: target})
+	got, err := DistributeMap.Do(ctx, DistributeMapReq{
+		Action:    "test.worker",
+		Items:     []any{1},
+		TimeoutMs: 100,
+	})
+	if err != nil {
+		t.Fatalf("DistributeMap.Do: %v", err)
+	}
+	if len(got.Items) != 1 || got.Items[0].OK {
+		t.Fatalf("map result = %#v, want one failed item", got.Items)
+	}
+	if remaining := <-observedDeadline; remaining <= 0 || remaining > 100*time.Millisecond {
+		t.Fatalf("worker deadline remaining = %s, want (0, 100ms]", remaining)
 	}
 }
 

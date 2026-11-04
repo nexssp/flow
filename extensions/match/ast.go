@@ -81,7 +81,7 @@ func (m *Expr) Build(ctx context.Context, bCtx *compiler.BuildContext) (action.A
 	}
 
 	for i, c := range m.Cases {
-		act, err := c.Body.Build(ctx, bCtx)
+		act, err := buildMatchCaseBody(ctx, bCtx, c.Body)
 		if err != nil {
 			return nil, err
 		}
@@ -139,6 +139,21 @@ func (m *Expr) Build(ctx context.Context, bCtx *compiler.BuildContext) (action.A
 		composition.Notes = []string{"case predicates and subject are closure-captured and omitted"}
 	}
 	return compiler.TrackActionComposition(bCtx, program, composition), nil
+}
+
+func buildMatchCaseBody(ctx context.Context, bCtx *compiler.BuildContext, body compiler.Expr) (action.AnyAction, error) {
+	if atom, ok := body.(*compiler.Atom); ok && atom != nil &&
+		len(atom.Params) == 0 && len(atom.ParamValues) == 0 &&
+		len(atom.Modifiers) == 0 && len(atom.Args) == 0 &&
+		len(atom.ArgSpreads) == 0 && !atom.HasArgumentObject &&
+		!atom.NamedPipelineArgs && !atom.ConfigInject && atom.Prompt == "" &&
+		len(atom.Targets) == 0 && len(atom.Excludes) == 0 {
+		meta := map[string]any{"symbols": compiler.LocalSymbolsFrom(ctx)}
+		if value, found := compiler.ResolveSymbolValue(meta, atom.Name); found {
+			return (&compiler.LiteralExpr{Val: value, Pos: atom.Pos}).Build(ctx, bCtx)
+		}
+	}
+	return body.Build(ctx, bCtx)
 }
 
 // matchConditionExpression preserves equality-style match(subject) behavior,

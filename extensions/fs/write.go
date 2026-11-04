@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"errors"
 	"iter"
 	"os"
 	"path/filepath"
@@ -21,8 +22,8 @@ type WriteConfig struct {
 // the per-item counterpart to out.file, which aggregates the whole
 // stream into one file.
 //
-// RelPath is validated through xfs.Rel so a hostile upstream cannot
-// escape Dir with ../ or absolute paths.
+// RelPath is validated through xfs.Rel and all file operations use
+// xfs.Root so symlinks cannot escape Dir.
 func Write(cfg WriteConfig) action.StreamOp[FileContent, FileContent] {
 	if cfg.Dir == "" {
 		cfg.Dir = "."
@@ -68,10 +69,23 @@ func WriteOperator() action.NamedOperator {
 	return action.NewOperator("fs.write", Write)
 }
 
-func writeOne(dir, rel string, content []byte, mode os.FileMode, overwrite bool) error {
-	target := filepath.Join(dir, rel)
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return xerr.Internal("fs.write: mkdir", err)
+func writeOne(dir, rel string, content []byte, mode os.FileMode, overwrite bool) (resultErr error) {
+	if mkdirErr := os.MkdirAll(dir, 0o755); mkdirErr != nil {
+		return xerr.Internal("fs.write: mkdir", mkdirErr)
+	}
+
+	root, rootErr := xfs.OpenRoot(dir)
+	if rootErr != nil {
+		return xerr.Internal("fs.write: root", rootErr)
+	}
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil {
+			resultErr = errors.Join(resultErr, xerr.Internal("fs.write: close root", closeErr))
+		}
+	}()
+
+	if mkdirErr := root.MkdirAll(filepath.Dir(rel), 0o755); mkdirErr != nil {
+		return xerr.Internal("fs.write: mkdir", mkdirErr)
 	}
 
 	flags := os.O_CREATE | os.O_WRONLY
@@ -81,19 +95,19 @@ func writeOne(dir, rel string, content []byte, mode os.FileMode, overwrite bool)
 		flags |= os.O_EXCL
 	}
 
-	file, err := os.OpenFile(target, flags, mode)
-	if err != nil {
-		return xerr.Internal("fs.write: open "+target, err)
+	file, openErr := root.OpenFile(rel, flags, mode)
+	if openErr != nil {
+		return xerr.Internal("fs.write: open "+rel, openErr)
 	}
 
 	_, writeErr := file.Write(content)
 	closeErr := file.Close()
 
 	if writeErr != nil {
-		return xerr.Internal("fs.write: write "+target, writeErr)
+		return xerr.Internal("fs.write: write "+rel, writeErr)
 	}
 	if closeErr != nil {
-		return xerr.Internal("fs.write: close "+target, closeErr)
+		return xerr.Internal("fs.write: close "+rel, closeErr)
 	}
 	return nil
 }

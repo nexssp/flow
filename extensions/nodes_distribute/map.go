@@ -3,6 +3,7 @@ package nodes_distribute
 import (
 	"context"
 	"errors"
+	"math"
 	"sync"
 	"time"
 
@@ -48,9 +49,20 @@ type DistributeMapRes struct {
 	Failed    int    `json:"failed"`
 }
 
+func mapTimeoutDuration(timeoutMS int64) (time.Duration, error) {
+	if timeoutMS < 0 || timeoutMS > int64(math.MaxInt64)/int64(time.Millisecond) {
+		return 0, xerr.BadRequest("distribute.map: timeout_ms is outside the supported range")
+	}
+	return time.Duration(timeoutMS) * time.Millisecond, nil
+}
+
 var DistributeMap = action.New("distribute.map", func(ctx context.Context, req DistributeMapReq) (DistributeMapRes, error) {
 	if req.Action == "" {
 		return DistributeMapRes{}, xerr.BadRequest("distribute.map: action is required")
+	}
+	timeout, err := mapTimeoutDuration(req.TimeoutMs)
+	if err != nil {
+		return DistributeMapRes{}, err
 	}
 	if len(req.Items) == 0 {
 		return DistributeMapRes{}, nil
@@ -91,8 +103,8 @@ var DistributeMap = action.New("distribute.map", func(ctx context.Context, req D
 		}
 		return itemCtx, nil
 	})
-	if req.TimeoutMs > 0 {
-		builder = builder.Timeout(time.Duration(req.TimeoutMs) * time.Millisecond)
+	if timeout > 0 {
+		builder = builder.Timeout(timeout)
 	}
 	if req.Retries > 0 {
 		builder = builder.Retry(req.Retries, action.ExponentialJitter(10*time.Millisecond, 2*time.Second))

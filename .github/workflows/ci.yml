@@ -53,7 +53,7 @@ jobs:
       - name: Build
         run: task build
 
-      - name: Run CI gate (extension self-tests, acceptance specs, lint, Go tests)
+      - name: Run CI gate (self-tests, acceptance specs, lint, Go tests, vulnerability scan)
         run: task ci
 
       - name: Benchmark smoke check

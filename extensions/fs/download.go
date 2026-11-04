@@ -282,7 +282,7 @@ func completeDownloadTarget(file DownloadFile, target string) (DownloadFileResul
 	if file.ExpectedBytes <= 0 {
 		return result, false
 	}
-	info, err := os.Stat(target)
+	info, err := os.Lstat(target)
 	if err != nil || !info.Mode().IsRegular() || info.Size() != file.ExpectedBytes {
 		return result, false
 	}

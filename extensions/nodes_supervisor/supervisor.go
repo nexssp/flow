@@ -3,6 +3,7 @@ package nodes_supervisor
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/nexssp/kernel/action"
@@ -14,6 +15,7 @@ import (
 
 const (
 	childDefaultTimeout = 30 * time.Second
+	maxChildTimeoutMS   = int64(math.MaxInt64) / int64(time.Millisecond)
 )
 
 // ChildTask describes one pipeline to compile and run.
@@ -52,6 +54,11 @@ type SupervisorRes struct {
 var Supervisor = action.New("supervisor.run", func(ctx context.Context, req SupervisorReq) (SupervisorRes, error) {
 	if len(req.Tasks) == 0 {
 		return SupervisorRes{}, xerr.BadRequest("supervisor: no child tasks provided")
+	}
+	for _, task := range req.Tasks {
+		if task.TimeoutMS < 0 || task.TimeoutMS > maxChildTimeoutMS {
+			return SupervisorRes{}, xerr.BadRequest("supervisor: timeout_ms is outside the supported range")
+		}
 	}
 
 	compiler := contracts.CompilerFromContext(ctx)

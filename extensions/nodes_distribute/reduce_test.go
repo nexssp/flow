@@ -1,7 +1,6 @@
 package nodes_distribute
 
 import (
-	"context"
 	"testing"
 
 	"github.com/nexssp/kernel/xerr"
@@ -26,26 +25,36 @@ func TestReduce_Collect(t *testing.T) {
 
 func TestReduce_AllPass(t *testing.T) {
 	t.Parallel()
-	got, _ := runReduce(DistributeReduceReq{
+	got, err := runReduce(DistributeReduceReq{
 		Strategy: "all_pass",
 		Items:    []Item{{OK: true}, {OK: true}},
 	})
+	ktest.RequireNoError(t, err)
 	ktest.RequireCondition(t, got.AllPass, "expected all_pass=true")
 
-	got, _ = runReduce(DistributeReduceReq{
+	got, err = runReduce(DistributeReduceReq{
 		Strategy: "all_pass",
 		Items:    []Item{{OK: true}, {OK: false}},
 	})
+	ktest.RequireNoError(t, err)
 	ktest.RequireCondition(t, !got.AllPass, "expected all_pass=false")
 }
 
 func TestReduce_AnyPass(t *testing.T) {
 	t.Parallel()
-	got, _ := runReduce(DistributeReduceReq{
+	got, err := runReduce(DistributeReduceReq{
 		Strategy: "any_pass",
 		Items:    []Item{{OK: false}, {OK: true}},
 	})
+	ktest.RequireNoError(t, err)
 	ktest.RequireCondition(t, got.AnyPass, "expected any_pass=true")
+
+	got, err = runReduce(DistributeReduceReq{
+		Strategy: "any_pass",
+		Items:    []Item{{OK: false}, {OK: false}},
+	})
+	ktest.RequireNoError(t, err)
+	ktest.RequireCondition(t, !got.AnyPass, "expected any_pass=false")
 }
 
 func TestReduce_FirstSuccess(t *testing.T) {
@@ -73,10 +82,11 @@ func TestReduce_FirstSuccess_AllFailed(t *testing.T) {
 
 func TestReduce_Count(t *testing.T) {
 	t.Parallel()
-	got, _ := runReduce(DistributeReduceReq{
+	got, err := runReduce(DistributeReduceReq{
 		Strategy: "count",
 		Items:    []Item{{OK: true}, {OK: false}, {OK: true}},
 	})
+	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, got.Succeeded, 2)
 	ktest.RequireEqual(t, got.Failed, 1)
 }
@@ -104,5 +114,3 @@ func TestBundle_WiresActionsAndFixtures(t *testing.T) {
 		ktest.RequireCondition(t, seen, "action %q missing", name)
 	}
 }
-
-var _ = context.Background

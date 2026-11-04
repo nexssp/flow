@@ -39,7 +39,8 @@ type Request struct {
 	Backend   string              `json:"backend"              cli:"backend,b"`
 	State     map[string]any      `json:"state,omitempty"`
 	Questions map[string]Question `json:"questions"`
-	TimeoutMS int64               `json:"timeout_ms,omitempty"`
+	// TimeoutMS bounds one backend call; zero keeps the caller's deadline.
+	TimeoutMS int64 `json:"timeout_ms,omitempty"`
 }
 
 // Response is the decide action's output. It mirrors Result so callers
