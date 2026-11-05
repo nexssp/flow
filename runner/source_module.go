@@ -48,8 +48,7 @@ func mountSourceModule(cfg Config, parent compiler.CapabilityResolver, imported 
 }
 
 func sourceName(prepared *compiler.PreparedSource) string {
-	name, _ := prepared.SourceIdentity()
-	return name
+	return prepared.SourceName()
 }
 
 // sourceDeclarations excludes cached lookups of base libraries: importing a

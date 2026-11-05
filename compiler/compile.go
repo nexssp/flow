@@ -40,6 +40,14 @@ func (p *PreparedSource) Metadata() map[string]any {
 	return p.meta
 }
 
+// SourceName returns the original source name without exposing source text.
+func (p *PreparedSource) SourceName() string {
+	if p == nil {
+		return ""
+	}
+	return p.name
+}
+
 // SourceIdentity returns the original source name and its SHA-256 digest.
 // It lets callers bind durable state to a prepared source without exposing
 // the source text stored inside this opaque value.

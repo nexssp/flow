@@ -1,9 +1,11 @@
 package runtime
 
 import (
+	"container/heap"
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -19,6 +21,7 @@ const (
 	printDefaultDepth   = 4
 	printDefaultStrings = 200
 	printMaxBytes       = 16 * 1024
+	printMaxEntries     = printMaxBytes / 16
 
 	printReset   = "\x1b[0m"
 	printDim     = "\x1b[2m"
@@ -109,8 +112,15 @@ func readPositiveInt(v any) (int, bool) {
 	case int:
 		return x, x > 0
 	case int64:
+		maxInt := int64(int(^uint(0) >> 1))
+		if x <= 0 || x > maxInt {
+			return 0, false
+		}
 		return int(x), x > 0
 	case float64:
+		if x <= 0 || math.IsInf(x, 0) || math.IsNaN(x) || math.Trunc(x) != x || x >= math.Ldexp(1, strconv.IntSize-1) {
+			return 0, false
+		}
 		return int(x), x > 0
 	}
 	return 0, false
@@ -141,6 +151,13 @@ func renderPrint(v any, cfg printConfig, color bool) string {
 	buf := &printBuffer{limit: printMaxBytes}
 	renderPrintValue(buf, v, cfg, 0, color, "")
 	return buf.finish()
+}
+
+func printEntryLimit(limit int) int {
+	if limit <= 0 {
+		return printDefaultLimit
+	}
+	return min(limit, printMaxEntries)
 }
 
 // printBuffer is a strings.Builder with a hard byte budget. Every write
@@ -176,6 +193,9 @@ func (b *printBuffer) finish() string {
 }
 
 func renderPrintValue(buf *printBuffer, v any, cfg printConfig, depth int, color bool, indent string) {
+	if buf.truncated {
+		return
+	}
 	if depth > cfg.depth {
 		buf.write(paintPrint("...", printDim, color))
 		return
@@ -203,27 +223,24 @@ func renderPrintMap(buf *printBuffer, m map[string]any, cfg printConfig, depth i
 		buf.write("{}")
 		return
 	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	displayed := keys
-	truncated := 0
-	if cfg.limit > 0 && len(keys) > cfg.limit {
-		truncated = len(keys) - cfg.limit
-		displayed = keys[:cfg.limit]
-	}
+	limit := printEntryLimit(cfg.limit)
+	keys := sortedPrintMapKeys(m, limit)
+	truncated := len(m) - len(keys)
 
 	inner := indent + "  "
 	buf.write("{\n")
-	for i, k := range displayed {
+	for i, k := range keys {
+		if buf.truncated {
+			return
+		}
 		buf.write(inner)
 		buf.write(paintPrint(strconv.Quote(k), printGreen, color))
 		buf.write(": ")
 		renderPrintValue(buf, m[k], cfg, depth+1, color, inner)
-		if i < len(displayed)-1 {
+		if buf.truncated {
+			return
+		}
+		if i < len(keys)-1 {
 			buf.write(",")
 		}
 		buf.write("\n")
@@ -237,26 +254,82 @@ func renderPrintMap(buf *printBuffer, m map[string]any, cfg printConfig, depth i
 	buf.write("}")
 }
 
+func sortedPrintMapKeys(values map[string]any, limit int) []string {
+	if limit <= 0 {
+		return nil
+	}
+	if len(values) <= limit {
+		keys := make([]string, 0, len(values))
+		for key := range values {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		return keys
+	}
+
+	keys := make(printKeyHeap, 0, limit)
+	for key := range values {
+		if len(keys) < limit {
+			heap.Push(&keys, key)
+			continue
+		}
+		if key < keys[0] {
+			keys[0] = key
+			heap.Fix(&keys, 0)
+		}
+	}
+	sort.Strings([]string(keys))
+	return []string(keys)
+}
+
+type printKeyHeap []string
+
+func (keys *printKeyHeap) Len() int           { return len(*keys) }
+func (keys *printKeyHeap) Less(i, j int) bool { return (*keys)[i] > (*keys)[j] }
+func (keys *printKeyHeap) Swap(i, j int)      { (*keys)[i], (*keys)[j] = (*keys)[j], (*keys)[i] }
+
+func (keys *printKeyHeap) Push(value any) {
+	key, ok := value.(string)
+	if ok {
+		*keys = append(*keys, key)
+	}
+}
+
+func (keys *printKeyHeap) Pop() any {
+	values := *keys
+	last := len(values) - 1
+	key := values[last]
+	*keys = values[:last]
+	return key
+}
+
 func renderPrintSlice(buf *printBuffer, s []any, cfg printConfig, depth int, color bool, indent string) {
 	if len(s) == 0 {
 		buf.write("[]")
 		return
 	}
 
+	limit := printEntryLimit(cfg.limit)
 	displayed := s
 	truncated := 0
-	if cfg.limit > 0 && len(s) > cfg.limit {
-		truncated = len(s) - cfg.limit
-		displayed = s[:cfg.limit]
+	if len(s) > limit {
+		truncated = len(s) - limit
+		displayed = s[:limit]
 	}
 
 	if printSliceIsInline(displayed) {
 		buf.write("[")
 		for i, item := range displayed {
+			if buf.truncated {
+				return
+			}
 			if i > 0 {
 				buf.write(", ")
 			}
 			renderPrintValue(buf, item, cfg, depth+1, color, indent)
+			if buf.truncated {
+				return
+			}
 		}
 		if truncated > 0 {
 			buf.write(paintPrint(fmt.Sprintf(", ... %d more", truncated), printDim, color))
@@ -268,8 +341,14 @@ func renderPrintSlice(buf *printBuffer, s []any, cfg printConfig, depth int, col
 	inner := indent + "  "
 	buf.write("[\n")
 	for i, item := range displayed {
+		if buf.truncated {
+			return
+		}
 		buf.write(inner)
 		renderPrintValue(buf, item, cfg, depth+1, color, inner)
+		if buf.truncated {
+			return
+		}
 		if i < len(displayed)-1 {
 			buf.write(",")
 		}

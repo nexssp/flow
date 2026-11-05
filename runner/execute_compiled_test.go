@@ -117,6 +117,16 @@ func TestExecuteCompiledRejectsNilProgram(t *testing.T) {
 	}
 }
 
+func TestExecutePreparedRejectsNilPreparedSource(t *testing.T) {
+	result, err := runner.ExecutePrepared(t.Context(), runner.Config{}, nil, runner.EntryPoint{})
+	if err == nil || err.Error() != "runner: prepared source is required" {
+		t.Fatalf("error = %v, want prepared-source-required error", err)
+	}
+	if result.ExecutionID != "" || result.CompileDuration != 0 || result.RunDuration != 0 {
+		t.Errorf("result = %#v, want empty execution", result)
+	}
+}
+
 func TestExecuteCompiledPropagatesCancellation(t *testing.T) {
 	waitForContext := action.New("test.wait_for_context", func(ctx context.Context, _ any) (any, error) {
 		<-ctx.Done()

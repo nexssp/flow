@@ -39,7 +39,7 @@ func (c *durableStepCounters) next(stepName string) uint64 {
 // creates one for this invocation. The per-run occurrence counters make a
 // repeated static callsite (for example, inside LoopAny) produce distinct but
 // repeatable durable step names on a retry.
-func ensureExecutionIdentity(ctx context.Context) (context.Context, string, error) {
+func ensureExecutionIdentity(ctx context.Context, cfg Config) (context.Context, string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -55,7 +55,9 @@ func ensureExecutionIdentity(ctx context.Context) (context.Context, string, erro
 		id = "flow-" + hex.EncodeToString(raw[:])
 	}
 	ctx = xctx.WithExecutionID(ctx, id)
-	ctx = durableCountersContextKey.With(ctx, &durableStepCounters{})
+	if cfg.Journal != nil || cfg.IdempotencyStore != nil {
+		ctx = durableCountersContextKey.With(ctx, &durableStepCounters{})
+	}
 	return ctx, id, nil
 }
 

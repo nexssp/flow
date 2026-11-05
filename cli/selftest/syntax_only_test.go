@@ -159,3 +159,54 @@ func TestMarkedFixtureCompilesInsteadOfExecutingInOrdinaryMode(t *testing.T) {
 		t.Fatalf("marked fixture action invoked %d times; expected compile-only", got)
 	}
 }
+
+func TestUnmatchedFilterFailsWhenSomeFeaturesMatch(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		json bool
+	}{
+		{name: "text"},
+		{name: "json", json: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			feature := compiler.SelfTestFeature{
+				Name:       "selected feature",
+				DSL:        "runtime.noop",
+				Source:     "selected.nflow",
+				SyntaxOnly: true,
+			}
+			bundle := compiler.Bundle{
+				ID: "filter-probe",
+				SelfTest: func() []compiler.SelfTestSection {
+					return []compiler.SelfTestSection{{Name: "Filter probe", Features: []compiler.SelfTestFeature{feature}}}
+				},
+			}
+
+			var output bytes.Buffer
+			code := runWithBundles(context.Background(), Options{
+				Out:     &output,
+				Filters: []string{feature.Name, "misspelled filter"},
+				JSON:    tc.json,
+			}, []compiler.Bundle{runtime.Bundle(nil), bundle})
+			if code != 2 {
+				t.Fatalf("mixed matched/unmatched filters exit code = %d, want 2; output:\n%s", code, output.String())
+			}
+
+			if tc.json {
+				var report struct {
+					UnmatchedFilters []string `json:"unmatched_filters"`
+				}
+				if err := json.Unmarshal(output.Bytes(), &report); err != nil {
+					t.Fatalf("decode self-test report: %v\n%s", err, output.String())
+				}
+				if len(report.UnmatchedFilters) != 1 || report.UnmatchedFilters[0] != "misspelled filter" {
+					t.Fatalf("unmatched filters = %v, want [misspelled filter]", report.UnmatchedFilters)
+				}
+				return
+			}
+			if !strings.Contains(output.String(), "misspelled filter") {
+				t.Fatalf("text output did not report unmatched filter:\n%s", output.String())
+			}
+		})
+	}
+}

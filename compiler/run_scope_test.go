@@ -110,3 +110,17 @@ func TestRunScopeBoundsCleanupAndJoinsErrorsAfterPanics(t *testing.T) {
 		t.Fatalf("cleanup callbacks called = %d, want 3", called)
 	}
 }
+
+func TestRunScopeEmptyCloseCancels(t *testing.T) {
+	t.Parallel()
+	runCtx, scope := NewRunScope(context.Background())
+	if err := scope.Close(runCtx); err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(runCtx.Err(), context.Canceled) {
+		t.Fatalf("run context error = %v, want canceled", runCtx.Err())
+	}
+	if err := scope.Close(runCtx); err != nil {
+		t.Fatalf("second close = %v, want nil", err)
+	}
+}

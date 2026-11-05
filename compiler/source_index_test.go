@@ -30,6 +30,9 @@ func TestPreparedSourceFromPreprocessedDoesNotRunDirectivesAgain(t *testing.T) {
 	if prepared.SourceText() != source {
 		t.Fatalf("SourceText() = %q, want original source", prepared.SourceText())
 	}
+	if prepared.SourceName() != "test.nflow" {
+		t.Fatalf("SourceName() = %q, want test.nflow", prepared.SourceName())
+	}
 	if prepared.CleanSource() != clean {
 		t.Fatalf("CleanSource() = %q, want %q", prepared.CleanSource(), clean)
 	}

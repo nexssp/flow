@@ -42,8 +42,8 @@ type filterResult struct {
 }
 
 // Run executes the suite and returns a process exit code: 0 when every
-// selected feature passes, 1 when at least one fails, 2 on
-// configuration error.
+// selected feature passes, 1 when at least one fails, 2 on configuration
+// error or when any requested filter matches nothing.
 func Run(ctx context.Context, opts Options) int {
 	bundles := native.SelftestBundles()
 	host := flowrunner.NewHost()
@@ -109,7 +109,7 @@ func runWithBundles(ctx context.Context, opts Options, bundles []compiler.Bundle
 	cfg.MeasureAllocs = true
 
 	if opts.JSON {
-		return runJSON(ctx, opts, cfg, res.Sections)
+		return runJSON(ctx, opts, cfg, res.Sections, res.UnmatchedFilters)
 	}
 	if opts.SyntaxOnly {
 		writeLine(opts.Out, "syntax-only: compiling selected fixtures without executing flows or probing language runtimes")
@@ -164,6 +164,9 @@ func runWithBundles(ctx context.Context, opts Options, bundles []compiler.Bundle
 		if results[i].Status == StatusFail {
 			return 1
 		}
+	}
+	if len(res.UnmatchedFilters) > 0 {
+		return 2
 	}
 	return 0
 }

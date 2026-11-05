@@ -67,7 +67,7 @@ func fingerprintApprovalRunHash(sourceHash, _ string, payload any) (approvalFing
 func runApprovalAware(
 	ctx context.Context,
 	journal any,
-	executionID, sourceHash, name string,
+	executionID, source, name string,
 	payload any,
 	meta map[string]any,
 	invoke func() (any, error),
@@ -88,7 +88,7 @@ func runApprovalAware(
 	}
 	if len(declarations) > 0 || found {
 		var err error
-		fingerprint, err = fingerprintApprovalRunHash(sourceHash, name, payload)
+		fingerprint, err = fingerprintApprovalRun(source, name, payload)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -108,7 +108,7 @@ func runApprovalAware(
 
 	output, runErr := invoke()
 	if runErr != nil {
-		return persistApprovalFailure(ctx, store, canPersist, executionID, sourceHash, name, payload, declarations, fingerprint, output, runErr)
+		return persistApprovalFailure(ctx, store, canPersist, executionID, source, name, payload, declarations, fingerprint, output, runErr)
 	}
 	if found {
 		if err := store.ClearApprovalSuspension(ctx, executionID); err != nil {
@@ -122,7 +122,7 @@ func persistApprovalFailure(
 	ctx context.Context,
 	store SuspensionStore,
 	canPersist bool,
-	executionID, sourceHash, name string,
+	executionID, source, name string,
 	payload any,
 	declarations []flowapproval.Declaration,
 	fingerprint approvalFingerprint,
@@ -149,7 +149,7 @@ func persistApprovalFailure(
 		suspension.SourceHash = fingerprint.sourceHash
 		suspension.InputHash = fingerprint.inputHash
 	} else {
-		computed, err := fingerprintApprovalRunHash(sourceHash, name, payload)
+		computed, err := fingerprintApprovalRun(source, name, payload)
 		if err != nil {
 			return output, nil, err
 		}

@@ -49,7 +49,7 @@ var defaultRunAction = compiler.RunAction()
 
 func withExecutionContext(ctx context.Context, cfg Config, resolver compiler.CapabilityResolver, meta map[string]any) context.Context {
 	cfg.Resolver = resolver
-	ctx = contracts.WithCompiler(ctx, compilerAdapter{cfg: cfg, inheritedMeta: meta})
+	ctx = contracts.WithCompiler(ctx, compilerAdapter{cfg: cfg, inheritedMeta: meta, compileContext: ctx})
 	ctx = contracts.WithActionResolver(ctx, resolver)
 	return contracts.WithFileResolver(ctx, cfg.FileResolver)
 }
@@ -69,12 +69,14 @@ func CompileWithOptions(ctx context.Context, cfg Config, src, name string, opts 
 	return compilePrepared(ctx, cfg, prepared)
 }
 
+var errPreparedSourceRequired = errors.New("runner: prepared source is required")
+
 // CompilePrepared compiles a source that has already completed preprocessing.
 // It is useful when a caller must inspect the same directive metadata before
 // compiling and should not repeat the preprocessing pass.
 func CompilePrepared(ctx context.Context, cfg Config, prepared *compiler.PreparedSource) (Compilation, error) {
 	if prepared == nil {
-		return Compilation{}, errors.New("runner: prepared source is required")
+		return Compilation{}, errPreparedSourceRequired
 	}
 	return compilePrepared(ctx, cfg, prepared)
 }
@@ -90,7 +92,10 @@ func ExecutePrepared(
 	entry EntryPoint,
 	extraOpts ...compiler.CompileOption,
 ) (Execution, error) {
-	ctx, executionID, identityErr := ensureExecutionIdentity(ctx)
+	if prepared == nil {
+		return Execution{}, errPreparedSourceRequired
+	}
+	ctx, executionID, identityErr := ensureExecutionIdentity(ctx, cfg)
 	if identityErr != nil {
 		return Execution{}, identityErr
 	}
@@ -135,12 +140,12 @@ func ExecutePrepared(
 	ctx = compiler.WithExpressionScope(ctx, entry.Payload)
 
 	runStart := time.Now()
-	preparedName, preparedSourceHash := prepared.SourceIdentity()
+	preparedName := prepared.SourceName()
 	output, suspension, runErr := runApprovalAware(
 		ctx,
 		cfg.Journal,
 		executionID,
-		preparedSourceHash,
+		prepared.SourceText(),
 		preparedName,
 		entry.Payload,
 		prepared.Metadata(),
@@ -300,7 +305,7 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 }
 
 func Execute(ctx context.Context, cfg Config, src, name string, payload map[string]any) (Execution, error) {
-	ctx, executionID, identityErr := ensureExecutionIdentity(ctx)
+	ctx, executionID, identityErr := ensureExecutionIdentity(ctx, cfg)
 	if identityErr != nil {
 		return Execution{}, identityErr
 	}
@@ -330,7 +335,7 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 // retained state are reused intentionally, so this is warm repeated execution,
 // not a process-cold-start benchmark. Each call gets its own execution identity.
 func ExecuteCompiled(ctx context.Context, cfg Config, compiled Compilation, src, name string, payload map[string]any) (Execution, error) {
-	ctx, executionID, identityErr := ensureExecutionIdentity(ctx)
+	ctx, executionID, identityErr := ensureExecutionIdentity(ctx, cfg)
 	if identityErr != nil {
 		return Execution{}, identityErr
 	}
@@ -371,7 +376,7 @@ func executeCompiled(
 		ctx,
 		cfg.Journal,
 		executionID,
-		sourceDigest(src),
+		src,
 		name,
 		payload,
 		compiled.Meta,
@@ -441,15 +446,20 @@ func fillRunAllocs(dst *Execution, enabled bool, before, after *runtime.MemStats
 }
 
 type compilerAdapter struct {
-	cfg           Config
-	inheritedMeta map[string]any
+	cfg            Config
+	inheritedMeta  map[string]any
+	compileContext context.Context
 }
 
 func (a compilerAdapter) CompilePipeline(expr string) (action.Executable, error) {
+	ctx := a.compileContext
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	res, err := compiler.CompileAction(
 		a.cfg.Resolver, a.cfg.Directives, a.cfg.Modifiers,
 		a.cfg.Operators, a.cfg.Primaries, a.cfg.CompileOpts...,
-	).Do(context.Background(), compiler.CompileReq{Source: expr, Name: "<child>", InheritedMeta: a.inheritedMeta})
+	).Do(ctx, compiler.CompileReq{Source: expr, Name: "<child>", InheritedMeta: a.inheritedMeta})
 	if err != nil {
 		return nil, err
 	}

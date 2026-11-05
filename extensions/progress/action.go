@@ -18,7 +18,10 @@ import (
 // After step runs, the pipeline sees { x: 1 }.
 func StepAction() action.AnyAction {
 	return action.New("progress.step", func(ctx context.Context, req any) (any, error) {
-		message, cleaned := extractStepInput(req)
+		message, cleaned, err := extractStepInput(req)
+		if err != nil {
+			return nil, err
+		}
 		if message != "" {
 			xctx.ReportProgress(ctx, xctx.Progress{
 				Message:  message,
@@ -34,12 +37,15 @@ func StepAction() action.AnyAction {
 		Build()
 }
 
-func extractStepInput(req any) (message string, cleaned any) {
+func extractStepInput(req any) (message string, cleaned any, err error) {
 	m, ok := req.(map[string]any)
 	if !ok {
-		return "", req
+		return "", req, nil
 	}
-	message, _ = m["message"].(string)
+	message, err = readMessageOption(m, "progress.step")
+	if err != nil {
+		return "", nil, err
+	}
 	out := make(map[string]any, len(m))
 	for k, v := range m {
 		if k == "message" {
@@ -49,10 +55,22 @@ func extractStepInput(req any) (message string, cleaned any) {
 	}
 	if len(out) == 1 {
 		if root, ok := out["__root__"]; ok {
-			return message, root
+			return message, root, nil
 		}
 	}
-	return message, out
+	return message, out, nil
+}
+
+func readMessageOption(values map[string]any, capability string) (string, error) {
+	value, exists := values["message"]
+	if !exists {
+		return "", nil
+	}
+	message, ok := value.(string)
+	if !ok {
+		return "", xerr.Validation(capability + ": 'message' must be a string")
+	}
+	return message, nil
 }
 
 // WrapAction resolves its target through the execution resolver and
@@ -78,7 +96,10 @@ func WrapAction() action.AnyAction {
 		if targetName == "" {
 			return nil, xerr.BadRequest("progress.wrap: 'action' is required")
 		}
-		message, _ := m["message"].(string)
+		message, messageErr := readMessageOption(m, "progress.wrap")
+		if messageErr != nil {
+			return nil, messageErr
+		}
 		if message == "" {
 			message = targetName
 		}
@@ -136,23 +157,5 @@ func stripWrapKeys(m map[string]any) any {
 			return root
 		}
 	}
-	if len(out) == 1 && hasOnlyKey(m, "__root__") {
-		return m["__root__"]
-	}
 	return out
-}
-
-func hasOnlyKey(m map[string]any, keys ...string) bool {
-	allowed := make(map[string]bool, len(keys)+2)
-	for _, k := range keys {
-		allowed[k] = true
-	}
-	allowed["action"] = true
-	allowed["message"] = true
-	for k := range m {
-		if !allowed[k] {
-			return false
-		}
-	}
-	return true
 }

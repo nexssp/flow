@@ -470,20 +470,22 @@ type jsonSection struct {
 }
 
 type jsonReport struct {
-	Environment jsonEnvironment `json:"environment"`
-	Sections    []jsonSection   `json:"sections"`
-	Passed      int             `json:"passed"`
-	Failed      int             `json:"failed"`
-	Skipped     int             `json:"skipped"`
-	ElapsedNS   int64           `json:"elapsed_ns"`
-	Score       Score           `json:"score"`
+	Environment      jsonEnvironment `json:"environment"`
+	Sections         []jsonSection   `json:"sections"`
+	UnmatchedFilters []string        `json:"unmatched_filters,omitempty"`
+	Passed           int             `json:"passed"`
+	Failed           int             `json:"failed"`
+	Skipped          int             `json:"skipped"`
+	ElapsedNS        int64           `json:"elapsed_ns"`
+	Score            Score           `json:"score"`
 }
 
-func runJSON(ctx context.Context, opts Options, cfg flowrunner.Config, sections []compiler.SelfTestSection) int {
+func runJSON(ctx context.Context, opts Options, cfg flowrunner.Config, sections []compiler.SelfTestSection, unmatchedFilters []string) int {
 	host := DetectHost()
 
 	report := jsonReport{
-		Environment: jsonEnvironment(host),
+		Environment:      jsonEnvironment(host),
+		UnmatchedFilters: unmatchedFilters,
 	}
 
 	started := time.Now()
@@ -555,6 +557,9 @@ func runJSON(ctx context.Context, opts Options, cfg flowrunner.Config, sections 
 
 	if report.Failed > 0 {
 		return 1
+	}
+	if len(report.UnmatchedFilters) > 0 {
+		return 2
 	}
 	return 0
 }

@@ -116,6 +116,10 @@ func (s *RunScope) Close(ctx context.Context) error {
 		s.mu.Unlock()
 
 		s.cancel()
+		if len(entries) == 0 {
+			return
+		}
+
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), runCleanupTimeout)
 		defer cancel()
 

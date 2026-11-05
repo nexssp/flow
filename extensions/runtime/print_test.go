@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"bytes"
+	"math"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -53,6 +55,28 @@ func TestPrint_Map(t *testing.T) {
 	ktest.RequireCondition(t, strings.Index(got, `"a"`) < strings.Index(got, `"b"`), "keys must be sorted")
 }
 
+func TestPrint_MapKeySelectionUsesLimitSizedStorage(t *testing.T) {
+	t.Parallel()
+
+	values := make(map[string]any, printMaxEntries+1)
+	for length := 1; length <= printMaxEntries+1; length++ {
+		values[strings.Repeat("k", length)] = length
+	}
+
+	keys := sortedPrintMapKeys(values, 2)
+	ktest.RequireLen(t, keys, 2)
+	ktest.RequireCondition(t, cap(keys) <= 2, "key storage capacity = %d, want at most 2", cap(keys))
+	ktest.RequireEqual(t, keys[0], "k")
+	ktest.RequireEqual(t, keys[1], "kk")
+}
+
+func TestPrint_EntryLimitIsBounded(t *testing.T) {
+	t.Parallel()
+
+	ktest.RequireEqual(t, printEntryLimit(0), printDefaultLimit)
+	ktest.RequireEqual(t, printEntryLimit(printMaxEntries+1), printMaxEntries)
+}
+
 func TestPrint_SliceInline(t *testing.T) {
 	t.Parallel()
 
@@ -82,6 +106,19 @@ func TestPrint_Limit(t *testing.T) {
 	ktest.RequireStringContains(t, got, "1")
 	ktest.RequireStringContains(t, got, "2")
 	ktest.RequireStringNotContains(t, got, ", 3")
+}
+
+func TestPrint_LargeSliceLimitIsCapped(t *testing.T) {
+	t.Parallel()
+
+	input := make([]any, printMaxEntries+1)
+	for i := range input {
+		input[i] = "x"
+	}
+	cfg := defaultConfig()
+	cfg.limit = printMaxEntries + 1
+	got := renderToString(input, cfg)
+	ktest.RequireStringContains(t, got, "... 1 more")
 }
 
 func TestPrint_Depth(t *testing.T) {
@@ -165,6 +202,37 @@ func TestPrint_ExtractConfigDefaults(t *testing.T) {
 	ktest.RequireEqual(t, cfg.depth, printDefaultDepth)
 	ktest.RequireEqual(t, cfg.strings, printDefaultStrings)
 	ktest.RequireEqual(t, cfg.stream, "stderr")
+}
+
+func TestReadPositiveIntRejectsInvalidValues(t *testing.T) {
+	t.Parallel()
+
+	for _, value := range []any{
+		float64(1.5),
+		math.NaN(),
+		math.Inf(1),
+		math.Ldexp(1, strconv.IntSize-1),
+		math.MaxFloat64,
+	} {
+		if _, ok := readPositiveInt(value); ok {
+			t.Errorf("readPositiveInt(%v) accepted invalid value", value)
+		}
+	}
+
+	if strconv.IntSize == 32 {
+		if _, ok := readPositiveInt(int64(1 << 31)); ok {
+			t.Error("readPositiveInt accepted int64 outside the platform int range")
+		}
+	}
+}
+
+func TestReadPositiveIntAcceptsLargestRepresentableFloat(t *testing.T) {
+	t.Parallel()
+
+	value := math.Floor(math.Nextafter(math.Ldexp(1, strconv.IntSize-1), 0))
+	got, ok := readPositiveInt(value)
+	ktest.RequireCondition(t, ok, "readPositiveInt rejected largest representable positive int float")
+	ktest.RequireEqual(t, got, int(value))
 }
 
 func TestPrint_ColorsDisabledWhenNotTTY(t *testing.T) {

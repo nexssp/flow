@@ -152,6 +152,71 @@ func TestPendingApprovalRejectsChangedSourceOrInput(t *testing.T) {
 	}
 }
 
+func TestExecutePreparedApprovalBindingUsesPreparedSource(t *testing.T) {
+	t.Parallel()
+	cfg, err := BuildConfig([]compiler.Bundle{
+		approval.Bundle(nil),
+		runtime.Bundle(nil),
+		syntax.Bundle(nil),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal, err := NewFileJournal(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := journal.Close(); err != nil {
+			t.Errorf("close journal: %v", err)
+		}
+	}()
+	cfg.Journal = journal
+
+	const sourceName = "prepared-approval.nflow"
+	const source = `@approval finance_review {
+  role: finance reviewer
+  reason: confirm the transfer
+  expires: 1h
+}`
+	ctx := xctx.WithExecutionID(t.Context(), "prepared-approval-binding-run")
+	prepared, err := Preflight(ctx, cfg, source, sourceName)
+	if err != nil {
+		t.Fatalf("Preflight: %v", err)
+	}
+	entry := EntryPoint{Name: "approval.finance_review", Payload: map[string]any{"amount": 100}}
+
+	first, err := ExecutePrepared(ctx, cfg, prepared, entry)
+	if !errors.Is(err, dag.ErrSuspended) || first.Suspension == nil || !first.Suspension.Persisted {
+		t.Fatalf("initial ExecutePrepared = %#v, %v; want persisted approval suspension", first.Suspension, err)
+	}
+
+	changedSource, err := Preflight(ctx, cfg, source+"\n# changed source", sourceName)
+	if err != nil {
+		t.Fatalf("Preflight changed source: %v", err)
+	}
+	if _, err := ExecutePrepared(ctx, cfg, changedSource, entry); xerr.KindFrom(err) != xerr.KindConflict {
+		t.Fatalf("changed prepared source error = %v, want conflict", err)
+	}
+	changedEntry := EntryPoint{Name: entry.Name, Payload: map[string]any{"amount": 101}}
+	if _, err := ExecutePrepared(ctx, cfg, prepared, changedEntry); xerr.KindFrom(err) != xerr.KindConflict {
+		t.Fatalf("changed prepared input error = %v, want conflict", err)
+	}
+
+	approvedCtx := xctx.WithApprovalToken(ctx, "finance_review")
+	resumed, err := ExecutePrepared(approvedCtx, cfg, prepared, entry)
+	if err != nil {
+		t.Fatalf("approved ExecutePrepared resume: %v", err)
+	}
+	output, ok := resumed.Output.(map[string]any)
+	if !ok || output["amount"] != 100 {
+		t.Fatalf("resumed output = %#v, want original payload", resumed.Output)
+	}
+	if _, found, err := journal.LoadApprovalSuspension(t.Context(), "prepared-approval-binding-run"); err != nil || found {
+		t.Fatalf("pending approval after prepared resume = %t, %v; want cleared", found, err)
+	}
+}
+
 func TestPendingApprovalExpiryFailsClosed(t *testing.T) {
 	before := action.New("test.before", func(_ context.Context, input any) (any, error) { return input, nil }).Build()
 	after := action.New("test.after", func(_ context.Context, input any) (any, error) { return input, nil }).Build()
