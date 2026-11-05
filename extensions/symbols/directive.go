@@ -71,7 +71,7 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 			}
 			rel := strings.Index(entry.Text[searchFrom:], text)
 			rel = max(0, rel)
-			entryPos := positionAt(req, entry.Span.Start+searchFrom+rel)
+			entryPos := req.PositionAt(entry.Span.Start + searchFrom + rel)
 			searchFrom += rel + len(text) + 1
 			if err := addEntry(entryPos, name, symbols, text); err != nil {
 				return compiler.DirectiveRes{}, err
@@ -206,17 +206,6 @@ func canonicalTypedSymbolType(typeName string) string {
 		return "duration"
 	}
 	return typeName
-}
-
-func positionAt(req compiler.DirectiveReq, offset int) compiler.Position {
-	for line := range req.Lines {
-		start := req.Offset(line, 0)
-		end := req.Offset(line, len(req.Lines[line]))
-		if offset >= start && offset <= end {
-			return compiler.Position{File: req.File, Line: line + 1, Col: offset - start + 1}
-		}
-	}
-	return compiler.Position{File: req.File, Line: req.I + 1}
 }
 
 func validNamespaceName(name string) bool {

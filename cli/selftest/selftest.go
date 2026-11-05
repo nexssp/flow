@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/terminal"
 	"github.com/nexssp/flow/native"
 	flowrunner "github.com/nexssp/flow/runner"
 )
@@ -83,7 +84,7 @@ func runWithBundles(ctx context.Context, opts Options, bundles []compiler.Bundle
 	if opts.Out == nil {
 		opts.Out = os.Stdout
 	}
-	if !isTerminal(opts.Out) {
+	if !terminal.IsTerminal(opts.Out) {
 		opts.NoColor = true
 		opts.NoSpinner = true
 	}

@@ -114,7 +114,7 @@ func TestCollectAsserts_PreservesOrderDuplicatesAndPositions(t *testing.T) {
 			{File: "flow.nflow", Line: 5},
 		},
 	}
-	asserts, positions := collectAsserts(meta, []string{"result.extra == true"})
+	asserts, positions := CollectAsserts(meta, []string{"result.extra == true"})
 	if want := []string{"result.ok == true", "result.ok == true", "result.count > 0", "result.extra == true"}; !slices.Equal(asserts, want) {
 		t.Fatalf("collected assertions = %v, want %v", asserts, want)
 	}

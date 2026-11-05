@@ -125,7 +125,7 @@ func ValidateBundle(b Bundle) error {
 	default:
 		return xerr.Validation(fmt.Sprintf("bundle %q: invalid materialize phase %d", b.ID, b.MaterializePhase))
 	}
-	if b.Alias != "" && !validNamespaceQualifier(b.Alias) {
+	if b.Alias != "" && !IsValidNamespaceQualifier(b.Alias) {
 		return fmt.Errorf("bundle %q: invalid @require namespace qualifier %q", b.ID, b.Alias)
 	}
 	if err := validateBundleSourceModules(b); err != nil {

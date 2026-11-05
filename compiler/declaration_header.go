@@ -1,6 +1,10 @@
 package compiler
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/nexssp/flow/internal/lexical"
+)
 
 // ParseDeclarationHeader reads a named directive's inline modifiers and its
 // leading modifier-only continuation lines. Blank lines and whole-line comments
@@ -81,7 +85,7 @@ func parseDeclarationHeaderDetailed(req DirectiveReq, directive string) (Declara
 	indent := headerIndent(line)
 	for i := next; i < len(req.Lines); i++ {
 		text = strings.TrimSpace(req.Lines[i])
-		if text == "" || headerComment(text) {
+		if text == "" || lexical.IsHeaderComment(text) {
 			continue
 		}
 		if !strings.HasPrefix(text, ":") || headerIndent(req.Lines[i]) <= indent {
@@ -102,14 +106,10 @@ func headerIndent(line string) int {
 	return len(line) - len(strings.TrimLeft(line, " \t"))
 }
 
-func headerComment(text string) bool {
-	return strings.HasPrefix(text, "#") || strings.HasPrefix(text, "//")
-}
-
 func parseDeclarationModifiersDetailed(text string, pos Position) (mods []string, quoted []bool, err error) {
 	for {
 		text = strings.TrimSpace(text)
-		if text == "" || headerComment(text) {
+		if text == "" || lexical.IsHeaderComment(text) {
 			return mods, quoted, nil
 		}
 		if text[0] != ':' {
@@ -147,7 +147,7 @@ func headerKeyByte(c byte, first bool) bool {
 }
 
 func declarationValueDetailed(text string, pos Position) (value, rest string, quoted bool, err error) {
-	if text == "" || text[0] == ':' || text[0] == ' ' || text[0] == '\t' || headerComment(text) {
+	if text == "" || text[0] == ':' || text[0] == ' ' || text[0] == '\t' || lexical.IsHeaderComment(text) {
 		return "", "", false, SourceError(pos, "expected declaration modifier value")
 	}
 	if quote := text[0]; quote == '\'' || quote == '"' || quote == '`' {
@@ -167,7 +167,7 @@ func declarationValueDetailed(text string, pos Position) (value, rest string, qu
 		return "", "", false, SourceError(pos, "unterminated quoted declaration modifier value")
 	}
 	i := 0
-	for i < len(text) && !strings.ContainsRune(": \t\r", rune(text[i])) && !headerComment(text[i:]) {
+	for i < len(text) && !strings.ContainsRune(": \t\r", rune(text[i])) && !lexical.IsHeaderComment(text[i:]) {
 		i++
 	}
 	return text[:i], text[i:], false, nil

@@ -13,6 +13,7 @@ import (
 
 	"github.com/nexssp/flow/compiler"
 	flowschema "github.com/nexssp/flow/extensions/schema"
+	"github.com/nexssp/flow/internal/identifier"
 	"github.com/nexssp/flow/runner"
 )
 
@@ -299,7 +300,7 @@ func lspSchemaFieldCompletionRange(source string, index compiler.SourceIndex, cu
 			continue
 		}
 		for i := start; i < end; i++ {
-			if !isLSPIdentifierByte(source[i]) {
+			if !identifier.IsContinueByte(source[i]) {
 				return 0, 0, "", false
 			}
 		}
@@ -352,22 +353,14 @@ func (s *flowLanguageServer) lspSchemaForCompletion(name string, workspace []lsp
 }
 
 func lspIdentifierEnd(text string, start int) int {
-	if start >= len(text) || !isLSPIdentifierStart(text[start]) {
+	if start >= len(text) || !identifier.IsStartByte(text[start]) {
 		return start
 	}
 	end := start + 1
-	for end < len(text) && isLSPIdentifierByte(text[end]) {
+	for end < len(text) && identifier.IsContinueByte(text[end]) {
 		end++
 	}
 	return end
-}
-
-func isLSPIdentifierStart(value byte) bool {
-	return value == '_' || value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'
-}
-
-func isLSPIdentifierByte(value byte) bool {
-	return isLSPIdentifierStart(value) || value >= '0' && value <= '9'
 }
 
 func lspPositionToByteOffset(source string, position lspPosition) (int, bool) {

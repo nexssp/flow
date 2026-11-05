@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 const metadataKey = "approvals"
@@ -137,7 +138,7 @@ func parseApprovalBody(req compiler.DirectiveReq, header approvalHeader) (Declar
 
 func addApprovalField(file, name string, decl *Declaration, seen map[string]bool, raw string, lineNo int) error {
 	field := strings.TrimSpace(raw)
-	if field == "" || strings.HasPrefix(field, "#") || strings.HasPrefix(field, "//") {
+	if field == "" || lexical.IsHeaderComment(field) {
 		return nil
 	}
 	position := compiler.Position{File: file, Line: lineNo}
@@ -177,7 +178,7 @@ func addApprovalField(file, name string, decl *Declaration, seen map[string]bool
 
 func hasUnexpectedTrailingText(value string) bool {
 	trailing := strings.TrimSpace(value)
-	return trailing != "" && !strings.HasPrefix(trailing, "#") && !strings.HasPrefix(trailing, "//")
+	return trailing != "" && !lexical.IsHeaderComment(trailing)
 }
 
 // DeclarationsFromMeta returns a copy of the approval declarations in metadata.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/projection"
+	"github.com/nexssp/flow/internal/identifier"
 )
 
 const functionMetadataKey = "nflow_functions"
@@ -128,7 +129,7 @@ func parseDeclarationHeader(raw string) (FunctionDeclaration, string, error) {
 		return FunctionDeclaration{}, "", errors.New("expected a qualified function name followed by `(`")
 	}
 	name := strings.TrimSpace(raw[:open])
-	if !validQualifiedName(name) {
+	if !identifier.IsQualified(name) {
 		return FunctionDeclaration{}, "", fmt.Errorf("invalid function name %q; use namespace.name", name)
 	}
 	closeIndex := strings.IndexByte(raw[open+1:], ')')
@@ -218,7 +219,7 @@ func parseParameters(raw string) ([]projection.FunctionParameter, error) {
 			return nil, errors.New("each parameter must be written `name type`")
 		}
 		name, typeName := fields[0], fields[1]
-		if !validIdentifier(name) {
+		if !identifier.IsValid(name) {
 			return nil, fmt.Errorf("invalid parameter name %q", name)
 		}
 		if _, exists := seen[name]; exists {
@@ -245,39 +246,6 @@ func findFunction(declarations []FunctionDeclaration, name string) (FunctionDecl
 		}
 	}
 	return FunctionDeclaration{}, false
-}
-
-func validQualifiedName(name string) bool {
-	parts := strings.Split(name, ".")
-	if len(parts) < 2 {
-		return false
-	}
-	for _, part := range parts {
-		if !validIdentifier(part) {
-			return false
-		}
-	}
-	return true
-}
-
-func validIdentifier(name string) bool {
-	if name == "" || !isIdentifierStart(name[0]) {
-		return false
-	}
-	for i := 1; i < len(name); i++ {
-		if !isIdentifierContinue(name[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-func isIdentifierStart(value byte) bool {
-	return value == '_' || value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'
-}
-
-func isIdentifierContinue(value byte) bool {
-	return isIdentifierStart(value) || value >= '0' && value <= '9'
 }
 
 func isSpace(value byte) bool { return value == ' ' || value == '\t' }

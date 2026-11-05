@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/identifier"
 )
 
 const (
@@ -193,22 +194,14 @@ func skipSlashOrComment(s string, i int) int {
 // Returns the name and the index past it. Returns ("", i+1) when the
 // character after '@' is not a valid identifier start.
 func readMacroRefAt(s string, i int) (ref string, next int) {
-	if i+1 >= len(s) || !isMacroNameStart(s[i+1]) {
+	if i+1 >= len(s) || !identifier.IsStartByte(s[i+1]) {
 		return "", i + 1
 	}
 	j := i + 1
-	for j < len(s) && (isMacroNameCont(s[j]) || s[j] == '-' || s[j] == '.') {
+	for j < len(s) && (identifier.IsContinueByte(s[j]) || s[j] == '-' || s[j] == '.') {
 		j++
 	}
 	return s[i+1 : j], j
-}
-
-func isMacroNameStart(c byte) bool {
-	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-}
-
-func isMacroNameCont(c byte) bool {
-	return isMacroNameStart(c) || (c >= '0' && c <= '9')
 }
 
 // detectCycle walks forward from start. If we ever reach start again,
@@ -255,7 +248,7 @@ func parseParams(raw string, pos compiler.Position, macroName string) (params, k
 		}
 		name, kind, typed := strings.Cut(part, ":")
 		name = strings.TrimSpace(name)
-		if !validIdentifier(name) {
+		if !identifier.IsValid(name) {
 			return nil, nil, compiler.SourceError(pos, "@macro %s: invalid parameter name %q", macroName, name)
 		}
 		if _, exists := seen[name]; exists {
@@ -279,24 +272,12 @@ func parseParams(raw string, pos compiler.Position, macroName string) (params, k
 	return params, kinds, nil
 }
 
-func validIdentifier(name string) bool {
-	if name == "" || !isMacroNameStart(name[0]) {
-		return false
-	}
-	for i := 1; i < len(name); i++ {
-		if !isMacroNameCont(name[i]) {
-			return false
-		}
-	}
-	return true
-}
-
 func validMacroName(name string) bool {
-	if name == "" || !isMacroNameStart(name[0]) {
+	if name == "" || !identifier.IsStartByte(name[0]) {
 		return false
 	}
 	for i := 1; i < len(name); i++ {
-		if !isMacroNameCont(name[i]) && name[i] != '-' {
+		if !identifier.IsContinueByte(name[i]) && name[i] != '-' {
 			return false
 		}
 	}

@@ -700,7 +700,7 @@ func unversionedPackageProvider(packagePath, driverRoot, goworkPath, sourceDir s
 	}
 	if sourceDir != "" {
 		if abs, err := filepath.Abs(sourceDir); err == nil {
-			if root := findModuleRoot(abs); root != "" {
+			if root := FindModuleRoot(abs); root != "" {
 				if modulePath, err := require.ReadModuleLine(filepath.Join(root, "go.mod")); err == nil {
 					add(modulePath)
 				}
@@ -1466,7 +1466,7 @@ func currentModuleRequirement(sourceDir string, reqs []require.Requirement) (res
 	if err != nil {
 		return "", ""
 	}
-	root := findModuleRoot(abs)
+	root := FindModuleRoot(abs)
 	if root == "" {
 		return "", ""
 	}

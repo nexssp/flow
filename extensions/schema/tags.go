@@ -61,23 +61,6 @@ func parseStructTags(raw string) (map[string]string, error) {
 	return out, nil
 }
 
-func isValidSchemaName(s string) bool {
-	if s == "" {
-		return false
-	}
-	first := s[0]
-	if first != '_' && (first < 'a' || first > 'z') && (first < 'A' || first > 'Z') {
-		return false
-	}
-	for i := 1; i < len(s); i++ {
-		c := s[i]
-		if c != '_' && (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
-			return false
-		}
-	}
-	return true
-}
-
 func lowerFirst(s string) string {
 	if s == "" {
 		return s

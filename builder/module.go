@@ -58,7 +58,8 @@ func appendRequirement(requirements []moduleRequirement, line string) []moduleRe
 	return append(requirements, moduleRequirement{path: fields[0], version: fields[1]})
 }
 
-func findModuleRoot(dir string) string {
+// FindModuleRoot returns the nearest ancestor of dir containing a go.mod file.
+func FindModuleRoot(dir string) string {
 	curr := dir
 	for {
 		if _, err := os.Stat(filepath.Join(curr, "go.mod")); err == nil {

@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/nexssp/kernel/xctx"
+
+	"github.com/nexssp/flow/internal/maputil"
 )
 
 // SymbolNamespace groups compile-time symbolic values that .nflow programs
@@ -150,7 +152,7 @@ func ResolveSymbolDeclaration(meta map[string]any, reference string) (any, bool)
 		return nil, false
 	}
 	if local, exists := SymbolsFromMeta(meta)[namespace]; exists {
-		return lookupPath(local.Symbols, member)
+		return maputil.LookupPath(local.Symbols, member)
 	}
 	return LookupSymbol(namespace, member)
 }

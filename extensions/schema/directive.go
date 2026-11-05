@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/identifier"
 )
 
 // Directive parses `@schema NAME { ... }` into a Schema appended to
@@ -37,7 +38,7 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	if name == "" {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@schema: name is required before '{'")
 	}
-	if !isValidSchemaName(name) {
+	if !identifier.IsValid(name) {
 		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@schema: invalid name %q", name)
 	}
 
@@ -140,12 +141,12 @@ func parseSchemaEntries(entries []compiler.BlockEntry, body []string, req compil
 		if err != nil {
 			fieldPos := pos
 			if i < len(entries) {
-				fieldPos = positionAt(req, entries[i].Span.Start)
+				fieldPos = req.PositionAt(entries[i].Span.Start)
 			}
 			return nil, nil, compiler.SourceError(fieldPos, "@schema %s: %v", schemaName, err)
 		}
 		if i < len(entries) {
-			field.Position = positionAt(req, entries[i].Span.Start)
+			field.Position = req.PositionAt(entries[i].Span.Start)
 		}
 		if field.Name == "" && field.Embed == "" {
 			continue
@@ -157,17 +158,6 @@ func parseSchemaEntries(entries []compiler.BlockEntry, body []string, req compil
 		}
 	}
 	return fields, references, nil
-}
-
-func positionAt(req compiler.DirectiveReq, offset int) compiler.Position {
-	for line := range req.Lines {
-		start := req.Offset(line, 0)
-		end := req.Offset(line, len(req.Lines[line]))
-		if offset >= start && offset <= end {
-			return compiler.Position{File: req.File, Line: line + 1, Col: offset - start + 1}
-		}
-	}
-	return compiler.Position{File: req.File, Line: req.I + 1}
 }
 
 // resolveEmbeds flattens embedded schemas into the parent field list.
@@ -257,13 +247,13 @@ func parseSchemaField(line string) (*Field, error) {
 		if tags != nil {
 			return nil, fmt.Errorf("embedded schema %q must not carry tags", parts[0])
 		}
-		if !isValidSchemaName(parts[0]) {
+		if !identifier.IsValid(parts[0]) {
 			return nil, fmt.Errorf("invalid embed name %q", parts[0])
 		}
 		return &Field{Embed: parts[0]}, nil
 	case 2:
 		name, typeText := parts[0], parts[1]
-		if !isValidSchemaName(name) {
+		if !identifier.IsValid(name) {
 			return nil, fmt.Errorf("invalid field name %q", name)
 		}
 		field := &Field{Name: name, Type: typeText, Tags: tags}

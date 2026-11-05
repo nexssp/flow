@@ -39,30 +39,3 @@ func isTruthyArg(in map[string]any, key string) bool {
 	}
 	return false
 }
-
-// lookupDottedPath walks a nested map by a dot-separated path. The
-// empty path returns the root. Missing keys return (nil, false).
-func lookupDottedPath(m map[string]any, path string) (any, bool) {
-	if path == "" {
-		return m, true
-	}
-	var current any = m
-	remaining := path
-	for remaining != "" {
-		var segment string
-		if dot := strings.IndexByte(remaining, '.'); dot >= 0 {
-			segment, remaining = remaining[:dot], remaining[dot+1:]
-		} else {
-			segment, remaining = remaining, ""
-		}
-		mm, ok := current.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-		current, ok = mm[segment]
-		if !ok {
-			return nil, false
-		}
-	}
-	return current, true
-}

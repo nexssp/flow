@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"os"
 	"strings"
 
 	"github.com/expr-lang/expr"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/terminal"
 )
 
 const (
@@ -19,20 +19,6 @@ const (
 	assertGreen = "\x1b[32m"
 	assertReset = "\x1b[0m"
 )
-
-// outputColorEnabled mirrors cli.colorEnabled without importing cli.
-// Color is enabled only when w is a terminal-backed *os.File.
-func outputColorEnabled(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
-}
 
 func paintAssert(s, color string, enabled bool) string {
 	if !enabled {
@@ -72,7 +58,7 @@ func RunAssertionsContextWithExpressionCompiler(ctx context.Context, w io.Writer
 		return 0
 	}
 
-	color := outputColorEnabled(w)
+	color := terminal.IsTerminal(w)
 
 	env := assertionEnvironment(ctx, result, durationMS, actions, firstSymbolNamespace(localSymbols))
 

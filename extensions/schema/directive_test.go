@@ -148,6 +148,7 @@ func TestDirective_Errors(t *testing.T) {
 	}{
 		{"missing brace", []string{`@schema X`}, "expected"},
 		{"empty name", []string{`@schema {`, `  A string`, `}`}, "name is required"},
+		{"invalid name", []string{`@schema 1X {`, `  A string`, `}`}, "invalid name"},
 		{"empty body", []string{`@schema X {`, `}`}, "at least one field"},
 		{"unknown embed", []string{`@schema X {`, `  OnlyName`, `}`}, "not declared before this point"},
 		{"too many tokens", []string{`@schema X {`, `  Name string extra`, `}`}, "expected `Name Type` or `Embed`"},

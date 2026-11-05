@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"go/token"
 	"maps"
 	"os"
 	"path/filepath"
@@ -258,7 +257,7 @@ func parseRequirement(spec, baseDir string, opts map[string]string, file string,
 					"@require: missing local namespace qualifier after `as`")
 			}
 			alias = strings.Trim(parts[1].raw, `"'`)
-			if !validNamespaceQualifier(alias) {
+			if !compiler.IsValidNamespaceQualifier(alias) {
 				return Requirement{}, 0, 0, compiler.SourceError(
 					compiler.Position{File: file, Line: line},
 					"@require: invalid local namespace qualifier %q", alias)
@@ -424,24 +423,6 @@ func isLocal(s string) bool {
 		strings.HasPrefix(s, `.\`) ||
 		strings.HasPrefix(s, `..\`) ||
 		filepath.IsAbs(s)
-}
-
-func validNamespaceQualifier(alias string) bool {
-	if alias == "" || alias == "_" || token.Lookup(alias).IsKeyword() {
-		return false
-	}
-	for i, r := range alias {
-		if i == 0 {
-			if r != '_' && !unicode.IsLetter(r) {
-				return false
-			}
-			continue
-		}
-		if r != '_' && !unicode.IsLetter(r) && !unicode.IsDigit(r) {
-			return false
-		}
-	}
-	return true
 }
 
 func resolveLocal(name, baseDir string, opts map[string]string, file string, line int) (Requirement, error) {

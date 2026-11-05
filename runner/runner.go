@@ -13,6 +13,7 @@ import (
 	"github.com/nexssp/kernel/xfile"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/terminal"
 )
 
 // Config bundles all compiler tables, capability resolvers, and
@@ -169,7 +170,7 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 			}
 			return 3
 		}
-		useColor := outputColorEnabled(stderr)
+		useColor := terminal.IsTerminal(stderr)
 		heading := diagnosticPaint("✗ Pipeline Execution Failed", diagnosticANSIRed, useColor)
 		fmt.Fprintf(stderr, "\n%s\n\n  %s\n\n", heading, FormatErrorDetail(err, src, name, useColor))
 		if opts.Verbosity >= 1 {
@@ -187,7 +188,7 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 		fmt.Fprintln(stdout, formatOutput(ex.Output))
 	}
 
-	asserts, positions := collectAsserts(ex.Meta, opts.Asserts)
+	asserts, positions := CollectAsserts(ex.Meta, opts.Asserts)
 	return RunAssertionsContextWithExpressionCompiler(
 		ctx,
 		stderr,
@@ -218,7 +219,8 @@ func printSourceInfo(ctx context.Context, cfg Config, src, name string, stdout, 
 	return PrintInfo(stdout, name, src, meta, ast)
 }
 
-func collectAsserts(meta map[string]any, extra []string) ([]string, []compiler.Position) {
+// CollectAsserts combines source assertions with caller-supplied assertions and positions.
+func CollectAsserts(meta map[string]any, extra []string) ([]string, []compiler.Position) {
 	var out []string
 	var positions []compiler.Position
 	if list, ok := meta["asserts"].([]string); ok {

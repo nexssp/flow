@@ -17,6 +17,7 @@ import (
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 	testext "github.com/nexssp/flow/extensions/test"
+	"github.com/nexssp/flow/internal/terminal"
 	"github.com/nexssp/flow/runner"
 )
 
@@ -75,7 +76,7 @@ func withHarnessRequirements(ctx context.Context, inv *invocation, subcommand, f
 		return inProcess(ctx, inv, args)
 	}
 
-	thinSelected := thinHarnessArgsSupported(subcommand, flowPath, args) && isTerminal(os.Stdin) && !isTerminal(os.Stdout)
+	thinSelected := thinHarnessArgsSupported(subcommand, flowPath, args) && terminal.IsTerminal(os.Stdin) && !terminal.IsTerminal(os.Stdout)
 	ensureHarness := builder.EnsureHarnessCLIContext
 	if thinSelected {
 		ensureHarness = builder.EnsureThinHarnessContext
@@ -435,7 +436,7 @@ func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string,
 	useColorErr := colorEnabled(os.Stderr)
 	useColorOut := colorEnabled(os.Stdout)
 	wantJSON := hasFlag(flags, "--json")
-	isTerm := isTerminal(os.Stdout)
+	isTerm := terminal.IsTerminal(os.Stdout)
 
 	var journal *runner.FileJournal
 	if durability.JournalDir != "" {
@@ -510,7 +511,7 @@ func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string,
 		renderPrettyOutput(os.Stdout, ex.Output, useColorOut)
 	}
 
-	asserts, positions := collectAsserts(ex.Meta, flagsToAsserts(flags))
+	asserts, positions := runner.CollectAsserts(ex.Meta, flagsToAsserts(flags))
 	return runner.RunAssertionsContextWithPositions(
 		ctx,
 		os.Stderr,
@@ -643,34 +644,6 @@ func renderColoredJSON(w io.Writer, value any, useColor bool) {
 	for line := range strings.SplitSeq(string(encoded), "\n") {
 		fmt.Fprintln(w, colorizeJSONLine(line, useColor))
 	}
-}
-
-func collectAsserts(meta map[string]any, extra []string) ([]string, []compiler.Position) {
-	var out []string
-	var positions []compiler.Position
-
-	if list, ok := meta["asserts"].([]string); ok {
-		sourcePositions, _ := meta["asserts.positions"].([]compiler.Position)
-		for i, assertion := range list {
-			if assertion == "" {
-				continue
-			}
-			out = append(out, assertion)
-			if i < len(sourcePositions) {
-				positions = append(positions, sourcePositions[i])
-			} else {
-				positions = append(positions, compiler.Position{})
-			}
-		}
-	}
-	for _, assertion := range extra {
-		if assertion == "" {
-			continue
-		}
-		out = append(out, assertion)
-		positions = append(positions, compiler.Position{})
-	}
-	return out, positions
 }
 
 func splitArgs(args []string) (target string, payload map[string]any, flags []string, err error) {

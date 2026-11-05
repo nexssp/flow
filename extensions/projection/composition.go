@@ -156,7 +156,7 @@ func parseProjectionBody(p *compiler.Parser, closeIndex int, pos compiler.Positi
 	if p.Cur().Type == compiler.TokRBrace && p.Cur().Offset == closeIndex {
 		p.Next()
 	}
-	raw := stripHashComments(rewritten.String())
+	raw := compiler.StripExprComments(rewritten.String())
 	if len(bindings) == 0 && functions == nil {
 		return &compiler.ProjectionExpr{Raw: raw, Pos: pos}, nil
 	}

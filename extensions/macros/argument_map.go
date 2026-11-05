@@ -249,16 +249,13 @@ func (m *macroPrimary) expandNestedMapBodies(p *compiler.Parser, s string) (stri
 	var out strings.Builder
 	for i := 0; i < len(s); {
 		if s[i] == '"' || s[i] == '\'' || s[i] == '`' {
-			end := skipMapQuoted(s, i)
+			end := skipQuoted(s, i)
 			out.WriteString(s[i:end])
 			i = end
 			continue
 		}
 		if isMapCommentAt(s, i) {
-			end := i
-			for end < len(s) && s[end] != '\n' {
-				end++
-			}
+			end := skipLineComment(s, i)
 			out.WriteString(s[i:end])
 			i = end
 			continue
@@ -291,13 +288,11 @@ func matchingMapBrace(s string, open int) (int, bool) {
 	for i := open + 1; i < len(s); i++ {
 		c := s[i]
 		if c == '"' || c == '\'' || c == '`' {
-			i = skipMapQuoted(s, i) - 1
+			i = skipQuoted(s, i) - 1
 			continue
 		}
 		if isMapCommentAt(s, i) {
-			for i < len(s) && s[i] != '\n' {
-				i++
-			}
+			i = skipLineComment(s, i)
 			continue
 		}
 		switch c {
@@ -313,28 +308,12 @@ func matchingMapBrace(s string, open int) (int, bool) {
 	return 0, false
 }
 
-func skipMapQuoted(s string, start int) int {
-	quote := s[start]
-	for i := start + 1; i < len(s); i++ {
-		if s[i] == '\\' && i+1 < len(s) {
-			i++
-			continue
-		}
-		if s[i] == quote {
-			return i + 1
-		}
-	}
-	return len(s)
-}
-
 func skipMapTrivia(s string, i int) int {
 	for i < len(s) {
 		before := i
 		i = skipMapSpace(s, i)
 		if isMapCommentAt(s, i) {
-			for i < len(s) && s[i] != '\n' {
-				i++
-			}
+			i = skipLineComment(s, i)
 		}
 		if before == i {
 			break

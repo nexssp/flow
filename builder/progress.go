@@ -2,10 +2,11 @@ package builder
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/nexssp/flow/internal/terminal"
 )
 
 // progressTracker renders a live status line while a long-running
@@ -33,7 +34,7 @@ func startProgress(label string) *progressTracker {
 	p := &progressTracker{
 		label: label,
 		start: time.Now(),
-		tty:   isTerminal(os.Stderr) && os.Getenv("NFLOW_GO_VERBOSE") != "1",
+		tty:   terminal.IsTerminal(os.Stderr) && os.Getenv("NFLOW_GO_VERBOSE") != "1",
 		stop:  make(chan struct{}),
 		done:  make(chan struct{}),
 	}
@@ -86,14 +87,4 @@ func (p *progressTracker) Complete(result string) {
 		}
 		fmt.Fprintf(os.Stderr, "%s  %s (%s)\n", p.label, result, elapsed)
 	})
-}
-
-// isTerminal reports whether w targets a character device such as a terminal.
-func isTerminal(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := f.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }

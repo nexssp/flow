@@ -85,11 +85,7 @@ func runBenchmark(ctx context.Context, resolver contracts.ActionResolver, req Be
 }
 
 func invokeOnce(ctx context.Context, target action.AnyAction, payload any) (err error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			err = xerr.PanicRecovery(recovered)
-		}
-	}()
+	defer recoverPanicAsError(&err)
 	_, err = action.InvokeAny(ctx, target, payload)
 	return err
 }
@@ -139,12 +135,15 @@ func Measure(ctx context.Context, iterations int, invoke func(context.Context) e
 }
 
 func invokeSafely(ctx context.Context, invoke func(context.Context) error) (err error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			err = xerr.PanicRecovery(recovered)
-		}
-	}()
+	defer recoverPanicAsError(&err)
 	return invoke(ctx)
+}
+
+//nolint:gocritic // Deferred recovery must update the named return value.
+func recoverPanicAsError(err *error) {
+	if recovered := recover(); recovered != nil {
+		*err = xerr.PanicRecovery(recovered)
+	}
 }
 
 func percentile(sorted []time.Duration, p float64) time.Duration {

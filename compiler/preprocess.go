@@ -266,9 +266,21 @@ func canRecoverIndexDirective(partial bool, res DirectiveRes, current, lineCount
 func sourceLineOffsets(lines []string) []int {
 	offsets := make([]int, len(lines))
 	for i := 1; i < len(lines); i++ {
-		offsets[i] = offsets[i-1] + len(lines[i-1]) + 1
+		offsets[i] = nextSourceLineOffset(offsets[i-1], lines[i-1])
 	}
 	return offsets
+}
+
+func sourceLineStartOffset(lines []string, line int) int {
+	offset := 0
+	for i := range line {
+		offset = nextSourceLineOffset(offset, lines[i])
+	}
+	return offset
+}
+
+func nextSourceLineOffset(offset int, line string) int {
+	return offset + len(line) + 1
 }
 
 func directiveName(line string) string {

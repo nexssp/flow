@@ -10,6 +10,7 @@ import (
 
 	"github.com/nexssp/flow/compiler"
 	requireext "github.com/nexssp/flow/extensions/require"
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 // Formatter formats source using the parser extensions supplied by the caller.
@@ -139,7 +140,7 @@ func (f *Formatter) formatLine(lines []string, index int, file string, opaqueLin
 	if directive, ok := declarationDirective(trimmed); ok {
 		return formatDeclaration(lines, index, file, directive)
 	}
-	if trimmed == "@end" || trimmed == "}" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//") {
+	if trimmed == "@end" || trimmed == "}" || lexical.IsHeaderComment(trimmed) {
 		return []string{indent + trimmed}, index + 1, nil
 	}
 	if isDirectiveLine(trimmed) || containsMacroInvocation(trimmed) {
@@ -168,7 +169,7 @@ func formatDeclaration(lines []string, index int, file, directive string) (forma
 			out = append(out, "")
 			continue
 		}
-		if isHeaderComment(part) {
+		if lexical.IsHeaderComment(part) {
 			out = append(out, indent+"  "+part)
 			continue
 		}
@@ -331,7 +332,7 @@ func (f *Formatter) validateLine(ctx context.Context, lines []string, index int,
 	if trimmed == "" {
 		return f.validateBlankLine(ctx, index, file, line, state)
 	}
-	if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//") {
+	if lexical.IsHeaderComment(trimmed) {
 		state.addLine(index, line)
 		return index + 1, nil
 	}
@@ -510,7 +511,7 @@ func splitHeaderModifiers(text string) (modifiers []string, comment string) {
 	if text == "" {
 		return nil, ""
 	}
-	if isHeaderComment(text) {
+	if lexical.IsHeaderComment(text) {
 		return nil, text
 	}
 	var parts []string
@@ -559,10 +560,6 @@ func splitHeaderModifiers(text string) (modifiers []string, comment string) {
 
 func headerCommentAt(text string, i int) bool {
 	return text[i] == '#' || i+1 < len(text) && text[i] == '/' && text[i+1] == '/'
-}
-
-func isHeaderComment(text string) bool {
-	return strings.HasPrefix(text, "#") || strings.HasPrefix(text, "//")
 }
 
 func formatExpressionLines(line string) []string {

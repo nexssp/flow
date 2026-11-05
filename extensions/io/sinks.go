@@ -8,6 +8,8 @@ import (
 	"os"
 
 	"github.com/nexssp/kernel/action"
+
+	"github.com/nexssp/flow/internal/terminal"
 )
 
 // StdoutOperator returns io.stdout: each item is written as a line to
@@ -32,7 +34,7 @@ func writeLineTo(get func() io.Writer) func(iter.Seq2[any, error]) iter.Seq2[any
 	return func(up iter.Seq2[any, error]) iter.Seq2[any, error] {
 		return func(yield func(any, error) bool) {
 			w := get()
-			writeLines(up, w, isCharDevice(w))(yield)
+			writeLines(up, w, terminal.IsTerminal(w))(yield)
 		}
 	}
 }
@@ -74,16 +76,4 @@ func writeLines(up iter.Seq2[any, error], w io.Writer, flushEach bool) iter.Seq2
 			yield(nil, err)
 		}
 	}
-}
-
-func isCharDevice(w io.Writer) bool {
-	file, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := file.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
 }

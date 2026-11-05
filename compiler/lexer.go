@@ -1,6 +1,10 @@
 package compiler
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/nexssp/flow/internal/lexical"
+)
 
 type Lexer struct {
 	src  string
@@ -108,7 +112,7 @@ func (l *Lexer) scanAtBrace() Token {
 			quote = l.scanAtBraceQuotedByte(quote)
 			continue
 		}
-		if (c == '"' || c == '\'' || c == '`') && l.quoteCanStart(l.pos, start) {
+		if (c == '"' || c == '\'' || c == '`') && lexical.CanStartQuote(l.src, l.pos, start) {
 			quote = c
 			l.pos++
 			continue
@@ -169,19 +173,6 @@ func (l *Lexer) scanAtBraceDelimiter(start, startLine int, depth *int) (Token, b
 	}
 	l.pos++
 	return Token{}, false
-}
-
-// quoteCanStart distinguishes quoted values from apostrophes embedded in bare
-// words. In this grammar, quoted scalars begin at the start of a value.
-func (l *Lexer) quoteCanStart(pos, start int) bool {
-	for i := pos - 1; i >= start; i-- {
-		c := l.src[i]
-		if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
-			continue
-		}
-		return c == ':' || c == ',' || c == '[' || c == '{'
-	}
-	return true
 }
 
 func (l *Lexer) scanQuotedAtPromptByte(quote byte) byte {

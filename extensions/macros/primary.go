@@ -9,6 +9,7 @@ import (
 	"github.com/nexssp/kernel/xctx"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/identifier"
 )
 
 const (
@@ -260,7 +261,7 @@ func typedArgumentRequirement(kind string) string {
 
 func singleIdentifier(source string) bool {
 	token, ok := singleToken(source)
-	return ok && token.Type == compiler.TokIdent && validIdentifier(token.Lit)
+	return ok && token.Type == compiler.TokIdent && identifier.IsValid(token.Lit)
 }
 
 func singleIntegerLiteral(source string) bool {
@@ -405,13 +406,13 @@ func substituteParams(body string, params, args []string) string {
 	var out strings.Builder
 	out.Grow(len(body))
 	for i := 0; i < len(body); {
-		if body[i] != '$' || i+1 >= len(body) || !isMacroNameStart(body[i+1]) {
+		if body[i] != '$' || i+1 >= len(body) || !identifier.IsStartByte(body[i+1]) {
 			out.WriteByte(body[i])
 			i++
 			continue
 		}
 		end := i + 2
-		for end < len(body) && isMacroNameCont(body[end]) {
+		for end < len(body) && identifier.IsContinueByte(body[end]) {
 			end++
 		}
 		if value, ok := values[body[i+1:end]]; ok {

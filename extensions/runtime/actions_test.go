@@ -7,6 +7,8 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xtest/ktest"
+
+	"github.com/nexssp/flow/internal/maputil"
 )
 
 func run(tb testing.TB, act action.AnyAction, in any) (any, error) {
@@ -256,14 +258,14 @@ func TestLookupDottedPath(t *testing.T) {
 		"a": map[string]any{"b": map[string]any{"c": 42}},
 	}
 
-	got, ok := lookupDottedPath(in, "a.b.c")
+	got, ok := maputil.LookupPath(in, "a.b.c")
 	ktest.RequireCondition(t, ok, "path not found")
 	ktest.RequireEqual(t, got, 42)
 
-	_, ok = lookupDottedPath(in, "a.missing")
+	_, ok = maputil.LookupPath(in, "a.missing")
 	ktest.RequireCondition(t, !ok, "missing path should not resolve")
 
-	root, ok := lookupDottedPath(in, "")
+	root, ok := maputil.LookupPath(in, "")
 	ktest.RequireCondition(t, ok, "root not returned")
 
 	rootMap, ok := root.(map[string]any)

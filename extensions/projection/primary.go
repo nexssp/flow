@@ -2,7 +2,6 @@ package projection
 
 import (
 	"errors"
-	"strings"
 
 	compiler "github.com/nexssp/flow/compiler"
 )
@@ -45,81 +44,6 @@ func (e Extension) Parse(p *compiler.Parser) (compiler.Expr, error) {
 	}
 
 	return parseProjectionBody(p, closeIndex, p.Position(), e.functions)
-}
-
-// stripHashComments removes `#`-to-EOL comments from a projection body.
-//
-// The rule is depth-aware: `#` starts a comment only at parenthesis
-// depth 0. Inside parentheses `#` is expr-lang's iterator placeholder
-// (`filter(# > 0)`, `map(#.name)`, `sortBy(#.line, "desc")`) and must be
-// preserved verbatim, or the projection fails with
-// "unexpected token Bracket" / "unclosed projection".
-//
-// Line terminators (\n or \r\n) are preserved so expr-lang line numbers
-// still match the source file — wrapMacroError and the on_error wrapper
-// remap positions using that alignment.
-func stripHashComments(raw string) string {
-	if !strings.Contains(raw, "#") {
-		return raw
-	}
-	var sb strings.Builder
-	sb.Grow(len(raw))
-
-	var quote byte
-	depth := 0
-	i := 0
-	for i < len(raw) {
-		c := raw[i]
-
-		if quote != 0 {
-			sb.WriteByte(c)
-			if c == '\\' && i+1 < len(raw) {
-				sb.WriteByte(raw[i+1])
-				i += 2
-				continue
-			}
-			if c == quote {
-				quote = 0
-			}
-			i++
-			continue
-		}
-
-		switch c {
-		case '"', '\'', '`':
-			quote = c
-			sb.WriteByte(c)
-		case '(':
-			depth++
-			sb.WriteByte(c)
-		case ')':
-			if depth > 0 {
-				depth--
-			}
-			sb.WriteByte(c)
-		case '#':
-			if depth > 0 {
-				// expr-lang iterator placeholder inside filter/map/etc.
-				sb.WriteByte(c)
-				i++
-				continue
-			}
-			// Comment: skip to the next line terminator, then write the
-			// terminator verbatim so CRLF files stay CRLF.
-			for i < len(raw) && raw[i] != '\n' && raw[i] != '\r' {
-				i++
-			}
-			for i < len(raw) && (raw[i] == '\r' || raw[i] == '\n') {
-				sb.WriteByte(raw[i])
-				i++
-			}
-			continue
-		default:
-			sb.WriteByte(c)
-		}
-		i++
-	}
-	return sb.String()
 }
 
 // scanBalancedBraces returns the index of the closing '}' that matches

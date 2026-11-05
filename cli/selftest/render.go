@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/terminal"
 	flowrunner "github.com/nexssp/flow/runner"
 )
 
@@ -35,7 +35,7 @@ type Renderer struct {
 func newRenderer(opts Options) *Renderer {
 	return &Renderer{
 		w:        opts.Out,
-		tty:      isTerminal(opts.Out),
+		tty:      terminal.IsTerminal(opts.Out),
 		color:    !opts.NoColor,
 		verbose:  opts.Verbose,
 		perSect:  map[string]int{},
@@ -437,18 +437,6 @@ func (r *Renderer) printf(format string, args ...any) {
 
 func writeLine(w io.Writer, s string) {
 	fmt.Fprintln(w, s)
-}
-
-func isTerminal(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
 }
 
 type jsonEnvironment struct {

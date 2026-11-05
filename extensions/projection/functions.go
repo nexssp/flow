@@ -15,6 +15,7 @@ import (
 	"github.com/nexssp/kernel/xerr"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/identifier"
 )
 
 // FunctionParameter describes one typed parameter in a source-local @func.
@@ -179,7 +180,7 @@ func RewriteFunctionReferences(source string, references map[string]string) stri
 			index = copyFunctionQuoted(&output, source, index)
 			continue
 		}
-		if isIdentifierStart(source[index]) && (index == 0 || source[index-1] != '.' && !isIdentifierContinue(source[index-1])) {
+		if identifier.IsStartByte(source[index]) && (index == 0 || source[index-1] != '.' && !identifier.IsContinueByte(source[index-1])) {
 			end := scanQualifiedIdentifier(source, index)
 			name := source[index:end]
 			next := end
@@ -249,7 +250,7 @@ func (s *FunctionSet) compileFunctions() error {
 }
 
 func validateFunctionSignature(definition FunctionDefinition) error {
-	if !validQualifiedFunctionName(definition.Name) {
+	if !identifier.IsQualified(definition.Name) {
 		return fmt.Errorf("invalid name %q; use namespace.function", definition.Name)
 	}
 	if _, ok := functionType(definition.Result); !ok {
@@ -257,7 +258,7 @@ func validateFunctionSignature(definition FunctionDefinition) error {
 	}
 	seen := make(map[string]struct{}, len(definition.Parameters))
 	for _, parameter := range definition.Parameters {
-		if !validIdentifier(parameter.Name) {
+		if !identifier.IsValid(parameter.Name) {
 			return fmt.Errorf("invalid parameter name %q", parameter.Name)
 		}
 		if _, duplicate := seen[parameter.Name]; duplicate {
@@ -372,7 +373,7 @@ func (s *FunctionSet) rewriteCalls(source string) (rewritten string, calls []str
 			index = copyFunctionQuoted(&output, source, index)
 			continue
 		}
-		if isIdentifierStart(source[index]) && (index == 0 || source[index-1] != '.' && !isIdentifierContinue(source[index-1])) {
+		if identifier.IsStartByte(source[index]) && (index == 0 || source[index-1] != '.' && !identifier.IsContinueByte(source[index-1])) {
 			end := scanQualifiedIdentifier(source, index)
 			name := source[index:end]
 			next := end
@@ -415,14 +416,14 @@ func copyFunctionQuoted(output *strings.Builder, source string, index int) int {
 func scanQualifiedIdentifier(source string, start int) int {
 	index := start
 	for index < len(source) {
-		if !isIdentifierStart(source[index]) {
+		if !identifier.IsStartByte(source[index]) {
 			return index
 		}
 		index++
-		for index < len(source) && isIdentifierContinue(source[index]) {
+		for index < len(source) && identifier.IsContinueByte(source[index]) {
 			index++
 		}
-		if index+1 >= len(source) || source[index] != '.' || !isIdentifierStart(source[index+1]) {
+		if index+1 >= len(source) || source[index] != '.' || !identifier.IsStartByte(source[index+1]) {
 			return index
 		}
 		index++
@@ -512,39 +513,6 @@ func numericFloat64(value any) (float64, bool) {
 	default:
 		return 0, false
 	}
-}
-
-func validQualifiedFunctionName(name string) bool {
-	parts := strings.Split(name, ".")
-	if len(parts) < 2 {
-		return false
-	}
-	for _, part := range parts {
-		if !validIdentifier(part) {
-			return false
-		}
-	}
-	return true
-}
-
-func validIdentifier(name string) bool {
-	if name == "" || !isIdentifierStart(name[0]) {
-		return false
-	}
-	for i := 1; i < len(name); i++ {
-		if !isIdentifierContinue(name[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-func isIdentifierStart(value byte) bool {
-	return value == '_' || value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'
-}
-
-func isIdentifierContinue(value byte) bool {
-	return isIdentifierStart(value) || value >= '0' && value <= '9'
 }
 
 func isFunctionWhitespace(value byte) bool {

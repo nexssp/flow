@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/extensions/require"
+	"github.com/nexssp/flow/extensions/resilience"
 )
 
 func TestCLIBundleConflictsRejectDuplicateIDs(t *testing.T) {
@@ -82,6 +84,32 @@ func TestCLIBundleConflictsRejectNativeAndIdenticalOverlaps(t *testing.T) {
 				t.Fatalf("exit=%d stdout=%q stderr=%q; want duplicate %q with no output", code, stdout, stderr, test.wantID)
 			}
 		})
+	}
+}
+
+func TestCLIBundleConflictsReplaceLinkedResilienceWithRequiredInstance(t *testing.T) {
+	inv, err := newNativeInvocation(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativeFactory := inv.nativeFactory
+	inv.nativeFactory = func() []compiler.Bundle {
+		return append(nativeFactory(), resilience.Bundle(nil))
+	}
+
+	code := runInvocation(t.Context(), inv, func(context.Context) int {
+		_, err := inv.buildConfig([]require.Requirement{{
+			Import:  "resilience",
+			Options: map[string]string{"default_max": "2"},
+		}})
+		if err != nil {
+			t.Errorf("build config with @require resilience: %v", err)
+			return 1
+		}
+		return 0
+	})
+	if code != 0 {
+		t.Fatalf("runInvocation = %d; want configured resilience to replace the linked default", code)
 	}
 }
 

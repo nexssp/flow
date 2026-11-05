@@ -124,30 +124,32 @@ func (req DirectiveReq) Offset(line, column int) int {
 			return 0
 		}
 		last := line - 1
-		start := 0
 		if last < len(req.lineOffsets) {
-			start = req.lineOffsets[last]
-		} else {
-			for i := range last {
-				start += len(req.Lines[i]) + 1
-			}
+			return req.lineOffsets[last] + len(req.Lines[last])
 		}
-		return start + len(req.Lines[last])
+		return sourceLineStartOffset(req.Lines, last) + len(req.Lines[last])
 	}
-	start := 0
 	if line < len(req.lineOffsets) {
-		start = req.lineOffsets[line]
-	} else {
-		for i := range line {
-			start += len(req.Lines[i]) + 1
-		}
+		return req.lineOffsets[line] + min(max(column, 0), len(req.Lines[line]))
 	}
-	return start + min(max(column, 0), len(req.Lines[line]))
+	return sourceLineStartOffset(req.Lines, line) + min(max(column, 0), len(req.Lines[line]))
 }
 
 // LineSpan returns the span of one source line without its line ending.
 func (req DirectiveReq) LineSpan(line int) SourceSpan {
 	return SourceSpan{Start: req.Offset(line, 0), End: req.Offset(line, len(req.Lines[line]))}
+}
+
+// PositionAt maps a source byte offset to its 1-based line and column.
+func (req DirectiveReq) PositionAt(offset int) Position {
+	for line := range req.Lines {
+		start := req.Offset(line, 0)
+		end := req.Offset(line, len(req.Lines[line]))
+		if offset >= start && offset <= end {
+			return Position{File: req.File, Line: line + 1, Col: offset - start + 1}
+		}
+	}
+	return Position{File: req.File, Line: req.I + 1}
 }
 
 // SourceImports returns imports in source order. Returned module state is

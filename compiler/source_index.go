@@ -3,6 +3,8 @@ package compiler
 import (
 	"context"
 	"sort"
+
+	"github.com/nexssp/flow/internal/identifier"
 )
 
 // SourceSpan is a half-open byte range in the original source file.
@@ -205,7 +207,7 @@ func schemaModifierReferences(tokens []SourceToken) []SourceReference {
 				ref.Value = value.Text
 				ref.NameSpan = value.Span
 				ref.Span.End = value.Span.End
-				ref.HasName = value.Type == TokIdent && isSourceIdentifier(value.Text)
+				ref.HasName = value.Type == TokIdent && identifier.IsValid(value.Text)
 				if ref.HasName {
 					ref.Name = value.Text
 					ref.Valid = true
@@ -215,23 +217,4 @@ func schemaModifierReferences(tokens []SourceToken) []SourceReference {
 		references = append(references, ref)
 	}
 	return references
-}
-
-func isSourceIdentifier(value string) bool {
-	if value == "" {
-		return false
-	}
-	for i := range len(value) {
-		c := value[i]
-		if i == 0 {
-			if c != '_' && (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') {
-				return false
-			}
-			continue
-		}
-		if c != '_' && (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
-			return false
-		}
-	}
-	return true
 }

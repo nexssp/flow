@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/identifier"
 )
 
 // importedMacroDeclarations exposes a module's macros under its include alias.
@@ -96,16 +97,16 @@ func qualifyMacroReferences(body string, bindings map[string]string) string {
 // readQualifiedMacroRefAt reads `namespace.@name` and returns the equivalent
 // binding key `namespace.name`. Namespace paths may contain nested aliases.
 func readQualifiedMacroRefAt(source string, start int) (name string, next int, ok bool) {
-	if start >= len(source) || !isMacroNameStart(source[start]) {
+	if start >= len(source) || !identifier.IsStartByte(source[start]) {
 		return "", start, false
 	}
 	segmentStart := start
 	for i := start; i < len(source); {
-		if !isMacroNameStart(source[i]) {
+		if !identifier.IsStartByte(source[i]) {
 			return "", start, false
 		}
 		i++
-		for i < len(source) && (isMacroNameCont(source[i]) || source[i] == '-') {
+		for i < len(source) && (identifier.IsContinueByte(source[i]) || source[i] == '-') {
 			i++
 		}
 		if i >= len(source) || source[i] != '.' {

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 // BlockEntry is one top-level comma-separated block entry and its source span.
@@ -71,7 +73,7 @@ func ReadBlockWithSpans(lines []string, start int) (BlockRead, error) {
 		block.Entries = blockEntries(content, offsets[start]+open+1)
 		block.Span.End = offsets[start] + open + 1 + closeAt + 1
 		block.BodySpan.End = offsets[start] + open + 1 + closeAt
-		if rest := strings.TrimSpace(afterOpen[closeAt+1:]); rest != "" && !strings.HasPrefix(rest, "#") && !strings.HasPrefix(rest, "//") {
+		if rest := strings.TrimSpace(afterOpen[closeAt+1:]); rest != "" && !lexical.IsHeaderComment(rest) {
 			return block, fmt.Errorf("unexpected content after '}': %q", rest)
 		}
 		return block, nil
@@ -95,7 +97,7 @@ func ReadBlockWithSpans(lines []string, start int) (BlockRead, error) {
 				block.Entries = append(block.Entries, blockEntries(bodyPart, offsets[i])...)
 			}
 			rest := strings.TrimSpace(line[closeAt+1:])
-			if rest != "" && !strings.HasPrefix(rest, "#") && !strings.HasPrefix(rest, "//") {
+			if rest != "" && !lexical.IsHeaderComment(rest) {
 				return block, fmt.Errorf("unexpected content after '}': %q", rest)
 			}
 			block.Next = i + 1

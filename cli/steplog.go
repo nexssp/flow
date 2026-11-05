@@ -4,10 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nexssp/flow/internal/terminal"
 )
 
 // StepLogger prints numbered build steps. In an interactive terminal it
@@ -27,20 +28,7 @@ func NewStepLogger(w io.Writer, total int) *StepLogger {
 	if w == nil {
 		w = io.Discard
 	}
-	return &StepLogger{w: w, tty: isTerminal(w), total: total}
-}
-
-// isTerminal reports whether w is an interactive character device.
-func isTerminal(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
+	return &StepLogger{w: w, tty: terminal.IsTerminal(w), total: total}
 }
 
 // Step is one in-flight build step. Exactly one terminal method should

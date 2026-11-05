@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/nexssp/kernel/action"
+
+	"github.com/nexssp/flow/internal/terminal"
 )
 
 const (
@@ -49,7 +51,7 @@ var Print = action.New("runtime.print", func(_ context.Context, in any) (any, er
 	data := stripPrintConfig(in)
 
 	writer := printStream(cfg.stream)
-	rendered := renderPrint(data, cfg, printIsTerminal(writer))
+	rendered := renderPrint(data, cfg, terminal.IsTerminal(writer))
 	writePrintOutput(writer, cfg.label, rendered)
 
 	return data, nil
@@ -63,18 +65,6 @@ func printStream(name string) io.Writer {
 		return os.Stdout
 	}
 	return os.Stderr
-}
-
-func printIsTerminal(w io.Writer) bool {
-	file, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := file.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
 }
 
 func writePrintOutput(w io.Writer, label, rendered string) {

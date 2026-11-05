@@ -32,7 +32,7 @@ func (r *DynamicResolver) MountWithAlias(lib action.Library, alias string) error
 	if alias == "" {
 		return r.Mount(lib)
 	}
-	if !validNamespaceQualifier(alias) {
+	if !IsValidNamespaceQualifier(alias) {
 		return fmt.Errorf("library %q: invalid @require namespace qualifier %q", lib.Name, alias)
 	}
 	return r.mount(lib, alias)
@@ -222,7 +222,8 @@ func replaceCapabilityNamespace(name, qualifier string) string {
 	return qualifier + "." + suffix
 }
 
-func validNamespaceQualifier(alias string) bool {
+// IsValidNamespaceQualifier reports whether alias is a valid Flow namespace qualifier.
+func IsValidNamespaceQualifier(alias string) bool {
 	if alias == "" || alias == "_" || token.Lookup(alias).IsKeyword() {
 		return false
 	}

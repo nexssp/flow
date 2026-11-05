@@ -49,6 +49,25 @@ func TestValidateModifierValue(t *testing.T) {
 	}
 }
 
+func TestModifierName(t *testing.T) {
+	t.Parallel()
+	for _, testCase := range []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "bare name", raw: "timeout", want: "timeout"},
+		{name: "name and value", raw: "timeout=5s", want: "timeout"},
+		{name: "leading equals", raw: "=value", want: "=value"},
+		{name: "empty", raw: "", want: ""},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			ktest.RequireEqual(t, compiler.ModifierName(testCase.raw), testCase.want)
+		})
+	}
+}
+
 func TestModifierTable_RejectsDuplicateNonRepeatable(t *testing.T) {
 	table := compiler.NewModifierTable(
 		compiler.WithUnique(compiler.Int("count", func(b *action.Builder[any, any], _ int) *action.Builder[any, any] {

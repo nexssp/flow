@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 // formatAtBraceBlocks indents multiline argument blocks without rewriting their
@@ -92,7 +93,7 @@ func scanArgumentBlockLine(source string, start, end, blockStart, depth int, quo
 			}
 			continue
 		}
-		if isArgumentQuote(char) && argumentQuoteCanStart(source, position, blockStart) {
+		if isArgumentQuote(char) && lexical.CanStartQuote(source, position, blockStart) {
 			quote = char
 			continue
 		}
@@ -116,15 +117,4 @@ func sourceLineEnd(source string, lineStart int) int {
 
 func isArgumentQuote(char byte) bool {
 	return char == '"' || char == '\'' || char == '`'
-}
-
-func argumentQuoteCanStart(source string, position, start int) bool {
-	for index := position - 1; index >= start; index-- {
-		char := source[index]
-		if char == ' ' || char == '\t' || char == '\r' || char == '\n' {
-			continue
-		}
-		return char == ':' || char == ',' || char == '[' || char == '{'
-	}
-	return true
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 // Directive imports a parsed source module. The compiler owns source loading,
@@ -32,7 +33,7 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	namespace := strings.TrimSuffix(filepath.Base(target), filepath.Ext(target))
 	var namespaceSpan compiler.SourceSpan
 	rest = strings.TrimSpace(rest)
-	if rest != "" && !includeComment(rest) {
+	if rest != "" && !lexical.IsHeaderComment(rest) {
 		fields := strings.Fields(rest)
 		if len(fields) < 2 || !strings.EqualFold(fields[0], "AS") {
 			return compiler.DirectiveRes{Next: req.I + 1}, compiler.SourceError(pos, "@include: expected AS namespace after file path")
@@ -49,7 +50,7 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 			}
 		}
 		rest = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(strings.TrimPrefix(rest, fields[0])), namespace))
-		if rest != "" && !includeComment(rest) {
+		if rest != "" && !lexical.IsHeaderComment(rest) {
 			return compiler.DirectiveRes{Next: req.I + 1}, compiler.SourceError(pos, "@include: unexpected text after namespace: %s", rest)
 		}
 	}
@@ -70,7 +71,7 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 }
 
 func includePathWithSpan(text string, pos compiler.Position) (target, rest string, start, end int, err error) {
-	if text == "" || includeComment(text) {
+	if text == "" || lexical.IsHeaderComment(text) {
 		return "", "", 0, 0, compiler.SourceError(pos, "@include requires a file path")
 	}
 	if quote := text[0]; quote == '"' || quote == '\'' || quote == '`' {
@@ -88,8 +89,4 @@ func includePathWithSpan(text string, pos compiler.Position) (target, rest strin
 		return text[:i], text[i:], 0, i, nil
 	}
 	return text, "", 0, len(text), nil
-}
-
-func includeComment(text string) bool {
-	return strings.HasPrefix(text, "#") || strings.HasPrefix(text, "//")
 }

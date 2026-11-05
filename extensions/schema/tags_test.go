@@ -37,18 +37,6 @@ func TestParseStructTags(t *testing.T) {
 	}
 }
 
-func TestIsValidSchemaName(t *testing.T) {
-	t.Parallel()
-	yes := []string{"User", "user", "_x", "A1", "Plan2"}
-	no := []string{"", "1abc", "a-b", "a.b", "a b"}
-	for _, s := range yes {
-		ktest.RequireCondition(t, isValidSchemaName(s), "expected %q valid", s)
-	}
-	for _, s := range no {
-		ktest.RequireCondition(t, !isValidSchemaName(s), "expected %q invalid", s)
-	}
-}
-
 func TestClassifyFieldType(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/nexssp/flow/builder"
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/require"
 )
@@ -104,23 +105,9 @@ func resolveOutputPath(explicit, nflowPath string) (string, error) {
 		return "", fmt.Errorf("resolve %s: %w", nflowPath, err)
 	}
 
-	root := findModuleRoot(filepath.Dir(abs))
+	root := builder.FindModuleRoot(filepath.Dir(abs))
 	if root == "" {
 		return "requires_gen.go", nil
 	}
 	return filepath.Join(root, "requires_gen.go"), nil
-}
-
-func findModuleRoot(dir string) string {
-	curr := dir
-	for {
-		if _, err := os.Stat(filepath.Join(curr, "go.mod")); err == nil {
-			return curr
-		}
-		parent := filepath.Dir(curr)
-		if parent == curr {
-			return ""
-		}
-		curr = parent
-	}
 }

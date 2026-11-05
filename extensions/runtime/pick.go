@@ -7,6 +7,8 @@ import (
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
+
+	"github.com/nexssp/flow/internal/maputil"
 )
 
 // Pick extracts a single field or filters the map with an allowlist / denylist.
@@ -19,7 +21,7 @@ var Pick = action.New("runtime.pick", func(_ context.Context, in any) (any, erro
 	// 1. Single field mode
 	field := strings.TrimSpace(readStringArg(m, "field"))
 	if field != "" {
-		val, found := lookupDottedPath(m, field)
+		val, found := maputil.LookupPath(m, field)
 		if !found {
 			return nil, xerr.NotFound("pick: field '" + field + "' not found")
 		}
@@ -32,7 +34,7 @@ var Pick = action.New("runtime.pick", func(_ context.Context, in any) (any, erro
 		if len(keys) > 0 {
 			filtered := make(map[string]any, len(keys))
 			for _, k := range keys {
-				if val, found := lookupDottedPath(m, k); found {
+				if val, found := maputil.LookupPath(m, k); found {
 					filtered[k] = val
 				}
 			}

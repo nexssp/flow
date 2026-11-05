@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/nexssp/kernel/xctx"
+
+	"github.com/nexssp/flow/internal/terminal"
 )
 
 // Reporter renders xctx.Progress events to a writer. It is safe for
@@ -34,7 +36,7 @@ func NewReporter(out io.Writer) *Reporter {
 	if out == nil {
 		out = os.Stderr
 	}
-	return &Reporter{out: out, tty: isTerminal(out)}
+	return &Reporter{out: out, tty: terminal.IsTerminal(out)}
 }
 
 // Report implements xctx.ProgressReporter.
@@ -195,16 +197,4 @@ func (r *Reporter) spin(s *activeStep) {
 			render()
 		}
 	}
-}
-
-func isTerminal(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
 }

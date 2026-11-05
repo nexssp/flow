@@ -17,6 +17,8 @@ import (
 	kernelstream "github.com/nexssp/kernel/stream"
 	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xfile"
+
+	"github.com/nexssp/flow/internal/maputil"
 )
 
 func (*Atom) Analyze(CapabilityResolver) error { return nil }
@@ -1203,7 +1205,7 @@ func resolveValue(ctx context.Context, v *Value, state map[string]any) (any, err
 		if v.Ref == "" {
 			return state, nil
 		}
-		val, _ := lookupPath(state, v.Ref)
+		val, _ := maputil.LookupPath(state, v.Ref)
 		return val, nil
 	case ValueExpression:
 		if v.Program == nil {
@@ -1343,36 +1345,11 @@ func lookupSymbolValue(ctx context.Context, raw string) (any, bool) {
 	if ctx != nil {
 		if local := LocalSymbolsFrom(ctx); local != nil {
 			if localNS, exists := local[ns]; exists {
-				return lookupPath(localNS.Symbols, name)
+				return maputil.LookupPath(localNS.Symbols, name)
 			}
 		}
 	}
 	return LookupSymbol(ns, name)
-}
-
-func lookupPath(m map[string]any, path string) (any, bool) {
-	if path == "" {
-		return m, true
-	}
-	var cur any = m
-	remaining := path
-	for remaining != "" {
-		var part string
-		if dot := strings.IndexByte(remaining, '.'); dot >= 0 {
-			part, remaining = remaining[:dot], remaining[dot+1:]
-		} else {
-			part, remaining = remaining, ""
-		}
-		mm, ok := cur.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-		cur, ok = mm[part]
-		if !ok {
-			return nil, false
-		}
-	}
-	return cur, true
 }
 
 func BuildEnv(input any) map[string]any {
