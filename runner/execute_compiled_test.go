@@ -99,6 +99,47 @@ func TestExecuteCompiledReusesProgramAndExecutionContext(t *testing.T) {
 	}
 }
 
+func TestExecuteCompiledRejectsChangedSourceIdentity(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	act := action.New("test.count", func(_ context.Context, input any) (any, error) {
+		calls.Add(1)
+		return input, nil
+	}).Build()
+	cfg, err := runner.BuildConfig(append(native.Bundles(), compiler.Bundle{
+		ID:        "execute-compiled-source-identity-test",
+		Libraries: []action.Library{{Name: "test", Actions: []action.AnyAction{act}}},
+	}))
+	if err != nil {
+		t.Fatalf("BuildConfig: %v", err)
+	}
+	const source = "test.count"
+	const name = "source-identity.nflow"
+	compiled, err := runner.Compile(t.Context(), cfg, source, name)
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	for _, tc := range []struct {
+		name   string
+		source string
+		path   string
+	}{
+		{name: "changed source", source: "noop", path: name},
+		{name: "changed name", source: source, path: "other.nflow"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := runner.ExecuteCompiled(t.Context(), cfg, compiled, tc.source, tc.path, map[string]any{})
+			if xerr.KindFrom(err) != xerr.KindConflict {
+				t.Fatalf("ExecuteCompiled() error = %v, want conflict", err)
+			}
+		})
+	}
+	if got := calls.Load(); got != 0 {
+		t.Fatalf("compiled action ran %d times with mismatched source identity, want zero", got)
+	}
+}
+
 func TestExecuteCompiledRejectsNilProgram(t *testing.T) {
 	result, err := runner.ExecuteCompiled(t.Context(), runner.Config{}, runner.Compilation{}, "", "", nil)
 	if err == nil || xerr.KindFrom(err) != xerr.KindBadRequest ||

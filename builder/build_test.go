@@ -89,6 +89,14 @@ func Bundle(opts map[string]string) compiler.Bundle {
 	if !strings.Contains(stderr, "nexssflow") {
 		t.Fatalf("built executable omitted its run banner; stderr:\n%s", stderr)
 	}
+	stdout, stderr, err = run(`--assert=result.value == "not-ok"`)
+	if err == nil || !strings.Contains(stderr, `result.value == "not-ok"`) {
+		t.Fatalf("built executable did not evaluate the requested failing assertion: err=%v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+	stdout, stderr, err = run("--info")
+	if err != nil || strings.Contains(stdout, `"value":"option:ok"`) || strings.Contains(stderr, "(built ") {
+		t.Fatalf("built executable --info did not describe the flow without running it: err=%v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
 
 	journalDir := filepath.Join(workDir, "journal")
 	stdout, stderr, err = run("--journal-dir", journalDir)
@@ -126,6 +134,8 @@ func Bundle(opts map[string]string) compiler.Bundle {
 		t.Fatalf("built executable help failed: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 	}
 	if !strings.Contains(stdout, "Usage:") ||
+		!strings.Contains(stdout, "--assert=EXPR") ||
+		!strings.Contains(stdout, "--info") ||
 		!strings.Contains(stdout, "--journal-dir DIR") ||
 		!strings.Contains(stdout, "--execution-id ID") ||
 		strings.Contains(stderr, "(built ") {

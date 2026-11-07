@@ -132,7 +132,7 @@ type jsonTypeField struct {
 	stringQuote bool
 }
 
-const jsonTagStringOption = "string"
+const jsonTagStringOption = stringKindName
 
 type jsonTypeFieldGroup struct {
 	depth         int

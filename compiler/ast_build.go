@@ -846,10 +846,15 @@ func (l *LoopExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAct
 				return nil, runErr
 			}
 			value, evalErr := prog.Evaluate(runCtx, output)
-			if evalErr == nil {
-				if satisfied, ok := value.(bool); ok && satisfied {
-					return output, nil
-				}
+			if evalErr != nil {
+				return nil, xerr.Validation(fmt.Sprintf("loop [loop]: termination condition %q failed on turn %d", l.Until, turn), evalErr)
+			}
+			satisfied, ok := value.(bool)
+			if !ok {
+				return nil, xerr.Validation(fmt.Sprintf("loop [loop]: termination condition %q returned %T, want bool on turn %d", l.Until, value, turn))
+			}
+			if satisfied {
+				return output, nil
 			}
 			current = output
 		}

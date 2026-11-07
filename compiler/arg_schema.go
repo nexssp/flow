@@ -2,6 +2,8 @@ package compiler
 
 import (
 	"fmt"
+	"math"
+	"reflect"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
@@ -56,48 +58,144 @@ func resolveArgSchema(resolver CapabilityResolver, atom *Atom, schema []ArgField
 	for _, field := range schema {
 		value, present := atom.Args[field.Name]
 		if !present {
-			if len(atom.ArgSpreads) > 0 {
-				// The compiler cannot know the keys in a runtime spread. Defer
-				// required-field validation to the capability receiving it.
-				continue
-			}
-			if isCapabilityRefKind(field.Kind) && !field.Optional {
-				return missingCapabilityFieldError(atom, field)
+			if err := validateMissingArgField(atom, field); err != nil {
+				return err
 			}
 			continue
 		}
 
-		switch field.Kind {
-		case ArgAny, ArgString, ArgInt, ArgBool:
-			// These kinds do not perform capability resolution or requiredness checks.
-		case ArgCapabilityRef:
-			canonical, err := resolveCapabilityValue(resolver, value, atom.Name, field.Name)
-			if err != nil {
-				return err
-			}
-			value.Kind = ValueString
-			value.Str = canonical
-		case ArgCapabilityRefList:
-			if value == nil || value.Kind != ValueSlice {
-				got := "missing value"
-				if value != nil {
-					got = kindName(value.Kind)
-				}
-				return xerr.Validation(fmt.Sprintf(
-					"%s.%s: expected a capability reference list, got %s",
-					atom.Name, field.Name, got))
-			}
-			for _, item := range value.Slice {
-				canonical, err := resolveCapabilityValue(resolver, item, atom.Name, field.Name)
-				if err != nil {
-					return err
-				}
-				item.Kind = ValueString
-				item.Str = canonical
-			}
+		if err := resolvePresentArgField(resolver, atom, field, value); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func validateMissingArgField(atom *Atom, field ArgFieldSpec) error {
+	// The compiler cannot know the keys in a runtime spread. Defer required-field
+	// validation to the capability receiving it.
+	if len(atom.ArgSpreads) > 0 || !isCapabilityRefKind(field.Kind) || field.Optional {
+		return nil
+	}
+	return missingCapabilityFieldError(atom, field)
+}
+
+func resolvePresentArgField(resolver CapabilityResolver, atom *Atom, field ArgFieldSpec, value *Value) error {
+	switch field.Kind {
+	case ArgAny:
+		// Untyped fields have no compile-time validation.
+		return nil
+	case ArgString, ArgInt, ArgBool:
+		if !primitiveArgValueMatches(field.Kind, value) {
+			got := "missing value"
+			if value != nil {
+				got = kindName(value.Kind)
+			}
+			if field.Kind == ArgInt && value != nil && value.Kind == ValueNumber && !isIntegerNumber(value.Num) {
+				got = "non-integer number"
+			}
+			return SourceError(atom.Pos, "%s.%s: expected %s, got %s", atom.Name, field.Name, expectedArgKind(field.Kind), got)
+		}
+		return nil
+	case ArgCapabilityRef:
+		canonical, err := resolveCapabilityValue(resolver, value, atom.Name, field.Name)
+		if err != nil {
+			return err
+		}
+		value.Kind = ValueString
+		value.Str = canonical
+	case ArgCapabilityRefList:
+		if value == nil || value.Kind != ValueSlice {
+			got := "missing value"
+			if value != nil {
+				got = kindName(value.Kind)
+			}
+			return xerr.Validation(fmt.Sprintf(
+				"%s.%s: expected a capability reference list, got %s",
+				atom.Name, field.Name, got))
+		}
+		for _, item := range value.Slice {
+			canonical, err := resolveCapabilityValue(resolver, item, atom.Name, field.Name)
+			if err != nil {
+				return err
+			}
+			item.Kind = ValueString
+			item.Str = canonical
+		}
+		return nil
+	}
+	return nil
+}
+
+func primitiveArgValueMatches(kind ArgKind, value *Value) bool {
+	if value == nil {
+		return false
+	}
+	// These values depend on pipeline input or runtime expression evaluation;
+	// their concrete types cannot be proven during compilation.
+	if value.Kind == ValueRef || value.Kind == ValueExpression {
+		return true
+	}
+	if value.Kind == ValueTyped {
+		reflected := reflect.ValueOf(value.Typed)
+		if !reflected.IsValid() {
+			return false
+		}
+		switch kind {
+		case ArgString:
+			return reflected.Kind() == reflect.String
+		case ArgBool:
+			return reflected.Kind() == reflect.Bool
+		case ArgInt:
+			switch reflected.Kind() {
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				return true
+			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+				return reflected.Uint() <= uint64(1<<63-1)
+			case reflect.Float32, reflect.Float64:
+				return isIntegerNumber(reflected.Float())
+			case reflect.Invalid, reflect.Bool, reflect.Uintptr, reflect.Complex64, reflect.Complex128,
+				reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map,
+				reflect.Pointer, reflect.Slice, reflect.String, reflect.Struct, reflect.UnsafePointer:
+				return false
+			}
+		case ArgAny, ArgCapabilityRef, ArgCapabilityRefList:
+			return false
+		}
+		return false
+	}
+
+	switch kind {
+	case ArgString:
+		return value.Kind == ValueString || value.Kind == ValueBare
+	case ArgInt:
+		return value.Kind == ValueNumber && isIntegerNumber(value.Num)
+	case ArgBool:
+		return value.Kind == ValueBool
+	case ArgAny, ArgCapabilityRef, ArgCapabilityRefList:
+		return false
+	}
+	return false
+}
+
+func isIntegerNumber(value float64) bool {
+	const int64Limit = float64(1 << 63)
+	return !math.IsNaN(value) && !math.IsInf(value, 0) &&
+		value >= -int64Limit && value < int64Limit && math.Trunc(value) == value
+}
+
+func expectedArgKind(kind ArgKind) string {
+	switch kind {
+	case ArgString:
+		return stringKindName
+	case ArgInt:
+		return "integer"
+	case ArgBool:
+		return "bool"
+	case ArgAny, ArgCapabilityRef, ArgCapabilityRefList:
+		return "value"
+	}
+	return "value"
 }
 
 func isCapabilityRefKind(kind ArgKind) bool {
@@ -158,7 +256,7 @@ func resolveCapabilityValue(resolver CapabilityResolver, v *Value, atomName, fie
 func kindName(k ValueKind) string {
 	switch k {
 	case ValueString:
-		return "string"
+		return stringKindName
 	case ValueBare:
 		return "bare identifier"
 	case ValueNumber:

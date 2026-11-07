@@ -269,10 +269,24 @@ nflow build -o /tmp/my-flow flow.nflow
 
 `build` produces a self-contained binary that embeds the `.nflow`
 source and any `@require` modules. The binary runs the flow when
-launched, accepts the same JSON payload and CLI flags as `nflow run`,
-and prints the same output.
+launched and accepts JSON-object payloads plus the core runtime options
+below. Successful run output is clean JSON; unlike the regular CLI, the
+standalone binary does not render a terminal-specific pretty view.
 
-Options:
+Runtime options:
+
+| Flag | Effect |
+|---|---|
+| `--info` or `info` | Describe the embedded flow without running it. |
+| `--assert=EXPR` or `--assert EXPR` | Evaluate a post-run assertion; exit nonzero on failure. |
+| `--approval TOKEN` | Approve named `@approval` gates (comma-separated names or `all`). |
+| `--journal-dir DIR` | Persist durable step results in `DIR`. |
+| `--execution-id ID` | Resume the same run; requires a durable journal. |
+| `-v`, `-vv`, `-vvv`, `--verbose` | Increase execution verbosity. |
+| `--key VALUE` | Supply a CLI value to `@flag.key`. |
+| `--json` | Suppress the embedded version banner; run output is already JSON. |
+
+Build options:
 
 | Flag | Effect |
 |---|---|

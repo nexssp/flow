@@ -1,9 +1,15 @@
 package runner_test
 
 import (
+	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
+
+	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/native"
 	"github.com/nexssp/flow/runner"
 )
@@ -58,6 +64,42 @@ func TestBareBuiltinDiagnostics_CompileBeforeExecution(t *testing.T) {
 			_, err = runner.Compile(t.Context(), cfg, source, "bare-builtin.nflow")
 			if err == nil || !strings.Contains(err.Error(), "for a payload field use .count") {
 				t.Fatalf("compile = %v, want field hint before execution", err)
+			}
+		})
+	}
+}
+
+func TestLoopStopsWhenTerminationConditionFails(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		until string
+	}{
+		{name: "evaluation error", until: "len(.denominator) > 0"},
+		{name: "non-boolean result", until: "42"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var bodyCalls atomic.Int32
+			body := action.New("test.bump", func(_ context.Context, input any) (any, error) {
+				bodyCalls.Add(1)
+				return input, nil
+			}).Build()
+			cfg, err := runner.BuildConfig(append(native.Bundles(), compiler.Bundle{
+				ID:        "loop-condition-regression",
+				Libraries: []action.Library{{Name: "test", Actions: []action.AnyAction{body}}},
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			source := "loop(test.bump) until(" + tc.until + ")"
+			_, err = runner.Execute(t.Context(), cfg, source, "loop-condition.nflow", map[string]any{"denominator": 0})
+			if err == nil || xerr.KindFrom(err) != xerr.KindValidation {
+				t.Fatalf("Execute() error = %v, want validation error", err)
+			}
+			if got := bodyCalls.Load(); got != 1 {
+				t.Fatalf("loop body called %d times after invalid termination condition, want exactly once", got)
 			}
 		})
 	}

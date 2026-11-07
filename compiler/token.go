@@ -1,5 +1,7 @@
 package compiler
 
+const stringKindName = "string"
+
 type TokenType uint8
 
 const (
@@ -28,7 +30,7 @@ const (
 var tokenNames = [20]string{
 	TokEOF:       "eof",
 	TokIdent:     "ident",
-	TokString:    "string",
+	TokString:    stringKindName,
 	TokNumber:    "number",
 	TokArrow:     "->",
 	TokPipe:      "|",

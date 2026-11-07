@@ -3,7 +3,6 @@ package runner
 import (
 	"cmp"
 	"fmt"
-	"maps"
 	"slices"
 
 	"github.com/nexssp/kernel/action"
@@ -31,7 +30,11 @@ func BuildConfig(bundles []compiler.Bundle) (Config, error) {
 	}
 
 	materializers := orderedMaterializers(collected.bundles)
-	if err := validateKeywordMappings(resolver); err != nil {
+	if validationErr := validateKeywordMappings(resolver); validationErr != nil {
+		return Config{}, validationErr
+	}
+	compileOpts, err := compiler.BundleConfigChecked(collected.bundles...)
+	if err != nil {
 		return Config{}, err
 	}
 
@@ -43,7 +46,7 @@ func BuildConfig(bundles []compiler.Bundle) (Config, error) {
 		Operators:     compiler.NewOperatorTable(contributions.operators...),
 		Primaries:     compiler.NewPrimaryExtensionTable(contributions.primaries...),
 		Materializers: materializers,
-		CompileOpts:   compiler.BundleConfig(collected.bundles...),
+		CompileOpts:   compileOpts,
 		ArgSchemas:    collected.argSchemas,
 		Hooks:         contributions.hooks,
 	}, nil
@@ -87,15 +90,17 @@ func collectUniqueBundles(bundles []compiler.Bundle) (uniqueBundleSet, error) {
 			}
 			seenLibraries[library.Name] = bundle.ID
 		}
-		if len(bundle.ArgSchemas) > 0 {
-			maps.Copy(collected.argSchemas, bundle.ArgSchemas)
-		}
 		for _, binding := range bundle.FileResolvers {
 			collected.fileResolvers[binding.Provider] = append(collected.fileResolvers[binding.Provider], binding.Resolver)
 		}
 		collected.bundles = append(collected.bundles, bundle)
 	}
 
+	argSchemas, err := compiler.BundleArgumentSchemas(collected.bundles...)
+	if err != nil {
+		return uniqueBundleSet{}, err
+	}
+	collected.argSchemas = argSchemas
 	return collected, nil
 }
 

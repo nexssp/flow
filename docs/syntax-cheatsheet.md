@@ -26,6 +26,8 @@ request.action :timeout=3s :retry=2 @{ id: .id, payload: . }
 
 `@{ ... }` is a structured data block. Values can be literals, arrays, nested objects, `.`, and input paths such as `.user.id`. A path entry `.user.id,` derives the key `id`; bare fields such as `name` still mean `name: .name`. Duplicate keys fail.
 
+For new flows, use structured `@{ ... }` arguments, projection shorthand, and pipeline composition (`->` or `|`). The older `action(key=value, ...)` form is parsed only to keep existing flows working; it is intentionally not used in these examples.
+
 Modifiers and `@{ ... }` may be combined on the same action. Modifiers come
 before the argument block; both compact and spaced colon forms are accepted:
 

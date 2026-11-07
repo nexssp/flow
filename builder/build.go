@@ -569,9 +569,9 @@ func main() {
 		case "version", "--version":
 			fmt.Printf("flow binary (version: %s, commit: %s, built at: %s)\n", Version, Commit, BuiltAt)
 			os.Exit(0)
-		case "help", "--help", "-h":
-			fmt.Println("Nexss Flow standalone executable.")
-			fmt.Println("Usage:\n  <binary> [json_payload] [flags]\n\nFlags:\n  --journal-dir DIR   persist durable step results\n  --execution-id ID   resume a run (requires --journal-dir)")
+			case "help", "--help", "-h":
+				fmt.Println("Nexss Flow standalone executable.")
+				fmt.Println("Usage:\n  <binary> [json_payload] [flags]\n\nFlags:\n  --info              describe the embedded flow\n  --assert=EXPR       evaluate an assertion after the run\n  --approval TOKEN    approve named @approval gates (or all)\n  --journal-dir DIR   persist durable step results\n  --execution-id ID   resume a run (requires --journal-dir)\n  -v | -vv | -vvv     increase verbosity\n  --key VALUE         pass a CLI value to @flag.key")
 			os.Exit(0)
 		}
 	}
@@ -579,27 +579,57 @@ func main() {
 	durability, runArgs, err := runner.ParseDurabilityOptions(os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "run options: %v\n", err)
-		os.Exit(2)
-	}
-	payload := map[string]any{}
-	var flags []string
-	for _, arg := range runArgs {
-		if strings.HasPrefix(arg, "{") {
-			if err := json.Unmarshal([]byte(arg), &payload); err != nil {
-				fmt.Fprintf(os.Stderr, "invalid JSON payload: %v\n", err)
-				os.Exit(2)
+			os.Exit(2)
+		}
+		approvalToken, runArgs, err := runner.ParseApprovalOption(runArgs)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "run options: %v\n", err)
+			os.Exit(2)
+		}
+		payload := map[string]any{}
+		var flags []string
+		opts := runner.Opts{ApprovalToken: approvalToken}
+		showBanner := true
+		for i := 0; i < len(runArgs); i++ {
+			arg := runArgs[i]
+			if strings.HasPrefix(arg, "{") {
+				if err := json.Unmarshal([]byte(arg), &payload); err != nil {
+					fmt.Fprintf(os.Stderr, "invalid JSON payload: %v\n", err)
+					os.Exit(2)
+				}
+				continue
 			}
-		} else if strings.HasPrefix(arg, "-") {
-			flags = append(flags, arg)
+			switch {
+			case arg == "--assert":
+				if i+1 >= len(runArgs) || strings.HasPrefix(runArgs[i+1], "--") {
+					fmt.Fprintln(os.Stderr, "run options: --assert requires an expression")
+					os.Exit(2)
+				}
+				i++
+				opts.Asserts = append(opts.Asserts, runArgs[i])
+				flags = append(flags, arg, runArgs[i])
+			case strings.HasPrefix(arg, "--assert="):
+				expression := strings.TrimPrefix(arg, "--assert=")
+				if strings.TrimSpace(expression) == "" {
+					fmt.Fprintln(os.Stderr, "run options: --assert requires an expression")
+					os.Exit(2)
+				}
+				opts.Asserts = append(opts.Asserts, expression)
+				flags = append(flags, arg)
+			case arg == "--info" || arg == "-info":
+				opts.Info = true
+				showBanner = false
+				flags = append(flags, arg)
+			case arg == "info" && i == 0:
+				opts.Info = true
+				showBanner = false
+			case arg == "--json":
+				showBanner = false
+				flags = append(flags, arg)
+			default:
+				flags = append(flags, arg)
+			}
 		}
-	}
-	showBanner := true
-	for _, arg := range runArgs {
-		if arg == "--json" || arg == "info" {
-			showBanner = false
-			break
-		}
-	}
 	if showBanner {
 		fmt.Fprintf(os.Stderr, "nexssflow %s (built %s)\n", Version, BuiltAt)
 	}
@@ -611,11 +641,14 @@ func main() {
 	}
 	b.WriteString(`	}
 
-	host := runner.NewHost()
-	defer func() { _ = host.Shutdown(context.Background()) }()
-	if err := host.OwnAll(bundles); err != nil {
-		fmt.Fprintf(os.Stderr, "host error: %v\n", err)
-		os.Exit(2)
+		host := runner.NewHost()
+		closeHost := func() error { return host.Shutdown(context.Background()) }
+		if err := host.OwnAll(bundles); err != nil {
+			fmt.Fprintf(os.Stderr, "host error: %v\n", err)
+			if shutdownErr := closeHost(); shutdownErr != nil {
+				fmt.Fprintf(os.Stderr, "host shutdown: %v\n", shutdownErr)
+			}
+			os.Exit(2)
 	}
 `)
 
@@ -634,32 +667,45 @@ func main() {
 		writeBundleConstruction(&b, imports)
 		b.WriteString(`		return nil
 	}
-	if err := constructExternal(); err != nil {
-		fmt.Fprintf(os.Stderr, "bundle error: %v\n", err)
-		os.Exit(2)
+		if err := constructExternal(); err != nil {
+			fmt.Fprintf(os.Stderr, "bundle error: %v\n", err)
+			if shutdownErr := closeHost(); shutdownErr != nil {
+				fmt.Fprintf(os.Stderr, "host shutdown: %v\n", shutdownErr)
+			}
+			os.Exit(2)
 	}
 `)
 	}
 
 	b.WriteString(`
 	cfg, err := runner.BuildConfig(bundles)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
-		os.Exit(2)
-	}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "config error: %v\n", err)
+			if shutdownErr := closeHost(); shutdownErr != nil {
+				fmt.Fprintf(os.Stderr, "host shutdown: %v\n", shutdownErr)
+			}
+			os.Exit(2)
+		}
 
-	opts := runner.Opts{
-		Verbosity:   countVerbosity(flags),
-		JournalDir:  durability.JournalDir,
-		ExecutionID: durability.ExecutionID,
-	}
-	var sourceFiles compiler.SourceMap
- if err := json.Unmarshal(sourceManifest, &sourceFiles); err != nil {
-  fmt.Fprintf(os.Stderr, "source manifest: %v\n",err)
-  os.Exit(2)
- }
- ctx := compiler.WithSourceLoader(context.Background(),sourceFiles)
- os.Exit(runner.RunSource(ctx, cfg, embedded, sourceName, payload, opts))
+		opts.Verbosity = countVerbosity(flags)
+		opts.JournalDir = durability.JournalDir
+		opts.ExecutionID = durability.ExecutionID
+		cfg.CompileOpts = append(cfg.CompileOpts, compiler.WithCLIArgs(flags))
+		var sourceFiles compiler.SourceMap
+	 if err := json.Unmarshal(sourceManifest, &sourceFiles); err != nil {
+	  fmt.Fprintf(os.Stderr, "source manifest: %v\n",err)
+	  if shutdownErr := closeHost(); shutdownErr != nil {
+	   fmt.Fprintf(os.Stderr, "host shutdown: %v\n", shutdownErr)
+	  }
+	  os.Exit(2)
+	 }
+	 ctx := compiler.WithSourceLoader(context.Background(),sourceFiles)
+	 exitCode := runner.RunSource(ctx, cfg, embedded, sourceName, payload, opts)
+	 if shutdownErr := closeHost(); shutdownErr != nil {
+	  fmt.Fprintf(os.Stderr, "host shutdown: %v\n", shutdownErr)
+	  if exitCode == 0 { exitCode = 1 }
+	 }
+	 os.Exit(exitCode)
 }
 
 func countVerbosity(flags []string) int {

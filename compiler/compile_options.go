@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"context"
+	"fmt"
 	"maps"
 
 	"github.com/nexssp/kernel/action"
@@ -172,15 +173,29 @@ func withBundleSources(loader *bundleSourceLoader) CompileOption {
 	}
 }
 
-// BundleConfig collects every extension point from a set of bundles
-// into a single set of CompileOptions. Called once at startup.
+// BundleConfig collects every extension point from a set of bundles into a
+// single set of CompileOptions. Invalid or colliding argument schemas panic;
+// callers that need construction errors should use BundleConfigChecked.
 func BundleConfig(bundles ...Bundle) []CompileOption {
+	opts, err := BundleConfigChecked(bundles...)
+	if err != nil {
+		panic(fmt.Sprintf("compiler.BundleConfig: %v", err))
+	}
+	return opts
+}
+
+// BundleConfigChecked is BundleConfig with errors returned for invalid or
+// colliding argument schemas.
+func BundleConfigChecked(bundles ...Bundle) ([]CompileOption, error) {
+	schemas, err := BundleArgumentSchemas(bundles...)
+	if err != nil {
+		return nil, err
+	}
 	var (
 		advisors   []AtomAdviseFunc
 		wrappers   []PipelineWrapFunc
 		onPre      []OnPreprocessFunc
 		inheritors []ScopeInheritFunc
-		schemas    = map[string][]ArgFieldSpec{}
 	)
 	for i := range bundles {
 		b := &bundles[i]
@@ -199,7 +214,6 @@ func BundleConfig(bundles ...Bundle) []CompileOption {
 		if b.InheritScope != nil {
 			inheritors = append(inheritors, b.InheritScope)
 		}
-		maps.Copy(schemas, b.ArgSchemas)
 	}
 
 	opts := make([]CompileOption, 0, 4)
@@ -221,7 +235,32 @@ func BundleConfig(bundles ...Bundle) []CompileOption {
 	if sourceLoader := newBundleSourceLoader(bundles); sourceLoader != nil {
 		opts = append(opts, withBundleSources(sourceLoader))
 	}
-	return opts
+	return opts, nil
+}
+
+// BundleArgumentSchemas merges bundle schemas using the same namespace alias
+// rewrite as mounted capabilities. Duplicate canonical schema names are errors.
+func BundleArgumentSchemas(bundles ...Bundle) (map[string][]ArgFieldSpec, error) {
+	schemas := make(map[string][]ArgFieldSpec)
+	owners := make(map[string]string)
+	for i := range bundles {
+		bundle := &bundles[i]
+		if bundle.Alias != "" && !IsValidNamespaceQualifier(bundle.Alias) {
+			return nil, fmt.Errorf("bundle %q: invalid @require namespace qualifier %q", bundle.ID, bundle.Alias)
+		}
+		for name, fields := range bundle.ArgSchemas {
+			if !validQualifiedCapabilityName(name) {
+				return nil, fmt.Errorf("bundle %q: argument schema %q must declare a canonical fully-qualified name", bundle.ID, name)
+			}
+			mountedName := mountedCapabilityName(name, bundle.Alias)
+			if previous, exists := owners[mountedName]; exists {
+				return nil, fmt.Errorf("duplicate argument schema %q in bundles %q and %q", mountedName, previous, bundle.ID)
+			}
+			owners[mountedName] = bundle.ID
+			schemas[mountedName] = append([]ArgFieldSpec(nil), fields...)
+		}
+	}
+	return schemas, nil
 }
 
 type compileConfigValue struct {

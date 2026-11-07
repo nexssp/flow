@@ -31,9 +31,11 @@ type Execution struct {
 }
 
 type Compilation struct {
-	Program  action.AnyAction
-	Meta     map[string]any
-	Resolver compiler.CapabilityResolver
+	Program    action.AnyAction
+	Meta       map[string]any
+	Resolver   compiler.CapabilityResolver
+	sourceName string
+	sourceHash string
 }
 
 type EntryPoint struct {
@@ -147,6 +149,7 @@ func ExecutePrepared(
 		executionID,
 		prepared.SourceText(),
 		preparedName,
+		entry.Name,
 		entry.Payload,
 		prepared.Metadata(),
 		func() (any, error) {
@@ -297,10 +300,13 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 	if err != nil {
 		return Compilation{Meta: meta, Resolver: resolver}, err
 	}
+	sourceName, sourceHash := prepared.SourceIdentity()
 	return Compilation{
-		Program:  compiledRes.Program,
-		Meta:     meta,
-		Resolver: resolver,
+		Program:    compiledRes.Program,
+		Meta:       meta,
+		Resolver:   resolver,
+		sourceName: sourceName,
+		sourceHash: sourceHash,
 	}, nil
 }
 
@@ -363,6 +369,10 @@ func executeCompiled(
 		}
 		return result, xerr.BadRequest("compile: no runnable Flow expression remained after preprocessing. Here, source means the .nflow program text, not a JSON payload field or symbol. A declaration such as @pipeline NAME defines a reusable action but does not execute it; add a top-level call such as `{} -> pipeline.NAME`. If the file already has a top-level call, inspect what Flow parsed with `nflow info <file>` and confirm the command is running the saved file you inspected.")
 	}
+	if compiled.sourceName == "" || compiled.sourceHash == "" || compiled.sourceName != name || compiled.sourceHash != sourceDigest(src) {
+		return Execution{ExecutionID: executionID, Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration},
+			xerr.Conflict("compiled source identity does not match the supplied source; recompile before execution")
+	}
 	var runStats runtime.MemStats
 
 	if syms := compiler.SymbolsFromMeta(compiled.Meta); len(syms) > 0 {
@@ -378,6 +388,7 @@ func executeCompiled(
 		executionID,
 		src,
 		name,
+		"",
 		payload,
 		compiled.Meta,
 		func() (any, error) {

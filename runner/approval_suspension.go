@@ -18,16 +18,17 @@ import (
 // ApprovalSuspension is the persisted description of a workflow paused at an
 // approval gate. It stores hashes, not the source or input payload.
 type ApprovalSuspension struct {
-	ExecutionID string    `json:"execution_id"`
-	Gate        string    `json:"gate"`
-	Role        string    `json:"role"`
-	Reason      string    `json:"reason"`
-	SourceName  string    `json:"source_name"`
-	SourceHash  string    `json:"source_hash"`
-	InputHash   string    `json:"input_hash"`
-	SuspendedAt time.Time `json:"suspended_at"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	Persisted   bool      `json:"-"`
+	ExecutionID    string    `json:"execution_id"`
+	Gate           string    `json:"gate"`
+	Role           string    `json:"role"`
+	Reason         string    `json:"reason"`
+	SourceName     string    `json:"source_name"`
+	EntryPointName string    `json:"entrypoint_name"`
+	SourceHash     string    `json:"source_hash"`
+	InputHash      string    `json:"input_hash"`
+	SuspendedAt    time.Time `json:"suspended_at"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	Persisted      bool      `json:"-"`
 }
 
 // SuspensionStore persists pending approval requests independently of completed
@@ -67,7 +68,7 @@ func fingerprintApprovalRunHash(sourceHash, _ string, payload any) (approvalFing
 func runApprovalAware(
 	ctx context.Context,
 	journal any,
-	executionID, source, name string,
+	executionID, source, name, entryPointName string,
 	payload any,
 	meta map[string]any,
 	invoke func() (any, error),
@@ -95,8 +96,8 @@ func runApprovalAware(
 	}
 	if found {
 		pending.Persisted = true
-		if pending.SourceName != name || pending.SourceHash != fingerprint.sourceHash || pending.InputHash != fingerprint.inputHash {
-			return nil, nil, xerr.Conflict("pending approval is bound to different source or input; use a new execution ID")
+		if pending.SourceName != name || pending.EntryPointName != entryPointName || pending.SourceHash != fingerprint.sourceHash || pending.InputHash != fingerprint.inputHash {
+			return nil, nil, xerr.Conflict("pending approval is bound to different source, entrypoint, or input; use a new execution ID")
 		}
 		if !time.Now().Before(pending.ExpiresAt) {
 			return nil, nil, xerr.Conflict("approval request expired; use a new execution ID")
@@ -108,7 +109,7 @@ func runApprovalAware(
 
 	output, runErr := invoke()
 	if runErr != nil {
-		return persistApprovalFailure(ctx, store, canPersist, executionID, source, name, payload, declarations, fingerprint, output, runErr)
+		return persistApprovalFailure(ctx, store, canPersist, executionID, source, name, entryPointName, payload, declarations, fingerprint, output, runErr)
 	}
 	if found {
 		if err := store.ClearApprovalSuspension(ctx, executionID); err != nil {
@@ -122,7 +123,7 @@ func persistApprovalFailure(
 	ctx context.Context,
 	store SuspensionStore,
 	canPersist bool,
-	executionID, source, name string,
+	executionID, source, name, entryPointName string,
 	payload any,
 	declarations []flowapproval.Declaration,
 	fingerprint approvalFingerprint,
@@ -138,12 +139,13 @@ func persistApprovalFailure(
 		return output, nil, runErr
 	}
 	suspension := ApprovalSuspension{
-		ExecutionID: executionID,
-		Gate:        info.gate,
-		Role:        info.role,
-		Reason:      suspendErr.Reason,
-		SourceName:  name,
-		SuspendedAt: time.Now().UTC(),
+		ExecutionID:    executionID,
+		Gate:           info.gate,
+		Role:           info.role,
+		Reason:         suspendErr.Reason,
+		SourceName:     name,
+		EntryPointName: entryPointName,
+		SuspendedAt:    time.Now().UTC(),
 	}
 	if fingerprint.sourceHash != "" {
 		suspension.SourceHash = fingerprint.sourceHash

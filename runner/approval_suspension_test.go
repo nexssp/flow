@@ -154,7 +154,13 @@ func TestPendingApprovalRejectsChangedSourceOrInput(t *testing.T) {
 
 func TestExecutePreparedApprovalBindingUsesPreparedSource(t *testing.T) {
 	t.Parallel()
+	var alternateCalls atomic.Int32
+	alternate := action.New("test.alternate", func(_ context.Context, input any) (any, error) {
+		alternateCalls.Add(1)
+		return input, nil
+	}).Build()
 	cfg, err := BuildConfig([]compiler.Bundle{
+		{ID: "prepared-approval-entrypoint-test", Libraries: []action.Library{{Name: "test", Actions: []action.AnyAction{alternate}}}},
 		approval.Bundle(nil),
 		runtime.Bundle(nil),
 		syntax.Bundle(nil),
@@ -204,6 +210,13 @@ func TestExecutePreparedApprovalBindingUsesPreparedSource(t *testing.T) {
 	}
 
 	approvedCtx := xctx.WithApprovalToken(ctx, "finance_review")
+	changedEntrypoint := EntryPoint{Name: "test.alternate", Payload: map[string]any{"amount": 100}}
+	if _, err := ExecutePrepared(approvedCtx, cfg, prepared, changedEntrypoint); xerr.KindFrom(err) != xerr.KindConflict {
+		t.Fatalf("changed prepared entrypoint error = %v, want conflict", err)
+	}
+	if got := alternateCalls.Load(); got != 0 {
+		t.Fatalf("changed entrypoint invoked alternate action %d times, want zero", got)
+	}
 	resumed, err := ExecutePrepared(approvedCtx, cfg, prepared, entry)
 	if err != nil {
 		t.Fatalf("approved ExecutePrepared resume: %v", err)

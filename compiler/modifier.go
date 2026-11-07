@@ -79,7 +79,7 @@ func (k ModifierKind) String() string {
 	case ModifierKindFlag:
 		return "flag"
 	case ModifierKindString:
-		return "string"
+		return stringKindName
 	case ModifierKindStringList:
 		return "string_list"
 	case ModifierKindInt:

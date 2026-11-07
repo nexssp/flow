@@ -53,7 +53,10 @@ jobs:
           cache-dependency-path: source/go.sum
       - name: Test tagged source, including integration tests
         working-directory: source
-        run: go test ./...
+        run: |
+          go test ./...
+          go run ./cmd/nflow lint ./spec
+          go run ./cmd/nflow test ./spec
       - name: Build and publish release
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:

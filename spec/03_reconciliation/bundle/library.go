@@ -12,6 +12,8 @@ import (
 
 const ID = "ledger_tools"
 
+const maxInt64 = int64(1<<63 - 1)
+
 func init() { compiler.Register(ID, Bundle) }
 
 func Bundle(_ map[string]string) compiler.Bundle {
@@ -38,26 +40,42 @@ func reconcile(_ context.Context, in map[string]any) (map[string]any, error) {
 	}
 
 	bankByRef := make(map[string]int64, len(bankRows))
+	bankRefs := make(map[string]struct{}, len(bankRows))
 	bankTotal := int64(0)
 	for _, row := range bankRows {
 		ref, cents, err := parseRow(row)
 		if err != nil {
 			return nil, err
 		}
+		if _, exists := bankRefs[ref]; exists {
+			return nil, fmt.Errorf("ledger.reconcile: duplicate bank reference %q", ref)
+		}
+		bankRefs[ref] = struct{}{}
 		bankByRef[ref] = cents
-		bankTotal += cents
+		bankTotal, err = addCents(bankTotal, cents)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	paymentTotal := int64(0)
 	matched := 0
 	usedBankRefs := make(map[string]bool, len(payments))
+	paymentRefs := make(map[string]struct{}, len(payments))
 	exceptions := make([]map[string]any, 0)
 	for _, row := range payments {
 		ref, cents, err := parseRow(row)
 		if err != nil {
 			return nil, err
 		}
-		paymentTotal += cents
+		if _, exists := paymentRefs[ref]; exists {
+			return nil, fmt.Errorf("ledger.reconcile: duplicate payment reference %q", ref)
+		}
+		paymentRefs[ref] = struct{}{}
+		paymentTotal, err = addCents(paymentTotal, cents)
+		if err != nil {
+			return nil, err
+		}
 		bankCents, found := bankByRef[ref]
 		if found {
 			usedBankRefs[ref] = true
@@ -97,6 +115,13 @@ func reconcile(_ context.Context, in map[string]any) (map[string]any, error) {
 		"exception_count":     len(exceptions),
 		"exceptions":          exceptions,
 	}, nil
+}
+
+func addCents(total, cents int64) (int64, error) {
+	if cents > maxInt64-total {
+		return 0, errors.New("ledger.reconcile: cents total overflows int64")
+	}
+	return total + cents, nil
 }
 
 func rows(value any) ([]map[string]any, bool) {
