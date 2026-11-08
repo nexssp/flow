@@ -44,6 +44,34 @@ Extract the archive, place the `nflow` executable in a directory on `PATH` (on W
 nflow version
 ```
 
+## Install with a script
+
+The repository includes installers for Linux/macOS (`install.sh`) and Windows (`install.ps1`). They select the matching release archive for `amd64` or `arm64`, check its SHA-256 digest against the release checksum file before installing, and never need Go.
+
+On Linux or macOS, install the latest stable release into `$HOME/.local/bin`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh
+```
+
+Pin a release by passing its version to the script. Set `NFLOW_INSTALL_DIR` or pass a second argument to choose a different destination:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh -s -- v0.37.0
+# Or: curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh -s -- v0.37.0 "$HOME/bin"
+```
+
+On Windows, download the script and run it from PowerShell. The default destination is `%LOCALAPPDATA%\Programs\nflow`; the installer adds that directory to the current user's `PATH` unless `-NoPathUpdate` is specified.
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/nexssp/flow/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+# Pin a release or choose a destination:
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Version v0.37.0 -InstallDir "$HOME\bin"
+```
+
+Open a new terminal after installation to use `nflow` from `PATH`. Checksums catch archive corruption or mismatches; they are not signatures or independent proof of publisher identity.
+
 Alternatively, install the latest tagged version with Go as described in the [README](../README.md#install):
 
 ```sh

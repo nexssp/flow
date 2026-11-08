@@ -15,7 +15,22 @@ Use `nflow fmt` to format Flow source from the CLI or an editor; use `nflow lint
 
 Prebuilt CLI downloads are published on [GitHub Releases](https://github.com/nexssp/flow/releases) for Linux, macOS, and Windows (amd64 and arm64), with SHA-256 checksums. See [CLI releases](docs/releases.md) for archive details and publishing instructions.
 
-Install the CLI from the latest tagged release:
+Install the latest prebuilt release without Go on Linux or macOS:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh
+```
+
+On Windows, download and run the PowerShell installer; it verifies the archive and adds the per-user install directory to `PATH`:
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/nexssp/flow/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+Both installers accept a pinned version; see [installer options](docs/releases.md#install-with-a-script).
+
+Alternatively, install the CLI with Go:
 
 ```sh
 go install github.com/nexssp/flow/cmd/nflow@latest
