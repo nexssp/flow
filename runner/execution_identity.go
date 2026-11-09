@@ -55,6 +55,11 @@ func ensureExecutionIdentity(ctx context.Context, cfg Config) (context.Context, 
 		id = "flow-" + hex.EncodeToString(raw[:])
 	}
 	ctx = xctx.WithExecutionID(ctx, id)
+	if xctx.IdempotencyKeyFrom(ctx) == "" {
+		if requestID := xctx.RequestIDFrom(ctx); requestID != "" {
+			ctx = xctx.WithIdempotencyKey(ctx, requestID)
+		}
+	}
 	if cfg.Journal != nil || cfg.IdempotencyStore != nil {
 		ctx = durableCountersContextKey.With(ctx, &durableStepCounters{})
 	}
@@ -90,10 +95,12 @@ func runnerAtomAdvisor(journal action.Journal, idempotencyStore action.Idempoten
 		staticStepName := fmt.Sprintf("%s|%s", atom.Pos.String(), atom.Name)
 
 		if hasIdempotent {
-			builder.IdempotentWithConfig(action.IdempotencyConfig{
-				Enabled: true,
-				Store:   newScopedIdempotencyStore(idempotencyStore, staticStepName),
-			})
+			store := newScopedIdempotencyStore(idempotencyStore, staticStepName)
+			builder.Use(action.IdempotencyMiddleware[any, any](store, action.IdempotencyConfig{
+				Enabled:   true,
+				Namespace: atom.Name,
+				Store:     store,
+			}))
 			atom.Modifiers = retained
 			atom.ModifierSources = retainedSources
 		}

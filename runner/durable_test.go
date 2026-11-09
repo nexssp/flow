@@ -186,6 +186,7 @@ func TestRunnerIdempotentModifierUsesConfiguredKernelStore(t *testing.T) {
 	source := "test.effect:idempotent"
 	firstCtx := xctx.WithExecutionID(t.Context(), "idempotency-run-1")
 	firstCtx = xctx.WithRequestID(firstCtx, "request-42")
+	firstCtx = xctx.WithIdempotencyKey(firstCtx, "explicit-key")
 	first, err := Execute(firstCtx, cfg, source, "idempotency.nflow", map[string]any{"value": "same"})
 	if err != nil {
 		t.Fatalf("first execution: %v", err)
@@ -195,7 +196,8 @@ func TestRunnerIdempotentModifierUsesConfiguredKernelStore(t *testing.T) {
 	}
 
 	secondCtx := xctx.WithExecutionID(t.Context(), "idempotency-run-2")
-	secondCtx = xctx.WithRequestID(secondCtx, "request-42")
+	secondCtx = xctx.WithRequestID(secondCtx, "request-43")
+	secondCtx = xctx.WithIdempotencyKey(secondCtx, "explicit-key")
 	second, err := Execute(secondCtx, cfg, source, "idempotency.nflow", map[string]any{"value": "same"})
 	if err != nil {
 		t.Fatalf("idempotent replay: %v", err)
@@ -205,7 +207,8 @@ func TestRunnerIdempotentModifierUsesConfiguredKernelStore(t *testing.T) {
 	}
 
 	conflictCtx := xctx.WithExecutionID(t.Context(), "idempotency-run-3")
-	conflictCtx = xctx.WithRequestID(conflictCtx, "request-42")
+	conflictCtx = xctx.WithRequestID(conflictCtx, "request-44")
+	conflictCtx = xctx.WithIdempotencyKey(conflictCtx, "explicit-key")
 	_, err = Execute(conflictCtx, cfg, source, "idempotency.nflow", map[string]any{"value": "different"})
 	if xerr.KindFrom(err) != xerr.KindConflict {
 		t.Fatalf("reused key with changed payload error = %v, want conflict", err)
