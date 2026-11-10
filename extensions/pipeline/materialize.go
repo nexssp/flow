@@ -344,6 +344,7 @@ func isPendingPipelineDependency(err error, pending map[string]struct{}) bool {
 		xerr.KindUnavailable,
 		xerr.KindInternal,
 		xerr.KindMethodNotAllowed,
+		xerr.KindUnsupportedMediaType,
 		xerr.KindRateLimit,
 		xerr.KindCanceled,
 		xerr.KindDatabase,
