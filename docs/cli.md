@@ -33,6 +33,17 @@ following flags:
 | `--journal-dir DIR` | Persist completed capability results (and idempotency responses) below `DIR`. Prints the execution ID to stderr for later replay. |
 | `--execution-id ID` | Replay/resume using an existing journal identity; requires `--journal-dir`. |
 | `--approval TOKEN` | Approve named `@approval` gates (comma-separated names or `all`). See [approval pause and resume](approval-resume.md). |
+| `--preserve-stdin` | Do not consume piped stdin as workflow input; reserve it for an action or transport such as an MCP stdio server. |
+| `--suppress-output` | Suppress the runner's final result on stdout. Output written directly by workflow actions or transports is unaffected. |
+
+For local testing of an in-process stdio transport, use
+`nflow run server.nflow --preserve-stdin --suppress-output`: the first flag
+leaves stdin to the transport and the second prevents the runner's final result
+from being appended to its protocol stream. For production MCP stdio servers,
+prefer a standalone build (`nflow build server.nflow -o ./bin/server`) and
+launch that executable from the MCP client. Its `--suppress-output` option is
+available in the Flow CLI release that includes this patch; the current patch
+base, Flow v0.72.0, does not include it.
 
 For example, run once and save the reported execution ID, then supply that
 same ID with the same source name and journal directory to replay completed
@@ -285,6 +296,7 @@ Runtime options:
 | `-v`, `-vv`, `-vvv`, `--verbose` | Increase execution verbosity. |
 | `--key VALUE` | Supply a CLI value to `@flag.key`. |
 | `--json` | Suppress the embedded version banner; run output is already JSON. |
+| `--suppress-output` | Suppress the runner's final result on stdout so a workflow transport can own the stream. Supported by `nflow run` and standalone binaries; output written directly by workflow actions remains visible. |
 
 Build options:
 
@@ -531,6 +543,14 @@ A completed lookup returns **0**, whether or not an update is available or the
 current build can be compared. Invalid usage returns **2**.
 
 ---
+
+## Limitations and direction
+
+There is no first-class `nflow mcp <file.nflow>` command yet; that direction is
+deferred while the Flow-to-transport dependency boundary is unresolved. The
+transport-agnostic `--preserve-stdin` and `--suppress-output` flags are the
+interim path. Use `nflow run` with both flags for local testing, or build a
+standalone server and launch it from the MCP client for production.
 
 ## Extension bundles
 

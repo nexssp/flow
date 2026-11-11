@@ -536,6 +536,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -572,6 +573,7 @@ func main() {
 			case "help", "--help", "-h":
 				fmt.Println("Nexss Flow standalone executable.")
 				fmt.Println("Usage:\n  <binary> [json_payload] [flags]\n\nFlags:\n  --info              describe the embedded flow\n  --assert=EXPR       evaluate an assertion after the run\n  --approval TOKEN    approve named @approval gates (or all)\n  --journal-dir DIR   persist durable step results\n  --execution-id ID   resume a run (requires --journal-dir)\n  -v | -vv | -vvv     increase verbosity\n  --key VALUE         pass a CLI value to @flag.key")
+				fmt.Println("  --suppress-output   suppress runner output to stdout for stream transports")
 			os.Exit(0)
 		}
 	}
@@ -626,6 +628,9 @@ func main() {
 			case arg == "--json":
 				showBanner = false
 				flags = append(flags, arg)
+			case arg == "--suppress-output":
+				opts.Stdout = io.Discard
+				showBanner = false
 			default:
 				flags = append(flags, arg)
 			}

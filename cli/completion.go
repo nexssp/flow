@@ -53,7 +53,7 @@ _nflow() {
     sub="${COMP_WORDS[1]}"
     op="${COMP_WORDS[2]}"
     case "$sub" in
-        run) flags="-v -vv -vvv --assert= --approval= --budget= --max-tokens= --journal-dir= --execution-id=" ;;
+        run) flags="-v -vv -vvv --assert= --approval= --budget= --max-tokens= --journal-dir= --execution-id= --preserve-stdin --suppress-output" ;;
         build) flags="-o --output= --debug -d --no-trimpath --all-bundles" ;;
         completion) flags="bash zsh pwsh powershell" ;;
         self)
@@ -149,7 +149,7 @@ _nflow() {
         run)
             _arguments '1:flow file:_files -g "*.nflow"' \
                 '-v' '-vv' '-vvv' '--assert=' '--approval=' '--budget=' '--max-tokens=' \
-                '--journal-dir=' '--execution-id='
+                '--journal-dir=' '--execution-id=' '--preserve-stdin' '--suppress-output'
             ;;
         test)
             _arguments '1:directory:_files -/'
@@ -278,7 +278,7 @@ Register-ArgumentCompleter -Native -CommandName nflow -ScriptBlock {
     }
 
     $flags = switch ($sub) {
-        'run'   { @('-v', '-vv', '-vvv', '--assert=', '--approval=', '--budget=', '--max-tokens=', '--journal-dir=', '--execution-id=') }
+        'run'   { @('-v', '-vv', '-vvv', '--assert=', '--approval=', '--budget=', '--max-tokens=', '--journal-dir=', '--execution-id=', '--preserve-stdin', '--suppress-output') }
         'build' { @('-o', '--output=', '--debug', '-d', '--no-trimpath', '--all-bundles') }
 'self' { if ($tokens.Count -ge 3 -and $tokens[2].ToString() -eq 'bench') { @('--path', '--iterations', '--warmup', '--json', '--list') } elseif ($tokens.Count -ge 3 -and $tokens[2].ToString() -eq 'test') { @('--verbose', '--json', '--no-color', '--syntax-only') } else { @() } }
 		'require' { if ($tokens.Count -ge 3 -and $tokens[2].ToString() -in @('check', 'update', 'pin')) { @('--package') } else { @() } }

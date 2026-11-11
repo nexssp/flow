@@ -23,6 +23,11 @@ import (
 
 const harnessEnv = builder.HarnessEnv
 
+const (
+	preserveStdinFlag  = "--preserve-stdin"
+	suppressOutputFlag = "--suppress-output"
+)
+
 func RunWithBundles(args []string, bundles []compiler.Bundle) int {
 	return RunWithBundlesForRequirements(args, bundles, nil)
 }
@@ -324,6 +329,8 @@ func printEmbeddedHelp(w io.Writer, source string) {
 	fmt.Fprintln(w, "  --json           Emit clean JSON to stdout")
 	fmt.Fprintln(w, "  --info           Describe the pipeline instead of running it")
 	fmt.Fprintln(w, "  --assert=EXPR    Evaluate EXPR after the run; non-zero exit on failure")
+	fmt.Fprintln(w, "  --preserve-stdin Do not read piped stdin as workflow input")
+	fmt.Fprintln(w, "  --suppress-output Suppress the runner's final result on stdout")
 	fmt.Fprintln(w, "  --journal-dir DIR   Persist durable step results in DIR")
 	fmt.Fprintln(w, "  --execution-id ID   Resume the same run (requires --journal-dir)")
 	fmt.Fprintln(w, "  --approval TOKEN    Approve named @approval gates (or all)")
@@ -384,6 +391,8 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 	if err != nil {
 		return fatalf("%v", err)
 	}
+	suppressOutput := hasFlag(flags, suppressOutputFlag)
+	flags = withoutFlag(flags, suppressOutputFlag)
 	durability, flags, err := runner.ParseDurabilityOptions(flags)
 	if err != nil {
 		return fatalf("run options: %v", err)
@@ -401,11 +410,9 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 		return fatalf("preprocess/config: %v", err)
 	}
 
-	if !strings.Contains(clean, "io.stdin") {
-		payload, err = readPipedStdin(payload)
-		if err != nil {
-			return fatalf("%v", err)
-		}
+	payload, flags, err = readRunInput(payload, clean, flags)
+	if err != nil {
+		return fatalf("%v", err)
 	}
 
 	cfg.CompileOpts = append(cfg.CompileOpts, compiler.WithCLIArgs(flags))
@@ -413,7 +420,7 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 	if hasFlag(flags, "-info") || hasFlag(flags, "--info") {
 		return printSourceInfo(ctx, cfg, src, name, clean, meta, hasFlag(flags, "--json"))
 	}
-	return runPreparedSource(ctx, cfg, src, name, payload, flags, durability)
+	return runPreparedSource(ctx, cfg, src, name, payload, flags, durability, suppressOutput)
 }
 
 func printSourceInfo(ctx context.Context, cfg runner.Config, src, name, clean string, meta map[string]any, wantJSON bool) int {
@@ -432,7 +439,7 @@ func printSourceInfo(ctx context.Context, cfg runner.Config, src, name, clean st
 	return runner.PrintInfo(os.Stderr, name, src, meta, ast)
 }
 
-func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string, payload map[string]any, flags []string, durability runner.DurabilityOptions) int {
+func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string, payload map[string]any, flags []string, durability runner.DurabilityOptions, suppressOutput bool) int {
 	useColorErr := colorEnabled(os.Stderr)
 	useColorOut := colorEnabled(os.Stdout)
 	wantJSON := hasFlag(flags, "--json")
@@ -505,11 +512,7 @@ func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string,
 		observer.PrintSummary(os.Stderr)
 	}
 
-	if wantJSON || !isTerm {
-		emitCleanOutput(os.Stdout, ex.Output)
-	} else {
-		renderPrettyOutput(os.Stdout, ex.Output, useColorOut)
-	}
+	emitPreparedOutput(ex.Output, suppressOutput, wantJSON, isTerm, useColorOut)
 
 	asserts, positions := runner.CollectAsserts(ex.Meta, flagsToAsserts(flags))
 	return runner.RunAssertionsContextWithPositions(
@@ -523,6 +526,17 @@ func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string,
 		verbosity,
 		compiler.SymbolsFromMeta(ex.Meta),
 	)
+}
+
+func emitPreparedOutput(output any, suppressOutput, wantJSON, isTerm, useColor bool) {
+	if suppressOutput {
+		return
+	}
+	if wantJSON || !isTerm {
+		emitCleanOutput(os.Stdout, output)
+		return
+	}
+	renderPrettyOutput(os.Stdout, output, useColor)
 }
 
 func readPipedStdin(current map[string]any) (map[string]any, error) {
@@ -563,6 +577,27 @@ func readPipedStdin(current map[string]any) (map[string]any, error) {
 		}
 	}
 	return current, nil
+}
+
+func readRunInput(payload map[string]any, source string, flags []string) (input map[string]any, remainingFlags []string, err error) {
+	if hasFlag(flags, preserveStdinFlag) {
+		return payload, withoutFlag(flags, preserveStdinFlag), nil
+	}
+	if strings.Contains(source, "io.stdin") {
+		return payload, flags, nil
+	}
+	input, err = readPipedStdin(payload)
+	return input, flags, err
+}
+
+func withoutFlag(args []string, flag string) []string {
+	filtered := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg != flag {
+			filtered = append(filtered, arg)
+		}
+	}
+	return filtered
 }
 
 func emitCleanOutput(w io.Writer, output any) {

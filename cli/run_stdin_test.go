@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
@@ -54,6 +56,48 @@ func TestReadPipedStdin_ExistingKeysWin(t *testing.T) {
 	ktest.RequireNoError(t, err)
 
 	ktest.RequireEqual(t, got["user"], "from-args")
+}
+
+func TestReadRunInput_PreserveStdin(t *testing.T) {
+	const protocol = `{"jsonrpc":"2.0","id":1,"method":"initialize"}`
+	withStdin(t, protocol)
+
+	payload, flags, err := readRunInput(map[string]any{"user": "alice"}, "runtime.const", []string{preserveStdinFlag, "--json"})
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, payload, map[string]any{"user": "alice"})
+	ktest.RequireEqual(t, flags, []string{"--json"})
+
+	remaining, err := io.ReadAll(os.Stdin)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, string(remaining), protocol)
+}
+
+func TestRunSource_SuppressOutput(t *testing.T) {
+	withStdin(t, "")
+	out := captureStdout(t, func() {
+		rc := runSourceInProcess(t.Context(), `runtime.const @{ value: "hidden" }`, "suppress-output.nflow", []string{"--suppress-output"})
+		ktest.RequireEqual(t, rc, 0)
+	})
+	ktest.RequireEqual(t, out, "")
+}
+
+func TestRunSource_SuppressOutputPreservesDirectStdout(t *testing.T) {
+	withStdin(t, "")
+	source := `runtime.const @{ value: "runner-result" } -> runtime.print @{ stream: "stdout", label: "direct-stdout" }`
+	suppressed := captureStdout(t, func() {
+		rc := runSourceInProcess(t.Context(), source, "direct-stdout.nflow", []string{"--json", "--suppress-output"})
+		ktest.RequireEqual(t, rc, 0)
+	})
+	unsuppressed := captureStdout(t, func() {
+		rc := runSourceInProcess(t.Context(), source, "direct-stdout.nflow", []string{"--json"})
+		ktest.RequireEqual(t, rc, 0)
+	})
+	if !strings.Contains(suppressed, "[direct-stdout]") {
+		t.Fatalf("suppress-output silenced direct stdout from the pipeline: %q", suppressed)
+	}
+	if !strings.HasPrefix(unsuppressed, suppressed) || len(unsuppressed) <= len(suppressed) {
+		t.Fatalf("suppress-output did not remove only the runner's final result; suppressed=%q unsuppressed=%q", suppressed, unsuppressed)
+	}
 }
 
 func TestReadPipedStdin_EmptyStdinIsNoop(t *testing.T) {

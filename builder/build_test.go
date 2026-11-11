@@ -89,6 +89,10 @@ func Bundle(opts map[string]string) compiler.Bundle {
 	if !strings.Contains(stderr, "nexssflow") {
 		t.Fatalf("built executable omitted its run banner; stderr:\n%s", stderr)
 	}
+	stdout, stderr, err = run("--suppress-output")
+	if err != nil || stdout != "" || strings.Contains(stderr, "(built ") {
+		t.Fatalf("built executable --suppress-output did not keep stdout clean: err=%v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
 	stdout, stderr, err = run(`--assert=result.value == "not-ok"`)
 	if err == nil || !strings.Contains(stderr, `result.value == "not-ok"`) {
 		t.Fatalf("built executable did not evaluate the requested failing assertion: err=%v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
@@ -138,6 +142,7 @@ func Bundle(opts map[string]string) compiler.Bundle {
 		!strings.Contains(stdout, "--info") ||
 		!strings.Contains(stdout, "--journal-dir DIR") ||
 		!strings.Contains(stdout, "--execution-id ID") ||
+		!strings.Contains(stdout, "--suppress-output") ||
 		strings.Contains(stderr, "(built ") {
 		t.Fatalf("embedded help output changed; stdout:\n%s\nstderr:\n%s", stdout, stderr)
 	}

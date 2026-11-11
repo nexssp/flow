@@ -100,7 +100,7 @@ func runCLIForThinDiagnosticTest(t *testing.T, cfg runner.Config, source, name s
 	}
 	code := 0
 	stdout, stderr := captureIO(t, func() {
-		code = runPreparedSource(t.Context(), cfg, source, name, nil, flags, runner.DurabilityOptions{})
+		code = runPreparedSource(t.Context(), cfg, source, name, nil, flags, runner.DurabilityOptions{}, false)
 	})
 	return code, stdout, stderr
 }
