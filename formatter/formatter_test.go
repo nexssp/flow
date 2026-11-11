@@ -50,6 +50,29 @@ func TestFormatSplitsPipelineArrowsDeterministically(t *testing.T) {
 	}
 }
 
+func TestFormatContinuationEdgesDoNotAddTrailingWhitespace(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		line string
+		want string
+	}{
+		{name: "arrow", line: "  condition ->", want: "  condition\n    ->"},
+		{name: "ternary colon", line: "  (condition ? yes :", want: "  (condition ? yes :"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := strings.Join(formatExpressionLines(tt.line), "\n")
+			if got != tt.want {
+				t.Fatalf("formatExpressionLines() = %q, want %q", got, tt.want)
+			}
+			for _, line := range strings.Split(got, "\n") {
+				if strings.TrimRight(line, " \t") != line {
+					t.Fatalf("formatted continuation has trailing whitespace: %q", line)
+				}
+			}
+		})
+	}
+}
+
 func TestFormatDeclarationHeadersKeepsModifierOrderAndComments(t *testing.T) {
 	input := "@profile reliable:timeout=2s:retry=4\n@pipeline fetch:profile=reliable\n  # header note\n  :tag=api:retry=2\n  http.request @{ url: \"https://api.example/x:y\" }\n@end\n"
 	want := "@profile reliable\n  :timeout=2s\n  :retry=4\n@pipeline fetch\n  :profile=reliable\n  # header note\n  :tag=api\n  :retry=2\n  http.request @{ url: \"https://api.example/x:y\" }\n@end\n"

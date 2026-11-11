@@ -609,7 +609,11 @@ func formatExpressionLines(line string) []string {
 			}
 			part := strings.TrimSpace(body[arrow+2 : end])
 			part = formatModifierSpacing(part)
-			formatted = append(formatted, indent+"  -> "+part)
+			arrowLine := indent + "  ->"
+			if part != "" {
+				arrowLine += " " + part
+			}
+			formatted = append(formatted, arrowLine)
 		}
 		return formatted
 	}
@@ -631,7 +635,7 @@ func formatModifierSpacing(body string) string {
 	depth := 0
 	for i := 0; i+1 < len(tokens); i++ {
 		current, next := tokens[i], tokens[i+1]
-		if current.Type == compiler.TokColon && next.Offset == current.Offset+1 {
+		if current.Type == compiler.TokColon && next.Type != compiler.TokEOF && next.Offset == current.Offset+1 {
 			if depth > 0 {
 				changes = append(changes, current.Offset+1)
 			} else if current.Offset > 0 && !isSpace(body[current.Offset-1]) {
