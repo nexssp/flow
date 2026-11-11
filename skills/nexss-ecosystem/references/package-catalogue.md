@@ -44,7 +44,7 @@ Go implementation of the `.nflow` language, runtime, and CLI. The CLI has docume
 | [`examples`](https://github.com/nexssp/flow/tree/main/examples) | README redirect/index to examples in the central Nexss examples repository; not a package. |
 | [`spec`](https://github.com/nexssp/flow/tree/main/spec) | Integrated acceptance specifications and scenario-local bundles; not a reusable library/bundle. |
 
-Evidence: [README](https://github.com/nexssp/flow/blob/main/README.md) · [release/install docs](https://github.com/nexssp/flow/blob/main/docs/releases.md) · [extension guide](https://github.com/nexssp/flow/blob/main/extensions/README.md) · [spec README](https://github.com/nexssp/flow/blob/main/spec/README.md).
+Evidence: [README](https://github.com/nexssp/flow/blob/main/README.md) · [GitHub Releases](https://github.com/nexssp/flow/releases/latest) · [extension guide](https://github.com/nexssp/flow/blob/main/extensions/README.md) · [spec README](https://github.com/nexssp/flow/blob/main/spec/README.md).
 
 ### [srcpack](https://github.com/nexssp/srcpack)
 

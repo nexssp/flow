@@ -1,0 +1,100 @@
+# Nexss source context for Flow and the wider ecosystem.
+# Keep views flat; compose only task-relevant views at invocation time. Add the
+# active local package as a separate selector with #with-tests when behavior needs it.
+options:
+  strip_comments: true
+  remove_body_func: true
+  no_tests: true
+  no_generated: true
+  no_deps: true
+  mask_secrets: true
+
+views:
+  # Small Kernel + Flow baseline; add compiler structure only when relevant.
+  nexss-core:
+    - github:nexssp/kernel//action/action.go#api
+    - github:nexssp/kernel//ai/dag#arch
+    - runner/runner.go#api
+
+  # Optional local compiler architecture map for compiler-focused work.
+  flow-compiler-map:
+    - compiler#dense
+
+  rest-api:
+    - extensions/external/http.go#source
+    - github:nexssp/transport//thttp#api
+
+  terminal-cli:
+    - internal/terminal#source
+    - github:nexssp/transport//tcli#api
+
+  # Broad AI architecture view; use a2a-mcp-integration for protocol-only work.
+  ai-architecture:
+    - github:nexssp/ai//engine/llm#api
+    - github:nexssp/ai//gateway#api
+    - github:nexssp/ai//retrieval#api
+    - github:nexssp/ai//memory#api
+    - github:nexssp/ai//nexssflow#api
+    - github:nexssp/transportai//ta2a#api
+    - github:nexssp/transportai//tmcp#api
+    - github:nexssp/transportai//nexssflow#api
+
+  # Focused A2A + MCP API contracts and the Transport AI Flow bundle facade.
+  a2a-mcp-integration:
+    - github:nexssp/transportai//ta2a#api
+    - github:nexssp/transportai//tmcp#api
+    - github:nexssp/transportai//nexssflow#api
+
+  # Exclude explicitly selected children from the parent selector to avoid duplicate blocks.
+  sandbox-runtime:
+    - github:nexssp/sandbox~docker,podman,nexssflow#api
+    - github:nexssp/sandbox//docker#api
+    - github:nexssp/sandbox//podman#api
+    - github:nexssp/sandbox//nexssflow#api
+
+  storage-budget:
+    - github:nexssp/storage//memory#api
+    - github:nexssp/storage//nexssflow#api
+    - github:nexssp/cost//adapters/kernel#api
+    - github:nexssp/cost//adapters/postgres#api
+    - github:nexssp/cost//nexssflow#api
+
+  transport-protocols:
+    - github:nexssp/transport//thttp#api
+    - github:nexssp/transport//tcli#api
+    - github:nexssp/transportai//ta2a#api
+    - github:nexssp/transportai//tmcp#api
+    - github:nexssp/transportnats//tnats#api
+
+  nats-and-testkit:
+    - github:nexssp/transportnats//tnats#api
+    - github:nexssp/transportnats//nexssflow#api
+    - github:nexssp/testkit~rpc,chaos#api
+    - github:nexssp/testkit//rpc#api
+    - github:nexssp/testkit//chaos#api
+
+  test-observability:
+    - github:nexssp/testkit~rpc,chaos#api
+    - github:nexssp/testkit//rpc#api
+    - github:nexssp/testkit//chaos#api
+    - github:nexssp/validation#api
+    - github:nexssp/observability~actionhook#api
+    - github:nexssp/observability//actionhook#api
+    - extensions/test#api
+    - extensions/selftestkit#api
+
+  language-and-ops:
+    - github:nexssp/lang//core#api
+    - github:nexssp/lang//extract#api
+    - github:nexssp/lang//nexssflow#api
+    - github:nexssp/ops//analyzer#api
+    - github:nexssp/ops//backendgen#api
+    - github:nexssp/ops//cmd/nexssp#api
+
+  srcpack-and-repo:
+    - github:nexssp/srcpack//cmd/srcpack#api
+    - github:nexssp/srcpack//bundles/pack#api
+    - github:nexssp/srcpack//bundles/github_source#api
+    - github:nexssp/repo~cmd,nexssflow#api
+    - github:nexssp/repo//cmd/repo#api
+    - github:nexssp/repo//nexssflow#api

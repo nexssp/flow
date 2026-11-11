@@ -2,9 +2,9 @@
 
 Prebuilt `nflow` command-line binaries are published on the [GitHub Releases page](https://github.com/nexssp/flow/releases). The release workflow builds Linux, macOS, and Windows binaries for `amd64` and `arm64` from the tagged source. Archives include `README.md`, `LICENSE`, and `NOTICE`; Unix-like targets use `.tar.gz`, and Windows targets use `.zip`.
 
-## Unreleased — intentional behavior changes
+## Compatibility and behavior notes
 
-- **Breaking syntax change: `@nflow_version` only.** The compiler-version directive is now named `@nflow_version`; the previous `@flow_version` spelling is rejected, not retained as an alias. Update existing `.nflow` files before upgrading. Constraint comparisons and the development-build bypass are unchanged. The technical `flow_version` extension package, bundle ID, and Go import paths are unchanged. This change targets the next release (planned `v0.38.0`, not yet tagged); the existing `v0.37.0` tag does not include it.
+- **Compiler-version directive.** Use `@nflow_version`; `@flow_version` is unsupported. The technical `flow_version` extension package, bundle ID, and Go import paths are unchanged.
 
 - **Simple compiler-version ranges.** `@nflow_version ">=0.37.0 <0.40.0"` requires every whitespace-separated comparison to hold (AND). Existing exact/single comparisons and version parsing remain compatible; no OR, wildcard, caret, or tilde range language is added. Development/unknown compiler builds retain their existing bypass.
 - **Manual release check.** `nflow version check` prints current/latest using the latest stable GitHub release and suggests a pinned `go install` command only for a newer release. It never updates automatically; plain `nflow version` stays offline. Unknown/development builds and failed lookups do not claim an update is available. See [CLI version help](cli.md#version) for exit codes and limitations.
@@ -55,11 +55,11 @@ On Linux or macOS, install the latest stable release into `$HOME/.local/bin`:
 curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh
 ```
 
-Pin a release by passing its version to the script. Set `NFLOW_INSTALL_DIR` or pass a second argument to choose a different destination:
+To install a specific tag, pass it to the script. The `v1.2.3` tag below is an illustrative version-format example; use a tag listed on the Releases page. Set `NFLOW_INSTALL_DIR` or pass a second argument to choose a different destination:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh -s -- v0.37.0
-# Or: curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh -s -- v0.37.0 "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh -s -- v1.2.3
+# Or: curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh -s -- v1.2.3 "$HOME/bin"
 ```
 
 On Windows, download the script and run it from PowerShell. The default destination is `%LOCALAPPDATA%\Programs\nflow`; the installer adds that directory to the current user's `PATH` unless `-NoPathUpdate` is specified.
@@ -67,8 +67,8 @@ On Windows, download the script and run it from PowerShell. The default destinat
 ```powershell
 Invoke-WebRequest https://raw.githubusercontent.com/nexssp/flow/main/install.ps1 -OutFile install.ps1
 powershell -ExecutionPolicy Bypass -File .\install.ps1
-# Pin a release or choose a destination:
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -Version v0.37.0 -InstallDir "$HOME\bin"
+# Illustrative version tag and custom destination:
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Version v1.2.3 -InstallDir "$HOME\bin"
 ```
 
 Open a new terminal after installation to use `nflow` from `PATH`. Checksums catch archive corruption or mismatches; they are not signatures or independent proof of publisher identity.

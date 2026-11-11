@@ -1,128 +1,106 @@
 # Source investigation with srcpack
 
-Use srcpack as the primary tool for building focused source context. It selects and summarizes code for reading; it does not modify repositories. Start with structure, then narrow to implementation and tests. All reusable remote selectors below omit `?ref=`, so srcpack follows each repository's current default revision. Check the current installed CLI and its bundled [cookbook](https://github.com/nexssp/srcpack/blob/main/bundles/system/cookbook.md) because selector and flag details can change.
+Use srcpack to build focused, provenance-preserving source context; it reads source and does not edit repositories. It is a separate CLI, not installed by this skill. Check `command -v srcpack` first. If absent and installation is permitted, inspect srcpack’s current `go.mod` and use the latest stable Go toolchain it supports with `go install github.com/nexssp/srcpack/cmd/srcpack@latest`; ensure `GOBIN` or `GOPATH/bin` is on `PATH`, then verify with `srcpack --help` and `srcpack list`. Otherwise use focused repository-native tools and report the limitation. The patched binary installed in this environment reports its Go module version rather than `dev`; other or older builds may differ. Verify with `srcpack --version`, and inspect `go version -m "$(command -v srcpack)"` when module metadata matters.
 
-## Contents
+The installed CLI is the contract: inspect `srcpack --help`, `srcpack list`, and `srcpack cookbook` before relying on flags or config syntax. Moving `main` documentation may describe features not present in an installed release.
 
-- [Map the ecosystem](#map-the-ecosystem)
-- [Select focused source and useful evidence](#select-focused-source-and-useful-evidence)
-- [Preserve provenance and handle configuration carefully](#preserve-provenance-and-handle-configuration-carefully)
-- [Investigate local changes and preview selection](#investigate-local-changes-and-preview-selection)
-- [Follow a feature into source](#follow-a-feature-into-source)
-- [Repeat a useful selection](#repeat-a-useful-selection)
-- [Trace undocumented needs without guessing](#trace-undocumented-needs-without-guessing)
-- [Freshness and source boundaries](#freshness-and-source-boundaries)
-- [Official references](#official-references)
+## Choose a small source slice
 
-## Map the ecosystem
+1. Map only the likely subsystem before reading bodies:
 
-From a working directory with srcpack available, produce one compact architecture context:
+   ```sh
+   srcpack tree "compiler" --tree-files --depth 2 -o -
+   ```
 
-```text
-srcpack "github:nexssp/kernel#arch" "github:nexssp/flow#arch" "github:nexssp/srcpack#arch" -o nexss-ecosystem-map.md
+2. Preview selector and output settings before a broad pack:
+
+   ```sh
+   srcpack pack "compiler#dense" --plan
+   ```
+
+   Plan mode does not enumerate candidate files or estimate final context size. Use the actual pack's reported file and token counts to decide whether to narrow it further.
+
+3. Select the smallest owning directory or file, then the detail needed. Do not pack `.` or an entire repository by default. Use a file line slice when the behavior is localized:
+
+   ```sh
+   srcpack "compiler/compile.go:80-140#source" -o -
+   srcpack "compiler#api" -o -
+   srcpack "extensions/macros#with-tests" -o -
+   ```
+
+   Quote selectors so the shell preserves `#`, `~`, `@`, and line-range syntax.
+
+4. Use local Git filters for changed work only, from the target worktree:
+
+   ```sh
+   srcpack ".#impl" --modified --diff-only -o -
+   srcpack ".#with-tests" --since origin/main -o review.md
+   ```
+
+   `--modified`, `--staged`, `--since`, and `--changed` describe the local workspace; do not combine them with remote GitHub selectors. Add `--diff-only` only when the unified diff is relevant.
+
+## Select the profile per task
+
+- `arch`: declaration/signature map without bodies or comments; use for structure.
+- `api`: public signatures with comments but no bodies; use for contracts and interface documentation.
+- `impl`: implementation bodies with comments stripped; use for focused logic review.
+- `source`: selected source with bodies and comments, without tests.
+- `with-tests`: selected source, comments, and tests; use for behavior questions, scoped to the owning package.
+- `dense`: compact signature-oriented context; useful for broad Go structure when signatures are enough.
+- `compact`: trimmed/limited source, but not a guarantee of the smallest total context for a large directory. Prefer narrowing paths first and compare the actual token statistics; in a multi-file compiler check, `compact` produced substantially more output than `dense`.
+
+Profiles are independent per selector, so mix them when useful. Bodies and tests cost tokens: start with `arch`, `api`, or `dense`, then add `impl`, `source`, or `with-tests` only for the specific owner. A profile never makes an overly broad selection automatically safe or small.
+
+## Repeat only stable selections
+
+No config file is needed for one-off use. `nexss.srcpack.yml` is workspace-specific and can hold:
+
+- **profiles**: reusable rendering/transformation settings; built-in profiles usually suffice.
+- **targets**: named local directory/file groups, invoked according to the installed CLI's help.
+- **views**: flat saved selector sets; use them for repeated source combinations, then combine multiple view names as separate arguments on a run.
+
+Use configured domain views for recurring Nexss context. Create another view only after a narrow selector set proves useful more than once. A view selects sources; a profile chooses how each source is rendered. Saving stores selectors; run the view separately to create output:
+
+```sh
+srcpack "compiler#dense" --save-view flow-compiler-map
+srcpack flow-compiler-map -o flow-compiler-map.md
+srcpack view list
+srcpack view show flow-compiler-map
+srcpack config validate
 ```
 
-For the current repository, include its local structure too:
+The Flow checkout's `nexss.srcpack.yml` defines the optional `flow-compiler-map`, a small `nexss-core`, and flat cross-repository domain views. See [Nexss srcpack view catalogue](srcpack-views.md) for their scope and safe composition. The CLI expands multiple top-level view names in one invocation, but does not recursively expand a view name stored inside another view. Use the compiler view only when compiler structure is relevant; it is not default context for every Nexss task.
 
-```text
-srcpack ".#arch" "github:nexssp/flow#arch" "github:nexssp/kernel#arch" -o nexss-project-map.md
+## REST API source and live endpoints
+
+For REST API code, select the confirmed route/router, handler, schema or OpenAPI document, client/server adapter, and relevant tests. Use `api` for Go contracts, `impl` or `source` for implementation, `with-tests` for behavior, and `source` for textual specs. For example, replace these placeholders with paths verified in the actual repository:
+
+```sh
+srcpack "path/to/http-handlers#with-tests" "path/to/openapi.yaml#source" -o rest-api-review.md
 ```
 
-Use these as initial maps, not inventories of every implementation. Confirm repository and subdirectory names against the current default branch before narrowing.
-
-## Select focused source and useful evidence
-
-Combine selectors to include related packages at appropriate detail levels; use exclusions to keep tests, generated fixtures, or vendor paths out when they are not relevant:
+srcpack packages source; it does not call a live REST endpoint or fetch arbitrary API responses. Its remote-source form is srcpack-specific selector syntax, not a GitHub URL or Go import path:
 
 ```text
-srcpack "cmd,internal#arch" "internal/auth#api" "internal/store#with-tests" -o focused-context.md
-srcpack "internal/auth~*_test.go#impl" -o auth-implementation.md
+github:OWNER/REPO[//PATH][?ref=REF][#PROFILE]
 ```
 
-For a local file, select an inclusive, 1-based line range when only one behavior is relevant:
+For example, `github:nexssp/transportai//ta2a#api` selects the public repository's `ta2a` subdirectory and renders its API profile. `github:` is required, `//` introduces the repository-relative path, and `#api` selects the profile. A value such as `github.com/nexssp/transportai` or `https://github.com/nexssp/transportai` is treated as a local path, not as a remote selector. Remote reads require Git and public repositories; private credentials are not forwarded. Use an appropriate HTTP/API client for live endpoint checks, and treat authentication, writes, and other external effects separately. The srcpack repository's `tests/fixtures/nflows/serve_rest.nflow` is a test fixture, not a general REST-source connector.
 
-```text
-srcpack "internal/auth/service.go:80-140#source" -o -
-srcpack "internal/auth/service.go:80-#source" -o -
-```
+Remote selectors omit `?ref=` to follow the current default revision; use a ref only for an explicit historical or reproducible-source question. Remote sources cannot be combined with local-change flags. Before sharing a generated pack, review its file list and content.
 
-Profiles include `arch` for a declaration map, `api` for commented public interfaces, `impl` for implementation bodies, `source` for selected source plus comments, and `with-tests` for source and tests. Use `srcpack list` and `srcpack info <profile>` for the installed profile descriptions. Use `srcpack types` when a file-type alias is unclear.
+## Provenance and configuration safety
 
-## Preserve provenance and handle configuration carefully
+Rendered file blocks include a machine-readable `srcpack-source` location comment with original path and line range; Go signature profiles may also include symbol spans. Cite original source paths/lines, not line positions in the rendered package, and inspect the source itself when a claim matters.
 
-Rendered file blocks include a machine-readable `srcpack-source` location comment. Its `path`, `start_line`, and `end_line` retain original-file coordinates; Go signature profiles may also provide declaration names/kinds/spans under `symbols`. Use those original locations when citing generated context rather than counting lines in the rendered bundle. The metadata preserves provenance but is not itself a correctness check: inspect the source when a claim matters.
-
-`--include-config` is opt-in. It includes eligible build/tool configuration as raw text; detected secret-like values are masked on a best-effort basis, while `.env` variants and common credential/private-key files remain excluded. This is not a guarantee that configuration is safe to share. Review the generated output before sending or publishing it.
-
-Selector `@...` text is per-file prompt metadata and is not printed by the current Markdown renderer. Use inline `--prompt "..."` when a shared instruction should appear in the rendered package; a path passed to `--prompt` is literal text, not a prompt-file loader. Recheck the current cookbook when relying on prompt-rendering behavior.
-
-## Investigate local changes and preview selection
-
-Run local-change selectors from a Git worktree. Choose the set that matches the review question:
-
-```text
-srcpack ".#impl" --modified --diff-only -o modified-review.md
-srcpack ".#source" --staged -o staged-context.md
-srcpack ".#with-tests" --since origin/main -o branch-context.md
-srcpack ".#arch" --changed -o changed-since-last-run.md
-```
-
-`--modified`, `--staged`, `--since`, and `--changed` select local workspace changes; do not combine them with remote GitHub selectors. Add `--diff-only` when the Git diff should be included. Inspect the current CLI help for exact semantics of `--changed` and saved incremental state.
-
-Before generating a large selection or writing an output, use `srcpack pack <selector> --plan` to preview the resolved selection, and use `--check` to see whether a generated output would change. Use `srcpack tree <path> --tree-files --depth N` when path layout or selector coverage is unclear. These are selection/preview tools, not substitutes for reading the resulting source.
-
-## Follow a feature into source
-
-After the map points to the likely owner, select only the relevant paths. For example, when tracing a compiler feature:
-
-```text
-srcpack "github:nexssp/flow//compiler#api" "github:nexssp/flow//extensions/macros#source" -o flow-compiler-macros.md
-```
-
-For a behavior question, include the owning package's tests or executable flow fixtures:
-
-```text
-srcpack "github:nexssp/flow//extensions/macros#with-tests" -o flow-macro-evidence.md
-```
-
-For Flow language syntax, verify the compiler/docs against actual `extensions/**/nflows` fixtures. For workflows combining several capabilities, inspect `spec/**`. The Flow top-level `examples` directory may only be a README redirect to the central examples repository; inspect its contents rather than assuming it holds fixtures.
-
-For local edits, inspect changed context instead of rereading an entire checkout:
-
-```text
-srcpack ".#arch" --modified -o changed-architecture.md
-srcpack ".#source" --modified --diff-only -o changed-source-and-diff.md
-```
-
-Quote selectors so shells do not reinterpret `#`, `@`, `~`, or other selector characters. Use `srcpack --help`, `srcpack pack --help`, `srcpack list`, `srcpack info <profile>`, and `srcpack cookbook` for current CLI usage and examples.
-
-## Repeat a useful selection
-
-When a selection is reused regularly, save it as a named view; saving or deleting views and editing targets/prompts changes the workspace's srcpack configuration. Inspect current help before using configuration-changing commands. For setup or troubleshooting, the current cookbook documents `srcpack init`, `srcpack doctor`, and `srcpack config validate`; do not run initialization or mutate configuration unless it is needed for the task.
-
-## Trace undocumented needs without guessing
-
-1. Translate the user's wording into the input/output behavior they need; keep the domain name separate from the capability.
-2. Search the current Flow registry, source tree, runnable `.nflow` fixtures, adapter/bundle source, and tests. Inspect Kernel separately when the question is about execution semantics rather than the DSL surface.
-3. Record each candidate as **verified**, **not found in inspected sources**, or **unverified**. A missing hit is not proof that no other host or private bundle can provide the capability.
-4. For verified syntax, cite a current extension fixture or integrated spec. For bundle behavior, inspect both the `@require`/registration path and the action implementation. For Kernel behavior, cite the owning package and its tests.
-5. If no existing capability fits, identify whether NFlow composition suffices. If not, place only the missing action-level behavior in `bundles/` and keep workflow/orchestration in NFlow.
-6. Validate the proposed flow against the same active registry it will use. Prefer `nflow fmt --check` and `nflow lint` for static checks, then run the specific example/test or a safe representative payload for runtime evidence.
-
-A useful evidence ledger is short: **claim → current file/test and original source line → what was actually verified → any host/config prerequisite**. Keep unknowns explicit and link sources at the claim they support.
-
-## Freshness and source boundaries
-
-- Remote GitHub selectors without a ref follow the current default revision. Local checkouts may be ahead of or behind that default; inspect their branch/status before drawing conclusions.
-- Remote source requires public repositories and Git; private-repository credentials are not forwarded. If remote access is unavailable, use the user's existing local checkout or report the blocker.
-- Do not put release tags or commit hashes into reusable skill examples, repository inventories, or ordinary source selectors. Use a historical ref only for a task that explicitly asks about a past state, and keep it task-local.
-- When a user supplies an approved scope manifest, use it only to establish the intended repository set; treat listed package paths as candidates and verify each against current source before publishing. Do not expose private manifest details or carry historical version pins into reusable guidance. A static inventory is not the active Flow runtime registry and does not replace source inspection.
+`--include-config` is opt-in. Use it only when build, tooling, or CI configuration affects the question. Secret detection/masking is best-effort; credential files and `.env` variants are excluded by default, but always review generated context before sharing it. Selector `@...` is per-file metadata and may not render in Markdown; use inline `--prompt "..."` when the instruction must appear in the package.
 
 ## Official references
 
 - [srcpack README and selector/profile guide](https://github.com/nexssp/srcpack/blob/main/README.md)
 - [srcpack bundled cookbook](https://github.com/nexssp/srcpack/blob/main/bundles/system/cookbook.md)
-- [srcpack remote-source details](https://github.com/nexssp/srcpack/blob/main/docs/REMOTE_SOURCES.md)
+- [srcpack selector cheat sheet](https://github.com/nexssp/srcpack/blob/main/docs/cheatsheet.md)
+- [srcpack GitHub source implementation](https://github.com/nexssp/srcpack/blob/main/bundles/github_source/remote.go)
 - [Flow CLI reference](https://github.com/nexssp/flow/blob/main/docs/cli.md)
 - [Flow language reference](https://github.com/nexssp/flow/blob/main/docs/language-reference.md)
 - [Flow extension guide](https://github.com/nexssp/flow/blob/main/docs/extensions.md)

@@ -9,7 +9,7 @@ go install github.com/nexssp/flow/cmd/nflow@latest
 nflow --version
 ```
 
-The editor-support launcher requires Flow `v0.44.2` or newer. The current Flow release is recommended because it keeps the editor features aligned with the language and compiler used by the project.
+The official launcher checks that the selected CLI is compatible with its language-server integration before starting `nflow lsp`.
 
 ## Supported editors
 

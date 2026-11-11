@@ -505,18 +505,23 @@ nflow version check
 
 Explicitly queries the [latest stable GitHub release](https://github.com/nexssp/flow/releases/latest)
 using the public Releases API (10-second timeout). Prints current/latest versions
-and, only when a newer stable release is found, an exact manual update command:
+and, only when a newer stable release is found, prints the exact `go install`
+command using its tag.
+
+For a version-neutral installation instead, use:
 
 ```sh
-go install github.com/nexssp/flow/cmd/nflow@v0.39.0
+go install github.com/nexssp/flow/cmd/nflow@latest
 ```
 
-The version above is illustrative; the command pins the tag returned by GitHub.
-It requires Go and installs into `GOBIN` or `GOPATH/bin`; check that this is the
-`nflow` on your `PATH`. Prebuilt-binary users can instead download and verify the
-matching [release archive](releases.md#download-and-verify). Nothing is installed
-or updated automatically. GitHub's latest published stable release is the source,
-not unreleased tags, prereleases, or the Go proxy's potentially different `@latest`.
+Go's `@latest` follows module version selection and may differ from GitHub's
+latest stable release. Go installs into `GOBIN` or `GOPATH/bin`; check that this
+is the `nflow` on your `PATH`. To install the exact release reported by the
+check, use the tag in the command it prints.
+Prebuilt-binary users can instead download and verify the matching
+[release archive](releases.md#download-and-verify). Nothing is installed or
+updated automatically. GitHub's latest published stable release is the source,
+not unreleased tags or prereleases.
 
 Development, pseudo-version, git-describe, and unknown builds are identified
 without claiming an update is available. A network/API failure (including rate
@@ -619,16 +624,20 @@ Declare `@nflow_version ">=0.38.0"` in a flow to require a compatible compiler. 
 
 For source-file execution (`nflow file.nflow` or `nflow run file.nflow`), the launcher reports an actual core switch on `stderr` before execution. A switch reports both the current and selected release; a development launcher selecting a released core reports `NFlow current dev -> selected v<version>`. When the current core is selected, the `using NFlow <version>` notice is shown only with `LOG_LEVEL=debug`; actual switches remain visible at every log level. Notices include `@nflow_version`, `nflow.lock`, or `--nflow-version` details when they determine selection. They do not alter workflow output on `stdout`; formatter, lint, and info commands do not print runtime notices.
 
-For reproducible projects, explicitly write an exact release pin:
+For reproducible projects, pin the current stable release in `nflow.lock`:
 
 ```sh
-nflow toolchain pin v0.44.2
+nflow toolchain pin
 ```
 
-This writes only `nflow.lock` in the current directory, containing the exact tag `v0.44.2`; it does not edit `.nflow` source. Running `nflow toolchain pin` without a version pins the current stable release. A one-off selector also works without changing the lock:
+This writes only `nflow.lock` in the current directory, containing the current
+stable release tag; it does not edit `.nflow` source. To select a different exact
+release, set `FLOW_VERSION` to a tag listed on the Releases page and use either
+form below. The one-off selector does not change the lock:
 
 ```sh
-nflow --nflow-version v0.44.2 run flows/client.nflow
+nflow toolchain pin "$FLOW_VERSION"
+nflow --nflow-version "$FLOW_VERSION" run flows/client.nflow
 ```
 
 When a lock or explicit selector is present, the exact official release is used and must still satisfy every declared `@nflow_version` range. The launcher passes command arguments directly (without a shell), preserves standard streams and exit status, and marks the child process to prevent repeated resolution. If offline, it uses only a previously verified compatible cache; otherwise it reports that no verified cache is available. `nflow lsp` and `nflow fmt --stdin` have no source path at startup, so use an explicit selector or `nflow.lock`; editor clients should run them from the project directory.

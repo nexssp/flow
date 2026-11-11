@@ -1,6 +1,6 @@
 ---
 name: nexss-ecosystem
-description: Help users and agents discover, understand, design, implement, test, and troubleshoot the Nexss ecosystem, especially NFlow workflows, Kernel capabilities, bundles, and Go extensions. Use for Nexss onboarding, package/capability selection, NFlow syntax, source investigation, runtime behavior, or changes to Nexss code.
+description: Help users and agents discover, understand, design, implement, test, and troubleshoot the Nexss ecosystem, especially NFlow workflows, Kernel capabilities, bundles, Go extensions, and srcpack context building. Use for Nexss onboarding, package/capability selection, NFlow syntax, source investigation, cross-repository srcpack view selection/composition, runtime behavior, or changes to Nexss code.
 ---
 
 # Nexss Ecosystem
@@ -13,7 +13,7 @@ Use this skill to solve Nexss tasks from current evidence. Treat the catalogue a
 - **Flow / NFlow** is the language and runtime for composing registered capabilities into workflows. NFlow is domainless: its actions and features come from the active host registry and loaded bundles.
 - **Bundles and adapters** expose Go capabilities to a Flow host. A repository, directory, Go package, or embedded `.nflow` file is not available to a flow unless the host loads and registers it.
 - **`@include`** imports NFlow source modules; **`@require`** loads extension bundles. Do not conflate them.
-- **srcpack** builds focused, provenance-preserving source context; it reads source and does not edit repositories. Use it when installed and useful; otherwise use the repository's available tools to inspect focused source and tests.
+- **srcpack** builds focused, provenance-preserving source context; it reads source and does not edit repositories. It is a separate CLI, not installed by this skill: check `command -v srcpack` before relying on it. If missing and installation is permitted, inspect srcpack’s current `go.mod` and use the latest stable Go toolchain it supports to run `go install github.com/nexssp/srcpack/cmd/srcpack@latest`; ensure `GOBIN` or `GOPATH/bin` is on `PATH`, and verify with `srcpack --help` and `srcpack list`. Otherwise use focused repository-native tools.
 
 ## Operating rules
 
@@ -40,6 +40,7 @@ Use this skill to solve Nexss tasks from current evidence. Treat the catalogue a
 - **Writing/reviewing NFlow, macros, includes, or bundle requirements:** [NFlow idioms](references/nflow-idioms.md).
 - **Retries, errors, approval, replay, schemas, configuration, streams, or test/runtime boundaries:** [Flow runtime practices](references/flow-runtime-practices.md).
 - **Mapping repositories, building source context, tracing undocumented behavior, or reviewing local changes:** [Source investigation with srcpack](references/source-investigation.md).
+- **Selecting or combining cross-repository srcpack contexts for REST, AI, storage, sandbox, transport, testing, or tooling work:** [Nexss srcpack view catalogue](references/srcpack-views.md).
 - **Package and repository discovery within the curated Nexss set:** [Package catalogue](references/package-catalogue.md). Revalidate current paths, availability, and scope before relying on it.
 - **Contributing to `nexssp/flow`, adding DSL features, or choosing focused verification commands:** [Flow repository guidance](references/flow-repository-guide.md).
 - **Creating or reviewing Go code, performance-sensitive code, tests, or linting:** [Go implementation standards](references/go-implementation-standards.md).
@@ -50,6 +51,6 @@ Follow links from the current repositories when paths change. Prefer official do
 
 - Flow: [README](https://github.com/nexssp/flow/blob/main/README.md), [language walkthrough](https://github.com/nexssp/flow/blob/main/docs/language.md), [language reference](https://github.com/nexssp/flow/blob/main/docs/language-reference.md), [CLI](https://github.com/nexssp/flow/blob/main/docs/cli.md), [extensions](https://github.com/nexssp/flow/blob/main/docs/extensions.md), [integrated specs](https://github.com/nexssp/flow/tree/main/spec), and installers for [Linux/macOS](https://raw.githubusercontent.com/nexssp/flow/main/install.sh) and [Windows](https://raw.githubusercontent.com/nexssp/flow/main/install.ps1).
 - Kernel: [README](https://github.com/nexssp/kernel/blob/main/README.md).
-- srcpack: [README](https://github.com/nexssp/srcpack/blob/main/README.md), [bundled cookbook](https://github.com/nexssp/srcpack/blob/main/bundles/system/cookbook.md), [remote-source notes](https://github.com/nexssp/srcpack/blob/main/docs/REMOTE_SOURCES.md), and installers for [Linux/macOS](https://raw.githubusercontent.com/nexssp/srcpack/main/install.sh) and [Windows](https://raw.githubusercontent.com/nexssp/srcpack/main/install.ps1). Confirm the selected release includes installer assets; older releases may not.
+- srcpack: [README](https://github.com/nexssp/srcpack/blob/main/README.md), [bundled cookbook](https://github.com/nexssp/srcpack/blob/main/bundles/system/cookbook.md), [selector cheat sheet](https://github.com/nexssp/srcpack/blob/main/docs/cheatsheet.md), and [GitHub source implementation](https://github.com/nexssp/srcpack/blob/main/bundles/github_source/remote.go). The CLI and moving `main` documentation can differ by release; inspect the installed `srcpack --help` and cookbook before relying on flags or target syntax.
 
 The catalog and this skill are reusable guidance, not a substitute for checking today's source, actual CLI, or target host.
