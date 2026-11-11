@@ -1,11 +1,11 @@
 module github.com/nexssp/flow
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/expr-lang/expr v1.17.8
 	github.com/mattn/go-isatty v0.0.20
-	github.com/nexssp/kernel v0.38.0
+	github.com/nexssp/kernel v0.38.1
 	github.com/nexssp/validation v0.3.0
 	github.com/tetratelabs/wazero v1.12.0
 	golang.org/x/mod v0.42.0
