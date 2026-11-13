@@ -42,6 +42,23 @@ func TestDirective_BasicDeclaration(t *testing.T) {
 	ktest.RequireEqual(t, schemas[0].Fields[1].Kind, KindInt)
 }
 
+func TestDirective_AllowsEmptyObjectSchema(t *testing.T) {
+	t.Parallel()
+	out, err := runDirective(t, `@schema NoArguments {`, `}`)
+	ktest.RequireNoError(t, err)
+	schemas := SchemasFromMap(out)
+	ktest.RequireEqual(t, len(schemas), 1)
+	ktest.RequireEqual(t, schemas[0].Name, "NoArguments")
+	ktest.RequireEqual(t, len(schemas[0].Fields), 0)
+	_, err = ApplyDefaultsAndValidate(context.Background(), schemas[0], map[string]any{})
+	ktest.RequireNoError(t, err)
+	jsonSchema := ToJSONSchema(schemas[0])
+	ktest.RequireEqual[any](t, jsonSchema["type"], "object")
+	properties, ok := jsonSchema["properties"].(map[string]any)
+	ktest.RequireCondition(t, ok, "properties have type %T, want empty object", jsonSchema["properties"])
+	ktest.RequireEqual(t, len(properties), 0)
+}
+
 func TestDirective_WithStructKeyword(t *testing.T) {
 	t.Parallel()
 	out, err := runDirective(t,
@@ -149,7 +166,6 @@ func TestDirective_Errors(t *testing.T) {
 		{"missing brace", []string{`@schema X`}, "expected"},
 		{"empty name", []string{`@schema {`, `  A string`, `}`}, "name is required"},
 		{"invalid name", []string{`@schema 1X {`, `  A string`, `}`}, "invalid name"},
-		{"empty body", []string{`@schema X {`, `}`}, "at least one field"},
 		{"unknown embed", []string{`@schema X {`, `  OnlyName`, `}`}, "not declared before this point"},
 		{"too many tokens", []string{`@schema X {`, `  Name string extra`, `}`}, "expected `Name Type` or `Embed`"},
 	}

@@ -201,7 +201,7 @@ The compiler-version directive is spelled `@nflow_version` only; the previous sp
 
 ## Schema declarations and validation boundaries
 
-`@schema` is implemented and is the right construct for declarative input shape/validation. The accepted declaration forms are `@schema NAME { ... }` and `@schema NAME struct { ... }`. Fields use `Field Type` and optional Go-style backtick tags; embedded schemas must be declared earlier. Supported scalar categories include strings, signed/unsigned integers, floats, booleans, and `any`/`interface{}`; slices, maps, pointers and struct-shaped values are recognized by the schema parser. Field names default to a lower-cased initial letter for their JSON key; `json:"..."` overrides it. Declaration syntax, names, tag syntax, defaults, duplicate names and references to unknown schemas are checked before a run.
+`@schema` is implemented and is the right construct for declarative input shape/validation. The accepted declaration forms are `@schema NAME { ... }` and `@schema NAME struct { ... }`. Fields use `Field Type` and optional Go-style backtick tags; embedded schemas must be declared earlier. An empty body is valid and represents a zero-property object, including a tool that accepts no arguments. Supported scalar categories include strings, signed/unsigned integers, floats, booleans, and `any`/`interface{}`; slices, maps, pointers and struct-shaped values are recognized by the schema parser. Field names default to a lower-cased initial letter for their JSON key; `json:"..."` overrides it. Declaration syntax, names, tag syntax, defaults, duplicate names and references to unknown schemas are checked before a run.
 
 ```nflow
 @schema Request {

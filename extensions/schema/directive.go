@@ -105,9 +105,6 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 		return compiler.DirectiveRes{Next: next}, err
 	}
 	resolveNestedSchemaTypes(fields, existing)
-	if len(fields) == 0 {
-		return compiler.DirectiveRes{Next: next}, compiler.SourceError(pos, "@schema %s: at least one field is required", name)
-	}
 
 	req.Out["schemas"] = append(existing, Schema{Name: name, Fields: fields})
 	return compiler.DirectiveRes{Next: next}, nil
