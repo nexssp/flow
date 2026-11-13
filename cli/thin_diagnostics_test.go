@@ -42,16 +42,22 @@ func TestThinAndCLIExecutionFailureDiagnosticsMatch(t *testing.T) {
 	if cliStdout != thinStdout || cliStderr != thinStderr {
 		t.Fatalf("diagnostics differ\nCLI stdout: %q\nthin stdout: %q\nCLI stderr: %q\nthin stderr: %q", cliStdout, thinStdout, cliStderr, thinStderr)
 	}
-	for _, want := range []string{"Pipeline Execution Failed", "planned execution failure"} {
+	for _, want := range []string{"Pipeline Execution Failed", "FLOW_ERROR: planned execution failure", "stage: run"} {
 		if !strings.Contains(thinStderr, want) {
 			t.Errorf("thin stderr missing %q:\n%s", want, thinStderr)
 		}
+	}
+	if strings.Contains(thinStderr, "action diagnostics_test.fail execution failed") {
+		t.Errorf("concise diagnostic retained action-wrapper noise:\n%s", thinStderr)
+	}
+	if strings.Contains(thinStderr, "call frames") {
+		t.Errorf("default diagnostic unexpectedly included verbose call frames:\n%s", thinStderr)
 	}
 
 	_, _, verboseCLI := runCLIForThinDiagnosticTest(t, cfg, source, name, true)
 	_, _, verboseThin := runThinForDiagnosticTest(t, cfg, source, name, true)
 	for label, output := range map[string]string{"CLI": verboseCLI, "thin": verboseThin} {
-		for _, want := range []string{"Pipeline Execution Failed", "EXECUTION TRACE", "diagnostics_test.fail"} {
+		for _, want := range []string{"Pipeline Execution Failed", "EXECUTION TRACE", "call frames", "diagnostics_test.fail"} {
 			if !strings.Contains(output, want) {
 				t.Errorf("verbose %s stderr missing %q:\n%s", label, want, output)
 			}

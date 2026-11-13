@@ -120,7 +120,7 @@ func (o *Observer) record(event observe.Event, err error) {
 		fmt.Fprintf(o.out, "  %s %-30s %s\n", status, event.Action, FormatDuration(dur))
 		fmt.Fprintf(o.out, "      in:  %s\n", formatTracePayload(event.Request))
 		if err != nil {
-			fmt.Fprintf(o.out, "      err: %v\n", err)
+			fmt.Fprintf(o.out, "      err: %s\n", formatErrorSummary(err))
 		} else {
 			fmt.Fprintf(o.out, "      out: %s\n", formatTracePayload(event.Response))
 		}
@@ -179,7 +179,7 @@ func (o *Observer) PrintSummary(w io.Writer) {
 		errStr := "-"
 		if r.Err != nil {
 			status = "✗"
-			errStr = r.Err.Error()
+			errStr = formatErrorSummary(r.Err)
 			if len(errStr) > 40 {
 				errStr = errStr[:37] + "..."
 			}

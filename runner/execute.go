@@ -99,7 +99,7 @@ func ExecutePrepared(
 	}
 	ctx, executionID, identityErr := ensureExecutionIdentity(ctx, cfg)
 	if identityErr != nil {
-		return Execution{}, identityErr
+		return Execution{}, newDiagnosticError(identityErr, "setup")
 	}
 	if len(extraOpts) > 0 {
 		cfg.CompileOpts = append(append([]compiler.CompileOption{}, cfg.CompileOpts...), extraOpts...)
@@ -119,19 +119,19 @@ func ExecutePrepared(
 	if err != nil {
 		result := Execution{ExecutionID: executionID, Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
 		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
-		return result, err
+		return result, newDiagnosticError(err, "compile")
 	}
 	if entry.Name == "" {
 		result := Execution{ExecutionID: executionID, Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
 		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
-		return result, errors.New("runner: entrypoint name is required")
+		return result, newDiagnosticError(errors.New("runner: entrypoint name is required"), "entrypoint")
 	}
 
 	entryAction, ok := compiled.Resolver.Action(entry.Name)
 	if !ok {
 		result := Execution{ExecutionID: executionID, Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
 		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
-		return result, fmt.Errorf("runner: entrypoint %q is not registered in the compiled source", entry.Name)
+		return result, newDiagnosticError(fmt.Errorf("runner: entrypoint %q is not registered in the compiled source", entry.Name), "entrypoint")
 	}
 
 	if syms := compiler.SymbolsFromMeta(compiled.Meta); len(syms) > 0 {
@@ -175,7 +175,7 @@ func ExecutePrepared(
 	fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
 	fillRunAllocs(&result, cfg.MeasureAllocs, &compileStats, &runStats)
 	if runErr != nil {
-		return result, runErr
+		return result, newDiagnosticError(runErr, "run")
 	}
 	return result, nil
 }
@@ -313,7 +313,7 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 func Execute(ctx context.Context, cfg Config, src, name string, payload map[string]any) (Execution, error) {
 	ctx, executionID, identityErr := ensureExecutionIdentity(ctx, cfg)
 	if identityErr != nil {
-		return Execution{}, identityErr
+		return Execution{}, newDiagnosticError(identityErr, "setup")
 	}
 	compileStart := time.Now()
 
@@ -330,9 +330,13 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 	if err != nil {
 		result := Execution{ExecutionID: executionID, Meta: compiled.Meta, Resolver: compiled.Resolver, CompileDuration: compileDuration}
 		fillCompileAllocs(&result, cfg.MeasureAllocs, &startStats, &compileStats)
-		return result, err
+		return result, newDiagnosticError(err, "compile")
 	}
-	return executeCompiled(ctx, cfg, compiled, src, name, payload, executionID, compileDuration, &startStats, &compileStats, &compileStats)
+	result, err := executeCompiled(ctx, cfg, compiled, src, name, payload, executionID, compileDuration, &startStats, &compileStats, &compileStats)
+	if err != nil {
+		return result, newDiagnosticError(err, "run")
+	}
+	return result, nil
 }
 
 // ExecuteCompiled executes a previously compiled program without compiling it again.
@@ -343,13 +347,17 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 func ExecuteCompiled(ctx context.Context, cfg Config, compiled Compilation, src, name string, payload map[string]any) (Execution, error) {
 	ctx, executionID, identityErr := ensureExecutionIdentity(ctx, cfg)
 	if identityErr != nil {
-		return Execution{}, identityErr
+		return Execution{}, newDiagnosticError(identityErr, "setup")
 	}
 	var runStartStats runtime.MemStats
 	if cfg.MeasureAllocs {
 		readMemStats(&runStartStats)
 	}
-	return executeCompiled(ctx, cfg, compiled, src, name, payload, executionID, 0, nil, nil, &runStartStats)
+	result, err := executeCompiled(ctx, cfg, compiled, src, name, payload, executionID, 0, nil, nil, &runStartStats)
+	if err != nil {
+		return result, newDiagnosticError(err, "run")
+	}
+	return result, nil
 }
 
 func executeCompiled(

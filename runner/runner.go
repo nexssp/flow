@@ -123,22 +123,11 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 	if opts.Info {
 		return printSourceInfo(ctx, cfg, src, name, stdout, stderr)
 	}
-	var journal *FileJournal
-	if opts.JournalDir != "" {
-		if cfg.Journal != nil {
-			fmt.Fprintln(stderr, "❌ run: --journal-dir cannot be combined with a journal already set in runner.Config")
-			return 2
-		}
-		var err error
-		journal, err = NewFileJournal(opts.JournalDir)
-		if err != nil {
-			fmt.Fprintf(stderr, "❌ journal: %v\n", err)
-			return 2
-		}
-		cfg.Journal = journal
-		if cfg.IdempotencyStore == nil {
-			cfg.IdempotencyStore = journal
-		}
+	journal, exitCode := configureRunSourceJournal(&cfg, opts.JournalDir, stderr)
+	if exitCode != 0 {
+		return exitCode
+	}
+	if journal != nil {
 		defer func() {
 			if err := journal.Close(); err != nil {
 				fmt.Fprintf(stderr, "❌ journal close: %v\n", err)
@@ -174,6 +163,9 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 		heading := diagnosticPaint("✗ Pipeline Execution Failed", diagnosticANSIRed, useColor)
 		fmt.Fprintf(stderr, "\n%s\n\n  %s\n\n", heading, FormatErrorDetail(err, src, name, useColor))
 		if opts.Verbosity >= 1 {
+			if trace := FormatErrorTrace(err); trace != "" {
+				fmt.Fprintln(stderr, trace)
+			}
 			observer.PrintSummary(stderr)
 		}
 		return 1
@@ -201,6 +193,26 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 		opts.Verbosity,
 		compiler.SymbolsFromMeta(ex.Meta),
 	)
+}
+
+func configureRunSourceJournal(cfg *Config, journalDir string, stderr io.Writer) (journal *FileJournal, exitCode int) {
+	if journalDir == "" {
+		return nil, 0
+	}
+	if cfg.Journal != nil {
+		fmt.Fprintln(stderr, "❌ run: --journal-dir cannot be combined with a journal already set in runner.Config")
+		return nil, 2
+	}
+	journal, err := NewFileJournal(journalDir)
+	if err != nil {
+		fmt.Fprintf(stderr, "❌ journal: %v\n", err)
+		return nil, 2
+	}
+	cfg.Journal = journal
+	if cfg.IdempotencyStore == nil {
+		cfg.IdempotencyStore = journal
+	}
+	return journal, 0
 }
 
 func printSourceInfo(ctx context.Context, cfg Config, src, name string, stdout, stderr io.Writer) int {

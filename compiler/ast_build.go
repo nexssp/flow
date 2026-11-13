@@ -952,7 +952,7 @@ func wrapWithPayloadBuilder(
 	return action.New(a.Name, func(ctx context.Context, in any) (any, error) {
 		payload, err := build(ctx, in, a)
 		if err != nil {
-			if pos.File != "" && !strings.Contains(err.Error(), pos.File+":") {
+			if _, ok := PositionOf(err); pos.File != "" && !ok {
 				return nil, SourceError(pos, "%w", err)
 			}
 			return nil, err
@@ -960,7 +960,24 @@ func wrapWithPayloadBuilder(
 		res, err := action.InvokeAny(ctx, inner, payload)
 		if err != nil {
 			// Attach pos to the error when not already tagged with that file.
-			if pos.File != "" && !strings.Contains(err.Error(), pos.File+":") {
+			if _, ok := PositionOf(err); pos.File != "" && !ok {
+				return nil, SourceError(pos, "%w", err)
+			}
+			return nil, err
+		}
+		return res, nil
+	}).Build()
+}
+
+func wrapWithSourcePosition(inner action.AnyAction, a *Atom) action.AnyAction {
+	pos := a.Pos
+	if pos.File == "" {
+		return inner
+	}
+	return action.New(a.Name, func(ctx context.Context, in any) (any, error) {
+		res, err := action.InvokeAny(ctx, inner, in)
+		if err != nil {
+			if _, ok := PositionOf(err); !ok {
 				return nil, SourceError(pos, "%w", err)
 			}
 			return nil, err
@@ -1576,10 +1593,10 @@ func finalizeAtomAction(a *Atom, bCtx *BuildContext, act action.AnyAction) (acti
 		})
 	}
 	if bCtx.Modifiers == nil || len(a.Modifiers) == 0 {
-		if injected {
-			return act, nil
+		if !injected {
+			act = inspectBuiltAction(bCtx, act)
 		}
-		return inspectBuiltAction(bCtx, act), nil
+		return positionAtomAction(a, act), nil
 	}
 	modified, err := bCtx.Modifiers.ApplyAllValues(act, a.ModifierValues)
 	if err != nil {
@@ -1588,9 +1605,21 @@ func finalizeAtomAction(a *Atom, bCtx *BuildContext, act action.AnyAction) (acti
 		}
 		return nil, err
 	}
-	return inspectBuiltChild(bCtx, modified, "modifier", action.IntrospectionChild{
+	modified = inspectBuiltChild(bCtx, modified, "modifier", action.IntrospectionChild{
 		Node: act, Relation: "wraps", Role: IntrospectionKindAction,
-	}), nil
+	})
+	return positionAtomAction(a, modified), nil
+}
+
+func positionAtomAction(a *Atom, act action.AnyAction) action.AnyAction {
+	if a.Pos.File == "" {
+		return act
+	}
+	positioned := wrapWithSourcePosition(act, a)
+	if composition, ok := act.(action.IntrospectionProvider); ok {
+		return action.WithComposition(positioned, composition.Introspection())
+	}
+	return positioned
 }
 
 func hasTypedModifierValues(values []ModifierValue) bool {
