@@ -25,6 +25,7 @@ For new flow syntax, actively choose the shortest supported expression that pres
 
 - Prefer `|` over `->` for the same pipeline connection; `|` is documented as a pipeline alias.
 - Prefer reserved keyword actions such as `const`, `noop`, `json`, `pick`, and `wrap` over their canonical action names when both express the same operation. Use canonical names when an API explicitly requires them, when inspecting registry output, or when the short form would obscure intent.
+- For an ordinary constant action, write `const @{ value: "..." }`, not `runtime.const @{ value: "..." }`. Keep the qualified form for examples specifically about canonical registry names or when that name is required.
 - Use object projections to reshape or calculate values instead of adding pass-through or field-copy actions. Use projection-local `let` bindings when they make repeated calculations clearer.
 - Use the smallest explicit argument map, `@{ ... }`, for action inputs. It is a data-value block, not a general-purpose expression language; use a projection or a condition for calculations unless the current expression-valued argument form is explicitly supported.
 - Before finalizing, remove unnecessary stages, expanded aliases, repeated literals, and repeated flow fragments. Then format, lint, and run the result; concise syntax still has to be valid.
@@ -66,6 +67,8 @@ When a required bundle explicitly exports embedded `.nflow` modules, load them s
 | Reuse another `.nflow` file | `@include` | loading every bundle in that repository |
 | Make bundle capabilities available | `@require` | importing arbitrary Flow source declarations |
 | Add low-level action behavior | existing or new Go bundle | move orchestration out of NFlow |
+
+A CLI is an adapter over a workflow, not a reason to move workflow policy out of NFlow. For a single `.nflow` entrypoint that exposes TCLI commands and can be built into an executable, keep the command binding and listener in that flow and build the same source with `nflow build`; do not assume TCLI requires a separate Go wrapper. See [NFlow build and TCLI entrypoint](nflow-build-and-tcli.md) for the verified pattern.
 
 ## Evidence and correctness notes
 
