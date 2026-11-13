@@ -39,6 +39,7 @@ Use this skill to solve Nexss tasks from current evidence. Treat the catalogue a
 ## Reference guide
 
 - **Writing/reviewing NFlow, macros, includes, or bundle requirements:** [NFlow idioms](references/nflow-idioms.md).
+- **Schema-bound LLM tools and AI pipeline metadata:** [LLM tool patterns](references/llm-tool-patterns.md).
 - **Exposing NFlow workflows as CLI commands or building a standalone executable:** [NFlow build and TCLI entrypoint](references/nflow-build-and-tcli.md).
 - **Retries, errors, approval, replay, schemas, configuration, streams, or test/runtime boundaries:** [Flow runtime practices](references/flow-runtime-practices.md).
 - **Mapping repositories, building source context, tracing undocumented behavior, or reviewing local changes:** [Source investigation with srcpack](references/source-investigation.md).

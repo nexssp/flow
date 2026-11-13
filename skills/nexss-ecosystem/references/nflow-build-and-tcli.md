@@ -8,7 +8,7 @@ Use one `.nflow` entrypoint as the source of truth for workflow behavior and, wh
 |---|---|---|
 | NFlow entrypoint (for example, `migrate.nflow`) | Workflow steps, migration policy, and composition of capabilities | A place that must be replaced by a wrapper to get a CLI |
 | Transport TCLI Flow bundle | Command binding, command/flag/positional argument adaptation, generated help, and listening for CLI invocation | A second implementation of the migration/workflow |
-| `nflow build` | Building a self-contained executable embedding the `.nflow` source and required `@require` modules | A command that requires a separate user-written launcher |
+| `nflow build` | Building a standalone executable that embeds the `.nflow` source and links required modules, including Flow compiler and runner code | A command that requires a separate user-written launcher, or a binary with no runtime dependencies |
 
 Keep the actual migration or other application behavior in NFlow and existing reusable actions. TCLI supplies the CLI interface; it does not require that the workflow itself be reimplemented in Go.
 
@@ -38,9 +38,9 @@ nflow build -o ./dist/migrate migrate.nflow
 GOOS=windows GOARCH=amd64 nflow build -o ./dist/migrate.exe migrate.nflow
 ```
 
-`nflow build` embeds the workflow and its `@require` modules. When launched, the binary runs the flow and accepts the same JSON payload and CLI flags as `nflow run`. The build defaults to the host platform; set `GOOS` and `GOARCH` for a cross-build. Choose the output suffix for the target platform (`.exe` for Windows).
+`nflow build` embeds the workflow and links required native and `@require` modules. By default it tree-shakes unused native bundles, selecting the ones the source needs; `--all-bundles` disables that selection. The generated entry point imports Flow's compiler and runner to compile and execute the embedded source (see [`builder/build.go`](https://github.com/nexssp/flow/blob/main/builder/build.go)). The resulting executable does not need the separate generic `nflow` CLI binary, but it does contain compiler/runner code. Do not read the CLI help's “zero compiler/CLI runtime baggage” wording as meaning the binary has no compiler or runner.
 
-“Self-contained” here means the workflow source and required Go modules are embedded in the executable. It does not remove runtime requirements such as external services, credentials, data files, or platform-specific configuration; provide those through the deployment environment using the application's normal configuration mechanism.
+The build defaults to the host platform; set `GOOS` and `GOARCH` for a cross-build. Choose the output suffix for the target platform (`.exe` for Windows). “Self-contained” here means the workflow source and required Go modules are built into the executable; it does not remove runtime requirements such as external services, credentials, data files, or platform-specific configuration. Provide those through the deployment environment using the application's normal configuration mechanism.
 
 ## Verify the actual command surface
 
