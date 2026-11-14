@@ -300,8 +300,10 @@ func expressionStructView(value, methodReceiver reflect.Value, state *expression
 		valid bool
 	}
 	var small [8]projectedField
-	projected := small[:len(fields)]
-	if len(fields) > len(small) {
+	var projected []projectedField
+	if len(fields) <= len(small) {
+		projected = small[:len(fields)]
+	} else {
 		projected = make([]projectedField, len(fields))
 	}
 	for index := range fields {
@@ -420,7 +422,7 @@ func normalizeExpressionEnvironmentWithCache(environment map[string]any, typeCac
 		rootView := out[expressionRootName]
 		if fields, ok := rootView.(map[string]any); ok {
 			for name, value := range fields {
-				if name != expressionRootName && name != expressionStateName && !projectionFieldIsBuiltin(name) {
+				if name != expressionRootName && name != expressionStateName && name != "input" && !projectionFieldIsBuiltin(name) {
 					out[name] = value
 				}
 			}

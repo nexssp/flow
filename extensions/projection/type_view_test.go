@@ -12,6 +12,7 @@ import (
 	"github.com/expr-lang/expr"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/extensions/nodes_bench"
 )
 
 type promotedProjectionFields struct {
@@ -54,6 +55,36 @@ func TestExpressionViewDirectFieldsShadowPromotedFields(t *testing.T) {
 	}
 	if view["id"] != "id-1" {
 		t.Fatalf("promoted non-conflicting field = %#v, want id-1", view["id"])
+	}
+}
+
+func TestExpressionViewHandlesWideStructs(t *testing.T) {
+	result := nodes_bench.BenchRunRes{
+		Action: "runtime.noop", Iterations: 1, P50Ms: 1.25,
+	}
+	view, ok := expressionValueView(result).(map[string]any)
+	if !ok {
+		t.Fatalf("view = %T, want map[string]any", expressionValueView(result))
+	}
+	if view["p50_ms"] != result.P50Ms {
+		t.Fatalf("p50_ms = %#v, want %v", view["p50_ms"], result.P50Ms)
+	}
+}
+
+func TestNormalizeExpressionEnvironmentPreservesOriginalInputBinding(t *testing.T) {
+	input := map[string]any{"input": "payload value"}
+	environment := compiler.MergeSymbolNamespaces(compiler.WithExpressionScope(t.Context(), input), buildEnv(input))
+	normalized := normalizeExpressionEnvironmentWithCache(environment, newExpressionViewTypeCache())
+	view, ok := normalized["input"].(map[string]any)
+	if !ok {
+		t.Fatalf("input binding = %T, want map[string]any", normalized["input"])
+	}
+	if !reflect.DeepEqual(view, input) {
+		t.Fatalf("input binding = %#v, want original request %#v", view, input)
+	}
+	root, ok := normalized[expressionRootName].(map[string]any)
+	if !ok || root["input"] != "payload value" {
+		t.Fatalf("root input field = %#v, want payload value", root)
 	}
 }
 

@@ -77,7 +77,6 @@ func TestLoopStopsWhenTerminationConditionFails(t *testing.T) {
 		wantBodyCalls int32
 	}{
 		{name: "evaluation error", until: "len(.denominator) > 0", wantBodyCalls: 1},
-		{name: "non-boolean result", until: "42", wantBodyCalls: 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -103,5 +102,16 @@ func TestLoopStopsWhenTerminationConditionFails(t *testing.T) {
 				t.Fatalf("loop body called %d times after invalid termination condition, want %d", got, tc.wantBodyCalls)
 			}
 		})
+	}
+}
+
+func TestLoopRejectsNonBooleanTerminationConditionAtCompileTime(t *testing.T) {
+	t.Parallel()
+	cfg, err := runner.BuildConfig(native.Bundles())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runner.Compile(t.Context(), cfg, "loop(noop) until(42)", "loop-condition.nflow"); err == nil || !strings.Contains(err.Error(), "bool") {
+		t.Fatalf("Compile() error = %v, want non-boolean condition rejection", err)
 	}
 }
