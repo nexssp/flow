@@ -39,6 +39,27 @@ func NormalizeObject(value any) (map[string]any, error) {
 	return normalized, nil
 }
 
+// NormalizeArray returns the JSON-visible elements of value as generic values.
+// It follows encoding/json semantics and restores native time.Duration values
+// for schema validation. The input is not modified.
+func NormalizeArray(value any) ([]any, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, xerr.Validation(fmt.Sprintf("schema: encode array: %v", err))
+	}
+	trimmed := bytes.TrimSpace(encoded)
+	if len(trimmed) == 0 || trimmed[0] != '[' {
+		return nil, xerr.Validation(fmt.Sprintf("schema: expected array, got %T", value))
+	}
+
+	var normalized []any
+	if err := json.Unmarshal(trimmed, &normalized); err != nil {
+		return nil, xerr.Validation(fmt.Sprintf("schema: decode array: %v", err))
+	}
+	normalized, _ = restoreTypedDurations(normalized, reflect.ValueOf(value)).([]any)
+	return normalized, nil
+}
+
 var durationType = reflect.TypeFor[time.Duration]()
 
 func restoreTypedDurations(normalized any, source reflect.Value) any {

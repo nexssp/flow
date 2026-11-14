@@ -1,0 +1,11 @@
+@description "spec: response-schema=[]Item validates each object and preserves the array result"
+@schema Item {
+  Name string `json:"name" validate:"required"`
+}
+@pipeline items
+  :response-schema=[]Item
+  runtime.const @{ value: [{ name: "Ada" }, { name: "Lin" }] }
+@end
+pipeline.items
+@assert: result[0].name == "Ada"
+@assert: result[1].name == "Lin"

@@ -178,7 +178,13 @@ type pipelineSchemaSelections struct {
 	responseSelection schemaSelection
 	compileModifiers  []string
 	requestSchema     *schemaext.Schema
-	responseSchema    *schemaext.Schema
+	responseSchema    *responseSchemaContract
+}
+
+type responseSchemaContract struct {
+	schema   *schemaext.Schema
+	array    bool
+	itemType string
 }
 
 func resolvePipelineSchemas(meta map[string]any, pipelineName string, modifierRaws []string) (pipelineSchemaSelections, error) {
@@ -190,7 +196,7 @@ func resolvePipelineSchemas(meta map[string]any, pipelineName string, modifierRa
 	if err != nil {
 		return pipelineSchemaSelections{}, err
 	}
-	responseValue, hasResponse, err := selectedPipelineSchema(meta, pipelineName, responseSelection, schemaext.ResponseSchemaModifierName, true)
+	responseSchema, err := selectedResponseSchema(meta, pipelineName, responseSelection, schemaext.ResponseSchemaModifierName)
 	if err != nil {
 		return pipelineSchemaSelections{}, err
 	}
@@ -200,9 +206,7 @@ func resolvePipelineSchemas(meta map[string]any, pipelineName string, modifierRa
 	if hasRequest {
 		resolved.requestSchema = &requestValue
 	}
-	if hasResponse {
-		resolved.responseSchema = &responseValue
-	}
+	resolved.responseSchema = responseSchema
 	return resolved, nil
 }
 
@@ -279,6 +283,29 @@ func selectedPipelineSchema(meta map[string]any, pipelineName string, selection 
 		}
 	}
 	return targetSchema, true, nil
+}
+
+func selectedResponseSchema(meta map[string]any, pipelineName string, selection schemaSelection, modifierName string) (*responseSchemaContract, error) {
+	if selection.name == "" {
+		return nil, nil
+	}
+	if !selection.array {
+		targetSchema, _, err := selectedPipelineSchema(meta, pipelineName, selection, modifierName, true)
+		if err != nil {
+			return nil, err
+		}
+		return &responseSchemaContract{schema: &targetSchema}, nil
+	}
+	if targetSchema, ok := schemaext.ByName(meta, selection.name); ok {
+		if err := rejectResponseSchemaDefaults(pipelineName, targetSchema); err != nil {
+			return nil, err
+		}
+		return &responseSchemaContract{schema: &targetSchema, array: true}, nil
+	}
+	if schemaext.IsScalarTypeName(selection.name) {
+		return &responseSchemaContract{array: true, itemType: selection.name}, nil
+	}
+	return nil, fmt.Errorf("@pipeline %q: :%s=[]%s: unknown schema or scalar item type", pipelineName, modifierName, selection.name)
 }
 
 func noProgressError(deferredErrors, terminalErrors []error) error {
@@ -359,6 +386,14 @@ func isPendingPipelineDependency(err error, pending map[string]struct{}) bool {
 type schemaSelection struct {
 	name   string
 	strict bool
+	array  bool
+}
+
+func (selection schemaSelection) selector() string {
+	if selection.array {
+		return "[]" + selection.name
+	}
+	return selection.name
 }
 
 func splitSchemaModifiers(pipelineName string, modifiers []string) (request, response schemaSelection, compileModifiers []string, err error) {
@@ -374,7 +409,7 @@ func splitSchemaModifiers(pipelineName string, modifiers []string) (request, res
 				return schemaSelection{}, schemaSelection{}, nil, parseErr
 			}
 			if hasShared && shared != selection {
-				return schemaSelection{}, schemaSelection{}, nil, fmt.Errorf("@pipeline %q: conflicting :schema selections %q and %q", pipelineName, shared.name, selection.name)
+				return schemaSelection{}, schemaSelection{}, nil, fmt.Errorf("@pipeline %q: conflicting :schema selections %q and %q", pipelineName, shared.selector(), selection.selector())
 			}
 			shared, hasShared = selection, true
 			continue
@@ -401,7 +436,7 @@ func splitSchemaModifiers(pipelineName string, modifiers []string) (request, res
 			return schemaSelection{}, schemaSelection{}, nil, fmt.Errorf("@pipeline %q: cannot combine :%s and :%s for the same schema boundary", pipelineName, *spelling, modifierName)
 		}
 		if target.name != "" && *target != selection {
-			return schemaSelection{}, schemaSelection{}, nil, fmt.Errorf("@pipeline %q: conflicting %s schema selections %q and %q", pipelineName, modifierName, target.name, selection.name)
+			return schemaSelection{}, schemaSelection{}, nil, fmt.Errorf("@pipeline %q: conflicting %s schema selections %q and %q", pipelineName, modifierName, target.selector(), selection.selector())
 		}
 		*target = selection
 		*spelling = modifierName
@@ -428,6 +463,16 @@ func parseSchemaSelection(pipelineName, modifierName, raw string) (schemaSelecti
 	if selected == "" {
 		return schemaSelection{}, fmt.Errorf("@pipeline %q: :%s requires a schema name after the strictness marker", pipelineName, modifierName)
 	}
+	if strings.HasPrefix(selected, "[]") {
+		if modifierName != schemaext.ResponseSchemaModifierName && modifierName != schemaext.OutSchemaModifierName {
+			return schemaSelection{}, fmt.Errorf("@pipeline %q: :%s array schemas are supported only for response boundaries", pipelineName, modifierName)
+		}
+		selected = strings.TrimPrefix(selected, "[]")
+		if selected == "" || strings.HasPrefix(selected, "[]") {
+			return schemaSelection{}, fmt.Errorf("@pipeline %q: :%s requires one array item type", pipelineName, modifierName)
+		}
+		selection.array = true
+	}
 	selection.name = selected
 	return selection, nil
 }
@@ -437,7 +482,7 @@ func wrapWithSchemaBoundary(
 	requestSelection schemaSelection,
 	requestSchema *schemaext.Schema,
 	responseSelection schemaSelection,
-	responseSchema *schemaext.Schema,
+	responseSchema *responseSchemaContract,
 	declaredSchemas []schemaext.Schema,
 ) action.AnyAction {
 	builder := action.Dynamic(inner).UseFirst(func(next action.Fn[any, any]) action.Fn[any, any] {
@@ -462,16 +507,36 @@ func wrapWithSchemaBoundary(
 				return nil, err
 			}
 			if responseSchema != nil {
-				normalized, err := schemaext.NormalizeObject(result)
-				if err != nil {
-					return nil, err
-				}
-				if err := schemaext.ValidateWithoutDefaults(ctx, *responseSchema, normalized); err != nil {
-					return nil, err
-				}
-				if responseSelection.strict {
-					if err := rejectUnknownFields(*responseSchema, normalized); err != nil {
+				if responseSchema.array {
+					normalized, err := schemaext.NormalizeArray(result)
+					if err != nil {
 						return nil, err
+					}
+					for index, item := range normalized {
+						if responseSchema.schema == nil {
+							err = schemaext.ValidateScalarValue(responseSchema.itemType, item)
+						} else {
+							err = schemaext.ValidateWithoutDefaults(ctx, *responseSchema.schema, item)
+							if err == nil && responseSelection.strict {
+								err = rejectUnknownFields(*responseSchema.schema, item)
+							}
+						}
+						if err != nil {
+							return nil, fmt.Errorf("response array item [%d]: %w", index, err)
+						}
+					}
+				} else {
+					normalized, err := schemaext.NormalizeObject(result)
+					if err != nil {
+						return nil, err
+					}
+					if err := schemaext.ValidateWithoutDefaults(ctx, *responseSchema.schema, normalized); err != nil {
+						return nil, err
+					}
+					if responseSelection.strict {
+						if err := rejectUnknownFields(*responseSchema.schema, normalized); err != nil {
+							return nil, err
+						}
 					}
 				}
 			}
@@ -482,7 +547,7 @@ func wrapWithSchemaBoundary(
 		builder.Tag("request-schema:" + requestSelection.name)
 	}
 	if responseSelection.name != "" {
-		builder.Tag("response-schema:" + responseSelection.name)
+		builder.Tag("response-schema:" + responseSelection.selector())
 	}
 	return builder.Build()
 }

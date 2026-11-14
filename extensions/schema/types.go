@@ -51,3 +51,23 @@ func classifyScalar(t string) Kind {
 		return KindStruct
 	}
 }
+
+// IsScalarTypeName reports whether name is one of the scalar types supported by
+// schema fields.
+func IsScalarTypeName(name string) bool {
+	switch classifyScalar(strings.TrimSpace(name)) {
+	case KindString, KindInt, KindFloat, KindBool, KindDuration, KindAny:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsArrayItemType reports whether name is a declared schema or supported scalar
+// type that can be selected as an element type for a response array.
+func IsArrayItemType(meta map[string]any, name string) bool {
+	if _, ok := ByName(meta, name); ok {
+		return true
+	}
+	return IsScalarTypeName(name)
+}

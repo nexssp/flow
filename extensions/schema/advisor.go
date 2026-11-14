@@ -38,6 +38,11 @@ func schemaRefAdvisor(meta map[string]any) compiler.AtomAdviseFunc {
 				return compiler.SourceError(atom.Pos,
 					":%s requires a name (use :%s=Name)", modifierName, modifierName)
 			}
+			if itemType, isArray := strings.CutPrefix(name, "[]"); isArray &&
+				(modifierName == ResponseSchemaModifierName || modifierName == OutSchemaModifierName) &&
+				itemType != "" && !strings.HasPrefix(itemType, "[]") && IsArrayItemType(meta, itemType) {
+				continue
+			}
 			if _, exists := declared[name]; !exists {
 				return compiler.SourceError(atom.Pos,
 					":%s=%s: unknown schema (declared: %s)", modifierName, name, known)

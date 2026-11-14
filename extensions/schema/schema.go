@@ -342,6 +342,18 @@ func detailsFromVarError(err error, fieldName string) xerr.ValidationDetails {
 // checkFieldKind compares the runtime kind of value against the
 // schema field's declared Go kind. Each mismatch produces a
 // ValidationDetail whose Value reads "must be X (got Y)".
+func ValidateScalarValue(typeName string, value any) error {
+	if !IsScalarTypeName(typeName) {
+		return xerr.BadRequest(fmt.Sprintf("schema: unsupported scalar type %q", typeName))
+	}
+	field := Field{Type: typeName, JSONName: "item"}
+	classifyFieldType(&field)
+	if detail, bad := checkFieldKind(field, value); bad {
+		return xerr.Validation("schema array item " + detail.Value)
+	}
+	return nil
+}
+
 func checkFieldKind(field Field, value any) (xerr.ValidationDetail, bool) {
 	if field.Pointer && value == nil {
 		return xerr.ValidationDetail{}, false

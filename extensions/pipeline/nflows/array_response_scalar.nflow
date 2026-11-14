@@ -1,0 +1,8 @@
+@description "spec: response-schema=[]string validates primitive items and preserves the array result"
+@pipeline words
+  :response-schema=[]string
+  runtime.const @{ value: ["first", "second"] }
+@end
+pipeline.words
+@assert: result[0] == "first"
+@assert: result[1] == "second"

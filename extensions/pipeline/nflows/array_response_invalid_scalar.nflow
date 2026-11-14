@@ -1,0 +1,12 @@
+@description "spec: response-schema=[]string rejects a non-string array item"
+@pipeline words
+  :response-schema=[]string
+  runtime.const @{ value: ["first", 2] }
+@end
+pipeline.words ? on_error {
+  xerr.KindValidation
+    -> { rejected: true },
+  else
+    -> error.reraise
+}
+@assert: result.rejected == true

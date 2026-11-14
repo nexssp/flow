@@ -1,0 +1,15 @@
+@description "spec: strict response-schema=![]Item rejects undeclared object fields in array items"
+@schema Item {
+  Name string `json:"name" validate:"required"`
+}
+@pipeline items
+  :response-schema=![]Item
+  runtime.const @{ value: [{ name: "Ada", extra: true }] }
+@end
+pipeline.items ? on_error {
+  xerr.KindValidation
+    -> { rejected: true },
+  else
+    -> error.reraise
+}
+@assert: result.rejected == true

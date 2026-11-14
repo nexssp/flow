@@ -159,3 +159,43 @@ func TestNormalizeObjectPreservesNestedStructDurations(t *testing.T) {
 		t.Fatalf("duration slice = %#v, want [5s 9s]", got["values"])
 	}
 }
+
+func TestNormalizeArrayPreservesJSONFieldsAndDurations(t *testing.T) {
+	t.Parallel()
+	type item struct {
+		Name    string        `json:"name"`
+		Timeout time.Duration `json:"timeout"`
+	}
+	want := 5 * time.Second
+	got, err := NormalizeArray([]item{{Name: "Ada", Timeout: want}})
+	if err != nil {
+		t.Fatalf("NormalizeArray: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("array length = %d, want 1", len(got))
+	}
+	values, ok := got[0].(map[string]any)
+	if !ok || values["name"] != "Ada" || values["timeout"] != want {
+		t.Fatalf("normalized item = %#v, want JSON fields and typed duration", got[0])
+	}
+}
+
+func TestNormalizeArrayRejectsNonArrays(t *testing.T) {
+	t.Parallel()
+	for name, value := range map[string]any{
+		"nil":    nil,
+		"object": map[string]any{"name": "Ada"},
+		"scalar": "not an array",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got, err := NormalizeArray(value)
+			if err == nil {
+				t.Fatalf("NormalizeArray(%T) = %#v, want an error", value, got)
+			}
+			if got != nil {
+				t.Fatalf("NormalizeArray(%T) = %#v, want nil result on error", value, got)
+			}
+		})
+	}
+}
