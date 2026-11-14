@@ -26,20 +26,21 @@ type ASTContextValidateFunc func(ctx context.Context, ast Expr, meta map[string]
 type OnPreprocessFunc func(meta map[string]any) PreprocessContributions
 
 type compileConfig struct {
-	advisors            []AtomAdviseFunc
-	wrappers            []PipelineWrapFunc
-	expressionCompiler  ExpressionCompiler
-	validators          []ASTValidateFunc
-	contextValidators   []ASTContextValidateFunc
-	onPreprocess        []OnPreprocessFunc
-	scopeInheritors     []ScopeInheritFunc
-	config              map[string]string
-	cliArgs             []string
-	argSchemas          map[string][]ArgFieldSpec
-	lineMods            []LineLookup
-	bundleSources       *bundleSourceLoader
-	actionGraph         bool
-	actionIntrospection bool
+	advisors               []AtomAdviseFunc
+	wrappers               []PipelineWrapFunc
+	expressionCompiler     ExpressionCompiler
+	typedExpressionChecker TypedSourceExpressionChecker
+	validators             []ASTValidateFunc
+	contextValidators      []ASTContextValidateFunc
+	onPreprocess           []OnPreprocessFunc
+	scopeInheritors        []ScopeInheritFunc
+	config                 map[string]string
+	cliArgs                []string
+	argSchemas             map[string][]ArgFieldSpec
+	lineMods               []LineLookup
+	bundleSources          *bundleSourceLoader
+	actionGraph            bool
+	actionIntrospection    bool
 }
 
 type CompileOption func(*compileConfig)
@@ -107,6 +108,16 @@ func WithExpressionCompiler(expressionCompiler ExpressionCompiler) CompileOption
 	return func(c *compileConfig) {
 		if expressionCompiler != nil {
 			c.expressionCompiler = expressionCompiler
+		}
+	}
+}
+
+// WithTypedExpressionChecker lets an expression extension check source
+// predicates against the static input and binding types during AST analysis.
+func WithTypedExpressionChecker(checker TypedSourceExpressionChecker) CompileOption {
+	return func(c *compileConfig) {
+		if checker != nil {
+			c.typedExpressionChecker = checker
 		}
 	}
 }

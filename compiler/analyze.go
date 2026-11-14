@@ -34,13 +34,37 @@ type ContractProvider interface {
 // Nominally assignable payloads pass directly. Structural JSON coercions are
 // checked conservatively so known value-dependent failures surface at compile time.
 func Analyze(resolver CapabilityResolver, expr Expr) error {
+	return AnalyzeWithTypedExpressionChecker(resolver, expr, nil, nil)
+}
+
+// AnalyzeWithTypedExpressionChecker runs ordinary AST analysis followed by
+// type propagation and extension-provided typed expression validation.
+func AnalyzeWithTypedExpressionChecker(
+	resolver CapabilityResolver,
+	expr Expr,
+	checker TypedSourceExpressionChecker,
+	expressionCompiler ExpressionCompiler,
+	symbolNamespaces ...map[string]SymbolNamespace,
+) error {
 	if resolver == nil {
 		return xerr.Internal("analyze: capability resolver is nil")
 	}
 	if expr == nil {
 		return nil
 	}
-	return expr.Analyze(resolver)
+	if err := expr.Analyze(resolver); err != nil {
+		return err
+	}
+	var localSymbols map[string]SymbolNamespace
+	if len(symbolNamespaces) > 0 {
+		localSymbols = symbolNamespaces[0]
+	}
+	return analyzeTypedExpressions(TypeAnalysisContext{
+		Resolver:           resolver,
+		SymbolNamespaces:   localSymbols,
+		CheckExpression:    checker,
+		ExpressionCompiler: expressionCompiler,
+	}, expr)
 }
 
 func contractForExpr(resolver CapabilityResolver, expr Expr) (CapabilityContract, bool) {

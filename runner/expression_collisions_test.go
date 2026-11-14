@@ -72,11 +72,12 @@ func TestBareBuiltinDiagnostics_CompileBeforeExecution(t *testing.T) {
 func TestLoopStopsWhenTerminationConditionFails(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name  string
-		until string
+		name          string
+		until         string
+		wantBodyCalls int32
 	}{
-		{name: "evaluation error", until: "len(.denominator) > 0"},
-		{name: "non-boolean result", until: "42"},
+		{name: "evaluation error", until: "len(.denominator) > 0", wantBodyCalls: 1},
+		{name: "non-boolean result", until: "42", wantBodyCalls: 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -98,8 +99,8 @@ func TestLoopStopsWhenTerminationConditionFails(t *testing.T) {
 			if err == nil || xerr.KindFrom(err) != xerr.KindValidation {
 				t.Fatalf("Execute() error = %v, want validation error", err)
 			}
-			if got := bodyCalls.Load(); got != 1 {
-				t.Fatalf("loop body called %d times after invalid termination condition, want exactly once", got)
+			if got := bodyCalls.Load(); got != tc.wantBodyCalls {
+				t.Fatalf("loop body called %d times after invalid termination condition, want %d", got, tc.wantBodyCalls)
 			}
 		})
 	}

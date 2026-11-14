@@ -3,7 +3,6 @@ package projection
 import (
 	"context"
 	"fmt"
-	"maps"
 	"strings"
 	"sync"
 
@@ -35,6 +34,7 @@ func DefaultEvaluator(_ context.Context, req Request) (any, error) {
 // preprocessDots.
 func NewExprEvaluator() Evaluator {
 	cache := newProgramCache()
+	viewCache := newExpressionViewTypeCache()
 	return func(ctx context.Context, req Request) (any, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -50,7 +50,8 @@ func NewExprEvaluator() Evaluator {
 			return nil, err
 		}
 
-		output, err := expr.Run(program, compiler.MergeSymbolNamespaces(ctx, buildEnv(req.Input)))
+		env := normalizeExpressionEnvironmentWithCache(compiler.MergeSymbolNamespaces(ctx, buildEnv(req.Input)), viewCache)
+		output, err := expr.Run(program, env)
 		if err != nil {
 			return nil, xerr.BadRequest(fmt.Sprintf("projection %q: %v", strings.TrimSpace(req.Raw), err))
 		}
@@ -89,16 +90,7 @@ func (c *programCache) compile(raw string) (*vm.Program, error) {
 	return program, nil
 }
 
-// buildEnv flattens the input into a map and adds `__root__` and
-// `__state__` aliases used by the rewritten expression.
+// buildEnv marks the input root for one-pass view normalization.
 func buildEnv(input any) map[string]any {
-	m, ok := input.(map[string]any)
-	if !ok {
-		return map[string]any{"__root__": input, "__state__": input}
-	}
-	env := make(map[string]any, len(m)+2)
-	maps.Copy(env, m)
-	env["__root__"] = m
-	env["__state__"] = m
-	return env
+	return map[string]any{expressionRootName: expressionEnvironmentRoot{value: input}}
 }

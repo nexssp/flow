@@ -105,7 +105,7 @@ func projectionLocalName(raw string, position int) (name string, next int, err e
 		position++
 	}
 	name = raw[nameStart:position]
-	if name == "__root__" || name == "__state__" {
+	if name == expressionRootName || name == expressionStateName {
 		return "", -1, fmt.Errorf("projection: %q is a reserved local name", name)
 	}
 	next, err = projectionAssignmentStart(raw, name, position)
@@ -665,7 +665,7 @@ func splitSpread(raw string) (stateRef, rest string, hasSpread bool) {
 			stateRef = after[:end]
 			after = after[end:]
 		} else {
-			stateRef = "__root__"
+			stateRef = expressionRootName
 		}
 	}
 	after = strings.TrimLeft(after, " \t\n")

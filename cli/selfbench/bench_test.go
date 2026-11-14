@@ -138,6 +138,23 @@ func TestBuiltinScenarios(t *testing.T) {
 	})
 }
 
+func TestJSONNormalizeSelfBenchScenario(t *testing.T) {
+	scenarios, err := Discover("", []string{"api/json_normalize.nflow"})
+	xtest.RequireNoError(t, err)
+	xtest.RequireEqual(t, len(scenarios), 1)
+
+	withConfig(t, func(ctx context.Context, cfg runner.Config) {
+		var output bytes.Buffer
+		code := Run(ctx, cfg, scenarios, Options{Out: &output, Iterations: 1, Warmup: 0, JSON: true})
+		xtest.RequireEqual(t, code, 0)
+		var report Report
+		xtest.RequireNoError(t, json.Unmarshal(output.Bytes(), &report))
+		xtest.RequireEqual(t, len(report.Results), 1)
+		xtest.RequireEqual(t, report.Results[0].Error, "")
+		xtest.RequireEqual(t, report.Results[0].Warm.Errors, 0)
+	})
+}
+
 func TestRunFailuresAndList(t *testing.T) {
 	withConfig(t, func(ctx context.Context, cfg runner.Config) {
 		for _, source := range []string{"no_such_action", "runtime.fail @{ message: \"expected\" }", ""} {

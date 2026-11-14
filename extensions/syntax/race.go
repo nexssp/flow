@@ -91,6 +91,28 @@ func (e *RaceExpr) Analyze(resolver compiler.CapabilityResolver) error {
 	return nil
 }
 
+func (e *RaceExpr) AnalyzeTypes(ctx compiler.TypeAnalysisContext) (compiler.TypeDescriptor, error) {
+	var output compiler.TypeDescriptor
+	commonOutput := true
+	for index, candidate := range e.candidates {
+		candidateOutput, err := compiler.AnalyzeTypedExpression(ctx, candidate)
+		if err != nil {
+			return compiler.TypeDescriptor{}, err
+		}
+		if index == 0 {
+			output = candidateOutput
+			continue
+		}
+		if candidateOutput != output {
+			commonOutput = false
+		}
+	}
+	if !commonOutput {
+		return compiler.TypeDescriptor{}, nil
+	}
+	return output, nil
+}
+
 func (e *RaceExpr) Build(ctx context.Context, bCtx *compiler.BuildContext) (action.AnyAction, error) {
 	candidates := make([]action.AnyAction, len(e.candidates))
 	children := make([]action.IntrospectionChild, 0, len(e.candidates))

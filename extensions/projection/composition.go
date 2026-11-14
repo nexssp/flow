@@ -47,6 +47,18 @@ func (p *composedProjection) Analyze(resolver compiler.CapabilityResolver) error
 	return nil
 }
 
+func (p *composedProjection) AnalyzeTypes(ctx compiler.TypeAnalysisContext) (compiler.TypeDescriptor, error) {
+	flowBindings := make([]projectionBindingType, 0, len(p.bindings))
+	for _, binding := range p.bindings {
+		output, err := compiler.AnalyzeTypedExpression(ctx, binding.node)
+		if err != nil {
+			return compiler.TypeDescriptor{}, err
+		}
+		flowBindings = append(flowBindings, projectionBindingType{name: binding.name, typeOf: output})
+	}
+	return analyzeProjectionTypes(p.raw, p.pos, ctx, p.functions, flowBindings, p.ctxName)
+}
+
 func (*composedProjection) DescribeActionGraph() compiler.ActionGraphDescription {
 	return compiler.ActionGraphDescription{Kind: "projection", Name: "projection.project"}
 }
@@ -63,6 +75,7 @@ func (p *composedProjection) Build(ctx context.Context, bCtx *compiler.BuildCont
 		}
 		options = append(options, functionOptions...)
 	}
+	viewCache := newExpressionViewTypeCache()
 	children := make([]action.IntrospectionChild, 0, len(p.bindings))
 	for _, binding := range p.bindings {
 		child, err := binding.node.Build(ctx, bCtx)
@@ -74,7 +87,11 @@ func (p *composedProjection) Build(ctx context.Context, bCtx *compiler.BuildCont
 			if !ok {
 				return nil, xerr.Internal("projection: missing execution context")
 			}
-			return action.InvokeAny(callCtx, child, params[1])
+			value, err := action.InvokeAny(callCtx, child, params[1])
+			if err != nil {
+				return nil, err
+			}
+			return expressionValueViewWithCache(value, viewCache), nil
 		}))
 		if bCtx.Introspect {
 			children = append(children, action.IntrospectionChild{Node: child, Relation: "value", Role: "value"})
@@ -95,7 +112,7 @@ func (p *composedProjection) Build(ctx context.Context, bCtx *compiler.BuildCont
 		if contextErr := callCtx.Err(); contextErr != nil {
 			return nil, contextErr
 		}
-		env := compiler.MergeSymbolNamespaces(callCtx, buildEnv(input))
+		env := normalizeExpressionEnvironmentWithCache(compiler.MergeSymbolNamespaces(callCtx, buildEnv(input)), viewCache)
 		env[p.ctxName] = callCtx
 		out, runErr := expr.Run(program, env)
 		if runErr != nil {
@@ -158,7 +175,13 @@ func parseProjectionBody(p *compiler.Parser, closeIndex int, pos compiler.Positi
 	}
 	raw := compiler.StripExprComments(rewritten.String())
 	if len(bindings) == 0 && functions == nil {
-		return &compiler.ProjectionExpr{Raw: raw, Pos: pos}, nil
+		return &compiler.ProjectionExpr{
+			Raw: raw,
+			Pos: pos,
+			TypeCheck: func(ctx compiler.TypeAnalysisContext) (compiler.TypeDescriptor, error) {
+				return analyzeProjectionTypes(raw, pos, ctx, nil, nil, "")
+			},
+		}, nil
 	}
 	return &composedProjection{raw: raw, bindings: bindings, functions: functions, pos: pos, ctxName: ctxName}, nil
 }

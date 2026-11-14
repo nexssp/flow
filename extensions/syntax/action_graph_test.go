@@ -1,6 +1,7 @@
 package syntax
 
 import (
+	"reflect"
 	"testing"
 
 	compiler "github.com/nexssp/flow/compiler"
@@ -30,4 +31,15 @@ func hasEdge(graph *compiler.ActionGraph, kind string) bool {
 		}
 	}
 	return false
+}
+
+func TestNamedParallelResultTypeFallsBackWhenReflectionRejectsSchema(t *testing.T) {
+	got := namedParallelResultType([]reflect.StructField{
+		{Name: "Branch", Type: reflect.TypeFor[string]()},
+		{Name: "Branch", Type: reflect.TypeFor[int]()},
+	})
+	want := reflect.TypeFor[map[string]any]()
+	if got != want {
+		t.Fatalf("invalid named-parallel result schema = %v, want dynamic %v", got, want)
+	}
 }

@@ -267,7 +267,13 @@ func runCompile(
 	if refErr := validateConfigRefs(ast, effectiveCfg.config, effectiveCfg.cliArgs); refErr != nil {
 		return CompileRes{}, refErr
 	}
-	if analyzeErr := Analyze(resolver, ast); analyzeErr != nil {
+	if analyzeErr := AnalyzeWithTypedExpressionChecker(
+		resolver,
+		ast,
+		effectiveCfg.typedExpressionChecker,
+		effectiveCfg.expressionCompiler,
+		SymbolsFromMeta(prepared.meta),
+	); analyzeErr != nil {
 		return CompileRes{}, analyzeErr
 	}
 

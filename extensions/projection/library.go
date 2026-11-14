@@ -33,6 +33,13 @@ func Bundle(_ map[string]string) compiler.Bundle {
 		Libraries: []action.Library{Library(NewExprEvaluator())},
 		Primaries: []compiler.PrimaryExtension{Primary()},
 		Fixtures:  fixturesFS,
+		OnPreprocess: func(map[string]any) compiler.PreprocessContributions {
+			return compiler.PreprocessContributions{
+				CompileOpts: []compiler.CompileOption{
+					compiler.WithTypedExpressionChecker(CheckTypedSourceExpression),
+				},
+			}
+		},
 		AtomAdvise: func(atom *compiler.Atom, _ *action.Builder[any, any]) error {
 			if atom.Name != "projection.project" {
 				return nil

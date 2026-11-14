@@ -70,10 +70,38 @@ func library() action.Library {
 		Actions: []action.AnyAction{
 			covEcho(), covDouble(), covFast(), covSlow(), covFlaky(),
 			covBoom(), covRecoverable(), covFailTimeout(), covFailUnavailable(),
-			covStubAction(), covReset(), covIncrement(), covCount(),
+			covStubAction(), covReset(), covIncrement(), covCount(), covTypedProjection(),
 		},
 		Sources: []action.AnyStreamAction{covItems()},
 	}
+}
+
+type covProjectionNested struct {
+	RequestID string
+}
+
+type covProjectionResult struct {
+	Stdout   string
+	ExitCode int
+	OK       bool
+	Nested   covProjectionNested
+	Items    []covProjectionNested
+	Dynamic  any
+}
+
+func (result covProjectionResult) Summary() string { return result.Stdout }
+
+func covTypedProjection() action.AnyAction {
+	return action.New("cov.typed_projection", func(_ context.Context, _ any) (covProjectionResult, error) {
+		return covProjectionResult{
+			Stdout:   "typed result",
+			ExitCode: 0,
+			OK:       true,
+			Nested:   covProjectionNested{RequestID: "request-42"},
+			Items:    []covProjectionNested{{RequestID: "request-42"}},
+			Dynamic:  map[string]any{"runtime_field": "available"},
+		}, nil
+	}).Build()
 }
 
 func covEcho() action.AnyAction {

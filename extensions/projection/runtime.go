@@ -25,7 +25,7 @@ func projectionAction(eval Evaluator) action.AnyAction {
 
 			// If the compiler injected __root__ as the only key, project
 			// over that root instead of the raw input map.
-			if root, ok := state["__root__"]; ok && len(state) == 1 {
+			if root, ok := state[expressionRootName]; ok && len(state) == 1 {
 				return eval(ctx, Request{Raw: raw, Input: root})
 			}
 			return eval(ctx, Request{Raw: raw, Input: state})

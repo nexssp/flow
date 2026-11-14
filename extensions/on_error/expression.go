@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"reflect"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
@@ -67,6 +69,38 @@ func (g *ErrorGuardExpr) Analyze(resolver compiler.CapabilityResolver) error {
 		}
 	}
 	return nil
+}
+
+func (g *ErrorGuardExpr) AnalyzeTypes(ctx compiler.TypeAnalysisContext) (compiler.TypeDescriptor, error) {
+	output, err := compiler.AnalyzeTypedExpression(ctx, g.Protected)
+	if err != nil {
+		return compiler.TypeDescriptor{}, err
+	}
+	handlerBindings := make(map[string]compiler.TypeDescriptor, len(ctx.Bindings)+1)
+	maps.Copy(handlerBindings, ctx.Bindings)
+	handlerBindings["error"] = compiler.TypeDescriptor{Type: reflect.TypeFor[map[string]any]()}
+	handlerContext := compiler.TypeAnalysisContext{
+		Resolver:           ctx.Resolver,
+		Input:              ctx.Input,
+		Bindings:           handlerBindings,
+		SymbolNamespaces:   ctx.SymbolNamespaces,
+		CheckExpression:    ctx.CheckExpression,
+		ExpressionCompiler: ctx.ExpressionCompiler,
+	}
+	commonOutput := true
+	for i := range g.Cases {
+		handlerOutput, err := compiler.AnalyzeTypedExpression(handlerContext, g.Cases[i].Body)
+		if err != nil {
+			return compiler.TypeDescriptor{}, err
+		}
+		if handlerOutput != output {
+			commonOutput = false
+		}
+	}
+	if !commonOutput {
+		return compiler.TypeDescriptor{}, nil
+	}
+	return output, nil
 }
 
 func (g *ErrorGuardExpr) Build(ctx context.Context, buildCtx *compiler.BuildContext) (action.AnyAction, error) {

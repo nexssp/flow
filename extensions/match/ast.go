@@ -2,6 +2,7 @@ package match
 
 import (
 	"context"
+	"maps"
 	"strconv"
 	"strings"
 
@@ -22,6 +23,7 @@ type Case struct {
 type Expr struct {
 	Subject string
 	Cases   []Case
+	Pos     compiler.Position
 }
 
 func (*Expr) Node() {}
@@ -57,6 +59,60 @@ func (m *Expr) Analyze(resolver compiler.CapabilityResolver) error {
 		}
 	}
 	return nil
+}
+
+func (m *Expr) AnalyzeTypes(ctx compiler.TypeAnalysisContext) (compiler.TypeDescriptor, error) {
+	var output compiler.TypeDescriptor
+	hasOutput := false
+	hasDefault := false
+	commonOutput := true
+	subjectType := ctx.Input
+	if m.Subject != "" && ctx.CheckExpression != nil {
+		var err error
+		subjectType, err = ctx.CheckExpression(m.Subject, ctx, m.Pos)
+		if err != nil {
+			return compiler.TypeDescriptor{}, err
+		}
+	}
+	for i := range m.Cases {
+		current := m.Cases[i]
+		if !current.IsDefault && ctx.CheckExpression != nil {
+			conditionContext := ctx
+			if m.Subject != "" {
+				conditionContext.Bindings = maps.Clone(ctx.Bindings)
+				if conditionContext.Bindings == nil {
+					conditionContext.Bindings = make(map[string]compiler.TypeDescriptor)
+				}
+				conditionContext.Bindings["__match_subject__"] = subjectType
+			}
+			condition := matchConditionExpression(m.Subject, current.Condition)
+			if _, err := ctx.CheckExpression(condition, conditionContext, m.Pos); err != nil {
+				return compiler.TypeDescriptor{}, err
+			}
+		}
+		branchOutput, err := compiler.AnalyzeTypedExpression(ctx, current.Body)
+		if err != nil {
+			return compiler.TypeDescriptor{}, err
+		}
+		if !hasOutput {
+			output, hasOutput = branchOutput, true
+		} else if branchOutput != output {
+			commonOutput = false
+		}
+		hasDefault = hasDefault || current.IsDefault
+	}
+	if !hasDefault {
+		if !hasOutput {
+			return ctx.Input, nil
+		}
+		if ctx.Input != output {
+			commonOutput = false
+		}
+	}
+	if !commonOutput {
+		return compiler.TypeDescriptor{}, nil
+	}
+	return output, nil
 }
 
 func (m *Expr) Build(ctx context.Context, bCtx *compiler.BuildContext) (action.AnyAction, error) {

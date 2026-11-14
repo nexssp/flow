@@ -2,6 +2,8 @@ package syntax
 
 import (
 	"context"
+	"reflect"
+	"strconv"
 
 	"github.com/nexssp/kernel/action"
 
@@ -112,6 +114,39 @@ func (e *NamedParallelExpr) Analyze(resolver compiler.CapabilityResolver) error 
 		}
 	}
 	return nil
+}
+
+func (e *NamedParallelExpr) AnalyzeTypes(ctx compiler.TypeAnalysisContext) (compiler.TypeDescriptor, error) {
+	fields := make([]reflect.StructField, 0, len(e.branches))
+	for index, branch := range e.branches {
+		output, err := compiler.AnalyzeTypedExpression(ctx, branch.expr)
+		if err != nil {
+			return compiler.TypeDescriptor{}, err
+		}
+		fieldType := output.Type
+		if fieldType == nil || output.Stream {
+			fieldType = reflect.TypeFor[any]()
+		}
+		fields = append(fields, reflect.StructField{
+			Name: "Branch" + strconv.Itoa(index),
+			Type: fieldType,
+			Tag: reflect.StructTag(
+				"expr:" + strconv.Quote(branch.label) +
+					" json:" + strconv.Quote(branch.label) +
+					" flow_projection:\"true\"",
+			),
+		})
+	}
+	return compiler.TypeDescriptor{Type: namedParallelResultType(fields)}, nil
+}
+
+func namedParallelResultType(fields []reflect.StructField) (result reflect.Type) {
+	defer func() {
+		if recover() != nil {
+			result = reflect.TypeFor[map[string]any]()
+		}
+	}()
+	return reflect.StructOf(fields)
 }
 
 func (e *NamedParallelExpr) Build(ctx context.Context, bCtx *compiler.BuildContext) (action.AnyAction, error) {

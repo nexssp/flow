@@ -1,0 +1,14 @@
+@description "Static projection schemas preserve explicit nested and array keys"
+@assert: result.value == 1
+@assert: result.request_id == "request-42"
+@assert: result.item_id == 7
+@pipeline projection_static_output_schema
+  { value: 1, nested: { request_id: "request-42" }, items: [{ id: 7 }] } as projected
+  -> assert(projected.value == 1, "projection value must be available")
+  -> {
+    value: projected.value,
+    request_id: projected.nested.request_id,
+    item_id: projected.items[0].id
+  }
+@end
+pipeline.projection_static_output_schema

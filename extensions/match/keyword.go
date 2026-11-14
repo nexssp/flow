@@ -12,6 +12,7 @@ func (matchKeyword) Name() string    { return "match" }
 func (matchKeyword) Keyword() string { return "match" }
 
 func (matchKeyword) Parse(p *compiler.Parser) (compiler.Expr, error) {
+	startPos := p.Position()
 	p.Advance()
 
 	subject := ""
@@ -94,5 +95,6 @@ func (matchKeyword) Parse(p *compiler.Parser) (compiler.Expr, error) {
 	return &Expr{
 		Subject: subject,
 		Cases:   cases,
+		Pos:     startPos,
 	}, nil
 }

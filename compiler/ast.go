@@ -129,8 +129,9 @@ func (c *ConditionalExpr) Children() []Expr {
 
 // ProjectionExpr: raw content `{ ... }`.
 type ProjectionExpr struct {
-	Raw string
-	Pos Position
+	Raw       string
+	Pos       Position
+	TypeCheck TypedExpressionCheck
 }
 
 func (*ProjectionExpr) Node()              {}
