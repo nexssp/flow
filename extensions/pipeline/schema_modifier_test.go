@@ -12,7 +12,7 @@ func TestSplitSchemaModifiersSharedAlias(t *testing.T) {
 		"timeout=5s",
 	})
 	ktest.RequireNoError(t, err)
-	want := schemaSelection{name: "Shared", strict: true}
+	want := schemaSelection{name: "Shared", strict: true, modifierName: "schema"}
 	ktest.RequireEqual(t, request, want)
 	ktest.RequireEqual(t, response, want)
 	ktest.RequireEqual(t, compileModifiers, []string{"timeout=5s"})
@@ -24,8 +24,8 @@ func TestSplitSchemaModifiersPreservesDifferentBoundarySchemas(t *testing.T) {
 		"response-schema=Response",
 	})
 	ktest.RequireNoError(t, err)
-	ktest.RequireEqual(t, request, schemaSelection{name: "Request"})
-	ktest.RequireEqual(t, response, schemaSelection{name: "Response"})
+	ktest.RequireEqual(t, request, schemaSelection{name: "Request", modifierName: "request-schema"})
+	ktest.RequireEqual(t, response, schemaSelection{name: "Response", modifierName: "response-schema"})
 }
 
 func TestSplitSchemaModifiersRejectsSharedAliasWithBoundarySpecificSchema(t *testing.T) {

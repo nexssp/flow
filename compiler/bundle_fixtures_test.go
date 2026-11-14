@@ -108,3 +108,45 @@ func TestDiscoverFixturesRecognizesSyntaxOnlyMarker(t *testing.T) {
 		}
 	}
 }
+
+func TestDiscoverFixturesRecognizesExpectedCompileErrorMarker(t *testing.T) {
+	t.Parallel()
+
+	fixtures := fstest.MapFS{
+		"nflows/expected.nflow": &fstest.MapFile{Data: []byte("@description \"Expected compile error\"\n# @expect-compile-error  unknown schema  \nnoop")},
+		"nflows/syntax.nflow":   &fstest.MapFile{Data: []byte("@description \"Syntax fixture\"\n# @syntax-only\nnoop")},
+		"nflows/normal.nflow":   &fstest.MapFile{Data: []byte("@description \"Normal fixture\"\nnoop")},
+	}
+
+	features := discoverFixtures("sample", fixtures)
+	if len(features) != 3 {
+		t.Fatalf("discovered %d fixtures, want 3", len(features))
+	}
+	for _, feature := range features {
+		switch feature.Name {
+		case "Expected compile error":
+			if feature.ExpectCompileError != "unknown schema" {
+				t.Errorf("expected compile error = %q, want %q", feature.ExpectCompileError, "unknown schema")
+			}
+			if feature.SyntaxOnly {
+				t.Error("expected-error fixture is unexpectedly syntax-only")
+			}
+		case "Syntax fixture":
+			if !feature.SyntaxOnly {
+				t.Error("syntax fixture is not marked syntax-only")
+			}
+			if feature.ExpectCompileError != "" {
+				t.Errorf("syntax fixture expected compile error = %q, want empty", feature.ExpectCompileError)
+			}
+		case "Normal fixture":
+			if feature.SyntaxOnly {
+				t.Error("normal fixture is unexpectedly syntax-only")
+			}
+			if feature.ExpectCompileError != "" {
+				t.Errorf("normal fixture expected compile error = %q, want empty", feature.ExpectCompileError)
+			}
+		default:
+			t.Errorf("unexpected fixture %q", feature.Name)
+		}
+	}
+}

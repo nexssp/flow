@@ -1,0 +1,9 @@
+@description "spec: request-schema=[]string validates each scalar input item"
+@pipeline words
+  :request-schema=[]string
+  runtime.noop
+@end
+const @{ value: ["first", "second"] }
+-> pipeline.words
+@assert: result[0] == "first"
+@assert: result[1] == "second"

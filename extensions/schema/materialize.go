@@ -67,8 +67,7 @@ func validatePipelineSchemaModifiers(meta map[string]any) error {
 			if schemaName == "" {
 				return fmt.Errorf("@pipeline %q: :%s requires a schema name after the strictness marker", pipelineName, modifierName)
 			}
-			if itemType, isArray := strings.CutPrefix(schemaName, "[]"); isArray &&
-				(modifierName == ResponseSchemaModifierName || modifierName == OutSchemaModifierName) {
+			if itemType, isArray := strings.CutPrefix(schemaName, "[]"); isArray {
 				if itemType == "" || strings.HasPrefix(itemType, "[]") || !IsArrayItemType(meta, itemType) {
 					return fmt.Errorf("@pipeline %q: :%s=%s: unknown schema or scalar item type", pipelineName, modifierName, schemaName)
 				}

@@ -69,13 +69,18 @@ maps, nil pointer fields become JSON `null` unless omitted by a tag, and
 is rejected. Strict response schemas check every JSON-visible top-level field;
 permissive schemas allow undeclared fields without projecting them away.
 
-For array responses, select the item contract with `:response-schema=[]PackOutput`
-or a scalar item type such as `:response-schema=[]string`. Flow requires the
-top-level result to encode as a JSON array and validates every item; object items
-are checked against the declared schema, while scalar items are checked against
-their declared type. `:response-schema=![]PackOutput` also rejects undeclared
-fields in every object item. The original result is returned unchanged after
-validation.
+Every boundary accepts `[]Type` selectors, for example
+`:request-schema=[]PackInput`, `:in-schema=[]PackInput`,
+`:response-schema=[]PackOutput`, and `:out-schema=[]PackOutput`; shared
+`:schema=[]Type` applies the same array contract to both boundaries. `Type` may
+be a declared schema or supported scalar such as `string`. Flow requires the
+selected value to encode as a JSON array and validates each item. Request object
+items receive defaults before validation; response items are validated without
+defaults. Prefix the selector with `!`, as in `:in-schema=![]PackInput`, to
+reject undeclared fields in every object item. Response arrays are returned
+unchanged after validation. Request object arrays are passed downstream as
+`[]any` of maps after defaults are applied; response arrays preserve the
+original value, including its Go type.
 
 By default, fields not listed in a request or response schema are allowed and
 preserved. Prefix a schema name with `!` to make only that boundary reject

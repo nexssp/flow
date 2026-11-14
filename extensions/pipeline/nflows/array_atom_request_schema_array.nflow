@@ -1,0 +1,7 @@
+# @expect-compile-error unknown schema
+@description "spec: atom-level request-schema array syntax is rejected"
+@schema Item {
+  Name string `json:"name"`
+}
+{ name: "Ada" }
+  -> noop :request-schema=[]Item

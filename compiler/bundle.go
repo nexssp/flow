@@ -293,11 +293,12 @@ func discoverFixtures(bundleID string, fsys fs.FS) []SelfTestFeature {
 			continue
 		}
 		features = append(features, SelfTestFeature{
-			Name:       fixtureName(p, string(content)),
-			DSL:        string(content),
-			Files:      readFixtureFiles(fsys, p),
-			SyntaxOnly: fixtureSyntaxOnly(string(content)),
-			Source:     source,
+			Name:               fixtureName(p, string(content)),
+			DSL:                string(content),
+			Files:              readFixtureFiles(fsys, p),
+			SyntaxOnly:         fixtureSyntaxOnly(string(content)),
+			ExpectCompileError: fixtureExpectedCompileError(string(content)),
+			Source:             source,
 		})
 	}
 	return features
@@ -310,6 +311,16 @@ func fixtureSyntaxOnly(source string) bool {
 		}
 	}
 	return false
+}
+
+func fixtureExpectedCompileError(source string) string {
+	const prefix = "# @expect-compile-error "
+	for line := range strings.SplitSeq(source, "\n") {
+		if expected, ok := strings.CutPrefix(strings.TrimSpace(line), prefix); ok {
+			return strings.TrimSpace(expected)
+		}
+	}
+	return ""
 }
 
 // isFixtureCompanionPath reports whether p is nested beneath the companion

@@ -8,9 +8,9 @@
 // validation; response schemas are validated without defaults and must not
 // declare any `default` tags. Such declarations fail before execution. Extra
 // fields remain allowed unless the corresponding boundary is strict.
-// Response boundaries also accept `:response-schema=[]Type` and
-// `:out-schema=[]Type`, validating JSON array shape and every item against a
-// declared schema or supported scalar type.
+// All boundaries also accept `=[]Type`, including shared `:schema` shorthand,
+// validating array shape and each item against a declared schema or supported
+// scalar type. Request object items receive defaults; response items do not.
 //
 // Typical use:
 //

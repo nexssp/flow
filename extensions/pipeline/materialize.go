@@ -133,14 +133,8 @@ func materializePipeline(req compiler.MaterializeReq, definition pipelineDefinit
 			if validationCtx == nil {
 				validationCtx = context.Background()
 			}
-			effective, validateErr := schemaext.ApplyDefaultsAndValidate(validationCtx, *requestSchema, meta.Example)
-			if validateErr != nil {
-				return false, fmt.Errorf("@pipeline %q :example does not match request schema %q: %w", definition.name, requestSchema.Name, validateErr)
-			}
-			if requestSelection.strict {
-				if unknownErr := rejectUnknownFields(*requestSchema, effective); unknownErr != nil {
-					return false, fmt.Errorf("@pipeline %q :example: %w", definition.name, unknownErr)
-				}
+			if _, validateErr := validateRequestPayload(validationCtx, *requestSchema, requestSelection, meta.Example); validateErr != nil {
+				return false, fmt.Errorf("@pipeline %q :example does not match request schema %q: %w", definition.name, requestSelection.selector(), validateErr)
 			}
 		}
 	}
@@ -177,11 +171,10 @@ type pipelineSchemaSelections struct {
 	requestSelection  schemaSelection
 	responseSelection schemaSelection
 	compileModifiers  []string
-	requestSchema     *schemaext.Schema
-	responseSchema    *responseSchemaContract
+	requestSchema     *schemaBoundaryContract
+	responseSchema    *schemaBoundaryContract
 }
-
-type responseSchemaContract struct {
+type schemaBoundaryContract struct {
 	schema   *schemaext.Schema
 	array    bool
 	itemType string
@@ -192,11 +185,11 @@ func resolvePipelineSchemas(meta map[string]any, pipelineName string, modifierRa
 	if err != nil {
 		return pipelineSchemaSelections{}, err
 	}
-	requestValue, hasRequest, err := selectedPipelineSchema(meta, pipelineName, requestSelection, schemaext.RequestSchemaModifierName, false)
+	requestSchema, hasRequest, err := selectedBoundarySchema(meta, pipelineName, requestSelection, requestSelection.modifierName, false)
 	if err != nil {
 		return pipelineSchemaSelections{}, err
 	}
-	responseSchema, err := selectedResponseSchema(meta, pipelineName, responseSelection, schemaext.ResponseSchemaModifierName)
+	responseSchema, hasResponse, err := selectedBoundarySchema(meta, pipelineName, responseSelection, responseSelection.modifierName, true)
 	if err != nil {
 		return pipelineSchemaSelections{}, err
 	}
@@ -204,9 +197,11 @@ func resolvePipelineSchemas(meta map[string]any, pipelineName string, modifierRa
 		requestSelection: requestSelection, responseSelection: responseSelection, compileModifiers: compileMods,
 	}
 	if hasRequest {
-		resolved.requestSchema = &requestValue
+		resolved.requestSchema = &requestSchema
 	}
-	resolved.responseSchema = responseSchema
+	if hasResponse {
+		resolved.responseSchema = &responseSchema
+	}
 	return resolved, nil
 }
 
@@ -269,43 +264,26 @@ func hasTypedPipelineModifier(values []compiler.ModifierValue) bool {
 	return false
 }
 
-func selectedPipelineSchema(meta map[string]any, pipelineName string, selection schemaSelection, modifierName string, rejectDefaults bool) (schemaext.Schema, bool, error) {
+func selectedBoundarySchema(meta map[string]any, pipelineName string, selection schemaSelection, modifierName string, rejectDefaults bool) (schemaBoundaryContract, bool, error) {
 	if selection.name == "" {
-		return schemaext.Schema{}, false, nil
+		return schemaBoundaryContract{}, false, nil
 	}
 	targetSchema, ok := schemaext.ByName(meta, selection.name)
 	if !ok {
-		return schemaext.Schema{}, false, fmt.Errorf("@pipeline %q: :%s=%s: unknown schema", pipelineName, modifierName, selection.name)
+		if selection.array && schemaext.IsScalarTypeName(selection.name) {
+			return schemaBoundaryContract{array: true, itemType: selection.name}, true, nil
+		}
+		if selection.array {
+			return schemaBoundaryContract{}, false, fmt.Errorf("@pipeline %q: :%s=%s: unknown schema or scalar item type", pipelineName, modifierName, selection.selector())
+		}
+		return schemaBoundaryContract{}, false, fmt.Errorf("@pipeline %q: :%s=%s: unknown schema", pipelineName, modifierName, selection.name)
 	}
 	if rejectDefaults {
-		if defaultErr := rejectResponseSchemaDefaults(pipelineName, targetSchema); defaultErr != nil {
-			return schemaext.Schema{}, false, defaultErr
+		if defaultErr := rejectResponseSchemaDefaults(pipelineName, targetSchema, selection); defaultErr != nil {
+			return schemaBoundaryContract{}, false, defaultErr
 		}
 	}
-	return targetSchema, true, nil
-}
-
-func selectedResponseSchema(meta map[string]any, pipelineName string, selection schemaSelection, modifierName string) (*responseSchemaContract, error) {
-	if selection.name == "" {
-		return nil, nil
-	}
-	if !selection.array {
-		targetSchema, _, err := selectedPipelineSchema(meta, pipelineName, selection, modifierName, true)
-		if err != nil {
-			return nil, err
-		}
-		return &responseSchemaContract{schema: &targetSchema}, nil
-	}
-	if targetSchema, ok := schemaext.ByName(meta, selection.name); ok {
-		if err := rejectResponseSchemaDefaults(pipelineName, targetSchema); err != nil {
-			return nil, err
-		}
-		return &responseSchemaContract{schema: &targetSchema, array: true}, nil
-	}
-	if schemaext.IsScalarTypeName(selection.name) {
-		return &responseSchemaContract{array: true, itemType: selection.name}, nil
-	}
-	return nil, fmt.Errorf("@pipeline %q: :%s=[]%s: unknown schema or scalar item type", pipelineName, modifierName, selection.name)
+	return schemaBoundaryContract{schema: &targetSchema, array: selection.array}, true, nil
 }
 
 func noProgressError(deferredErrors, terminalErrors []error) error {
@@ -315,11 +293,11 @@ func noProgressError(deferredErrors, terminalErrors []error) error {
 	return fmt.Errorf("unable to materialize sub-pipelines (no progress): %w", errors.Join(diagnostics...))
 }
 
-func rejectResponseSchemaDefaults(pipelineName string, responseSchema schemaext.Schema) error {
+func rejectResponseSchemaDefaults(pipelineName string, responseSchema schemaext.Schema, selection schemaSelection) error {
 	for i := range responseSchema.Fields {
 		field := responseSchema.Fields[i]
 		if _, hasDefault := field.Tags["default"]; hasDefault {
-			return fmt.Errorf("@pipeline %q: :response-schema=%s: field %q declares a default; response schemas must not declare defaults", pipelineName, responseSchema.Name, field.JSONName)
+			return fmt.Errorf("@pipeline %q: :%s=%s: field %q declares a default; response schemas must not declare defaults", pipelineName, selection.modifierName, selection.value(), field.JSONName)
 		}
 	}
 	return nil
@@ -384,9 +362,10 @@ func isPendingPipelineDependency(err error, pending map[string]struct{}) bool {
 }
 
 type schemaSelection struct {
-	name   string
-	strict bool
-	array  bool
+	name         string
+	strict       bool
+	array        bool
+	modifierName string
 }
 
 func (selection schemaSelection) selector() string {
@@ -394,6 +373,13 @@ func (selection schemaSelection) selector() string {
 		return "[]" + selection.name
 	}
 	return selection.name
+}
+
+func (selection schemaSelection) value() string {
+	if selection.strict {
+		return "!" + selection.selector()
+	}
+	return selection.selector()
 }
 
 func splitSchemaModifiers(pipelineName string, modifiers []string) (request, response schemaSelection, compileModifiers []string, err error) {
@@ -455,7 +441,7 @@ func parseSchemaSelection(pipelineName, modifierName, raw string) (schemaSelecti
 	if !hasValue || selected == "" {
 		return schemaSelection{}, fmt.Errorf("@pipeline %q: :%s requires a name (use :%s=Name)", pipelineName, modifierName, modifierName)
 	}
-	selection := schemaSelection{}
+	selection := schemaSelection{modifierName: modifierName}
 	if strings.HasPrefix(selected, "!") {
 		selection.strict = true
 		selected = strings.TrimPrefix(selected, "!")
@@ -463,11 +449,8 @@ func parseSchemaSelection(pipelineName, modifierName, raw string) (schemaSelecti
 	if selected == "" {
 		return schemaSelection{}, fmt.Errorf("@pipeline %q: :%s requires a schema name after the strictness marker", pipelineName, modifierName)
 	}
-	if strings.HasPrefix(selected, "[]") {
-		if modifierName != schemaext.ResponseSchemaModifierName && modifierName != schemaext.OutSchemaModifierName {
-			return schemaSelection{}, fmt.Errorf("@pipeline %q: :%s array schemas are supported only for response boundaries", pipelineName, modifierName)
-		}
-		selected = strings.TrimPrefix(selected, "[]")
+	if itemType, isArray := strings.CutPrefix(selected, "[]"); isArray {
+		selected = itemType
 		if selected == "" || strings.HasPrefix(selected, "[]") {
 			return schemaSelection{}, fmt.Errorf("@pipeline %q: :%s requires one array item type", pipelineName, modifierName)
 		}
@@ -480,9 +463,9 @@ func parseSchemaSelection(pipelineName, modifierName, raw string) (schemaSelecti
 func wrapWithSchemaBoundary(
 	inner action.AnyAction,
 	requestSelection schemaSelection,
-	requestSchema *schemaext.Schema,
+	requestSchema *schemaBoundaryContract,
 	responseSelection schemaSelection,
-	responseSchema *responseSchemaContract,
+	responseSchema *schemaBoundaryContract,
 	declaredSchemas []schemaext.Schema,
 ) action.AnyAction {
 	builder := action.Dynamic(inner).UseFirst(func(next action.Fn[any, any]) action.Fn[any, any] {
@@ -491,14 +474,9 @@ func wrapWithSchemaBoundary(
 			effective := payload
 			if requestSchema != nil {
 				var err error
-				effective, err = schemaext.ApplyDefaultsAndValidate(ctx, *requestSchema, payload)
+				effective, err = validateRequestPayload(ctx, *requestSchema, requestSelection, payload)
 				if err != nil {
 					return nil, err
-				}
-				if requestSelection.strict {
-					if err := rejectUnknownFields(*requestSchema, effective); err != nil {
-						return nil, err
-					}
 				}
 			}
 
@@ -544,12 +522,58 @@ func wrapWithSchemaBoundary(
 		}
 	})
 	if requestSelection.name != "" {
-		builder.Tag("request-schema:" + requestSelection.name)
+		builder.Tag("request-schema:" + requestSelection.selector())
 	}
 	if responseSelection.name != "" {
 		builder.Tag("response-schema:" + responseSelection.selector())
 	}
 	return builder.Build()
+}
+
+func validateRequestPayload(ctx context.Context, contract schemaBoundaryContract, selection schemaSelection, payload any) (any, error) {
+	if contract.array {
+		return validateRequestArray(ctx, contract, selection.strict, payload)
+	}
+	effective, err := schemaext.ApplyDefaultsAndValidate(ctx, *contract.schema, payload)
+	if err != nil {
+		return nil, err
+	}
+	if selection.strict {
+		if err := rejectUnknownFields(*contract.schema, effective); err != nil {
+			return nil, err
+		}
+	}
+	return effective, nil
+}
+
+func validateRequestArray(ctx context.Context, contract schemaBoundaryContract, strict bool, payload any) (any, error) {
+	items, err := schemaext.NormalizeArray(payload)
+	if err != nil {
+		return nil, err
+	}
+	if contract.schema == nil {
+		for index, item := range items {
+			if err := schemaext.ValidateScalarValue(contract.itemType, item); err != nil {
+				return nil, fmt.Errorf("request array item [%d]: %w", index, err)
+			}
+		}
+		return payload, nil
+	}
+
+	effective := make([]any, len(items))
+	for index, item := range items {
+		values, err := schemaext.ApplyDefaultsAndValidate(ctx, *contract.schema, item)
+		if err != nil {
+			return nil, fmt.Errorf("request array item [%d]: %w", index, err)
+		}
+		if strict {
+			if err := rejectUnknownFields(*contract.schema, values); err != nil {
+				return nil, fmt.Errorf("request array item [%d]: %w", index, err)
+			}
+		}
+		effective[index] = values
+	}
+	return effective, nil
 }
 
 func rejectUnknownFields(schema schemaext.Schema, payload any) error {

@@ -1,0 +1,7 @@
+# @expect-compile-error unknown schema
+@description "spec: atom-level :schema array syntax is not a pipeline boundary selector"
+@schema Item {
+  Name string `json:"name"`
+}
+{ name: "Ada" }
+  -> noop :schema=[]Item
