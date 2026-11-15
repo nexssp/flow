@@ -49,11 +49,14 @@ func NewExprEvaluator() Evaluator {
 		if err != nil {
 			return nil, err
 		}
+		if conflictErr := rejectRuntimeProjectionBindingConflict(ctx, body, req.Input, viewCache); conflictErr != nil {
+			return nil, conflictErr
+		}
 
 		env := normalizeExpressionEnvironmentWithCache(compiler.MergeSymbolNamespaces(ctx, buildEnv(req.Input)), viewCache)
 		output, err := expr.Run(program, env)
 		if err != nil {
-			return nil, xerr.BadRequest(fmt.Sprintf("projection %q: %v", strings.TrimSpace(req.Raw), err))
+			return nil, xerr.BadRequest(fmt.Sprintf("%s: %v", projectionEvaluationMessage(req.Raw), err))
 		}
 		return output, nil
 	}

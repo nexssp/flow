@@ -46,6 +46,21 @@ func AnalyzeWithTypedExpressionChecker(
 	expressionCompiler ExpressionCompiler,
 	symbolNamespaces ...map[string]SymbolNamespace,
 ) error {
+	return AnalyzeWithTypedExpressionCheckerAndInput(
+		resolver, expr, checker, expressionCompiler, TypeDescriptor{}, symbolNamespaces...,
+	)
+}
+
+// AnalyzeWithTypedExpressionCheckerAndInput runs typed analysis with an initial
+// payload type, in addition to the expression checker and local symbols.
+func AnalyzeWithTypedExpressionCheckerAndInput(
+	resolver CapabilityResolver,
+	expr Expr,
+	checker TypedSourceExpressionChecker,
+	expressionCompiler ExpressionCompiler,
+	input TypeDescriptor,
+	symbolNamespaces ...map[string]SymbolNamespace,
+) error {
 	if resolver == nil {
 		return xerr.Internal("analyze: capability resolver is nil")
 	}
@@ -61,6 +76,7 @@ func AnalyzeWithTypedExpressionChecker(
 	}
 	return analyzeTypedExpressions(TypeAnalysisContext{
 		Resolver:           resolver,
+		Input:              input,
 		SymbolNamespaces:   localSymbols,
 		CheckExpression:    checker,
 		ExpressionCompiler: expressionCompiler,

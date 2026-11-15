@@ -24,7 +24,7 @@ func materialize(req compiler.MaterializeReq) error {
 	if len(pipelines) == 0 {
 		return nil
 	}
-	if req.Compile == nil && req.CompileValues == nil {
+	if req.Compile == nil && req.CompileValues == nil && req.CompileWithAnalysisInput == nil {
 		return errors.New("@pipeline: compiler is not available")
 	}
 
@@ -123,7 +123,7 @@ func materializePipeline(req compiler.MaterializeReq, definition pipelineDefinit
 			compileValues = append(compileValues, modifier)
 		}
 	}
-	program, err := compilePipelineProgram(req, definition, canonicalName, compileValues, compileMods)
+	program, err := compilePipelineProgram(req, definition, canonicalName, compileValues, compileMods, pipelineAnalysisInput(requestSchema))
 	if err != nil {
 		return pipelineCompileFailure(definition, compileValues, pending, err)
 	}
@@ -205,7 +205,10 @@ func resolvePipelineSchemas(meta map[string]any, pipelineName string, modifierRa
 	return resolved, nil
 }
 
-func compilePipelineProgram(req compiler.MaterializeReq, definition pipelineDefinition, canonicalName string, compileValues []compiler.ModifierValue, compileMods []string) (action.AnyAction, error) {
+func compilePipelineProgram(req compiler.MaterializeReq, definition pipelineDefinition, canonicalName string, compileValues []compiler.ModifierValue, compileMods []string, analysisInput compiler.TypeDescriptor) (action.AnyAction, error) {
+	if req.CompileWithAnalysisInput != nil {
+		return req.CompileWithAnalysisInput(canonicalName, definition.source, compileValues, analysisInput)
+	}
 	if req.CompileValues != nil {
 		return req.CompileValues(canonicalName, definition.source, compileValues)
 	}

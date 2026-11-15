@@ -1,0 +1,15 @@
+# @expect-compile-error ambiguous bare identifier "tool"
+@description "compile-error: reject a used bare name shared by an input field and a pipeline binding"
+@schema ToolPayload {
+  Name string `json:"name"`
+}
+@schema Request {
+  Tool ToolPayload `json:"tool"`
+  Name string `json:"name"`
+}
+@pipeline ambiguous_binding
+  :in-schema=!Request
+  noop as tool
+  -> { value: tool.name }
+@end
+pipeline.ambiguous_binding

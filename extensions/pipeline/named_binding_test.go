@@ -115,8 +115,8 @@ func TestNamedPipelineBindings_LoopScopeAndErrorRoute(t *testing.T) {
 		t.Fatalf("loop output initial = %#v, want inherited seed value 0", loopOutput["initial"])
 	}
 
-	errorSource := `{ Known: true } as estimate
--> runtime.fail @{ kind: "Internal", message: "expected failure" } ? on_error ({ recovered: estimate.Known })
+	errorSource := `{ Known: true } as estimate_result
+	-> runtime.fail @{ kind: "Internal", message: "expected failure" } ? on_error ({ recovered: estimate_result.Known })
 `
 	errorResult, err := runner.Execute(context.Background(), cfg, errorSource, "error-binding-scope.nflow", nil)
 	if err != nil {

@@ -211,7 +211,7 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 	}
 	topContribs := prepared.Contributions()
 
-	compileSubValues := func(subName, subSource string, modifiers []compiler.ModifierValue) (action.AnyAction, error) {
+	compileSubValuesWithInput := func(subName, subSource string, modifiers []compiler.ModifierValue, analysisInput compiler.TypeDescriptor) (action.AnyAction, error) {
 		wrapperMods, bodyMods := SplitPipelineModifierValues(cfg.Modifiers, modifiers)
 
 		subOpts := append([]compiler.CompileOption(nil), cfg.CompileOpts...)
@@ -239,6 +239,7 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 			Name:               subName,
 			InheritedPrimaries: topContribs.Primaries,
 			InheritedMeta:      meta,
+			TypeAnalysisInput:  analysisInput,
 		})
 		if subErr != nil {
 			return nil, subErr
@@ -263,6 +264,9 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 		}
 		return program, nil
 	}
+	compileSubValues := func(subName, subSource string, modifiers []compiler.ModifierValue) (action.AnyAction, error) {
+		return compileSubValuesWithInput(subName, subSource, modifiers, compiler.TypeDescriptor{})
+	}
 	compileSub := func(subName, subSource string, mods ...string) (action.AnyAction, error) {
 		values := make([]compiler.ModifierValue, len(mods))
 		for i, raw := range mods {
@@ -276,12 +280,13 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 			continue
 		}
 		if matErr := m(compiler.MaterializeReq{
-			Ctx:           ctx,
-			Meta:          meta,
-			Resolver:      resolver,
-			Compile:       compileSub,
-			CompileValues: compileSubValues,
-			Introspection: prepared.ActionIntrospectionEnabled(),
+			Ctx:                      ctx,
+			Meta:                     meta,
+			Resolver:                 resolver,
+			Compile:                  compileSub,
+			CompileValues:            compileSubValues,
+			CompileWithAnalysisInput: compileSubValuesWithInput,
+			Introspection:            prepared.ActionIntrospectionEnabled(),
 		}); matErr != nil {
 			return Compilation{Meta: meta, Resolver: resolver}, fmt.Errorf("materialize: %w", matErr)
 		}

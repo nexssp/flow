@@ -82,6 +82,8 @@ request -> ai.decide as decision
 
 Bindings are pipeline-local, do not become result-map fields unless explicitly returned, and duplicate names fail compilation. `input` remains the original request; map shorthand, `__root__`, and `__state__` are unchanged. See the [complete binding guide](language-reference.md#pipeline-operators-and-control-flow) and [runnable fixture](../extensions/syntax/nflows/named_bindings.nflow).
 
+If a projection actually uses a bare name that is both a current-input field and an `as` binding, Flow rejects the ambiguity at compile time when the input shape is known, or reports a value-free conflict before evaluating the projection when the shape is dynamic. Unused name overlaps are allowed. Use `.tool` for the current input field or `input.tool` for the original request, or rename the binding; `{ tool }` remains explicit input-field shorthand.
+
 Named parallel branches may use direct literal values. Use `const` when a
 branch needs action arguments or modifiers:
 

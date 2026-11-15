@@ -3,6 +3,7 @@ package compiler
 import (
 	"maps"
 	"reflect"
+	"slices"
 
 	"github.com/nexssp/kernel/xerr"
 )
@@ -14,6 +15,7 @@ type TypeAnalysisContext struct {
 	Resolver           CapabilityResolver
 	Input              TypeDescriptor
 	Bindings           map[string]TypeDescriptor
+	PipelineBindings   map[string]struct{}
 	SymbolNamespaces   map[string]SymbolNamespace
 	CheckExpression    TypedSourceExpressionChecker
 	ExpressionCompiler ExpressionCompiler
@@ -41,6 +43,7 @@ type TypedSourceExpressionChecker func(string, TypeAnalysisContext, Position) (T
 // those types. Unknown or dynamic payloads remain unchecked rather than being
 // rejected speculatively.
 func analyzeTypedExpressions(ctx TypeAnalysisContext, root Expr) error {
+	ctx = withPipelineBindingNames(ctx)
 	_, err := analyzeTypedNode(ctx, root)
 	return err
 }
@@ -52,6 +55,7 @@ func AnalyzeTypedExpression(ctx TypeAnalysisContext, expr Expr) (TypeDescriptor,
 	if ctx.Resolver == nil {
 		return TypeDescriptor{}, xerr.Internal("typed analysis: capability resolver is nil")
 	}
+	ctx = withPipelineBindingNames(ctx)
 	ctx.Bindings = cloneTypeBindings(ctx.Bindings)
 	return analyzeTypedNode(ctx, expr)
 }
@@ -68,9 +72,29 @@ func analyzeTypedNode(ctx TypeAnalysisContext, node Expr) (TypeDescriptor, error
 		return analyzer.AnalyzeTypes(ctx)
 	}
 	if contract, ok := contractForExpr(ctx.Resolver, node); ok {
+		if isIdentityAction(ctx.Resolver, node) {
+			return ctx.Input, nil
+		}
 		return contract.Output, nil
 	}
 	return analyzeTypedExpressionNode(ctx, node)
+}
+
+func isIdentityAction(resolver CapabilityResolver, node Expr) bool {
+	atom, ok := node.(*Atom)
+	if !ok || resolver == nil {
+		return false
+	}
+	act, ok := resolver.Action(atom.Name)
+	if !ok {
+		return false
+	}
+	meta := act.Describe()
+	if meta == nil {
+		return false
+	}
+	// Identity-tagged actions preserve their input's static type.
+	return slices.Contains(meta.Tags, "identity")
 }
 
 func analyzeTypedPipelineNode(ctx TypeAnalysisContext, node Expr) (TypeDescriptor, bool, error) {
@@ -95,17 +119,20 @@ func analyzeTypedPipelineNode(ctx TypeAnalysisContext, node Expr) (TypeDescripto
 func analyzeTypedPipe(ctx TypeAnalysisContext, pipe *PipeExpr) (TypeDescriptor, bool, error) {
 	state := ctx.Input
 	localBindings := cloneTypeBindings(ctx.Bindings)
+	localBindingNames := clonePipelineBindingNames(ctx.PipelineBindings)
 	for _, step := range flattenPipe(pipe) {
 		inner, binding := unwrapBinding(step)
 		stepContext := ctx
 		stepContext.Input = state
 		stepContext.Bindings = localBindings
+		stepContext.PipelineBindings = localBindingNames
 		output, err := analyzeTypedNode(stepContext, inner)
 		if err != nil {
 			return TypeDescriptor{}, true, err
 		}
 		if binding != nil {
 			localBindings[binding.Name] = output
+			localBindingNames[binding.Name] = struct{}{}
 		}
 		state = output
 	}
@@ -243,4 +270,27 @@ func cloneTypeBindings(bindings map[string]TypeDescriptor) map[string]TypeDescri
 		return make(map[string]TypeDescriptor)
 	}
 	return maps.Clone(bindings)
+}
+
+func withPipelineBindingNames(ctx TypeAnalysisContext) TypeAnalysisContext {
+	if ctx.PipelineBindings == nil {
+		ctx.PipelineBindings = make(map[string]struct{}, len(ctx.Bindings))
+		for name := range ctx.Bindings {
+			ctx.PipelineBindings[name] = struct{}{}
+		}
+		return ctx
+	}
+	ctx.PipelineBindings = clonePipelineBindingNames(ctx.PipelineBindings)
+	return ctx
+}
+
+func clonePipelineBindingNames(names map[string]struct{}) map[string]struct{} {
+	if names == nil {
+		return nil
+	}
+	cloned := make(map[string]struct{}, len(names))
+	for name := range names {
+		cloned[name] = struct{}{}
+	}
+	return cloned
 }

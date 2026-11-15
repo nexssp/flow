@@ -27,7 +27,10 @@ type MaterializeReq struct {
 	// CompileValues carries explicitly typed modifier values without flattening
 	// them through the legacy string callback.
 	CompileValues func(name, source string, modifiers []ModifierValue) (action.AnyAction, error)
-	Alias         string
+	// CompileWithAnalysisInput compiles a body with an initial static input type.
+	// Materializers use it when a declaration provides a typed input contract.
+	CompileWithAnalysisInput func(name, source string, modifiers []ModifierValue, input TypeDescriptor) (action.AnyAction, error)
+	Alias                    string
 	// Introspection enables retaining child-action relationships on materialized actions.
 	Introspection bool
 }

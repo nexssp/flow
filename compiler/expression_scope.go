@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sort"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xctx"
@@ -70,6 +71,27 @@ func WithChildExpressionScope(ctx context.Context) context.Context {
 func HasExpressionScope(ctx context.Context) bool {
 	scope, ok := expressionScopeKey.From(ctx)
 	return ok && scope != nil
+}
+
+// ExpressionBindingNames returns the visible lexical binding names without
+// exposing their values. The result includes inherited parent-scope names.
+func ExpressionBindingNames(ctx context.Context) []string {
+	scope, _ := expressionScopeKey.From(ctx)
+	if scope == nil {
+		return nil
+	}
+	names := make(map[string]struct{})
+	for current := scope; current != nil; current = current.parent {
+		for name := range current.bindings {
+			names[name] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(names))
+	for name := range names {
+		result = append(result, name)
+	}
+	sort.Strings(result)
+	return result
 }
 
 // BindExpressionValue adds an immutable name to the current lexical scope.

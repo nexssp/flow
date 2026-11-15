@@ -2,6 +2,25 @@ package compiler
 
 import "strings"
 
+func appendExprComment(raw string, index int, output *strings.Builder) int {
+	commentStart := index
+	for index < len(raw) && raw[index] != '\n' && raw[index] != '\r' {
+		index++
+	}
+	for commentIndex := commentStart; commentIndex < index; commentIndex++ {
+		if raw[commentIndex] == '\t' {
+			output.WriteByte('\t')
+		} else {
+			output.WriteByte(' ')
+		}
+	}
+	for index < len(raw) && (raw[index] == '\r' || raw[index] == '\n') {
+		output.WriteByte(raw[index])
+		index++
+	}
+	return index
+}
+
 // StripExprComments removes `#` comments from an expression that will be
 // handed to expr-lang.
 //
@@ -65,15 +84,7 @@ func StripExprComments(raw string) string {
 				i++
 				continue
 			}
-			// Depth-0 comment: skip to end of line, then carry the line
-			// terminator verbatim so CRLF files stay CRLF.
-			for i < len(raw) && raw[i] != '\n' && raw[i] != '\r' {
-				i++
-			}
-			for i < len(raw) && (raw[i] == '\r' || raw[i] == '\n') {
-				sb.WriteByte(raw[i])
-				i++
-			}
+			i = appendExprComment(raw, i, &sb)
 			continue
 		default:
 			sb.WriteByte(c)

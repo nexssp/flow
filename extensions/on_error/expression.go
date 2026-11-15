@@ -83,6 +83,7 @@ func (g *ErrorGuardExpr) AnalyzeTypes(ctx compiler.TypeAnalysisContext) (compile
 		Resolver:           ctx.Resolver,
 		Input:              ctx.Input,
 		Bindings:           handlerBindings,
+		PipelineBindings:   ctx.PipelineBindings,
 		SymbolNamespaces:   ctx.SymbolNamespaces,
 		CheckExpression:    ctx.CheckExpression,
 		ExpressionCompiler: ctx.ExpressionCompiler,
@@ -171,7 +172,8 @@ func (g *ErrorGuardExpr) Build(ctx context.Context, buildCtx *compiler.BuildCont
 			return nil, primaryErr
 		}
 
-		result, handlerErr := action.InvokeAny(execCtx, recoveryActions[caseIndex], env)
+		handlerInput := recoveryActionEnvironment(request, primaryErr)
+		result, handlerErr := action.InvokeAny(execCtx, recoveryActions[caseIndex], handlerInput)
 		if handlerErr != nil {
 			both := errors.Join(primaryErr, handlerErr)
 			return nil, fmt.Errorf("on_error recovery handler failed: %w", both)

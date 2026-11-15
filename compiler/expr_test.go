@@ -1,6 +1,7 @@
 package compiler_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
@@ -24,7 +25,7 @@ func TestStripExprComments_DepthAware(t *testing.T) {
 		{
 			name: "trailing comment at depth 0",
 			in:   `x > 0  # positive`,
-			want: `x > 0  `,
+			want: `x > 0  ` + strings.Repeat(" ", len(`# positive`)),
 		},
 		{
 			name: "iterator at depth 1 survives",
@@ -34,7 +35,7 @@ func TestStripExprComments_DepthAware(t *testing.T) {
 		{
 			name: "iterator and trailing comment coexist",
 			in:   `all(tags, # != "beta")  # no beta`,
-			want: `all(tags, # != "beta")  `,
+			want: `all(tags, # != "beta")  ` + strings.Repeat(" ", len(`# no beta`)),
 		},
 		{
 			name: "comment inside string is preserved",
@@ -49,17 +50,17 @@ func TestStripExprComments_DepthAware(t *testing.T) {
 		{
 			name: "multiline preserves line terminators",
 			in:   "a\n# comment\nb",
-			want: "a\n\nb",
+			want: "a\n" + strings.Repeat(" ", len("# comment")) + "\nb",
 		},
 		{
 			name: "CRLF preserved",
 			in:   "a  # note\r\nb",
-			want: "a  \r\nb",
+			want: "a  " + strings.Repeat(" ", len("# note")) + "\r\nb",
 		},
 		{
 			name: "nested parens — depth returns to 0",
 			in:   `f(g(x))  # done`,
-			want: `f(g(x))  `,
+			want: `f(g(x))  ` + strings.Repeat(" ", len(`# done`)),
 		},
 	}
 

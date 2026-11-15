@@ -297,3 +297,8 @@ Flow `parallel`, `race`, and `match` expressions may also appear as projection p
 ## Implementation references
 
 The introductory walkthrough remains in [`language.md`](language.md); detailed schema, error, resilience, approval, extension, CLI, and symbol behavior is linked throughout this reference. Host developers can inspect the implementation and executable fixtures in the Flow repository when they need source-level conformance details.
+
+
+## Projection input and binding name collisions
+
+A bare projection root can refer to a field of the current input or to a same-named `as` binding. Flow does not silently choose one: when the projection uses that ambiguous bare name and the input field is statically known, compilation fails even if the requested path exists on both candidates. For dynamic inputs, Flow checks the actual field and reports a value-free conflict before evaluating the projection. Unused name overlaps are allowed. Use `.name` for a current-input field, `input.name` for the original request, or rename the binding; `{ name }` remains explicit input-field shorthand.

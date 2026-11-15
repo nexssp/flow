@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -181,6 +182,44 @@ func TestProjectionPreservesWrappedAppError(t *testing.T) {
 	appErr, ok := errors.AsType[*xerr.AppError](err)
 	ktest.RequireCondition(t, ok && appErr != nil, "want wrapped AppError, got %T: %v", err, err)
 	ktest.RequireEqual(t, appErr.Kind, xerr.KindUnavailable)
+}
+
+func TestProjectionRuntimeConflictPreflightDoesNotExposeValues(t *testing.T) {
+	t.Parallel()
+	cfg, err := runner.BuildConfig(native.Bundles())
+	ktest.RequireNoError(t, err)
+	_, err = runner.Execute(t.Context(), cfg,
+		`noop as tool -> { result: tool.task }`,
+		"projection-shadowing-runtime.nflow",
+		map[string]any{"tool": map[string]any{"task": "payload-secret"}, "task": "binding-secret"},
+	)
+	ktest.RequireCondition(t, xerr.KindFrom(err) == xerr.KindConflict, "want Conflict, got %v", err)
+	for _, want := range []string{
+		`ambiguous bare identifier "tool"`,
+		"runtime input has a field",
+		"pipeline `as tool` binding",
+		"was not evaluated",
+	} {
+		ktest.RequireCondition(t, strings.Contains(err.Error(), want), "runtime diagnostic %q does not contain %q", err, want)
+	}
+	for _, secret := range []string{"payload-secret", "binding-secret"} {
+		ktest.RequireCondition(t, !strings.Contains(err.Error(), secret), "runtime diagnostic leaked %q: %v", secret, err)
+	}
+}
+
+func TestComposedProjectionRuntimeConflictPreflightRunsBeforeEmbeddedActions(t *testing.T) {
+	t.Parallel()
+	cfg, err := runner.BuildConfig(native.Bundles())
+	ktest.RequireNoError(t, err)
+	_, err = runner.Execute(t.Context(), cfg,
+		`noop as tool -> { candidate: race { "ready" }, result: tool.task }`,
+		"projection-composed-shadowing-runtime.nflow",
+		map[string]any{"tool": map[string]any{"task": "payload-secret"}, "task": "binding-secret"},
+	)
+	ktest.RequireCondition(t, xerr.KindFrom(err) == xerr.KindConflict, "want Conflict before embedded projection evaluation, got %v", err)
+	for _, secret := range []string{"payload-secret", "binding-secret"} {
+		ktest.RequireCondition(t, !strings.Contains(err.Error(), secret), "runtime diagnostic leaked %q: %v", secret, err)
+	}
 }
 
 func TestProjectionLocalLets(t *testing.T) {

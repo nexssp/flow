@@ -39,6 +39,9 @@ func analyzeProjectionTypes(
 	if sourceErr != nil {
 		return compiler.TypeDescriptor{}, compiler.SourceError(pos, "projection: %v", sourceErr)
 	}
+	if err := validateStaticProjectionBindingConflict(raw, pos, ctx); err != nil {
+		return compiler.TypeDescriptor{}, err
+	}
 	source = rewriteProjectionLetsForTypeAnalysis(source)
 	if functions != nil {
 		if err := functions.prepare(); err != nil {
@@ -214,6 +217,11 @@ func typedProjectionEnvironment(ctx compiler.TypeAnalysisContext, proxyDepth int
 		bindingType := descriptor.Type
 		if bindingType == nil || descriptor.Stream {
 			bindingType = reflect.TypeFor[any]()
+		}
+		// Runtime projection normalization flattens payload fields after merging
+		// pipeline scope, so a same-named payload alias takes precedence.
+		if _, payloadFieldExists := env[name]; payloadFieldExists {
+			continue
 		}
 		env[name] = projectionStaticValueWithBuilder(bindingType, proxyDepth, builder)
 		staticTypes[name] = bindingType

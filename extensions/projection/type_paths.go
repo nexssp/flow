@@ -89,7 +89,7 @@ func validateTypedExpressionPaths(source string, pos compiler.Position, staticTy
 	validator := projectionStaticPathValidator{types: localTypes, optionalMembers: optionalMembers}
 	ast.Walk(&tree.Node, &validator)
 	if validator.err != nil {
-		return compiler.SourceError(pos, "projection: %v", validator.err)
+		return compiler.SourceError(pos, "projection: %w", validator.err)
 	}
 	if checkBareIdentifiers {
 		if err := validateBareProjectionIdentifiers(source, localTypes, optionalIdentifiers); err != nil {
@@ -242,7 +242,7 @@ func projectionStaticMemberType(valueType reflect.Type, selector string) (reflec
 		return valueType.Elem(), true, nil
 	}
 	if valueType.Kind() != reflect.Struct {
-		return nil, false, fmt.Errorf("type %s has no field %q", valueType, selector)
+		return nil, false, &projectionMissingFieldError{parentType: valueType, selector: selector}
 	}
 	fieldType, found := projectionStaticFieldType(valueType, selector)
 	if found {

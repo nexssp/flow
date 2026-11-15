@@ -21,10 +21,14 @@ func terminalRecoveryError(ctx context.Context, err error) error {
 }
 
 func recoveryEnvironment(ctx context.Context, input any, err error) map[string]any {
+	return match.WithSymbolEnvironment(ctx, recoveryActionEnvironment(input, err))
+}
+
+func recoveryActionEnvironment(input any, err error) map[string]any {
 	env := compiler.BuildEnv(input)
 	env["input"] = input
 	env["error"] = errorMetadata(err)
-	return match.WithSymbolEnvironment(ctx, env)
+	return env
 }
 
 func pipelineErrorEnvironment(ctx context.Context, input any, err error) map[string]any {

@@ -319,6 +319,7 @@ type projectionShorthandScanner struct {
 	quote           byte
 	parenDepth      int
 	lastSignificant byte
+	bareFields      *[]projectionIdentifierSpan
 }
 
 // expandProjectionShorthand rewrites a bare identifier in an object-entry
@@ -383,6 +384,9 @@ func (s *projectionShorthandScanner) copyIdentifier(index int) int {
 	field := s.raw[index:end]
 	s.rewritten.WriteString(field)
 	if s.isBareField(end) {
+		if s.bareFields != nil {
+			*s.bareFields = append(*s.bareFields, projectionIdentifierSpan{start: index, end: end})
+		}
 		s.rewritten.WriteString(": .")
 		s.rewritten.WriteString(field)
 	}

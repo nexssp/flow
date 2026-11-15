@@ -18,6 +18,8 @@ type CompileReq struct {
 	InheritedPrimaries []PrimaryExtension
 	InheritedMeta      map[string]any
 	Prepared           *PreparedSource
+	// TypeAnalysisInput seeds static analysis for sources compiled by a materializer.
+	TypeAnalysisInput TypeDescriptor
 }
 
 // PreparedSource is the result of preprocessing one source. Its fields are
@@ -267,11 +269,12 @@ func runCompile(
 	if refErr := validateConfigRefs(ast, effectiveCfg.config, effectiveCfg.cliArgs); refErr != nil {
 		return CompileRes{}, refErr
 	}
-	if analyzeErr := AnalyzeWithTypedExpressionChecker(
+	if analyzeErr := AnalyzeWithTypedExpressionCheckerAndInput(
 		resolver,
 		ast,
 		effectiveCfg.typedExpressionChecker,
 		effectiveCfg.expressionCompiler,
+		req.TypeAnalysisInput,
 		SymbolsFromMeta(prepared.meta),
 	); analyzeErr != nil {
 		return CompileRes{}, analyzeErr

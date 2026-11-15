@@ -112,6 +112,9 @@ func (p *composedProjection) Build(ctx context.Context, bCtx *compiler.BuildCont
 		if contextErr := callCtx.Err(); contextErr != nil {
 			return nil, contextErr
 		}
+		if conflictErr := rejectRuntimeProjectionBindingConflict(callCtx, p.raw, input, viewCache); conflictErr != nil {
+			return nil, conflictErr
+		}
 		env := normalizeExpressionEnvironmentWithCache(compiler.MergeSymbolNamespaces(callCtx, buildEnv(input)), viewCache)
 		env[p.ctxName] = callCtx
 		out, runErr := expr.Run(program, env)
@@ -121,7 +124,7 @@ func (p *composedProjection) Build(ctx context.Context, bCtx *compiler.BuildCont
 				errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {
 				return nil, runErr
 			}
-			return nil, xerr.BadRequest("projection: evaluation failed", runErr)
+			return nil, xerr.BadRequest(projectionEvaluationMessage(p.raw), runErr)
 		}
 		return out, nil
 	}).Build()
