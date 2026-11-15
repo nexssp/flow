@@ -165,13 +165,17 @@ array, or when the object itself needs a top-level `value` or `val` field.
 
 The optional `github.com/nexssp/lang` module provides a Flow adapter with
 language keywords such as `py`, `go`, and `js`. Load its adapter through the
-existing external `@require` harness, pinning a published version (replace
-`vX.Y.Z` with the tag you use); the language tag itself has no `@` prefix:
+existing external `@require` harness; the examples pin the current released
+version `v0.2.0`. The language tag itself has no `@` prefix:
 
 ```nflow
-@require github.com/nexssp/lang/nexssflow vX.Y.Z
+@require github.com/nexssp/lang/nexssflow v0.2.0
 { "x": 2, "y": 3 } -> py"import json, sys; v=json.load(sys.stdin); print(json.dumps({'value': v['x'] + v['y']}))"
 ```
+
+The `v0.2.0` adapter also exposes `lang.extract` for source text supplied in the
+Flow request. It extracts declarations or processes text in memory; `path` is a
+logical filename, not a file to read. See the [source extraction example](practical_examples.md#extract-source-declarations).
 
 Tags can also take a raw source block, for example `py { ... }`. The bundle
 checks that required interpreters are available before execution. Language
@@ -187,7 +191,7 @@ the `.nflow` file. The script receives the current value as JSON on stdin and
 returns the next value as JSON on stdout:
 
 ```nflow
-@require github.com/nexssp/lang/nexssflow vX.Y.Z
+@require github.com/nexssp/lang/nexssflow v0.2.0
 { "samples": [1.2, 1.8, 2.1] } -> py.file "./analysis.py"
 ```
 
@@ -197,7 +201,7 @@ and writes JSON to stdout. Existing files are never replaced, and without the
 option a missing script remains an error. For example:
 
 ```nflow
-@require github.com/nexssp/lang/nexssflow vX.Y.Z
+@require github.com/nexssp/lang/nexssflow v0.2.0
 { "orders": [] } -> go.file "./normalize.go" :autocreate
 ```
 

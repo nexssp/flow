@@ -14,6 +14,10 @@ Use the existing extension/bundle contribution point for a new DSL feature: dire
 
 For each new DSL feature, add wiring coverage and a runnable `.nflow` fixture in the extension's `nflows/` directory. Treat those fixtures as the source of truth for user-visible DSL correctness. If behavior can be expressed in `.nflow` and asserted with `@assert:`, test it there rather than only in Go. Use extension `SelfTest()` or direct-action Go tests only for internals, wiring, or behavior a fixture cannot express; explain why the case needs Go.
 
+### Expected compile-error fixtures
+
+For an embedded `.nflow` fixture that is intentionally expected to fail compilation, use the source comment `# @expect-compile-error <diagnostic fragment>`. `@description "compile-error: …"` only labels the fixture; it is not recognized as an expected compile-error marker. Give each such fixture a dedicated test that verifies compilation fails with the expected diagnostic fragment, and exclude it from generic positive compile-all tests.
+
 Registration must fail visibly rather than silently overwrite or lose entries. Prefer one canonical, qualified capability name; do not add new short aliases to `action.Library.Aliases` or make new code depend on existing aliases. When changing registration, test duplicate canonical names, duplicate aliases, alias/canonical collisions, aliases with missing targets, repeated mounts, and preservation of caller-owned libraries.
 
 For composed workflows, choose examples/specs by purpose: extension `nflows/` for one extension's conformance; root `spec/` for deterministic integration across extensions and scenario-local actions; the central examples repository for tutorial walkthroughs. Keep test inputs deterministic and offline. Do not send messages, change accounts, or mutate external systems in fixtures.

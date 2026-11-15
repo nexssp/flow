@@ -944,9 +944,13 @@ template.render @{
 ### Require an external bundle
 
 ```exs
-@require github.com/nexssp/transport v0.9.0
-
-http.request @{ method: "GET", url: .url }
+@require github.com/nexssp/transport/thttp/nexssflow v0.14.0 as thttp {
+  addr: ":8080"
+}
+@pipeline health:route="GET /health"
+  runtime.const @{ value: "ok" }
+@end
+thttp.listen
 ```
 
 ### Require a bundle with an alias
@@ -974,7 +978,7 @@ service.call :retry
 ### Run a language adapter
 
 ```exs
-@require github.com/nexssp/lang/nexssflow vX.Y.Z
+@require github.com/nexssp/lang/nexssflow v0.2.0
 
 { "x": 2, "y": 3 }
 -> py"import json, sys; v=json.load(sys.stdin); print(json.dumps({'value': v['x'] + v['y']}))"
@@ -983,10 +987,25 @@ service.call :retry
 ### Run a language file
 
 ```exs
-@require github.com/nexssp/lang/nexssflow vX.Y.Z
+@require github.com/nexssp/lang/nexssflow v0.2.0
 
 { "orders": [] }
 -> go.file "./normalize.go"
+```
+
+### Extract source declarations
+
+```exs
+@require github.com/nexssp/lang/nexssflow v0.2.0
+@assert: result.func_count == 1
+@assert: result.content == ""
+{
+  path: "sample.go",
+  language: "go",
+  source: "package sample\n\nfunc Exported() {}\nfunc hidden() {}\n",
+  options: { exported_only: true }
+}
+  -> lang.extract
 ```
 
 ### Embed a static asset
@@ -1087,7 +1106,6 @@ payments.reconcile
 ### HTTP to validation to storage
 
 ```exs
-@require github.com/nexssp/transport v0.9.0
 @require github.com/nexssp/storage v0.5.0
 
 http.request @{ method: "GET", url: .url }
@@ -1109,16 +1127,15 @@ ai.complete @{ prompt: .prompt }
 ### Language worker to Flow projection
 
 ```exs
-@require github.com/nexssp/lang/nexssflow vX.Y.Z
+@require github.com/nexssp/lang/nexssflow v0.2.0
 
 py.file "./score.py"
 -> { customer_id: .customer_id, score: .score, tier: .tier }
 ```
 
-### Transport with resilience policies
+### HTTP requests with resilience policies
 
 ```exs
-@require github.com/nexssp/transport v0.9.0
 @require resilience
 
 http.request :timeout=5s :retry=3 :rate_limit=100 :circuit_breaker="payments" @{ method: "POST", url: .url, body: .body }
