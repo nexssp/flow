@@ -209,9 +209,6 @@ func stageBuildDir(
 	defer func() { _ = buildRoot.Close() }()
 
 	embeddedSource := rewriteEmbeddedRequires(string(src), filepath.Dir(nflowPath), resolvedReqs)
-	if writeErr := writeBuildFile(buildRoot, "workflow.nflow", []byte(embeddedSource)); writeErr != nil {
-		return "", fmt.Errorf("embed: %w", writeErr)
-	}
 
 	sources, sourceFiles, graphErr := packageBuildSources(ctx, nflowPath, embeddedSource, resolvedReqs)
 	if graphErr != nil {
@@ -229,9 +226,17 @@ func stageBuildDir(
 	if writeErr := writeBuildFile(buildRoot, "sources.json", sourceManifest); writeErr != nil {
 		return "", fmt.Errorf("source manifest: %w", writeErr)
 	}
-	sourceName, err := filepath.Abs(nflowPath)
+	sourceName, err := relativeBuildSourceName(filepath.Dir(nflowPath), nflowPath)
 	if err != nil {
 		return "", fmt.Errorf("source name: %w", err)
+	}
+	rootSource, ok := sourceFiles[sourceName]
+	if !ok {
+		return "", fmt.Errorf("source graph: root source %q is missing from snapshot", sourceName)
+	}
+	embeddedSource = rootSource
+	if writeErr := writeBuildFile(buildRoot, "workflow.nflow", []byte(embeddedSource)); writeErr != nil {
+		return "", fmt.Errorf("embed: %w", writeErr)
 	}
 	if err := writeBuildFile(buildRoot, "main.go", []byte(buildMain(usedNative, imports, sourceName))); err != nil {
 		return "", fmt.Errorf("main.go: %w", err)
@@ -538,7 +543,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/runner"
@@ -570,11 +577,6 @@ func main() {
 		case "version", "--version":
 			fmt.Printf("flow binary (version: %s, commit: %s, built at: %s)\n", Version, Commit, BuiltAt)
 			os.Exit(0)
-			case "help", "--help", "-h":
-				fmt.Println("Nexss Flow standalone executable.")
-				fmt.Println("Usage:\n  <binary> [json_payload] [flags]\n\nFlags:\n  --info              describe the embedded flow\n  --assert=EXPR       evaluate an assertion after the run\n  --approval TOKEN    approve named @approval gates (or all)\n  --journal-dir DIR   persist durable step results\n  --execution-id ID   resume a run (requires --journal-dir)\n  -v | -vv | -vvv     increase verbosity\n  --key VALUE         pass a CLI value to @flag.key")
-				fmt.Println("  --suppress-output   suppress runner output to stdout for stream transports")
-			os.Exit(0)
 		}
 	}
 
@@ -594,13 +596,6 @@ func main() {
 		showBanner := true
 		for i := 0; i < len(runArgs); i++ {
 			arg := runArgs[i]
-			if strings.HasPrefix(arg, "{") {
-				if err := json.Unmarshal([]byte(arg), &payload); err != nil {
-					fmt.Fprintf(os.Stderr, "invalid JSON payload: %v\n", err)
-					os.Exit(2)
-				}
-				continue
-			}
 			switch {
 			case arg == "--assert":
 				if i+1 >= len(runArgs) || strings.HasPrefix(runArgs[i+1], "--") {
@@ -631,7 +626,26 @@ func main() {
 			case arg == "--suppress-output":
 				opts.Stdout = io.Discard
 				showBanner = false
+			case strings.HasPrefix(arg, "{"):
+				if err := json.Unmarshal([]byte(arg), &payload); err != nil {
+					fmt.Fprintf(os.Stderr, "invalid JSON payload: %v\n", err)
+					os.Exit(2)
+				}
 			default:
+				if isSeparatedFlag(arg) && !isStandaloneSwitch(arg) {
+					if i+1 >= len(runArgs) {
+						fmt.Fprintf(os.Stderr, "run options: %s requires a value\n", arg)
+						os.Exit(2)
+					}
+					next := runArgs[i+1]
+					if isStandaloneSwitch(next) || (isSwitchLike(next) && !isNegativeNumber(next)) {
+						fmt.Fprintf(os.Stderr, "run options: %s requires a value\n", arg)
+						os.Exit(2)
+					}
+					i++
+					flags = append(flags, arg+"="+next)
+					continue
+				}
 				flags = append(flags, arg)
 			}
 		}
@@ -704,9 +718,11 @@ func main() {
 	  }
 	  os.Exit(2)
 	 }
-	 ctx := compiler.WithSourceLoader(context.Background(),sourceFiles)
-	 exitCode := runner.RunSource(ctx, cfg, embedded, sourceName, payload, opts)
-	 if shutdownErr := closeHost(); shutdownErr != nil {
+		 ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		 ctx = compiler.WithSourceLoader(ctx,sourceFiles)
+		 exitCode := runner.RunSource(ctx, cfg, embedded, sourceName, payload, opts)
+		 stop()
+		 if shutdownErr := closeHost(); shutdownErr != nil {
 	  fmt.Fprintf(os.Stderr, "host shutdown: %v\n", shutdownErr)
 	  if exitCode == 0 { exitCode = 1 }
 	 }
@@ -729,6 +745,55 @@ func countVerbosity(flags []string) int {
 	}
 	return n
 }
-`)
+
+// Keep separated-value forwarding aligned with transport/tcli/binder.go.
+// The standalone executable groups argv but leaves flag interpretation to the workflow.
+func isSeparatedFlag(arg string) bool {
+	if strings.Contains(arg, "=") || arg == "-" {
+		return false
+	}
+	if strings.HasPrefix(arg, "--") {
+		return len(arg) > 2
+	}
+	return len(arg) > 1 && strings.HasPrefix(arg, "-") && (arg[1] < '0' || arg[1] > '9')
+}
+
+func isStandaloneSwitch(arg string) bool {
+	switch arg {
+	case "--assert", "--info", "-info", "--json", "--suppress-output",
+		"--verbose", "--help", "-h", "--flow-help", "--flow-banner",
+		"--journal-dir", "--execution-id", "--approval":
+		return true
+	default:
+		return isVerbosityFlag(arg)
+	}
+}
+
+func isVerbosityFlag(arg string) bool {
+	if len(arg) < 2 || arg[0] != '-' || arg[1] != 'v' {
+		return false
+	}
+	for _, char := range arg[1:] {
+		if char != 'v' {
+			return false
+		}
+	}
+	return true
+}
+
+func isSwitchLike(arg string) bool {
+	return len(arg) > 1 && strings.HasPrefix(arg, "-")
+}
+
+func isNegativeNumber(arg string) bool {
+	if len(arg) < 2 || arg[0] != '-' {
+		return false
+	}
+	if arg[1] == '.' {
+		return true
+	}
+	return arg[1] >= '0' && arg[1] <= '9'
+}
+		`)
 	return b.String()
 }

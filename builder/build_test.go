@@ -2,6 +2,7 @@ package builder
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -133,18 +134,11 @@ func Bundle(opts map[string]string) compiler.Bundle {
 		t.Fatalf("--json unexpectedly printed the embedded version banner; stderr:\n%s", stderr)
 	}
 
-	stdout, stderr, err = run("help")
-	if err != nil {
-		t.Fatalf("built executable help failed: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
-	}
-	if !strings.Contains(stdout, "Usage:") ||
-		!strings.Contains(stdout, "--assert=EXPR") ||
-		!strings.Contains(stdout, "--info") ||
-		!strings.Contains(stdout, "--journal-dir DIR") ||
-		!strings.Contains(stdout, "--execution-id ID") ||
-		!strings.Contains(stdout, "--suppress-output") ||
-		strings.Contains(stderr, "(built ") {
-		t.Fatalf("embedded help output changed; stdout:\n%s\nstderr:\n%s", stdout, stderr)
+	for _, args := range [][]string{{"help"}, {"--help"}, {"-h"}, {"-vvvv"}} {
+		stdout, stderr, err = run(args...)
+		if err != nil || !strings.Contains(stdout, `"value":"option:ok"`) || strings.Contains(stdout, "Nexss Flow standalone executable.") {
+			t.Fatalf("standalone did not forward %q to the embedded workflow: err=%v\nstdout:\n%s\nstderr:\n%s", args, err, stdout, stderr)
+		}
 	}
 
 	stdout, stderr, err = run("version")
@@ -170,7 +164,11 @@ func Bundle(opts map[string]string) compiler.Bundle {
 func TestStageBuildDir_ResilienceWithRetryMountsOnePolicyBundle(t *testing.T) {
 	workDir := t.TempDir()
 	flowPath := filepath.Join(workDir, "resilience.nflow")
-	source := "@require resilience\npayment.charge :retry\n"
+	childPath := filepath.Join(workDir, "child.nflow")
+	if err := os.WriteFile(childPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	source := "@require resilience\n@include \"" + childPath + "\"\npayment.charge :retry\n"
 	if err := os.WriteFile(flowPath, []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -186,6 +184,40 @@ func TestStageBuildDir_ResilienceWithRetryMountsOnePolicyBundle(t *testing.T) {
 		t.Fatalf("read generated main: %v", err)
 	}
 	mainSource := string(generated)
+	if !strings.Contains(mainSource, `const sourceName = "resilience.nflow"`) || strings.Contains(mainSource, workDir) {
+		t.Fatalf("generated main embedded an absolute source path instead of a stable relative name:\n%s", mainSource)
+	}
+	manifest, err := os.ReadFile(filepath.Join(buildDir, "sources.json"))
+	if err != nil {
+		t.Fatalf("read generated source manifest: %v", err)
+	}
+	if strings.Contains(string(manifest), workDir) {
+		t.Fatalf("generated source manifest contains an absolute temp path: %s", manifest)
+	}
+	var sourceFiles map[string]string
+	if err := json.Unmarshal(manifest, &sourceFiles); err != nil {
+		t.Fatalf("decode generated source manifest: %v", err)
+	}
+	workflow, err := os.ReadFile(filepath.Join(buildDir, "workflow.nflow"))
+	if err != nil {
+		t.Fatalf("read embedded workflow: %v", err)
+	}
+	if strings.Contains(string(workflow), workDir) || !strings.Contains(string(workflow), `@include "child.nflow"`) {
+		t.Fatalf("embedded root source is not path-normalized: %s", workflow)
+	}
+	if got := string(workflow); got != sourceFiles["resilience.nflow"] {
+		t.Fatalf("embedded workflow and source manifest root differ: embedded=%q manifest=%q", got, sourceFiles["resilience.nflow"])
+	}
+	if !strings.Contains(mainSource, `signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)`) ||
+		!strings.Contains(mainSource, `ctx = compiler.WithSourceLoader(ctx,sourceFiles)`) {
+		t.Fatalf("generated main does not use a signal-aware source-loader context:\n%s", mainSource)
+	}
+	runAt := strings.Index(mainSource, "exitCode := runner.RunSource")
+	stopAt := strings.Index(mainSource, "stop()")
+	shutdownAt := strings.LastIndex(mainSource, "if shutdownErr := closeHost();")
+	if runAt < 0 || stopAt < runAt || shutdownAt < stopAt {
+		t.Fatalf("signal notifications are not stopped after execution and before host shutdown:\n%s", mainSource)
+	}
 	if strings.Contains(mainSource, `"github.com/nexssp/flow/extensions/retry"`) {
 		t.Fatalf("generated binary imported the legacy retry adviser:\n%s", mainSource)
 	}

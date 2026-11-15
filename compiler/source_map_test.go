@@ -125,3 +125,28 @@ func TestSourceMapStableIdentityDetectsCycleThroughPathAlias(t *testing.T) {
 		t.Fatalf("Preprocess error = %v, want cycle detected for path alias", err)
 	}
 }
+
+func TestSourceMapLoadResolvesRelativeManifestKeys(t *testing.T) {
+	t.Parallel()
+
+	sources := SourceMap{
+		"parts/child.nflow": "child source",
+		"shared.nflow":      "shared source",
+	}
+
+	data, resolved, err := sources.Load("main.nflow", "parts/child.nflow")
+	if err != nil {
+		t.Fatalf("Load root-relative path: %v", err)
+	}
+	if string(data) != "child source" || resolved != "parts/child.nflow" {
+		t.Fatalf("Load root-relative path = (%q, %q), want (%q, %q)", data, resolved, "child source", "parts/child.nflow")
+	}
+
+	data, resolved, err = sources.Load("parts/nested.nflow", "../shared.nflow")
+	if err != nil {
+		t.Fatalf("Load normalized relative path: %v", err)
+	}
+	if string(data) != "shared source" || resolved != "shared.nflow" {
+		t.Fatalf("Load normalized relative path = (%q, %q), want (%q, %q)", data, resolved, "shared source", "shared.nflow")
+	}
+}

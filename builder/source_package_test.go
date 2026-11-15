@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
@@ -28,17 +29,20 @@ func TestPackagedSourcesPreserveIncludeInputsAndRewriteChildRequires(t *testing.
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, len(sources), 2)
 	ktest.RequireEqual(t, len(files), 2)
-	ktest.RequireStringContains(t, files[child], "@require example.invalid/local")
-	ktest.RequireStringContains(t, files[child], "${ACTION}")
-	ktest.RequireStringContains(t, files[flow], "@include parts/child.nflow")
+	ktest.RequireStringContains(t, files["parts/child.nflow"], "@require example.invalid/local")
+	ktest.RequireStringContains(t, files["parts/child.nflow"], "${ACTION}")
+	ktest.RequireStringContains(t, files["main.nflow"], "@include parts/child.nflow")
 	serialized, err := json.Marshal(files)
 	ktest.RequireNoError(t, err)
+	if strings.Contains(string(serialized), root) {
+		t.Fatalf("source manifest contains an absolute temp path: %s", serialized)
+	}
 	var packaged compiler.SourceMap
 	ktest.RequireNoError(t, json.Unmarshal(serialized, &packaged))
-	data, name, err := packaged.Load(flow, "parts/child.nflow")
+	data, name, err := packaged.Load("main.nflow", "parts/child.nflow")
 	ktest.RequireNoError(t, err)
-	ktest.RequireEqual(t, name, child)
-	ktest.RequireEqual(t, string(data), files[child])
+	ktest.RequireEqual(t, name, "parts/child.nflow")
+	ktest.RequireEqual(t, string(data), files["parts/child.nflow"])
 }
 
 func TestBuildStandaloneIncludesWithoutOriginalSources(t *testing.T) {
@@ -58,4 +62,36 @@ func TestBuildStandaloneIncludesWithoutOriginalSources(t *testing.T) {
 		t.Fatalf("standalone include without original sources: %v\n%s", err, output)
 	}
 	ktest.RequireStringContains(t, string(output), `"value":"two  spaces"`)
+}
+
+func TestPackagedSourcesRewriteAbsoluteIncludesToRelativePaths(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	flow := filepath.Join(root, "main.nflow")
+	child := filepath.Join(root, "parts", "child.nflow")
+	source := `@include "` + child + `"` + "\n"
+	writeSourceGraphFixture(t, flow, source)
+	writeSourceGraphFixture(t, child, "child.marker\n")
+
+	_, files, err := packageBuildSources(t.Context(), flow, source, nil)
+	ktest.RequireNoError(t, err)
+	if strings.Contains(files["main.nflow"], root) {
+		t.Fatalf("packaged root source retains its absolute include path: %s", files["main.nflow"])
+	}
+	ktest.RequireStringContains(t, files["main.nflow"], `@include "parts/child.nflow"`)
+	if _, ok := files["parts/child.nflow"]; !ok {
+		t.Fatalf("relative child source missing from packaged files: %#v", files)
+	}
+	serialized, err := json.Marshal(files)
+	ktest.RequireNoError(t, err)
+	if strings.Contains(string(serialized), root) {
+		t.Fatalf("source manifest contains an absolute temp path: %s", serialized)
+	}
+
+	var packaged compiler.SourceMap
+	ktest.RequireNoError(t, json.Unmarshal(serialized, &packaged))
+	data, resolved, err := packaged.Load("main.nflow", "parts/child.nflow")
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, resolved, "parts/child.nflow")
+	ktest.RequireEqual(t, string(data), files["parts/child.nflow"])
 }

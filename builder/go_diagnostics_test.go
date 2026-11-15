@@ -80,3 +80,20 @@ func TestGoWarningsBoundLineMemoryWithoutLosingLaterWarnings(t *testing.T) {
 	w.Flush()
 	ktest.RequireEqual(t, output.String(), conciseMimetypeWarning)
 }
+
+func TestVerboseGoWarningsFilterOnlyWarningLines(t *testing.T) {
+	ctx := WithGoDiagnostics(t.Context())
+	var output bytes.Buffer
+	writer := newGoWarningWriterMode(ctx, &output, true)
+	ordinary := strings.Repeat("x", 2*maxCapturedOutputBytes) + "\ngo: added example.com/module v1.0.0\n"
+	final := "final output without newline"
+	for _, fragment := range []string{ordinary, mimetypeWarning[:5], mimetypeWarning[5:] + "\r\n", final} {
+		if _, err := writer.Write([]byte(fragment)); err != nil {
+			t.Fatalf("Write: %v", err)
+		}
+	}
+	writer.Flush()
+
+	want := ordinary + conciseMimetypeWarning + final
+	ktest.RequireEqual(t, output.String(), want)
+}

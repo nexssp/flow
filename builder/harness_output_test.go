@@ -110,8 +110,9 @@ func TestRunGoOutputContextDiagnostics(t *testing.T) {
 			ktest.RequireNoError(t, err)
 			text := string(output)
 			if tc.warning && tc.verbose == "1" {
-				ktest.RequireEqual(t, strings.Count(text, "go: warning: "+path+"@"+version), 3)
-				ktest.RequireStringContains(t, text, "go: warning: "+path+"@"+version+": retracted by module author: "+warning)
+				ktest.RequireEqual(t, strings.Count(text, "nflow: warning: "+path+"@"+version), 1)
+				ktest.RequireCondition(t, !strings.Contains(text, "go: warning: "+path+"@"+version), "raw Go warning leaked in verbose output: %s", text)
+				ktest.RequireStringContains(t, text, "nflow: warning: "+path+"@"+version+" is retracted: "+warning)
 				ktest.RequireStringContains(t, text, "go: to switch to the latest unretracted version, run:")
 				ktest.RequireStringContains(t, text, "go get "+path+"@latest")
 			}

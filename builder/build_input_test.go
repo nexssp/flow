@@ -111,3 +111,57 @@ func Bundle(_ map[string]string) compiler.Bundle {
 		})
 	}
 }
+
+func TestBuild_StandaloneFlagValueForms(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping standalone build integration test in short mode")
+	}
+
+	workDir := t.TempDir()
+	flowPath := filepath.Join(workDir, "flags.nflow")
+	ktest.RequireNoError(t, os.WriteFile(flowPath, []byte(`const @{ value: "@flag.key" }`), 0o600))
+	binaryPath := filepath.Join(workDir, "flags-flow"+exeSuffix())
+	ktest.RequireEqual(t, runBuild([]string{flowPath, "-o", binaryPath}), 0)
+
+	for _, tc := range []struct {
+		name    string
+		args    []string
+		want    string
+		wantErr string
+	}{
+		{name: "separate value", args: []string{"--key", "VALUE"}, want: "VALUE"},
+		{name: "JSON-looking separate value", args: []string{"--key", `{"x":1}`}, want: `\"x\":1`},
+		{name: "JSON-looking equals value", args: []string{`--key={"x":1}`}, want: `\"x\":1`},
+		{name: "payload before separated value", args: []string{`{"payload":"kept"}`, "--key", "VALUE"}, want: "VALUE"},
+		{name: "negative integer separate value", args: []string{"--key", "-1"}, want: `"value":"-1"`},
+		{name: "negative fraction separate value", args: []string{"--key", "-.5"}, want: `"value":"-.5"`},
+		{name: "empty separate value", args: []string{"--key", ""}, want: `"value":""`},
+		{name: "equals value beginning with switch", args: []string{"--key=--help"}, want: `"value":"--help"`},
+		{name: "missing separate value", args: []string{"--key"}, wantErr: "--key requires a value"},
+		{name: "help switch is not a value", args: []string{"--key", "--help"}, wantErr: "--key requires a value"},
+		{name: "assert switch is not a value", args: []string{"--key", "--assert", "expr"}, wantErr: "--key requires a value"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			command := exec.CommandContext(t.Context(), binaryPath, tc.args...)
+			var stdout, stderr bytes.Buffer
+			command.Stdout, command.Stderr = &stdout, &stderr
+			err := command.Run()
+			if tc.wantErr != "" {
+				exitErr, ok := errors.AsType[*exec.ExitError](err)
+				if !ok || exitErr.ExitCode() != 2 {
+					t.Fatalf("standalone error = %v, want exit code 2; stdout=%s stderr=%s", err, &stdout, &stderr)
+				}
+				if !strings.Contains(stderr.String(), tc.wantErr) {
+					t.Fatalf("stderr = %q, want %q", stderr.String(), tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("standalone failed: %v; stdout=%s stderr=%s", err, &stdout, &stderr)
+			}
+			if !strings.Contains(stdout.String(), tc.want) {
+				t.Fatalf("stdout = %q, want it to contain %q", stdout.String(), tc.want)
+			}
+		})
+	}
+}

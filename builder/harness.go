@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"go/format"
+	"go/parser"
+	"go/token"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -39,7 +41,9 @@ const defaultAdapterDirectory = "nexssflow"
 
 const maxCapturedOutputBytes = 8 * 1024
 
-const harnessLockStaleAfter = 5 * time.Minute
+const harnessLockStaleGrace = time.Minute
+
+var errProcessLivenessUnavailable = errors.New("process liveness probing is unavailable")
 
 // HarnessEnv marks a process as running inside an external-module harness.
 const (
@@ -255,21 +259,27 @@ func requirementsToRetain(driverRequirements, harnessRequirements []moduleRequir
 
 func acquireHarnessLock(ctx context.Context, dir string) (func(), error) {
 	lockPath := filepath.Join(dir, "build.lock")
+	staleAfter := goCommandTimeout() + harnessLockStaleGrace
 
 	for {
 		file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
-			fmt.Fprintf(file, "%d\n", os.Getpid())
-			_ = file.Close()
+			if _, writeErr := fmt.Fprintf(file, "%d\n", os.Getpid()); writeErr != nil {
+				_ = file.Close()
+				_ = os.Remove(lockPath)
+				return nil, fmt.Errorf("harness: write lock %s: %w", lockPath, writeErr)
+			}
+			if closeErr := file.Close(); closeErr != nil {
+				_ = os.Remove(lockPath)
+				return nil, fmt.Errorf("harness: close lock %s: %w", lockPath, closeErr)
+			}
 			return func() { _ = os.Remove(lockPath) }, nil
 		}
 		if !errors.Is(err, fs.ErrExist) {
 			return nil, fmt.Errorf("harness: lock %s: %w", lockPath, err)
 		}
 
-		if info, statErr := os.Stat(lockPath); statErr == nil &&
-			time.Since(info.ModTime()) > harnessLockStaleAfter {
-			_ = os.Remove(lockPath)
+		if reclaimStaleHarnessLockAt(lockPath, time.Now(), staleAfter, processAlive) {
 			continue
 		}
 
@@ -279,6 +289,47 @@ func acquireHarnessLock(ctx context.Context, dir string) (func(), error) {
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
+}
+
+func reclaimStaleHarnessLockAt(lockPath string, now time.Time, staleAfter time.Duration, isAlive func(int) (bool, error)) bool {
+	info, err := os.Stat(lockPath)
+	if err != nil {
+		return false
+	}
+	aged := now.Sub(info.ModTime()) > staleAfter
+
+	contents, err := os.ReadFile(lockPath)
+	if err != nil {
+		return false
+	}
+	pid, parseErr := strconv.Atoi(strings.TrimSpace(string(contents)))
+	if parseErr == nil && pid > 0 {
+		alive, probeErr := isAlive(pid)
+		switch {
+		case probeErr == nil && alive:
+			return false
+		case probeErr == nil && !alive:
+			// A confirmed-dead owner can be reclaimed immediately.
+		case errors.Is(probeErr, errProcessLivenessUnavailable):
+			if !aged {
+				return false
+			}
+		default:
+			return false
+		}
+	} else if !aged {
+		return false
+	}
+
+	currentInfo, err := os.Stat(lockPath)
+	if err != nil || !os.SameFile(info, currentInfo) {
+		return false
+	}
+	currentContents, err := os.ReadFile(lockPath)
+	if err != nil || !bytes.Equal(contents, currentContents) {
+		return false
+	}
+	return os.Remove(lockPath) == nil
 }
 
 func flowDirectory(path string) string {
@@ -580,11 +631,12 @@ func runGoContext(parent context.Context, dir string, args ...string) error {
 	cmd.Stdin = os.Stdin
 
 	capture := newTailBuffer(maxCapturedOutputBytes)
-	warnings := newGoWarningWriter(parent, os.Stderr)
+	verbose := os.Getenv("NFLOW_GO_VERBOSE") == "1"
+	warnings := newGoWarningWriterMode(parent, os.Stderr, verbose)
 	defer warnings.Flush()
-	if os.Getenv("NFLOW_GO_VERBOSE") == "1" {
+	if verbose {
 		cmd.Stdout = io.MultiWriter(os.Stderr, capture)
-		cmd.Stderr = io.MultiWriter(os.Stderr, capture)
+		cmd.Stderr = io.MultiWriter(capture, warnings)
 	} else {
 		cmd.Stdout = capture
 		cmd.Stderr = io.MultiWriter(capture, warnings)
@@ -611,12 +663,10 @@ func runGoOutputContext(parent context.Context, dir string, args ...string) ([]b
 	var stdout bytes.Buffer
 	capture := newTailBuffer(maxCapturedOutputBytes)
 	cmd.Stdout = &stdout
-	warnings := newGoWarningWriter(parent, os.Stderr)
+	verbose := os.Getenv("NFLOW_GO_VERBOSE") == "1"
+	warnings := newGoWarningWriterMode(parent, os.Stderr, verbose)
 	defer warnings.Flush()
 	cmd.Stderr = io.MultiWriter(capture, warnings)
-	if os.Getenv("NFLOW_GO_VERBOSE") == "1" {
-		cmd.Stderr = io.MultiWriter(os.Stderr, capture)
-	}
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GIT_TERMINAL_PROMPT=0")
 	if err := cmd.Run(); err != nil {
 		return nil, goCommandFailure(ctx, args, err, capture.String())
@@ -799,17 +849,22 @@ func newTailBuffer(maxBytes int) *tailBuffer {
 }
 
 func (b *tailBuffer) Write(p []byte) (int, error) {
+	n := len(p)
 	if len(p) >= b.max {
+		if len(p) > b.max || len(b.buf) > 0 {
+			b.dropped = true
+		}
 		b.buf = append(b.buf[:0], p[len(p)-b.max:]...)
-		b.dropped = true
-		return len(p), nil
+		return n, nil
 	}
-	if over := len(b.buf) + len(p) - b.max; over > 0 {
-		b.buf = append(b.buf[:0], b.buf[over:]...)
+	remaining := b.max - len(b.buf)
+	if len(p) > remaining {
+		drop := len(p) - remaining
+		b.buf = append(b.buf[:0], b.buf[drop:]...)
 		b.dropped = true
 	}
 	b.buf = append(b.buf, p...)
-	return len(p), nil
+	return n, nil
 }
 
 func (b *tailBuffer) String() string {
@@ -1080,6 +1135,7 @@ func copyLoosePackage(r require.Requirement, dstDir string) error {
 		return err
 	}
 
+	copied := false
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
 			continue
@@ -1114,22 +1170,17 @@ func copyLoosePackage(r require.Requirement, dstDir string) error {
 		if err := os.WriteFile(dstFile, data, 0o600); err != nil {
 			return err
 		}
+		copied = true
+	}
+	if !copied {
+		return fmt.Errorf("harness: loose package %q contains no non-test Go source files", srcDir)
 	}
 	return nil
 }
 
 func isPackageMain(data []byte) bool {
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*") {
-			continue
-		}
-		if pkg, ok := strings.CutPrefix(line, "package "); ok {
-			return strings.TrimSpace(pkg) == "main"
-		}
-	}
-	return false
+	file, _ := parser.ParseFile(token.NewFileSet(), "", data, parser.PackageClauseOnly)
+	return file != nil && file.Name.Name == "main"
 }
 
 func bundleImportPath(r require.Requirement) string {

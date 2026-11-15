@@ -298,6 +298,13 @@ Runtime options:
 | `--json` | Suppress the embedded version banner; run output is already JSON. |
 | `--suppress-output` | Suppress the runner's final result on stdout so a workflow transport can own the stream. Supported by `nflow run` and standalone binaries; output written directly by workflow actions remains visible. |
 
+The standalone executable forwards workflow arguments; it does not handle `-h`
+or `--help` automatically, and the bare word `help` is positional. Separated
+values such as `--key VALUE` are forwarded as a flag/value pair. Use the explicit
+`--key=VALUE` form when a value starts with `-` (negative numeric values are also
+accepted as separated values). For boolean workflow flags, pass `true` or
+`false` explicitly, for example `--dry-run true` or `--dry-run=false`.
+
 Build options:
 
 | Flag | Effect |
