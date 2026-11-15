@@ -1,0 +1,7 @@
+@description "input remains the original request while __root__ is the current typed stage"
+@assert: result.request_lang == "en"
+@assert: result.stage_entry == "current-stage"
+typedprojection.entry -> {
+  request_lang: input.lang,
+  stage_entry: __root__.entry
+}

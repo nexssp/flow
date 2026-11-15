@@ -183,18 +183,18 @@ func TestProjectionNullCoalescingAllowsMissingSyntheticFieldsOnly(t *testing.T) 
 		Tag:  reflect.StructTag(`expr:"metadata" flow_projection:"true"`),
 	}})
 	projectionContext := compiler.TypeAnalysisContext{Input: compiler.TypeDescriptor{Type: inputType}}
-	if _, err := CheckTypedSourceExpression(`input.metadata.ip_address ?? "0.0.0.0"`, projectionContext, compiler.Position{}); err != nil {
+	if _, err := CheckTypedSourceExpression(`__root__.metadata.ip_address ?? "0.0.0.0"`, projectionContext, compiler.Position{}); err != nil {
 		t.Fatalf("compile fallback for absent synthetic projection field: %v", err)
 	}
 	if _, err := CheckTypedSourceExpression(`.app_env ?? "production"`, projectionContext, compiler.Position{}); err != nil {
 		t.Fatalf("compile fallback for absent synthetic shorthand field: %v", err)
 	}
-	if _, err := CheckTypedSourceExpression("input.metadata.ip_address", projectionContext, compiler.Position{}); err == nil {
+	if _, err := CheckTypedSourceExpression("__root__.metadata.ip_address", projectionContext, compiler.Position{}); err == nil {
 		t.Fatal("projection schema accepted a missing field without a null-coalescing fallback")
 	}
 
 	goContext := compiler.TypeAnalysisContext{Input: compiler.TypeDescriptor{Type: reflect.TypeFor[recursiveProjectionNode]()}}
-	if _, err := CheckTypedSourceExpression(`input.missing ?? "fallback"`, goContext, compiler.Position{}); err == nil {
+	if _, err := CheckTypedSourceExpression(`__root__.missing ?? "fallback"`, goContext, compiler.Position{}); err == nil {
 		t.Fatal("typed Go struct accepted a nonexistent field under null coalescing")
 	}
 }
@@ -385,7 +385,7 @@ func TestExpressionViewConvertsDeepAndCyclicRecursiveValues(t *testing.T) {
 	}
 	deepPath := "node" + strings.Repeat(".next", 80) + ".name"
 	typeContext := compiler.TypeAnalysisContext{Input: compiler.TypeDescriptor{Type: reflect.TypeFor[recursiveProjectionNode]()}}
-	deepSource := "input" + strings.Repeat(".next", 80) + ".name"
+	deepSource := "__root__" + strings.Repeat(".next", 80) + ".name"
 	deepType, err := CheckTypedSourceExpression(deepSource, typeContext, compiler.Position{})
 	if err != nil {
 		t.Fatalf("typed checker rejected a valid path beyond its dynamic proxy boundary: %v", err)
@@ -419,7 +419,7 @@ func TestExpressionViewConvertsDeepAndCyclicRecursiveValues(t *testing.T) {
 	if !known || len(flowFields) != 1 || flowFields[0].Type != reflect.TypeFor[recursiveProjectionNode]() {
 		t.Fatalf("embedded Flow output field type = (%v, %#v), want recursive Go output type", known, flowFields)
 	}
-	missingPath := "input" + strings.Repeat(".next", 80) + ".missing"
+	missingPath := "__root__" + strings.Repeat(".next", 80) + ".missing"
 	if _, err := CheckTypedSourceExpression(missingPath, typeContext, compiler.Position{}); err == nil || !strings.Contains(err.Error(), "missing") {
 		t.Fatalf("typed checker did not reject a missing field beyond its dynamic proxy boundary: %v", err)
 	}
@@ -436,7 +436,7 @@ func TestExpressionViewConvertsDeepAndCyclicRecursiveValues(t *testing.T) {
 	cycle := &recursiveProjectionNode{Name: "cycle"}
 	cycle.Next = cycle
 	cycleEnv := map[string]any{"node": expressionValueView(cycle)}
-	if _, err := CheckTypedSourceExpression("input.next.next.name", typeContext, compiler.Position{}); err != nil {
+	if _, err := CheckTypedSourceExpression("__root__.next.next.name", typeContext, compiler.Position{}); err != nil {
 		t.Fatalf("typed checker rejected a valid cyclic-type path: %v", err)
 	}
 	cycleProgram, err := compiler.CompileExpression("node.next.next.name", expr.Env(cycleEnv), expr.AllowUndefinedVariables())

@@ -13,6 +13,7 @@ import (
 const (
 	expressionRootName  = "__root__"
 	expressionStateName = "__state__"
+	expressionInputName = "input"
 )
 
 func projectionFieldIsBuiltin(name string) bool {
