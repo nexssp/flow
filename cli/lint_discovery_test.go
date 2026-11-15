@@ -141,6 +141,9 @@ func TestRunLintWildcardReportsMixedTreeFailures(t *testing.T) {
 }
 
 func TestRunLintBatchUsesCLIHarnessForExternalModules(t *testing.T) {
+	if testing.Short() {
+		t.Skip("external harness build skipped in short mode")
+	}
 	root := t.TempDir()
 	helperDir := filepath.Join(root, "helpers")
 	if err := os.MkdirAll(helperDir, 0o755); err != nil {

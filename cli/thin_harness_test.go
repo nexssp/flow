@@ -112,6 +112,9 @@ func TestRunHarnessWithFallback(t *testing.T) {
 }
 
 func TestGeneratedThinHarnessFallbackRunsCLIWithPipedStdin(t *testing.T) {
+	if testing.Short() {
+		t.Skip("external harness build skipped in short mode")
+	}
 	workDir := t.TempDir()
 	helperDir := filepath.Join(workDir, "helpers")
 	if err := os.MkdirAll(helperDir, 0o755); err != nil {

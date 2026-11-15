@@ -9,6 +9,30 @@ permissions:
   contents: read
 
 jobs:
+  harness-integration:
+    name: harness integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run full harness integration suite (without race instrumentation)
+        run: task test:harness
+
   verify:
     name: build · lint · test
     runs-on: ubuntu-latest
@@ -53,8 +77,8 @@ jobs:
       - name: Build
         run: task build
 
-      - name: Run CI gate (self-tests, acceptance specs, lint, Go tests, vulnerability scan)
-        run: task ci
+      - name: Run core CI gate (harness integration runs in parallel)
+        run: task ci:fast
 
       - name: Fast benchmark smoke check (exclude cold harness builds)
         run: task bench
