@@ -70,6 +70,15 @@ For schema-bound AI tools, keep the model-visible argument schema separate from 
 
 Use the smallest construct that matches the reuse boundary:
 
+### Choose a module boundary
+
+Start from the target host's active capabilities. A package or `.nflow` file is not available to an application merely because it exists in the repository.
+
+1. If the behavior can be composed from registered capabilities, keep the workflow in NFlow. Put app-specific workflows and contracts in focused `.nflow` modules and `@include` them from the application entrypoint.
+2. Use `@include` to import NFlow source. Use `@require` to load a Go extension or bundle that provides capabilities. A directory or Go package alone does not register actions; verify that the target host resolves the bundle and mounts its actions.
+3. Add a Go bundle only when required action-level behavior is missing and cannot reasonably be composed or reused. Keep the bundle focused on providing that capability; keep routes, orchestration, and workflow policy in NFlow.
+4. Add a fixture or host test that loads the application entrypoint and proves its includes and required capabilities resolve in the intended host.
+
 - **`@func`**: a pure, typed expression helper for repeated calculation. It cannot perform I/O or invoke actions. It is file-local; an included module exposes it under that module's namespace.
 - **`@macro`**: a short, parameterized source pattern that should expand at the call site. Use it for genuine repeated syntax; do not use it to hide a complex workflow or create an unreadable mini-language. Macros substitute source expressions and re-parse the expansion, so verify the current parameter syntax, kinds, arity, and limits.
 - **`@pipeline`**: a named flow-level composition that should be invoked as a pipeline capability. Use it when readers benefit from a descriptive reusable workflow name.
