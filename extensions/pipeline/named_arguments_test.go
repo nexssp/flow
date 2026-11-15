@@ -61,27 +61,6 @@ func TestNamedPipelineArgumentAdviser(t *testing.T) {
 	}
 }
 
-func TestNamedPipelineArgumentFixtures(t *testing.T) {
-	fixtures := []string{
-		"nflows/named_args_literals.nflow",
-		"nflows/named_args_runtime_refs.nflow",
-		"nflows/named_args_legacy_compat.nflow",
-		"nflows/named_args_generic_action_compat.nflow",
-	}
-	cfg := namedArgumentTestConfig(t)
-	for _, fixturePath := range fixtures {
-		t.Run(fixturePath, func(t *testing.T) {
-			source, err := fs.ReadFile(pipelineext.Bundle(nil).Fixtures, fixturePath)
-			if err != nil {
-				t.Fatalf("read named pipeline argument fixture %q: %v", fixturePath, err)
-			}
-			if _, err := runner.Execute(t.Context(), cfg, string(source), "pipeline/"+fixturePath, map[string]any{}); err != nil {
-				t.Fatalf("execute named pipeline argument fixture %q: %v", fixturePath, err)
-			}
-		})
-	}
-}
-
 func TestNamedPipelineArgumentsRespectRequestSchema(t *testing.T) {
 	const fixturePath = "nflows/named_args_literals.nflow"
 	source, err := fs.ReadFile(pipelineext.Bundle(nil).Fixtures, fixturePath)

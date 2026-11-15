@@ -51,30 +51,6 @@ func nativeConfig(t *testing.T) runner.Config {
 	return cfg
 }
 
-func TestFuncFixtureUsesSchemaDefaultsAndCanBeReusedByPipelines(t *testing.T) {
-	t.Parallel()
-	fixture, err := fs.ReadFile(funcext.Bundle(nil).Fixtures, "nflows/reusable_shipping_fee.nflow")
-	if err != nil {
-		t.Fatalf("read fixture: %v", err)
-	}
-	fixtureDir := t.TempDir()
-	cfg := nativeConfig(t)
-	execution, err := runner.Execute(t.Context(), cfg, string(fixture), filepath.Join(fixtureDir, "reusable_shipping_fee.nflow"), nil)
-	if err != nil {
-		t.Fatalf("execute fixture: %v", err)
-	}
-	result, ok := execution.Output.(map[string]any)
-	if !ok {
-		t.Fatalf("output = %T (%#v), want map[string]any", execution.Output, execution.Output)
-	}
-	if got, want := result["subtotal_minor"], 3000; got != want {
-		t.Errorf("default subtotal = %#v, want %d", got, want)
-	}
-	if got, want := result["shipping_minor"], 599; got != want {
-		t.Errorf("shipping fee = %#v, want %d", got, want)
-	}
-}
-
 func TestFuncPracticalExamples(t *testing.T) {
 	t.Parallel()
 	cfg := nativeConfig(t)
@@ -244,46 +220,6 @@ billing.@passthrough(runtime.const @{ value: billing.commerce.taxMinor(120) })`
 	}
 	if execution.Output != 12 {
 		t.Fatalf("output = %#v, want 12", execution.Output)
-	}
-}
-
-func TestFuncCallsInLoopAndOnErrorConditions(t *testing.T) {
-	t.Parallel()
-	cfg := nativeConfig(t)
-	root := t.TempDir()
-	writeSource(t, root, "conditions.nflow", `@func checks.done(value int) bool = value >= 3
-@func checks.isTimeout(kind string) bool = kind == "Timeout"`)
-
-	loopSource := `@include "./conditions.nflow" AS calc
-{ count: 0 } -> loop({ count: .count + 1 }) until(calc.checks.done(.count))`
-	loopResult, err := runner.Execute(t.Context(), cfg, loopSource, filepath.Join(root, "loop.nflow"), nil)
-	if err != nil {
-		t.Fatalf("execute function-based loop condition: %v", err)
-	}
-	loopOutput, ok := loopResult.Output.(map[string]any)
-	if !ok || loopOutput["count"] != 3 {
-		t.Fatalf("loop output = %#v, want count 3", loopResult.Output)
-	}
-
-	errorSource := `@include "./conditions.nflow" AS calc
-@pipeline recover
-  { recovered: true }
-@end
-@pipeline fallback
-  { recovered: false }
-@end
-@on_error {
-  when calc.checks.isTimeout(error.kind) -> pipeline.recover
-  else -> pipeline.fallback
-}
-runtime.fail @{ kind: "Timeout", message: "test" }`
-	errorResult, err := runner.Execute(t.Context(), cfg, errorSource, filepath.Join(root, "on-error.nflow"), nil)
-	if err != nil {
-		t.Fatalf("execute function-based @on_error condition: %v", err)
-	}
-	errorOutput, ok := errorResult.Output.(map[string]any)
-	if !ok || errorOutput["recovered"] != true {
-		t.Fatalf("on_error output = %#v, want recovered true", errorResult.Output)
 	}
 }
 

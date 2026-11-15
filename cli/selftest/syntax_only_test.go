@@ -72,34 +72,6 @@ func TestSyntaxOnlyCompilesWithoutExecutingActions(t *testing.T) {
 	}
 }
 
-func TestSyntaxOnlySyntaxGapFixturesCompile(t *testing.T) {
-	var output bytes.Buffer
-	code := runWithBundles(context.Background(), Options{
-		Out: &output,
-		Filters: []string{
-			"Ternary right associativity",
-			"Two-arm ternary compiles",
-			"Modifiers and ternary colons",
-			"Argument values cover scalar",
-		},
-		SyntaxOnly: true,
-		JSON:       true,
-	}, native.SelftestBundles())
-	if code != 0 {
-		t.Fatalf("syntax-gap fixture self-test exit code = %d; output:\n%s", code, output.String())
-	}
-	var report struct {
-		Passed int `json:"passed"`
-		Failed int `json:"failed"`
-	}
-	if err := json.Unmarshal(output.Bytes(), &report); err != nil {
-		t.Fatalf("decode syntax-gap report: %v\n%s", err, output.String())
-	}
-	if report.Passed != 4 || report.Failed != 0 {
-		t.Fatalf("syntax-gap results: passed=%d failed=%d\n%s", report.Passed, report.Failed, output.String())
-	}
-}
-
 func TestAllEmbeddedExtensionNFlowsCompileWithoutExecution(t *testing.T) {
 	bundles := native.SelftestBundles()
 	cfg, err := flowrunner.BuildConfig(bundles)

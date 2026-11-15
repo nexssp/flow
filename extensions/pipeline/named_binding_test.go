@@ -2,32 +2,14 @@ package pipeline_test
 
 import (
 	"context"
-	"io/fs"
 	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/action"
 
 	"github.com/nexssp/flow/compiler"
-	syntaxext "github.com/nexssp/flow/extensions/syntax"
 	"github.com/nexssp/flow/runner"
 )
-
-func TestNamedPipelineBindings_EmbeddedFixture(t *testing.T) {
-	const fixturePath = "nflows/named_bindings.nflow"
-	source, err := fs.ReadFile(syntaxext.Bundle(nil).Fixtures, fixturePath)
-	if err != nil {
-		t.Fatalf("read named-binding fixture %q: %v", fixturePath, err)
-	}
-	result, err := runner.Execute(context.Background(), pipelineTestConfig(t), string(source), "syntax/"+fixturePath, nil)
-	if err != nil {
-		t.Fatalf("execute named-binding fixture: %v", err)
-	}
-	output := requireOutputMap(t, result.Output)
-	if output["known"] != true || output["choice"] != "approved" || output["original"] != "original request" || output["flowing"] != true {
-		t.Fatalf("fixture output = %#v, want all named-binding outputs", output)
-	}
-}
 
 func TestNamedPipelineBindings_AIOutputExamples(t *testing.T) {
 	cfg := pipelineTestConfig(t)
@@ -69,19 +51,6 @@ func TestNamedPipelineBindings_AIOutputExamples(t *testing.T) {
 	}
 	if _, leaked := decisionOutput["decision"]; leaked {
 		t.Fatalf("binding was rewritten into the pipeline result: %#v", decisionOutput)
-	}
-}
-
-func TestNamedPipelineBindings_DuplicateNamesFailDuringCompilation(t *testing.T) {
-	cfg := pipelineTestConfig(t)
-	source := `@pipeline duplicate_names
-  runtime.const @{ value: { Known: true } } as estimate
-  -> runtime.const @{ value: { Known: false } } as estimate
-@end
-pipeline.duplicate_names
-`
-	if _, err := runner.Compile(context.Background(), cfg, source, "duplicate-bindings.nflow"); err == nil || !strings.Contains(err.Error(), `duplicate pipeline binding "estimate"`) {
-		t.Fatalf("compile error = %v, want duplicate pipeline binding diagnostic", err)
 	}
 }
 

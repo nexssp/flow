@@ -1,4 +1,7 @@
 @description "spec: explicit input paths and object shorthand remain valid around an overlapping pipeline binding"
+@assert: result.name == "current"
+@assert: result.original == "original"
+@assert: result.tool.name == "current"
 @pipeline explicit_binding_disambiguation
   runtime.const @{ value: { name: "bound" } } as tool
   -> runtime.const @{ value: { tool: { name: "current" } } }

@@ -12,30 +12,12 @@ import (
 	"github.com/nexssp/flow/runner"
 )
 
-func TestProjectionBindingConflictNFlowFixtures(t *testing.T) {
+func TestProjectionBindingConflictRuntimeError(t *testing.T) {
 	t.Parallel()
 
 	cfg, err := runner.BuildConfig(native.Bundles())
 	if err != nil {
 		t.Fatalf("build config: %v", err)
-	}
-
-	const validFixture = "nflows/explicit_binding_disambiguation.nflow"
-	validSource, err := fs.ReadFile(projectionext.Bundle(nil).Fixtures, validFixture)
-	if err != nil {
-		t.Fatalf("read fixture %q: %v", validFixture, err)
-	}
-	validResult, err := runner.Execute(t.Context(), cfg, string(validSource), validFixture, nil)
-	if err != nil {
-		t.Fatalf("execute explicit disambiguation fixture: %v", err)
-	}
-	assertions := []string{
-		`result.name == "current"`,
-		`result.original == "original"`,
-		`result.tool.name == "current"`,
-	}
-	if failures := runner.EvaluateAssertions(validResult.Output, assertions); len(failures) != 0 {
-		t.Fatalf("explicit disambiguation assertions failed: %v", failures)
 	}
 
 	const conflictFixture = "nflows/ambiguous_binding_runtime.nflow"

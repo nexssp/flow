@@ -14,41 +14,6 @@ import (
 	"github.com/nexssp/flow/runner"
 )
 
-func TestPipelineArraySchemaFixtures(t *testing.T) {
-	t.Parallel()
-	cfg := pipelineTestConfig(t)
-	// cfg is shared across parallel subtests; Execute creates a fresh execution
-	// resolver per compile, so materialized pipeline mounts are isolated.
-	for _, fixture := range []string{
-		"nflows/array_response_schema.nflow",
-		"nflows/array_response_scalar.nflow",
-		"nflows/array_response_wrong_shape.nflow",
-		"nflows/array_response_invalid_item.nflow",
-		"nflows/array_response_invalid_scalar.nflow",
-		"nflows/array_response_strict_item.nflow",
-		"nflows/array_request_schema.nflow",
-		"nflows/array_request_invalid_item.nflow",
-		"nflows/array_request_wrong_shape.nflow",
-		"nflows/array_request_scalar.nflow",
-		"nflows/array_request_invalid_scalar.nflow",
-		"nflows/array_in_schema_alias.nflow",
-		"nflows/array_schema_shared_alias.nflow",
-		"nflows/array_schema_shared_scalar.nflow",
-		"nflows/array_out_schema_alias.nflow",
-	} {
-		t.Run(fixture, func(t *testing.T) {
-			t.Parallel()
-			source, err := fs.ReadFile(pipelineext.Bundle(nil).Fixtures, fixture)
-			if err != nil {
-				t.Fatalf("read fixture %q: %v", fixture, err)
-			}
-			if _, err := runner.Execute(t.Context(), cfg, string(source), fixture, nil); err != nil {
-				t.Fatalf("execute fixture %q: %v", fixture, err)
-			}
-		})
-	}
-}
-
 func TestPipelineArraySchemaDefaultErrorFixtures(t *testing.T) {
 	t.Parallel()
 	cfg := pipelineTestConfig(t)

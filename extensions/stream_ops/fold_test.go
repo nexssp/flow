@@ -1,28 +1,13 @@
 package stream_ops_test
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	"github.com/nexssp/flow/cli/selftest"
 	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/stream_ops"
 )
-
-func TestStreamOps_NFlowFixtures(t *testing.T) {
-	t.Parallel()
-
-	var output bytes.Buffer
-	code := selftest.Run(t.Context(), selftest.Options{
-		Out:     &output,
-		Filters: []string{"stream_ops"},
-	})
-	if code != 0 {
-		t.Fatalf("stream_ops self-test exit code = %d; output:\n%s", code, output.String())
-	}
-}
 
 func TestStreamFold_AggregatesRecordFields(t *testing.T) {
 	t.Parallel()
