@@ -56,5 +56,5 @@ jobs:
       - name: Run CI gate (self-tests, acceptance specs, lint, Go tests, vulnerability scan)
         run: task ci
 
-      - name: Benchmark smoke check
+      - name: Fast benchmark smoke check (exclude cold harness builds)
         run: task bench
