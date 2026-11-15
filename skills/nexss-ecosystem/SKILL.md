@@ -11,6 +11,7 @@ Use this skill to solve Nexss tasks from current evidence. Treat the catalogue a
 
 - **Kernel** supplies reusable Go execution primitives, typed actions, and runtime semantics. A Kernel API is not automatically an NFlow capability.
 - **Flow / NFlow** is the language and runtime for composing registered capabilities into workflows. NFlow is domainless: its actions and features come from the active host registry and loaded bundles.
+- **NFlow schemas and JSON fields:** Declared `@schema` fields are JSON-visible by default, with the first letter lowercased (`Path` becomes `path`). Use `json:"-"` to omit a field; add an explicit JSON name only when you need to override the default. Use `default`, `validate`, and `omitempty` tags only when their specific behavior is needed.
 - **Bundles and adapters** expose Go capabilities to a Flow host. A repository, directory, Go package, or embedded `.nflow` file is not available to a flow unless the host loads and registers it.
 - **Executable CLI entrypoints** can stay in one `.nflow` file: use a transport adapter such as TCLI to bind commands to pipelines, then use `nflow build` to package that same workflow and its required modules. Do not add a separate Go/TCLI wrapper by default; see [NFlow build and TCLI entrypoint](references/nflow-build-and-tcli.md).
 - **`@include`** imports NFlow source modules; **`@require`** loads extension bundles. Do not conflate them.
