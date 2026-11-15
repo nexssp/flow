@@ -13,11 +13,13 @@ type KeywordMapping struct {
 	Target  string
 }
 
+const runtimeConstAction = "runtime.const"
+
 // keywordList is the canonical, ordered list of native keywords. It is
 // the source of truth; nativeKeywords is the O(1) lookup index derived
 // from it.
 var keywordList = []KeywordMapping{
-	{Keyword: "const", Target: "runtime.const"},
+	{Keyword: "const", Target: runtimeConstAction},
 	{Keyword: "with", Target: "runtime.with"},
 	{Keyword: "pick", Target: "runtime.pick"},
 	{Keyword: "wrap", Target: "runtime.wrap"},

@@ -43,9 +43,13 @@ var Const = action.New("runtime.const", func(_ context.Context, in any) (any, er
 	if len(m) > 0 {
 		clean := make(map[string]any, len(m))
 		for k, v := range m {
-			if k != "__root__" {
-				clean[k] = v
+			if k == "__root__" {
+				continue
 			}
+			if value, ok := v.(constinput.String); ok {
+				v = string(value)
+			}
+			clean[k] = v
 		}
 		return clean, nil
 	}

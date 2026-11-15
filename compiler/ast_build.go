@@ -907,7 +907,7 @@ func resolveConfigRefsInAtom(ctx context.Context, a *Atom) {
 	resolveConfigRefsInValue(cfg, cliArgs, a.DirectInput)
 	for key, value := range a.Params {
 		resolved := resolveConfigString(cfg, cliArgs, value)
-		if a.Name == "runtime.const" && (key == "value" || key == "val") &&
+		if a.Name == runtimeConstAction && (key == "value" || key == "val") &&
 			(strings.HasPrefix(value, "@config.") ||
 				strings.HasPrefix(value, "@flag.") ||
 				strings.HasPrefix(value, "@arg.")) {
@@ -1112,7 +1112,7 @@ func buildPayload(ctx context.Context, in any, a *Atom) (map[string]any, error) 
 
 	// runtime.const is a generator: it resolves references against input m (e.g. .id),
 	// but emits ONLY its own declared parameters/arguments without echoing unrequested keys
-	if a.Name == "runtime.const" {
+	if a.Name == runtimeConstAction {
 		out := make(map[string]any, len(a.Params)+len(a.Args))
 		for k, v := range a.Params {
 			out[k] = v
@@ -1489,7 +1489,7 @@ func dotFieldNeedsRoot(name string) bool {
 	// expr's literal/operator keywords cannot safely become bare identifiers.
 	// __root__ is Flow's own environment binding, not the user's field.
 	switch name {
-	case "true", "false", "nil", "not", "in", "or", "and", "matches", "contains",
+	case "true", literalFalse, "nil", "not", "in", "or", "and", "matches", "contains",
 		"startsWith", "endsWith", "let", "if", "else", "__root__":
 		return true
 	}

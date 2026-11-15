@@ -297,7 +297,7 @@ func (p *Parser) parsePrimaryInner() (Expr, error) {
 			pos := p.currentPos()
 			p.Next()
 			return &LiteralExpr{Val: true, Pos: pos}, nil
-		case "false":
+		case literalFalse:
 			pos := p.currentPos()
 			p.Next()
 			return &LiteralExpr{Val: false, Pos: pos}, nil
@@ -430,71 +430,84 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 		} else if consumed {
 			continue
 		}
-		switch p.Cur().Type {
-		case TokColon:
-			if p.isTernaryColon() {
-				return a, nil
-			}
-			if err := p.parseModifier(a); err != nil {
-				return nil, err
-			}
-
-		case TokHash:
-			p.Next()
-			a.Targets = p.appendList(a.Targets)
-
-		case TokTilde:
-			p.Next()
-			a.Excludes = p.appendList(a.Excludes)
-
-		case TokAtPrompt:
-			prompt := strings.TrimSpace(p.Cur().Lit)
-			if prompt == "config" {
-				a.ConfigInject = true
-			} else {
-				a.Prompt = prompt
-			}
-			p.Next()
-
-		case TokAtBrace:
-			if a.DirectInput != nil {
-				return nil, p.errorf(p.Cur().Line, "const cannot combine direct scalar input with a named argument object")
-			}
-			if p.Cur().Unterminated {
-				return nil, p.errorf(p.Cur().Line, "unterminated argument block; expected '}'")
-			}
-			raw, err := p.expandArgumentMap(p.Cur().Lit)
-			if err != nil {
-				return nil, err
-			}
-			args, spreads, err := parseAtBrace(raw, p.Position())
-			if err != nil {
-				return nil, err
-			}
-			a.HasArgumentObject = true
-			a.ArgSpreads = append(a.ArgSpreads, spreads...)
-			if a.Args == nil {
-				a.Args = args
-			} else {
-				for key, value := range args {
-					if _, exists := a.Args[key]; exists {
-						return nil, SourceError(p.Position(), "duplicate argument %q", key)
-					}
-					a.Args[key] = value
-				}
-			}
-			p.Next()
-
-		case TokEOF, TokIdent, TokString, TokNumber, TokArrow, TokPipe,
-			TokAmpersand, TokOrOr, TokLParen, TokRParen, TokLBrace,
-			TokRBrace, TokEquals, TokComma, TokQuestion:
+		consumed, err := p.parseAtomSuffix(a)
+		if err != nil {
+			return nil, err
+		}
+		if !consumed {
 			return a, nil
 		}
 	}
 }
 
+func (p *Parser) parseAtomSuffix(a *Atom) (bool, error) {
+	switch p.Cur().Type {
+	case TokColon:
+		if p.isTernaryColon() {
+			return false, nil
+		}
+		return true, p.parseModifier(a)
+
+	case TokHash:
+		p.Next()
+		a.Targets = p.appendList(a.Targets)
+		return true, nil
+
+	case TokTilde:
+		p.Next()
+		a.Excludes = p.appendList(a.Excludes)
+		return true, nil
+
+	case TokAtPrompt:
+		prompt := strings.TrimSpace(p.Cur().Lit)
+		if prompt == "config" {
+			a.ConfigInject = true
+		} else {
+			a.Prompt = prompt
+		}
+		p.Next()
+		return true, nil
+
+	case TokAtBrace:
+		if a.DirectInput != nil {
+			return false, p.errorf(p.Cur().Line, "const cannot combine direct scalar input with a named argument object")
+		}
+		if p.Cur().Unterminated {
+			return false, p.errorf(p.Cur().Line, "unterminated argument block; expected '}'")
+		}
+		raw, err := p.expandArgumentMap(p.Cur().Lit)
+		if err != nil {
+			return false, err
+		}
+		args, spreads, err := parseAtBrace(raw, p.Position())
+		if err != nil {
+			return false, err
+		}
+		a.HasArgumentObject = true
+		a.ArgSpreads = append(a.ArgSpreads, spreads...)
+		if a.Args == nil {
+			a.Args = args
+		} else {
+			for key, value := range args {
+				if _, exists := a.Args[key]; exists {
+					return false, SourceError(p.Position(), "duplicate argument %q", key)
+				}
+				a.Args[key] = value
+			}
+		}
+		p.Next()
+		return true, nil
+
+	case TokEOF, TokIdent, TokString, TokNumber, TokArrow, TokPipe,
+		TokAmpersand, TokOrOr, TokLParen, TokRParen, TokLBrace,
+		TokRBrace, TokEquals, TokComma, TokQuestion:
+		return false, nil
+	}
+	return false, nil
+}
+
 func (p *Parser) parseDirectConstInput(a *Atom) (bool, error) {
-	if a.Name != "runtime.const" {
+	if a.Name != runtimeConstAction {
 		return false, nil
 	}
 	token := p.Cur()
@@ -515,7 +528,7 @@ func (p *Parser) parseDirectConstInput(a *Atom) (bool, error) {
 		switch token.Lit {
 		case "true":
 			value = &Value{Kind: ValueBool, Bool: true}
-		case "false":
+		case literalFalse:
 			value = &Value{Kind: ValueBool, Bool: false}
 		case "null":
 			value = &Value{Kind: ValueNull}
@@ -530,7 +543,9 @@ func (p *Parser) parseDirectConstInput(a *Atom) (bool, error) {
 			return false, nil
 		}
 		value = &Value{Kind: ValueRef, Ref: reference}
-	default:
+	case TokEOF, TokArrow, TokPipe, TokAmpersand, TokOrOr,
+		TokLParen, TokRParen, TokLBrace, TokRBrace, TokColon,
+		TokEquals, TokComma, TokQuestion, TokHash, TokTilde, TokAtBrace:
 		return false, nil
 	}
 	if a.DirectInput != nil || a.HasArgumentObject || len(a.Params) > 0 {

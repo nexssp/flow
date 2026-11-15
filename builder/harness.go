@@ -637,7 +637,6 @@ func runGoContext(parent context.Context, dir string, args ...string) error {
 	capture := newTailBuffer(maxCapturedOutputBytes)
 	verbose := os.Getenv("NFLOW_GO_VERBOSE") == "1"
 	warnings := newGoWarningWriterMode(parent, os.Stderr, verbose)
-	defer warnings.Flush()
 	if verbose {
 		cmd.Stdout = io.MultiWriter(os.Stderr, capture)
 		cmd.Stderr = io.MultiWriter(capture, warnings)
@@ -651,8 +650,17 @@ func runGoContext(parent context.Context, dir string, args ...string) error {
 		"GIT_TERMINAL_PROMPT=0",
 	)
 
-	if err := cmd.Run(); err != nil {
-		return goCommandFailure(ctx, args, err, capture.String())
+	runErr := cmd.Run()
+	flushErr := warnings.Flush()
+	if runErr != nil {
+		commandErr := goCommandFailure(ctx, args, runErr, capture.String())
+		if flushErr != nil {
+			return errors.Join(commandErr, fmt.Errorf("harness: flush Go diagnostics: %w", flushErr))
+		}
+		return commandErr
+	}
+	if flushErr != nil {
+		return fmt.Errorf("harness: flush Go diagnostics: %w", flushErr)
 	}
 	return nil
 }
@@ -669,11 +677,19 @@ func runGoOutputContext(parent context.Context, dir string, args ...string) ([]b
 	cmd.Stdout = &stdout
 	verbose := os.Getenv("NFLOW_GO_VERBOSE") == "1"
 	warnings := newGoWarningWriterMode(parent, os.Stderr, verbose)
-	defer warnings.Flush()
 	cmd.Stderr = io.MultiWriter(capture, warnings)
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GIT_TERMINAL_PROMPT=0")
-	if err := cmd.Run(); err != nil {
-		return nil, goCommandFailure(ctx, args, err, capture.String())
+	runErr := cmd.Run()
+	flushErr := warnings.Flush()
+	if runErr != nil {
+		commandErr := goCommandFailure(ctx, args, runErr, capture.String())
+		if flushErr != nil {
+			return nil, errors.Join(commandErr, fmt.Errorf("harness: flush Go diagnostics: %w", flushErr))
+		}
+		return nil, commandErr
+	}
+	if flushErr != nil {
+		return nil, fmt.Errorf("harness: flush Go diagnostics: %w", flushErr)
 	}
 	return stdout.Bytes(), nil
 }
@@ -1183,8 +1199,8 @@ func copyLoosePackage(r require.Requirement, dstDir string) error {
 }
 
 func isPackageMain(data []byte) bool {
-	file, _ := parser.ParseFile(token.NewFileSet(), "", data, parser.PackageClauseOnly)
-	return file != nil && file.Name.Name == "main"
+	file, err := parser.ParseFile(token.NewFileSet(), "", data, parser.PackageClauseOnly)
+	return err == nil && file != nil && file.Name.Name == "main"
 }
 
 func bundleImportPath(r require.Requirement) string {

@@ -142,6 +142,8 @@ func TestBuild_StandaloneFlagValueForms(t *testing.T) {
 		{name: "assert switch is not a value", args: []string{"--key", "--assert", "expr"}, wantErr: "--key requires a value"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			// The executable is built in this test's temp directory; arguments are fixed test cases.
+			//nolint:gosec // G204: this is not a user-controlled executable or argument list.
 			command := exec.CommandContext(t.Context(), binaryPath, tc.args...)
 			var stdout, stderr bytes.Buffer
 			command.Stdout, command.Stderr = &stdout, &stderr

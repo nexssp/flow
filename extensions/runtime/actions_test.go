@@ -47,6 +47,7 @@ func TestConst_Coercion(t *testing.T) {
 		{"preserved JSON-looking CLI string", map[string]any{"value": constinput.String(`{"a":1}`)}, `{"a":1}`},
 		{"explicitly coerced CLI string", map[string]any{"value": constinput.String("42"), "coerce": true}, int64(42)},
 		{"named object", map[string]any{"count": 3, "enabled": true}, map[string]any{"count": 3, "enabled": true}},
+		{"named object preserves boolean-looking string", map[string]any{"enabled": constinput.String("true")}, map[string]any{"enabled": "true"}},
 		{"named object with coerce field", map[string]any{"count": 3, "coerce": true}, map[string]any{"count": 3, "coerce": true}},
 	}
 	for _, c := range cases {

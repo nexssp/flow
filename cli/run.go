@@ -195,7 +195,7 @@ func withoutTestModeFlag(args []string) []string {
 }
 
 func runFlowInProcess(ctx context.Context, inv *invocation, args []string) int {
-	target, _, _, err := splitArgs(args)
+	target, payload, flags, err := splitArgs(args)
 	if err != nil {
 		return fatalf("%v", err)
 	}
@@ -220,7 +220,7 @@ func runFlowInProcess(ctx context.Context, inv *invocation, args []string) int {
 		name = target
 	}
 
-	return runSourceInInvocation(ctx, inv, src, name, args)
+	return runSourceInInvocation(ctx, inv, src, name, payload, flags)
 }
 
 func isInlineSource(target string) bool {
@@ -279,12 +279,16 @@ func runEmbeddedInInvocation(ctx context.Context, inv *invocation, source string
 		}
 	}
 
-	if !hasFlag(args, "--json") {
+	payload, flags, err := splitPayloadAndFlags(args)
+	if err != nil {
+		return fatalf("%v", err)
+	}
+	if !hasFlag(flags, "--json") {
 		v, _, b := resolvedBuildInfo()
 		fmt.Fprintf(os.Stderr, "nexssflow %s (built %s)\n", v, b)
 	}
 
-	return runSourceInInvocation(ctx, inv, source, "<embedded>", args)
+	return runSourceInInvocation(ctx, inv, source, "<embedded>", payload, flags)
 }
 
 func runEmbeddedInfo(ctx context.Context, inv *invocation, source string, args []string) int {
@@ -359,7 +363,7 @@ func RunPath(ctx context.Context, args []string) int {
 		return fatalf("flow host: %v", err)
 	}
 	return runInvocation(ctx, inv, func(runCtx context.Context) int {
-		target, _, _, err := splitArgs(args)
+		target, payload, flags, err := splitArgs(args)
 		if err != nil {
 			return fatalf("%v", err)
 		}
@@ -372,7 +376,7 @@ func RunPath(ctx context.Context, args []string) int {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			return 2
 		}
-		return runSourceInInvocation(runCtx, inv, string(src), target, args)
+		return runSourceInInvocation(runCtx, inv, string(src), target, payload, flags)
 	})
 }
 
@@ -382,15 +386,15 @@ func runSourceInProcess(ctx context.Context, src, name string, args []string) in
 		return fatalf("flow host: %v", err)
 	}
 	return runInvocation(ctx, inv, func(runCtx context.Context) int {
-		return runSourceInInvocation(runCtx, inv, src, name, args)
+		payload, flags, err := splitPositionalsAndFlags(args)
+		if err != nil {
+			return fatalf("%v", err)
+		}
+		return runSourceInInvocation(runCtx, inv, src, name, payload, flags)
 	})
 }
 
-func runSourceInInvocation(ctx context.Context, inv *invocation, src, name string, args []string) int {
-	payload, flags, err := splitPayloadAndFlags(args)
-	if err != nil {
-		return fatalf("%v", err)
-	}
+func runSourceInInvocation(ctx context.Context, inv *invocation, src, name string, payload map[string]any, flags []string) int {
 	suppressOutput := hasFlag(flags, suppressOutputFlag)
 	flags = withoutFlag(flags, suppressOutputFlag)
 	durability, flags, err := runner.ParseDurabilityOptions(flags)
@@ -535,7 +539,11 @@ func emitPreparedOutput(output any, suppressOutput, wantJSON, isTerm, useColor b
 	if suppressOutput {
 		return
 	}
-	if wantJSON || !isTerm {
+	if wantJSON {
+		emitJSONOutput(os.Stdout, output)
+		return
+	}
+	if !isTerm {
 		emitCleanOutput(os.Stdout, output)
 		return
 	}
@@ -611,6 +619,10 @@ func emitCleanOutput(w io.Writer, output any) {
 		fmt.Fprintln(w, s)
 		return
 	}
+	emitJSONOutput(w, output)
+}
+
+func emitJSONOutput(w io.Writer, output any) {
 	encoded, err := json.Marshal(output)
 	if err != nil {
 		fmt.Fprintf(w, "%v\n", output)
@@ -685,6 +697,20 @@ func renderColoredJSON(w io.Writer, value any, useColor bool) {
 }
 
 func splitArgs(args []string) (target string, payload map[string]any, flags []string, err error) {
+	return splitArgsWithMode(args, true, true)
+}
+
+func splitPayloadAndFlags(args []string) (payload map[string]any, flags []string, err error) {
+	_, payload, flags, err = splitArgsWithMode(args, false, true)
+	return payload, flags, err
+}
+
+func splitPositionalsAndFlags(args []string) (payload map[string]any, flags []string, err error) {
+	_, payload, flags, err = splitArgsWithMode(args, false, false)
+	return payload, flags, err
+}
+
+func splitArgsWithMode(args []string, consumeTarget, parseJSONPayload bool) (target string, payload map[string]any, flags []string, err error) {
 	payload = map[string]any{}
 	flags = make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
@@ -697,24 +723,19 @@ func splitArgs(args []string) (target string, payload map[string]any, flags []st
 			} else {
 				flags = append(flags, a)
 			}
-		case strings.HasPrefix(a, "{"):
+		case parseJSONPayload && strings.HasPrefix(a, "{"):
 			if err := json.Unmarshal([]byte(a), &payload); err != nil {
 				return "", nil, nil, fmt.Errorf("invalid JSON payload: %w", err)
 			}
 		case strings.HasPrefix(a, "-"):
 			flags = append(flags, a)
-		case target == "":
+		case consumeTarget && target == "":
 			target = a
 		default:
 			flags = append(flags, a)
 		}
 	}
 	return
-}
-
-func splitPayloadAndFlags(args []string) (payload map[string]any, flags []string, err error) {
-	_, payload, flags, err = splitArgs(args)
-	return payload, flags, err
 }
 
 func countVerbosity(flags []string) int {

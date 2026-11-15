@@ -523,7 +523,7 @@ func (b *braceScanner) readKeyword() (*Value, error) {
 	switch raw {
 	case "true":
 		return &Value{Kind: ValueBool, Bool: true}, nil
-	case "false":
+	case literalFalse:
 		return &Value{Kind: ValueBool, Bool: false}, nil
 	case "null":
 		return &Value{Kind: ValueNull}, nil

@@ -1,6 +1,9 @@
 package compiler
 
-const stringKindName = "string"
+const (
+	stringKindName = "string"
+	literalFalse   = "false"
+)
 
 type TokenType uint8
 

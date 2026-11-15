@@ -28,12 +28,12 @@ func packageBuildSources(ctx context.Context, path, source string, requirements 
 			snapshotErr = xerr.Conflict("build source path cannot be made relative: " + event.File)
 			return
 		}
-		source, includeErr := rewriteAbsoluteIncludePaths(event.Original, root, event.Metadata)
+		rewrittenSource, includeErr := rewriteAbsoluteIncludePaths(event.Original, root, event.Metadata)
 		if includeErr != nil {
 			snapshotErr = xerr.Conflict("build source include path cannot be made relative: " + event.File)
 			return
 		}
-		content := rewriteEmbeddedRequires(source, filepath.Dir(event.File), requirements)
+		content := rewriteEmbeddedRequires(rewrittenSource, filepath.Dir(event.File), requirements)
 		if previous, exists := files[name]; exists && previous != content {
 			snapshotErr = xerr.Conflict("build source changed between include evaluations: " + name)
 			return

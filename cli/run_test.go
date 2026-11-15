@@ -75,6 +75,33 @@ pipeline.p
 	})
 }
 
+func TestEmitJSONOutputQuotesStrings(t *testing.T) {
+	var out bytes.Buffer
+	emitJSONOutput(&out, "42")
+	ktest.RequireEqual(t, out.String(), "\"42\"\n")
+}
+
+func TestEmitCleanOutputPrintsStringsAsPlainText(t *testing.T) {
+	var out bytes.Buffer
+	emitCleanOutput(&out, "42")
+	ktest.RequireEqual(t, out.String(), "42\n")
+}
+
+func TestSplitPayloadAndFlagsKeepsPositionalArguments(t *testing.T) {
+	payload, flags, err := splitPayloadAndFlags([]string{"42", "--json", "-x=7"})
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, len(payload), 0)
+	ktest.RequireEqual(t, flags, []string{"42", "--json", "-x=7"})
+}
+
+func TestSplitPositionalsAndFlagsKeepsJSONLookingString(t *testing.T) {
+	value := `{"a":1}`
+	payload, flags, err := splitPositionalsAndFlags([]string{value, "--json"})
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, len(payload), 0)
+	ktest.RequireEqual(t, flags, []string{value, "--json"})
+}
+
 func TestRenderColoredJSONStartsImmediately(t *testing.T) {
 	var out bytes.Buffer
 	renderColoredJSON(&out, map[string]any{"tags": []string{"a,b", "green"}}, false)

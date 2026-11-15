@@ -16,8 +16,8 @@ func TestRunSourceInProcess_ResumesFromDurableJournal(t *testing.T) {
 			t.Fatalf("first run returned %d", code)
 		}
 	})
-	if strings.TrimSpace(stdout) != "saved" {
-		t.Fatalf("first stdout = %q, want saved result", stdout)
+	if strings.TrimSpace(stdout) != `"saved"` {
+		t.Fatalf("first stdout = %q, want JSON string result", stdout)
 	}
 	if !strings.Contains(stderr, "Execution ID: "+executionID) {
 		t.Fatalf("first stderr did not report execution ID %q:\n%s", executionID, stderr)
@@ -28,8 +28,8 @@ func TestRunSourceInProcess_ResumesFromDurableJournal(t *testing.T) {
 			t.Fatalf("resume returned %d", code)
 		}
 	})
-	if strings.TrimSpace(stdout) != "saved" {
-		t.Fatalf("resumed stdout = %q, want the journaled result", stdout)
+	if strings.TrimSpace(stdout) != `"saved"` {
+		t.Fatalf("resumed stdout = %q, want the journaled JSON string", stdout)
 	}
 	if !strings.Contains(stderr, "Execution ID: "+executionID) {
 		t.Fatalf("resumed stderr did not report execution ID %q:\n%s", executionID, stderr)

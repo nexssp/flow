@@ -33,6 +33,15 @@ jobs:
       - name: Run full harness integration suite (without race instrumentation)
         run: task test:harness
 
+      - name: Upload full harness test event log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-test-event-log
+          path: ${{ runner.temp }}/flow-test-harness.jsonl
+          if-no-files-found: ignore
+          retention-days: 7
+
   verify:
     name: build · lint · test
     runs-on: ubuntu-latest

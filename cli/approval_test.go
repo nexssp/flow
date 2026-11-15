@@ -38,8 +38,8 @@ const @{ value: "approved" } -> approval.finance_review`
 			t.Fatalf("approved resume returned %d:\n%s", code, stderr)
 		}
 	})
-	if strings.TrimSpace(stdout) != "approved" {
-		t.Fatalf("resumed stdout = %q, want approved output", stdout)
+	if strings.TrimSpace(stdout) != `"approved"` {
+		t.Fatalf("resumed stdout = %q, want JSON string output", stdout)
 	}
 }
 
