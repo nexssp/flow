@@ -1,9 +1,9 @@
-# @syntax-only
-@description "Config-backed timeout modifiers inherit onto a primary in a materialized pipeline"
+@description "Config-backed timeout modifiers are inherited by an executable loop in a materialized pipeline"
 @config {
   pipeline_timeout: "240s"
 }
 @pipeline configured_loop :timeout=@config.pipeline_timeout
-  loop( { n: 0 } ) until( .n >= 1 )
+  loop({ n: .n + 1 }) until(.n >= 1)
 @end
-pipeline.configured_loop
+{ n: 0 } -> pipeline.configured_loop
+@assert: result.n == 1

@@ -1,3 +1,7 @@
-@description "Ternary right associativity and colon data compile without execution"
-# @syntax-only
-runtime.const @{ value: true } ? runtime.const @{ value: "outer" } : runtime.const @{ value: true } ? runtime.const @{ value: "inner-then" } : runtime.const @{ value: "inner-else" }
+@description "Ternary right associativity and colon data execute as expected"
+@assert: result == "inner-then"
+runtime.const @{ value: false }
+? runtime.const @{ value: "outer" }
+: runtime.const @{ value: true }
+  ? runtime.const @{ value: "inner-then" }
+  : runtime.const @{ value: "inner-else" }

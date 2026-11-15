@@ -1,0 +1,3 @@
+@macro greeting(name: String) {
+  const @{ value: { greeting: $name } }
+}

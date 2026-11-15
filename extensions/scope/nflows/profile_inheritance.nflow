@@ -1,0 +1,9 @@
+@description "A child profile inherits the timeout policy from its parent"
+@profile tight :timeout=1ms
+@profile inherited :parent=tight :tag="child-profile"
+@pipeline inherited_timeout :profile=inherited
+  sleep @{ duration_ms: 100 }
+  -> const @{ value: "parent-policy-missing" }
+@end
+@assert: result == "parent-policy-inherited"
+pipeline.inherited_timeout || const @{ value: "parent-policy-inherited" }

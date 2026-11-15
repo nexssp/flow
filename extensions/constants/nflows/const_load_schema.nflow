@@ -1,0 +1,8 @@
+@description "@const.load validates JSON against a declared schema and applies defaults"
+@schema Settings {
+  Name string `json:"name" validate:"required"`
+  Depth int `json:"depth" default:"2" validate:"gte=1"`
+}
+@const.load "settings.json" as settings :schema=Settings
+@assert: result == "release/2"
+const "${settings.name}/${settings.depth}"

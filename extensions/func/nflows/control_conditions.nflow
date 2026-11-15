@@ -1,0 +1,10 @@
+@description "Included pure function helpers work in match and loop conditions"
+@include "helpers.nflow" AS calc
+@assert: result.count == 3
+@assert: result.state == "done"
+{ count: 0 }
+-> loop({ count: .count + 1 }) until(calc.checks.complete(.count))
+-> {
+  count: .count,
+  state: match { calc.checks.complete(.count) -> "done", _ -> "waiting" }
+}

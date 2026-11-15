@@ -1,0 +1,1 @@
+@func checks.complete(value int) bool = value >= 3

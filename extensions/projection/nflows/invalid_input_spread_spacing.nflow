@@ -1,0 +1,3 @@
+# @expect-compile-error no whitespace after "..."
+@description "compile-error: reject whitespace between a spread marker and its projection path"
+{ state: { id: 1 } } -> { ... input.state }

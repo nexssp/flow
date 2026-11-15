@@ -1,0 +1,4 @@
+@description "A pure function can calculate a structured action argument value"
+@func commerce.double(value int) int = value * 2
+@assert: result == 84
+runtime.const @{ value: commerce.double(42) }

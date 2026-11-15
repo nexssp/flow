@@ -1,0 +1,3 @@
+# @expect-compile-error projection: duplicate key "id"
+@description "compile-error: reject duplicate projection output keys"
+{ user: { id: 1 } } -> { .user.id, id: "override" }

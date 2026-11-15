@@ -1,0 +1,3 @@
+# @expect-compile-error duplicate pipeline binding "estimate"
+@description "compile-error: reject duplicate names in pipeline as-bindings"
+runtime.const @{ value: 1 } as estimate -> runtime.const @{ value: 2 } as estimate

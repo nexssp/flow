@@ -1,0 +1,6 @@
+@description "Atom annotations are carried into the downstream action request"
+@assert: result.request == "kept"
+@assert: result.prompt == "review"
+@assert: result.targets[0] == "alpha" && result.targets[1] == "beta"
+@assert: result.excludes[0] == "legacy" && result.excludes[1] == "untrusted"
+runtime.noop #alpha,beta ~legacy,untrusted @review @{ request: "kept" }

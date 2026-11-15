@@ -1,0 +1,1 @@
+@func checks.isTimeout(kind string) bool = kind == "Timeout"

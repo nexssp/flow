@@ -1,6 +1,10 @@
 @description "Argument values cover scalar, collection, nested, and reference forms"
-# @syntax-only
-const @{
+@assert: result.text == "quoted: value"
+@assert: result.count == 3 && result.enabled == true && result.empty == nil
+@assert: result.items[0] == "one" && result.items[1] == 2 && result.items[2] == false && result.items[3] == nil
+@assert: result.nested.from == "Ada" && result.nested.whole.input.name == "Ada"
+{ input: { name: "Ada" }, tags: ["root"] }
+-> const @{
   value: {
     text: "quoted: value",
     count: 3,

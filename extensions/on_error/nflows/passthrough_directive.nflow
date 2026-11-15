@@ -1,0 +1,4 @@
+@description "The @on_error directive can pass through the original request"
+@on_error error.passthrough
+@assert: len(result) == 0
+runtime.fail @{ kind: "NotFound", message: "missing" }
