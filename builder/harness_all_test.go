@@ -2,6 +2,7 @@ package builder
 
 import (
 	"archive/zip"
+	"crypto/sha256"
 	"fmt"
 	"net/url"
 	"os"
@@ -525,8 +526,8 @@ func TestHarness_BareTargetUsesNestedRemoteModuleForRunAndBuild(t *testing.T) {
 
 	workDir := t.TempDir()
 	proxyDir := filepath.Join(workDir, "proxy")
-	const basePath = "example.invalid/nested/parent"
-	const modulePath = basePath + "/nexssflow"
+	basePath := testProxyModulePath(workDir, "nested/parent")
+	modulePath := basePath + "/nexssflow"
 	const rootVersion = "v0.9.0"
 	const adapterVersion = "v1.2.4"
 	writeGoModuleProxy(t, proxyDir, basePath, rootVersion, map[string]string{"README.md": "the root release does not contain the adapter package"})
@@ -572,7 +573,7 @@ func TestHarness_BareTargetUsesRootModuleNexssflowPackage(t *testing.T) {
 	}
 	workDir := t.TempDir()
 	proxyDir := filepath.Join(workDir, "proxy")
-	const modulePath = "example.invalid/rootpackage/repo"
+	modulePath := testProxyModulePath(workDir, "rootpackage/repo")
 	const version = "v1.4.2"
 	writeGoModuleProxy(t, proxyDir, modulePath, version, map[string]string{
 		"nexssflow/library.go": testBundleSource("repo"),
@@ -598,8 +599,8 @@ func TestHarness_ExplicitVariantUsesGoPackageProviderForRunAndBuild(t *testing.T
 	}
 	workDir := t.TempDir()
 	proxyDir := filepath.Join(workDir, "proxy")
-	const basePath = "example.invalid/variant/repo"
-	const packagePath = basePath + "/nexssflow_v2"
+	basePath := testProxyModulePath(workDir, "variant/repo")
+	packagePath := basePath + "/nexssflow_v2"
 	const version = "v1.3.1"
 	writeGoModuleProxy(t, proxyDir, basePath, version, map[string]string{
 		"nexssflow_v2/library.go": testBundleSource("variant-repo"),
@@ -716,6 +717,12 @@ func Bundle(opts map[string]string) compiler.Bundle {
 	return compiler.Bundle{ID: ID, Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{act}}}}
 }
 `, bundleID)
+}
+
+func testProxyModulePath(workDir, suffix string) string {
+	// The proxy is per-test, but GOMODCACHE is shared; avoid stale fixture archives.
+	hash := sha256.Sum256([]byte(filepath.Clean(workDir)))
+	return fmt.Sprintf("example.invalid/%x/%s", hash[:], suffix)
 }
 
 func writeGoModuleProxy(t *testing.T, proxyDir, modulePath, version string, files map[string]string) {

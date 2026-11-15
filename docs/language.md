@@ -41,10 +41,10 @@ The smallest pipeline:
 noop
 ```
 
-A pipeline that produces a literal:
+A pipeline that produces a scalar literal:
 
 ```nflow
-const @{ value: "hello" }
+const "hello"
 ```
 
 A pipeline that shapes the input:
@@ -138,12 +138,22 @@ Both forms are valid; prefer the keyword.
 `nflow explain` output, but a bundle cannot register an action named
 `const` — the mount rejects it.
 
-`@{ ... }` also accepts a bare field name as a same-name input reference, such as `name` for `.name`.
-Use `value` when the result should be a scalar or array:
+`const` accepts a direct string, number, boolean, or `null` scalar after the
+keyword:
 
 ```nflow
-const @{ value: "hello" }
+const "hello"
+const 42
+const true
+const null
 ```
+
+`@{ ... }` remains a named argument object. It also accepts a bare field name
+as a same-name input reference, such as `name` for `.name`. For `const`, fields
+other than the reserved top-level `value` or `val` field form an object result;
+the existing `value`/`val` wrapper remains supported for compatibility, is
+still the form for array results, and keeps its historical literal-string
+auto-parsing behavior.
 
 For an object result, its fields can usually be written directly, without the
 extra `value` wrapper:
@@ -156,8 +166,15 @@ Direct-object mode emits only the fields listed here; it does not pass through
 unspecified input fields. Bare names copy the same-named value from the current
 input, so `const @{ order_id, quantity, unit_price_minor: 1299 }` builds an
 object from two input fields and one literal. A top-level `value` (or `val`) is
-treated as the unwrap field; use `value: { ... }` when returning a scalar or
-array, or when the object itself needs a top-level `value` or `val` field.
+treated as the unwrap field; use `value: { ... }` when the object itself needs
+a top-level `value` or `val` field. Raw CLI and configuration references such
+as `@flag.count`, `@arg.1`, and `@config.count` remain strings by default, even
+when they look like numbers, booleans, `null`, or JSON. To request conversion
+for a referenced value, add `coerce: true`:
+
+```nflow
+const @{ value: @flag.count, coerce: true }
+```
 
 ---
 

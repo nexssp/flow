@@ -211,6 +211,18 @@ func TestResolveConfigRefsInUnquotedValues(t *testing.T) {
 	}
 }
 
+func TestResolveConfigRefsInValueIsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	value := &Value{Kind: ValueString, Str: "@config.retries"}
+	cfg := map[string]string{"retries": "3"}
+	resolveConfigRefsInValue(cfg, nil, value)
+	resolveConfigRefsInValue(cfg, nil, value)
+
+	ktest.RequireEqual(t, value.Str, "3")
+	ktest.RequireCondition(t, value.preserveString, "resolved config reference lost its string-preservation marker")
+}
+
 func TestValidateConfigRefsInUnquotedValues(t *testing.T) {
 	t.Parallel()
 

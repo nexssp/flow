@@ -1,0 +1,3 @@
+@description "Runtime.const preserves a numeric-looking direct string"
+@assert: result == "42"
+const "42"

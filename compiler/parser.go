@@ -425,6 +425,11 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 	}
 
 	for {
+		if consumed, err := p.parseDirectConstInput(a); err != nil {
+			return nil, err
+		} else if consumed {
+			continue
+		}
 		switch p.Cur().Type {
 		case TokColon:
 			if p.isTernaryColon() {
@@ -452,6 +457,9 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 			p.Next()
 
 		case TokAtBrace:
+			if a.DirectInput != nil {
+				return nil, p.errorf(p.Cur().Line, "const cannot combine direct scalar input with a named argument object")
+			}
 			if p.Cur().Unterminated {
 				return nil, p.errorf(p.Cur().Line, "unterminated argument block; expected '}'")
 			}
@@ -483,6 +491,54 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 			return a, nil
 		}
 	}
+}
+
+func (p *Parser) parseDirectConstInput(a *Atom) (bool, error) {
+	if a.Name != "runtime.const" {
+		return false, nil
+	}
+	token := p.Cur()
+	var value *Value
+	switch token.Type {
+	case TokString:
+		if token.Unterminated {
+			return false, p.errorf(token.Line, "unterminated string")
+		}
+		value = &Value{Kind: ValueString, Str: token.Lit}
+	case TokNumber:
+		if number, err := strconv.ParseFloat(token.Lit, 64); err == nil {
+			value = &Value{Kind: ValueNumber, Num: number}
+		} else {
+			return false, p.errorf(token.Line, "invalid numeric literal %q", token.Lit)
+		}
+	case TokIdent:
+		switch token.Lit {
+		case "true":
+			value = &Value{Kind: ValueBool, Bool: true}
+		case "false":
+			value = &Value{Kind: ValueBool, Bool: false}
+		case "null":
+			value = &Value{Kind: ValueNull}
+		default:
+			return false, nil
+		}
+	case TokAtPrompt:
+		reference := strings.TrimSpace(token.Lit)
+		if !strings.HasPrefix(reference, "config.") &&
+			!strings.HasPrefix(reference, "flag.") &&
+			!strings.HasPrefix(reference, "arg.") {
+			return false, nil
+		}
+		value = &Value{Kind: ValueRef, Ref: reference}
+	default:
+		return false, nil
+	}
+	if a.DirectInput != nil || a.HasArgumentObject || len(a.Params) > 0 {
+		return false, p.errorf(token.Line, "const accepts a direct scalar or named arguments, not both")
+	}
+	a.DirectInput = value
+	p.Next()
+	return true, nil
 }
 
 func (p *Parser) expandArgumentMap(raw string) (string, error) {

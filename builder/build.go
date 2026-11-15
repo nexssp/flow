@@ -133,13 +133,16 @@ func resolveBuildOutputPath(nflowPath, out string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve output path: %w", err)
 	}
-	abs = ensureExeSuffix(abs)
-
-	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
-		return "", fmt.Errorf("create output directory %s: %w", filepath.Dir(abs), err)
-	}
 	if sameBuildInputOutput(nflowPath, abs) {
 		return "", fmt.Errorf("output path %s refers to the input workflow; choose a different output path", abs)
+	}
+	abs = ensureExeSuffix(abs)
+
+	if sameBuildInputOutput(nflowPath, abs) {
+		return "", fmt.Errorf("output path %s refers to the input workflow; choose a different output path", abs)
+	}
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		return "", fmt.Errorf("create output directory %s: %w", filepath.Dir(abs), err)
 	}
 	return abs, nil
 }

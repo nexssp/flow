@@ -18,6 +18,7 @@ import (
 	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xfile"
 
+	"github.com/nexssp/flow/internal/constinput"
 	"github.com/nexssp/flow/internal/maputil"
 )
 
@@ -64,6 +65,9 @@ func (a *Atom) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction,
 
 func compileArgumentExpressions(atom *Atom, bCtx *BuildContext) error {
 	compileValue := func(value *Value) error { return compileArgumentValue(value, atom.Pos, bCtx) }
+	if err := compileValue(atom.DirectInput); err != nil {
+		return err
+	}
 	for _, value := range atom.Args {
 		if err := compileValue(value); err != nil {
 			return err
@@ -900,8 +904,19 @@ func (a *AssertExpr) Build(_ context.Context, bCtx *BuildContext) (action.AnyAct
 
 func resolveConfigRefsInAtom(ctx context.Context, a *Atom) {
 	cfg, cliArgs := compileConfigFromCtx(ctx)
+	resolveConfigRefsInValue(cfg, cliArgs, a.DirectInput)
 	for key, value := range a.Params {
-		a.Params[key] = resolveConfigString(cfg, cliArgs, value)
+		resolved := resolveConfigString(cfg, cliArgs, value)
+		if a.Name == "runtime.const" && (key == "value" || key == "val") &&
+			(strings.HasPrefix(value, "@config.") ||
+				strings.HasPrefix(value, "@flag.") ||
+				strings.HasPrefix(value, "@arg.")) {
+			if a.ParamValues == nil {
+				a.ParamValues = make(map[string]any)
+			}
+			a.ParamValues[key] = constinput.String(resolved)
+		}
+		a.Params[key] = resolved
 	}
 	for _, value := range a.Args {
 		resolveConfigRefsInValue(cfg, cliArgs, value)
@@ -931,12 +946,34 @@ func resolveConfigRefsInModifier(cfg map[string]string, cliArgs []string, raw st
 }
 
 func hasInjections(a *Atom) bool {
-	return len(a.Params) > 0 || len(a.Args) > 0 || len(a.ArgSpreads) > 0 ||
+	return a.DirectInput != nil || len(a.Params) > 0 || len(a.Args) > 0 || len(a.ArgSpreads) > 0 ||
 		a.Prompt != "" || len(a.Targets) > 0 || len(a.Excludes) > 0
 }
 
 func wrapWithInjections(inner action.AnyAction, a *Atom) action.AnyAction {
 	return wrapWithPayloadBuilder(inner, a, buildPayload)
+}
+
+func wrapWithDirectInput(inner action.AnyAction, a *Atom) action.AnyAction {
+	pos := a.Pos
+	return action.New(a.Name, func(ctx context.Context, in any) (any, error) {
+		state, _ := in.(map[string]any)
+		value, err := resolveValue(ctx, a.DirectInput, state)
+		if err != nil {
+			if _, ok := PositionOf(err); pos.File != "" && !ok {
+				return nil, SourceError(pos, "%w", err)
+			}
+			return nil, err
+		}
+		result, err := action.InvokeAny(ctx, inner, constinput.Direct{Value: value})
+		if err != nil {
+			if _, ok := PositionOf(err); pos.File != "" && !ok {
+				return nil, SourceError(pos, "%w", err)
+			}
+			return nil, err
+		}
+		return result, nil
+	}).Build()
 }
 
 func wrapWithNamedPipelineArgs(inner action.AnyAction, a *Atom) action.AnyAction {
@@ -1044,23 +1081,19 @@ func resolveConfigRefsInValue(cfg map[string]string, cliArgs []string, value *Va
 	}
 	switch value.Kind {
 	case ValueString:
-		// Explicit string stays string (preserves quotes in "@config.retries" -> "3")
+		// Raw configuration and CLI references remain text, including quoted references.
+		if !value.preserveString {
+			value.preserveString = strings.HasPrefix(value.Str, "@config.") ||
+				strings.HasPrefix(value.Str, "@flag.") || strings.HasPrefix(value.Str, "@arg.")
+		}
 		value.Str = resolveConfigString(cfg, cliArgs, value.Str)
 	case ValueRef:
-		if strings.HasPrefix(value.Ref, "config.") || strings.HasPrefix(value.Ref, "flag.") {
+		if strings.HasPrefix(value.Ref, "config.") ||
+			strings.HasPrefix(value.Ref, "flag.") || strings.HasPrefix(value.Ref, "arg.") {
+			value.preserveString = true
 			value.Kind = ValueString
 			value.Str = resolveConfigString(cfg, cliArgs, "@"+value.Ref)
 			value.Ref = ""
-		} else if strings.HasPrefix(value.Ref, "arg.") {
-			// Unquoted positional arguments (@arg.1) auto-coerce to number if numeric.
-			resolved := resolveConfigString(cfg, cliArgs, "@"+value.Ref)
-			if n, err := strconv.ParseInt(resolved, 10, 64); err == nil {
-				value.Kind = ValueNumber
-				value.Num = float64(n)
-			} else {
-				value.Kind = ValueString
-				value.Str = resolved
-			}
 		}
 	case ValueMap:
 		for i := range value.Map {
@@ -1094,6 +1127,11 @@ func buildPayload(ctx context.Context, in any, a *Atom) (map[string]any, error) 
 			resolved, err := resolveValue(ctx, v, m)
 			if err != nil {
 				return nil, err
+			}
+			if v.preserveString {
+				if stringValue, ok := resolved.(string); ok {
+					resolved = constinput.String(stringValue)
+				}
 			}
 			out[k] = resolved
 		}
@@ -1259,7 +1297,11 @@ func resolveValue(ctx context.Context, v *Value, state map[string]any) (any, err
 }
 
 func resolveSymbolsInAtom(ctx context.Context, a *Atom) {
+	resolveSymbolsInValue(ctx, a.DirectInput)
 	for key, value := range a.Params {
+		if _, preserved := a.ParamValues[key].(constinput.String); preserved {
+			continue
+		}
 		if val, ok := lookupSymbolValue(ctx, value); ok {
 			if typed, ok := val.(TypedSymbolValue); ok {
 				if a.ParamValues == nil {
@@ -1584,13 +1626,19 @@ func finalizeAtomAction(a *Atom, bCtx *BuildContext, act action.AnyAction) (acti
 	injected := hasInjections(a) || a.NamedPipelineArgs
 	if injected {
 		inner := act
-		wrap := wrapWithInjections
-		if a.NamedPipelineArgs {
-			wrap = wrapWithNamedPipelineArgs
+		if a.DirectInput != nil {
+			act = inspectBuiltChild(bCtx, wrapWithDirectInput(inner, a), "direct_input", action.IntrospectionChild{
+				Node: inner, Relation: IntrospectionKindWraps, Role: IntrospectionKindAction,
+			})
+		} else {
+			wrap := wrapWithInjections
+			if a.NamedPipelineArgs {
+				wrap = wrapWithNamedPipelineArgs
+			}
+			act = inspectBuiltChild(bCtx, wrap(inner, a), "injection", action.IntrospectionChild{
+				Node: inner, Relation: IntrospectionKindWraps, Role: IntrospectionKindAction,
+			})
 		}
-		act = inspectBuiltChild(bCtx, wrap(inner, a), "injection", action.IntrospectionChild{
-			Node: inner, Relation: IntrospectionKindWraps, Role: IntrospectionKindAction,
-		})
 	}
 	if bCtx.Modifiers == nil || len(a.Modifiers) == 0 {
 		if !injected {

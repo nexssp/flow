@@ -10,10 +10,17 @@ import (
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
+
+	"github.com/nexssp/flow/internal/constinput"
 )
 
 var Const = action.New("runtime.const", func(_ context.Context, in any) (any, error) {
 	switch v := in.(type) {
+	case constinput.Direct:
+		if value, ok := v.Value.(string); ok {
+			return value, nil
+		}
+		return coerceLiteral(v.Value), nil
 	case string, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, bool:
 		return coerceLiteral(v), nil
 	}
@@ -24,11 +31,12 @@ var Const = action.New("runtime.const", func(_ context.Context, in any) (any, er
 	}
 
 	// 1. If explicit "value" or "val" was passed, unwrap it (even if upstream state merged into m)
+	coerceRequested, _ := m["coerce"].(bool)
 	if raw, exists := m["value"]; exists {
-		return coerceLiteral(raw), nil
+		return constValue(raw, coerceRequested), nil
 	}
 	if raw, exists := m["val"]; exists {
-		return coerceLiteral(raw), nil
+		return constValue(raw, coerceRequested), nil
 	}
 
 	// 2. Object mode: const @{ server: "alpha", port: 8080 }
@@ -43,9 +51,19 @@ var Const = action.New("runtime.const", func(_ context.Context, in any) (any, er
 	}
 
 	return nil, xerr.BadRequest("const: missing required field 'value'")
-}).Description("Return a fixed literal; numbers, bools, and JSON auto-parse").
+}).Description("Return a fixed scalar or named object; legacy value strings are auto-parsed").
 	Tag("base", "literal").
 	Build()
+
+func constValue(raw any, coerceRequested bool) any {
+	if value, ok := raw.(constinput.String); ok {
+		if !coerceRequested {
+			return string(value)
+		}
+		return coerceLiteral(string(value))
+	}
+	return coerceLiteral(raw)
+}
 
 func coerceLiteral(raw any) any {
 	if number, ok := raw.(float64); ok {

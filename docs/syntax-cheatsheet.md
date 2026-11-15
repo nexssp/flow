@@ -19,12 +19,20 @@ nflow run flow.nflow --assert='result.ok == true'
 
 ```nflow
 noop
-const @{ value: "hello" }
+const "hello"
+const 42
+const true
+const null
+const @{ value: "hello" } # compatible named-value form
 const @{ count: 3, enabled: true, tags: ["a", "b"] }
 request.action :timeout=3s :retry=2 @{ id: .id, payload: . }
 ```
 
 `@{ ... }` is a structured data block. Values can be literals, arrays, nested objects, `.`, and input paths such as `.user.id`. A path entry `.user.id,` derives the key `id`; bare fields such as `name` still mean `name: .name`. Duplicate keys fail.
+`const` accepts direct scalar values; `@{ ... }` remains a named object, and the
+legacy `@{ value: ... }` / `@{ val: ... }` form remains supported. Values from
+`@flag.*`, `@arg.N`, and `@config.*` stay strings unless `coerce: true` is
+included with the named value.
 
 For new flows, use structured `@{ ... }` arguments, projection shorthand, and pipeline composition (`->` or `|`). The older `action(key=value, ...)` form is parsed only to keep existing flows working; it is intentionally not used in these examples.
 

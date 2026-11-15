@@ -39,6 +39,32 @@ Flow also has ten reserved keyword actions that map to canonical capabilities an
 
 `const` here is a runtime action; it is distinct from the compile-time `@const` directive. The keyword map is in [`compiler/reserved.go`](../compiler/reserved.go) and the action fixtures are under [`extensions/runtime/nflows/`](../extensions/runtime/nflows/).
 
+`const` accepts a direct scalar after the keyword, for example `const "hello"`,
+`const 42`, `const true`, or `const null`. Its `@{ ... }` form is still a named
+argument object: fields such as `count: 3` produce an object, while the existing
+`value:` and `val:` fields unwrap their contents for compatibility and remain
+the way to return an array directly. Raw text from `@flag.*`, `@arg.N`, and
+`@config.*` references remains a string instead of being guessed as a number,
+boolean, `null`, or JSON; add `coerce: true` alongside `value:` to opt into
+parsing a referenced value. Existing literal strings written directly in the
+legacy `value:` wrapper keep their historical auto-parsing behavior. In object
+mode, `coerce` is an ordinary output field; it only opts into parsing when used
+with a top-level `value` or `val`.
+
+### Migration: CLI and config references no longer auto-coerce
+
+Before this change, `const @{ value: @config.retries }` with `retries: 3`
+produced the integer `3`. It now produces the string `"3"`. The same change
+applies to `@flag.*` and `@arg.N` references. To restore the previous conversion,
+add `coerce: true` alongside the named value:
+
+```nflow
+const @{ value: @config.retries, coerce: true }
+```
+
+Direct scalar references such as `const @config.retries` are new and always
+produce text.
+
 Atoms can also carry extension-consumed annotations: `#target1,target2`, `~excluded1,excluded2`, and `@prompt` add target, exclusion, or prompt data to the action request when the action supports it. `@config` on an atom is a special configuration-injection marker for configurable stream sources/operators; it is not the same as the `@config` directive. These annotations have no universal effect independent of the consuming action; see the parser's [`Atom` fields](../compiler/ast.go#L35-L49) and builder [argument assembly](../compiler/ast_build.go#L840-L875).
 
 ## Expressions, projections, and symbols

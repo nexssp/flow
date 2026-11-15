@@ -39,6 +39,7 @@ type Atom struct {
 	Modifiers         []string
 	ModifierValues    []ModifierValue  // parallel to Modifiers for quoted or native values
 	ModifierSources   []ModifierSource // parallel to Modifiers; same length
+	DirectInput       *Value           // scalar written directly after the const keyword
 	Args              map[string]*Value
 	ArgSpreads        []*Value // runtime maps spread into @{...} arguments
 	HasArgumentObject bool     // true when the atom used @{...}, including an empty object
@@ -173,16 +174,17 @@ const (
 )
 
 type Value struct {
-	Kind       ValueKind
-	Str        string
-	Num        float64
-	Bool       bool
-	Ref        string
-	Map        []MapEntry
-	Slice      []*Value
-	Typed      any
-	Expression string
-	Program    ExpressionProgram
+	Kind           ValueKind
+	Str            string
+	preserveString bool // true when a resolved config/CLI string must stay a string
+	Num            float64
+	Bool           bool
+	Ref            string
+	Map            []MapEntry
+	Slice          []*Value
+	Typed          any
+	Expression     string
+	Program        ExpressionProgram
 }
 
 type MapEntry struct {

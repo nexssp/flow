@@ -64,7 +64,7 @@ func TestThinHarnessRefusesUnsupportedInvocationWithFallbackCode(t *testing.T) {
 	if err := writeHarnessWithMode(buildDir, driverRoot, driverVersion, "", nil, nil, harnessModeThin, root); err != nil {
 		t.Fatalf("write thin harness: %v", err)
 	}
-	bin := filepath.Join(t.TempDir(), "thin-runner")
+	bin := filepath.Join(t.TempDir(), "thin-runner"+exeSuffix())
 	if err := runGoContext(context.Background(), buildDir, "build", "-mod=mod", "-trimpath", "-o", bin, "."); err != nil {
 		t.Fatalf("build generated thin harness: %v", err)
 	}

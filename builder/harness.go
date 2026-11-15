@@ -586,7 +586,11 @@ func moduleSourceFingerprint(root string) string {
 		})
 	}()
 	if walkErr != nil {
-		slog.Debug("harness: source fingerprint walk", "err", walkErr)
+		slog.Warn(
+			"harness: source fingerprint scan failed; cache reuse disabled",
+			"root", root,
+			"error", walkErr,
+		)
 		// A failed scan must not reuse an earlier partial fingerprint.
 		fmt.Fprintf(h, "unreadable=%s\n", rand.Text())
 	}

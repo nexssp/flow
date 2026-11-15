@@ -124,19 +124,19 @@ func TestBuild_StandaloneFlagValueForms(t *testing.T) {
 	ktest.RequireEqual(t, runBuild([]string{flowPath, "-o", binaryPath}), 0)
 
 	for _, tc := range []struct {
-		name    string
-		args    []string
-		want    string
-		wantErr string
+		name       string
+		args       []string
+		wantStdout string
+		wantErr    string
 	}{
-		{name: "separate value", args: []string{"--key", "VALUE"}, want: "VALUE"},
-		{name: "JSON-looking separate value", args: []string{"--key", `{"x":1}`}, want: `\"x\":1`},
-		{name: "JSON-looking equals value", args: []string{`--key={"x":1}`}, want: `\"x\":1`},
-		{name: "payload before separated value", args: []string{`{"payload":"kept"}`, "--key", "VALUE"}, want: "VALUE"},
-		{name: "negative integer separate value", args: []string{"--key", "-1"}, want: `"value":"-1"`},
-		{name: "negative fraction separate value", args: []string{"--key", "-.5"}, want: `"value":"-.5"`},
-		{name: "empty separate value", args: []string{"--key", ""}, want: `"value":""`},
-		{name: "equals value beginning with switch", args: []string{"--key=--help"}, want: `"value":"--help"`},
+		{name: "separate value", args: []string{"--key", "VALUE"}, wantStdout: "VALUE\n"},
+		{name: "JSON-looking separate value", args: []string{"--key", `{"x":1}`}, wantStdout: `{"x":1}` + "\n"},
+		{name: "JSON-looking equals value", args: []string{`--key={"x":1}`}, wantStdout: `{"x":1}` + "\n"},
+		{name: "payload before separated value", args: []string{`{"payload":"kept"}`, "--key", "VALUE"}, wantStdout: "VALUE\n"},
+		{name: "negative integer separate value", args: []string{"--key", "-1"}, wantStdout: "-1\n"},
+		{name: "negative fraction separate value", args: []string{"--key", "-.5"}, wantStdout: "-.5\n"},
+		{name: "empty separate value", args: []string{"--key", ""}, wantStdout: "\n"},
+		{name: "equals value beginning with switch", args: []string{"--key=--help"}, wantStdout: "--help\n"},
 		{name: "missing separate value", args: []string{"--key"}, wantErr: "--key requires a value"},
 		{name: "help switch is not a value", args: []string{"--key", "--help"}, wantErr: "--key requires a value"},
 		{name: "assert switch is not a value", args: []string{"--key", "--assert", "expr"}, wantErr: "--key requires a value"},
@@ -159,8 +159,8 @@ func TestBuild_StandaloneFlagValueForms(t *testing.T) {
 			if err != nil {
 				t.Fatalf("standalone failed: %v; stdout=%s stderr=%s", err, &stdout, &stderr)
 			}
-			if !strings.Contains(stdout.String(), tc.want) {
-				t.Fatalf("stdout = %q, want it to contain %q", stdout.String(), tc.want)
+			if stdout.String() != tc.wantStdout {
+				t.Fatalf("stdout = %q, want %q", stdout.String(), tc.wantStdout)
 			}
 		})
 	}

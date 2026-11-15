@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/nexssp/flow/internal/constinput"
 )
 
 func TestBuildPayloadMergesArgumentMapSpread(t *testing.T) {
@@ -78,6 +80,22 @@ func TestBuildPayloadRejectsNonObjectArgumentMapSpread(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "must resolve to an object") {
 		t.Fatalf("buildPayload error = %v, want non-object spread error", err)
+	}
+}
+
+func TestBuildPayloadPreservesConstFlagString(t *testing.T) {
+	t.Parallel()
+	payload, err := buildPayload(context.Background(), nil, &Atom{
+		Name: "runtime.const",
+		Args: map[string]*Value{
+			"value": {Kind: ValueString, Str: "42", preserveString: true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("buildPayload: %v", err)
+	}
+	if got, ok := payload["value"].(constinput.String); !ok || got != "42" {
+		t.Fatalf("payload value = %#v, want preserved const string \"42\"", payload["value"])
 	}
 }
 

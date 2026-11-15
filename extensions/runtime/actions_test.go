@@ -8,6 +8,7 @@ import (
 	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xtest/ktest"
 
+	"github.com/nexssp/flow/internal/constinput"
 	"github.com/nexssp/flow/internal/maputil"
 )
 
@@ -37,6 +38,16 @@ func TestConst_Coercion(t *testing.T) {
 		{"non-string passthrough", map[string]any{"value": 42}, 42},
 		{"empty string", map[string]any{"value": ""}, ""},
 		{"val alias", map[string]any{"val": "x"}, "x"},
+		{"direct scalar string", constinput.Direct{Value: "42"}, "42"},
+		{"direct scalar number", constinput.Direct{Value: float64(42)}, int64(42)},
+		{"direct scalar bool", constinput.Direct{Value: true}, true},
+		{"direct scalar null", constinput.Direct{Value: nil}, nil},
+		{"preserved CLI string", map[string]any{"value": constinput.String("42")}, "42"},
+		{"preserved boolean-looking CLI string", map[string]any{"value": constinput.String("true")}, "true"},
+		{"preserved JSON-looking CLI string", map[string]any{"value": constinput.String(`{"a":1}`)}, `{"a":1}`},
+		{"explicitly coerced CLI string", map[string]any{"value": constinput.String("42"), "coerce": true}, int64(42)},
+		{"named object", map[string]any{"count": 3, "enabled": true}, map[string]any{"count": 3, "enabled": true}},
+		{"named object with coerce field", map[string]any{"count": 3, "coerce": true}, map[string]any{"count": 3, "coerce": true}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
