@@ -714,6 +714,8 @@ func resolveRequirementPackagesWithContext(ctx context.Context, reqs []require.R
 		sourceDir = sourceDirs[0]
 	}
 	resolved := append([]require.Requirement(nil), reqs...)
+	var remoteQueries []remotePackageQuery
+	var remoteIndexes []int
 	for i := range resolved {
 		r := &resolved[i]
 		if _, ok := compiler.Lookup(require.NormalizeID(r.Import)); ok {
@@ -739,15 +741,28 @@ func resolveRequirementPackagesWithContext(ctx context.Context, reqs []require.R
 			r.ModulePath = providerPath
 		default:
 			packagePath := bundleImportPath(*r)
-			providerPath, providerVersion, err := resolveRemotePackageProvider(
-				ctx, packagePath, r.Version, driverRoot, driverVersion, goworkPath,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("@require %s: resolve bundle package %s@%s: %w", r.Import, packagePath, r.Version, err)
-			}
 			r.PackagePath = packagePath
-			r.ModulePath = providerPath
-			r.ResolvedVersion = providerVersion
+			remoteQueries = append(remoteQueries, remotePackageQuery{packagePath: packagePath, version: r.Version})
+			remoteIndexes = append(remoteIndexes, i)
+		}
+	}
+	if len(remoteQueries) > 0 {
+		providers, err := resolveRemotePackageProviders(ctx, remoteQueries, driverRoot, driverVersion, goworkPath)
+		if err != nil {
+			requested := make([]string, len(remoteQueries))
+			for i, query := range remoteQueries {
+				requested[i] = query.packagePath + "@" + query.version
+			}
+			return nil, fmt.Errorf("@require remote packages %s: %w", strings.Join(requested, ", "), err)
+		}
+		for _, i := range remoteIndexes {
+			r := &resolved[i]
+			provider, ok := providers[remotePackageQuery{packagePath: r.PackagePath, version: r.Version}]
+			if !ok {
+				return nil, fmt.Errorf("@require %s: go list did not report a provider for %s@%s", r.Import, r.PackagePath, r.Version)
+			}
+			r.ModulePath = provider.path
+			r.ResolvedVersion = provider.version
 		}
 	}
 	return resolved, nil
@@ -812,40 +827,150 @@ func resolveLocalBundlePackage(r *require.Requirement) error {
 	return nil
 }
 
+type remotePackageQuery struct {
+	packagePath string
+	version     string
+}
+
+type remotePackageProvider struct {
+	path    string
+	version string
+}
+
+type goOutputRunner func(context.Context, string, ...string) ([]byte, error)
+
+var errRemotePackageVersionConflict = errors.New("remote package version conflict")
+
 func resolveRemotePackageProvider(ctx context.Context, packagePath, version, driverRoot, driverVersion, goworkPath string) (providerPath, providerVersion string, resolveErr error) {
-	if packagePath == "" || version == "" {
-		return "", "", errors.New("package path and explicit version are required")
+	providers, err := resolveRemotePackageProviders(ctx, []remotePackageQuery{{packagePath: packagePath, version: version}}, driverRoot, driverVersion, goworkPath)
+	if err != nil {
+		return "", "", err
 	}
+	provider, ok := providers[remotePackageQuery{packagePath: packagePath, version: version}]
+	if !ok {
+		return "", "", errors.New("go list did not report a providing module")
+	}
+	return provider.path, provider.version, nil
+}
+
+func resolveRemotePackageProviders(ctx context.Context, queries []remotePackageQuery, driverRoot, driverVersion, goworkPath string) (map[remotePackageQuery]remotePackageProvider, error) {
+	return resolveRemotePackageProvidersWithRunner(ctx, queries, driverRoot, driverVersion, goworkPath, runGoOutputContext)
+}
+
+func resolveRemotePackageProvidersWithRunner(ctx context.Context, queries []remotePackageQuery, driverRoot, driverVersion, goworkPath string, runGo goOutputRunner) (map[remotePackageQuery]remotePackageProvider, error) {
+	combinedProviders, err := resolveRemotePackageProviderBatchWithRunner(ctx, queries, driverRoot, driverVersion, goworkPath, runGo)
+	if err == nil || !errors.Is(err, errRemotePackageVersionConflict) {
+		return combinedProviders, err
+	}
+
+	// Go rejects one go get when the same module is requested at conflicting versions.
+	// Retry selector groups independently; compatible module graphs stay batched.
+	groups := make(map[string][]remotePackageQuery)
+	for _, query := range queries {
+		groups[query.version] = append(groups[query.version], query)
+	}
+	versions := make([]string, 0, len(groups))
+	for version := range groups {
+		versions = append(versions, version)
+	}
+	sort.Strings(versions)
+	providers := make(map[remotePackageQuery]remotePackageProvider, len(queries))
+	for _, version := range versions {
+		batch, err := resolveRemotePackageProviderBatchWithRunner(ctx, groups[version], driverRoot, driverVersion, goworkPath, runGo)
+		if err != nil {
+			return nil, fmt.Errorf("resolve selector %s: %w", version, err)
+		}
+		for query, provider := range batch {
+			providers[query] = provider
+		}
+	}
+	return providers, nil
+}
+
+func resolveRemotePackageProviderBatchWithRunner(ctx context.Context, queries []remotePackageQuery, driverRoot, driverVersion, goworkPath string, runGo goOutputRunner) (map[remotePackageQuery]remotePackageProvider, error) {
+	unique := make(map[remotePackageQuery]struct{}, len(queries))
+	ordered := make([]remotePackageQuery, 0, len(queries))
+	for _, query := range queries {
+		if query.packagePath == "" || query.version == "" {
+			return nil, errors.New("package path and explicit version are required")
+		}
+		if _, exists := unique[query]; exists {
+			continue
+		}
+		unique[query] = struct{}{}
+		ordered = append(ordered, query)
+	}
+	sort.Slice(ordered, func(i, j int) bool {
+		if ordered[i].packagePath != ordered[j].packagePath {
+			return ordered[i].packagePath < ordered[j].packagePath
+		}
+		return ordered[i].version < ordered[j].version
+	})
+	if len(ordered) == 0 {
+		return map[remotePackageQuery]remotePackageProvider{}, nil
+	}
+
 	dir, createErr := os.MkdirTemp("", "nflow-resolve-")
 	if createErr != nil {
-		return "", "", fmt.Errorf("create resolver context: %w", createErr)
+		return nil, fmt.Errorf("create resolver context: %w", createErr)
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 
 	mod := harnessGoMod(driverRoot, driverVersion, goworkPath, nil)
 	if writeErr := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(mod), 0o600); writeErr != nil {
-		return "", "", fmt.Errorf("write resolver go.mod: %w", writeErr)
+		return nil, fmt.Errorf("write resolver go.mod: %w", writeErr)
 	}
-	if _, getErr := runGoOutputContext(ctx, dir, "get", packagePath+"@"+version); getErr != nil {
-		return "", "", getErr
+	getArgs := make([]string, 1, len(ordered)+1)
+	getArgs[0] = "get"
+	packagePaths := make([]string, 0, len(ordered))
+	for _, query := range ordered {
+		getArgs = append(getArgs, query.packagePath+"@"+query.version)
+		if len(packagePaths) == 0 || packagePaths[len(packagePaths)-1] != query.packagePath {
+			packagePaths = append(packagePaths, query.packagePath)
+		}
 	}
-	data, listErr := runGoOutputContext(ctx, dir, "list", "-json", packagePath)
+	if _, getErr := runGo(ctx, dir, getArgs...); getErr != nil {
+		if strings.Contains(getErr.Error(), "conflicts with") {
+			return nil, fmt.Errorf("%w: %v", errRemotePackageVersionConflict, getErr)
+		}
+		return nil, getErr
+	}
+	listArgs := append([]string{"list", "-json"}, packagePaths...)
+	data, listErr := runGo(ctx, dir, listArgs...)
 	if listErr != nil {
-		return "", "", listErr
+		return nil, listErr
 	}
-	var pkg struct {
-		Module *struct {
-			Path    string `json:"Path"`
-			Version string `json:"Version"`
-		} `json:"Module"`
+	providersByPath := make(map[string]remotePackageProvider, len(packagePaths))
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	for {
+		var pkg struct {
+			ImportPath string `json:"ImportPath"`
+			Module     *struct {
+				Path    string `json:"Path"`
+				Version string `json:"Version"`
+			} `json:"Module"`
+		}
+		if decodeErr := decoder.Decode(&pkg); decodeErr != nil {
+			if errors.Is(decodeErr, io.EOF) {
+				break
+			}
+			return nil, fmt.Errorf("decode go list package metadata: %w", decodeErr)
+		}
+		if pkg.ImportPath == "" || pkg.Module == nil || pkg.Module.Path == "" {
+			return nil, errors.New("go list did not report a providing module")
+		}
+		providersByPath[pkg.ImportPath] = remotePackageProvider{path: pkg.Module.Path, version: pkg.Module.Version}
 	}
-	if decodeErr := json.Unmarshal(data, &pkg); decodeErr != nil {
-		return "", "", fmt.Errorf("decode go list package metadata: %w", decodeErr)
+
+	providers := make(map[remotePackageQuery]remotePackageProvider, len(ordered))
+	for _, query := range ordered {
+		provider, ok := providersByPath[query.packagePath]
+		if !ok {
+			return nil, fmt.Errorf("go list did not report package %q", query.packagePath)
+		}
+		providers[query] = provider
 	}
-	if pkg.Module == nil || pkg.Module.Path == "" {
-		return "", "", errors.New("go list did not report a providing module")
-	}
-	return pkg.Module.Path, pkg.Module.Version, nil
+	return providers, nil
 }
 
 func goCommandTimeout() time.Duration {
