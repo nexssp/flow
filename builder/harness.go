@@ -16,6 +16,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -704,8 +705,8 @@ func goCommandFailure(ctx context.Context, args []string, err error, output stri
 	return fmt.Errorf("go %s: %w\n%s", strings.Join(args, " "), err, output)
 }
 
-func resolveRequirementPackages(reqs []require.Requirement, driverRoot, driverVersion, goworkPath string, sourceDirs ...string) ([]require.Requirement, error) {
-	return resolveRequirementPackagesWithContext(context.Background(), reqs, driverRoot, driverVersion, goworkPath, sourceDirs...)
+func resolveRequirementPackages(reqs []require.Requirement, driverRoot string) ([]require.Requirement, error) {
+	return resolveRequirementPackagesWithContext(context.Background(), reqs, driverRoot, "", "")
 }
 
 func resolveRequirementPackagesWithContext(ctx context.Context, reqs []require.Requirement, driverRoot, driverVersion, goworkPath string, sourceDirs ...string) ([]require.Requirement, error) {
@@ -880,32 +881,16 @@ func resolveRemotePackageProvidersWithRunner(ctx context.Context, queries []remo
 		if err != nil {
 			return nil, fmt.Errorf("resolve selector %s: %w", version, err)
 		}
-		for query, provider := range batch {
-			providers[query] = provider
-		}
+		maps.Copy(providers, batch)
 	}
 	return providers, nil
 }
 
 func resolveRemotePackageProviderBatchWithRunner(ctx context.Context, queries []remotePackageQuery, driverRoot, driverVersion, goworkPath string, runGo goOutputRunner) (map[remotePackageQuery]remotePackageProvider, error) {
-	unique := make(map[remotePackageQuery]struct{}, len(queries))
-	ordered := make([]remotePackageQuery, 0, len(queries))
-	for _, query := range queries {
-		if query.packagePath == "" || query.version == "" {
-			return nil, errors.New("package path and explicit version are required")
-		}
-		if _, exists := unique[query]; exists {
-			continue
-		}
-		unique[query] = struct{}{}
-		ordered = append(ordered, query)
+	ordered, err := uniqueRemotePackageQueries(queries)
+	if err != nil {
+		return nil, err
 	}
-	sort.Slice(ordered, func(i, j int) bool {
-		if ordered[i].packagePath != ordered[j].packagePath {
-			return ordered[i].packagePath < ordered[j].packagePath
-		}
-		return ordered[i].version < ordered[j].version
-	})
 	if len(ordered) == 0 {
 		return map[remotePackageQuery]remotePackageProvider{}, nil
 	}
@@ -931,7 +916,7 @@ func resolveRemotePackageProviderBatchWithRunner(ctx context.Context, queries []
 	}
 	if _, getErr := runGo(ctx, dir, getArgs...); getErr != nil {
 		if strings.Contains(getErr.Error(), "conflicts with") {
-			return nil, fmt.Errorf("%w: %v", errRemotePackageVersionConflict, getErr)
+			return nil, fmt.Errorf("%w: %w", errRemotePackageVersionConflict, getErr)
 		}
 		return nil, getErr
 	}
@@ -971,6 +956,28 @@ func resolveRemotePackageProviderBatchWithRunner(ctx context.Context, queries []
 		providers[query] = provider
 	}
 	return providers, nil
+}
+
+func uniqueRemotePackageQueries(queries []remotePackageQuery) ([]remotePackageQuery, error) {
+	unique := make(map[remotePackageQuery]struct{}, len(queries))
+	ordered := make([]remotePackageQuery, 0, len(queries))
+	for _, query := range queries {
+		if query.packagePath == "" || query.version == "" {
+			return nil, errors.New("package path and explicit version are required")
+		}
+		if _, exists := unique[query]; exists {
+			continue
+		}
+		unique[query] = struct{}{}
+		ordered = append(ordered, query)
+	}
+	sort.Slice(ordered, func(i, j int) bool {
+		if ordered[i].packagePath != ordered[j].packagePath {
+			return ordered[i].packagePath < ordered[j].packagePath
+		}
+		return ordered[i].version < ordered[j].version
+	})
+	return ordered, nil
 }
 
 func goCommandTimeout() time.Duration {

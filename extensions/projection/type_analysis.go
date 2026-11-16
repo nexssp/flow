@@ -184,10 +184,6 @@ func typedProjectionEnvironment(ctx compiler.TypeAnalysisContext, proxyDepth int
 		env[expressionStateName] = root
 		staticTypes[expressionRootName] = ctx.Input.Type
 		staticTypes[expressionStateName] = ctx.Input.Type
-		// `input` is the original pipeline request; the type descriptor here is
-		// for the current stage payload. Keep request access dynamic and use
-		// __root__ / __state__ for paths validated against the stage type.
-		staticTypes[expressionInputName] = reflect.TypeFor[any]()
 		fields := expressionViewFields(ctx.Input.Type)
 		for index := range fields {
 			field := fields[index]
@@ -212,6 +208,16 @@ func typedProjectionEnvironment(ctx compiler.TypeAnalysisContext, proxyDepth int
 			}
 		}
 	}
+	originalInput := ctx.Input
+	if ctx.OriginalInput != nil {
+		originalInput = *ctx.OriginalInput
+	}
+	inputType := originalInput.Type
+	if inputType == nil || originalInput.Stream {
+		inputType = reflect.TypeFor[any]()
+	}
+	env[expressionInputName] = projectionStaticValueWithBuilder(inputType, proxyDepth, builder)
+	staticTypes[expressionInputName] = inputType
 	for name := range ctx.SymbolNamespaces {
 		setProjectionStaticTypeAlias(staticTypes, name, reflect.TypeFor[map[string]any]())
 	}

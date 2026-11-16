@@ -1,7 +1,16 @@
 @description "input remains the original request while __root__ is the current typed stage"
-@assert: result.request_lang == "en"
-@assert: result.stage_entry == "current-stage"
-typedprojection.entry -> {
-  request_lang: input.lang,
-  stage_entry: __root__.entry
+@assert: result.original_request == "original request" && result.current_stage_stdout == "typed result" && result.bound_stage_stdout == "typed result"
+@schema Request {
+  Request string `json:"request" validate:"required"`
 }
+@pipeline request_scope_after_typed_stage
+  :request-schema=Request
+  cov.typed_projection as typed
+  -> {
+    original_request: input.request,
+    current_stage_stdout: __root__.stdout,
+    bound_stage_stdout: typed.stdout
+  }
+@end
+runtime.const @{ value: { request: "original request" } }
+-> pipeline.request_scope_after_typed_stage

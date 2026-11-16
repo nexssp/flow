@@ -74,9 +74,11 @@ func AnalyzeWithTypedExpressionCheckerAndInput(
 	if len(symbolNamespaces) > 0 {
 		localSymbols = symbolNamespaces[0]
 	}
+	originalInput := input
 	return analyzeTypedExpressions(TypeAnalysisContext{
 		Resolver:           resolver,
 		Input:              input,
+		OriginalInput:      &originalInput,
 		SymbolNamespaces:   localSymbols,
 		CheckExpression:    checker,
 		ExpressionCompiler: expressionCompiler,

@@ -12,8 +12,12 @@ import (
 // pipeline. Input is the current payload; Bindings contains outputs previously
 // named with `as` in the same pipeline scope.
 type TypeAnalysisContext struct {
-	Resolver           CapabilityResolver
-	Input              TypeDescriptor
+	Resolver CapabilityResolver
+	Input    TypeDescriptor
+	// OriginalInput is the payload supplied when the expression scope began.
+	// A nil pointer preserves standalone-analysis behavior by treating Input as
+	// the original request; a non-nil descriptor may intentionally have no type.
+	OriginalInput      *TypeDescriptor
 	Bindings           map[string]TypeDescriptor
 	PipelineBindings   map[string]struct{}
 	SymbolNamespaces   map[string]SymbolNamespace

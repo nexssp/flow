@@ -82,6 +82,7 @@ func (g *ErrorGuardExpr) AnalyzeTypes(ctx compiler.TypeAnalysisContext) (compile
 	handlerContext := compiler.TypeAnalysisContext{
 		Resolver:           ctx.Resolver,
 		Input:              ctx.Input,
+		OriginalInput:      ctx.OriginalInput,
 		Bindings:           handlerBindings,
 		PipelineBindings:   ctx.PipelineBindings,
 		SymbolNamespaces:   ctx.SymbolNamespaces,

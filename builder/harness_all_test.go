@@ -583,7 +583,7 @@ func TestHarness_BareTargetUsesRootModuleNexssflowPackage(t *testing.T) {
 	t.Setenv("GOSUMDB", "off")
 
 	req := require.Requirement{Import: modulePath, Version: version}
-	resolved, err := resolveRequirementPackages([]require.Requirement{req}, mustSelfModuleRoot(t), "", "")
+	resolved, err := resolveRequirementPackages([]require.Requirement{req}, mustSelfModuleRoot(t))
 	if err != nil {
 		t.Fatalf("resolve bare root-module package: %v", err)
 	}
@@ -886,7 +886,7 @@ func TestHarness_LocalExplicitVariantPathIsPreserved(t *testing.T) {
 func TestHarness_UnversionedRemoteRequiresExplicitVersion(t *testing.T) {
 	flowRoot := mustSelfModuleRoot(t)
 	remote := require.Requirement{Import: "example.invalid/unpinned/repo"}
-	if _, err := resolveRequirementPackages([]require.Requirement{remote}, flowRoot, "", ""); err == nil || !strings.Contains(err.Error(), "need an explicit version") {
+	if _, err := resolveRequirementPackages([]require.Requirement{remote}, flowRoot); err == nil || !strings.Contains(err.Error(), "need an explicit version") {
 		t.Fatalf("unversioned remote target error = %v; want explicit-version diagnostic", err)
 	}
 
@@ -895,7 +895,7 @@ func TestHarness_UnversionedRemoteRequiresExplicitVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	sameModule := require.Requirement{Import: flowModule + "/extensions/requiretestfixture"}
-	resolved, err := resolveRequirementPackages([]require.Requirement{sameModule}, flowRoot, "", "")
+	resolved, err := resolveRequirementPackages([]require.Requirement{sameModule}, flowRoot)
 	if err != nil {
 		t.Fatalf("unversioned same-module subpackage was rejected: %v", err)
 	}

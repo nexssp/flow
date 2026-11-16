@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -85,7 +86,7 @@ func TestResolveRequirementPackagesBatchesRemoteModules(t *testing.T) {
 	resolved, err := resolveRequirementPackages([]require.Requirement{
 		{Import: firstModule, Version: firstVersion},
 		{Import: secondModule + "/nexssflow_v2", Version: secondVersion},
-	}, mustSelfModuleRoot(t), "", "")
+	}, mustSelfModuleRoot(t))
 	if err != nil {
 		t.Fatalf("resolve multiple remote bundles: %v", err)
 	}
@@ -123,7 +124,7 @@ func TestResolveRequirementPackagesSeparatesConflictingSharedModuleSelectors(t *
 	resolved, err := resolveRequirementPackages([]require.Requirement{
 		{Import: modulePath, Version: lowerVersion},
 		{Import: modulePath + "/nexssflow_v2", Version: higherVersion},
-	}, mustSelfModuleRoot(t), "", "")
+	}, mustSelfModuleRoot(t))
 	if err != nil {
 		t.Fatalf("resolve packages from shared remote module: %v", err)
 	}
@@ -156,7 +157,7 @@ func TestResolveRemotePackageProvidersRetriesConflictsByVersion(t *testing.T) {
 		switch args[0] {
 		case "get":
 			if len(calls) == 1 {
-				return nil, fmt.Errorf("requested module version conflicts with another requested version")
+				return nil, errors.New("requested module version conflicts with another requested version")
 			}
 			return nil, nil
 		case "list":
@@ -208,7 +209,7 @@ func TestResolveRemotePackageProvidersDoesNotRetryUnrelatedGetErrors(t *testing.
 		if args[0] != "get" {
 			t.Fatalf("unexpected retry command %v", args)
 		}
-		return nil, fmt.Errorf("proxy unavailable")
+		return nil, errors.New("proxy unavailable")
 	}
 
 	_, err := resolveRemotePackageProvidersWithRunner(
@@ -228,7 +229,7 @@ func TestResolveRemotePackageProvidersValidatesQueriesBeforeRunningGo(t *testing
 	calls := 0
 	runGo := func(context.Context, string, ...string) ([]byte, error) {
 		calls++
-		return nil, fmt.Errorf("Go runner should not be called")
+		return nil, errors.New("Go runner should not be called")
 	}
 
 	got, err := resolveRemotePackageProvidersWithRunner(t.Context(), nil, "", "", "", runGo)
