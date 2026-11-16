@@ -189,13 +189,14 @@ func compilePrepared(ctx context.Context, cfg Config, prepared *compiler.Prepare
 }
 
 func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedSource) (Compilation, error) {
-	ctx = compiler.WithLocalSymbols(ctx, compiler.SymbolsFromMeta(prepared.Metadata()))
+	meta := prepared.Metadata()
+	ctx = compiler.WithLocalSymbols(ctx, compiler.SymbolsFromMeta(meta))
 	resolver, err := newExecutionResolver(cfg.Resolver, cfg.Hooks)
 	if err != nil {
 		return Compilation{}, err
 	}
 
-	for _, imported := range compiler.SourceImports(prepared.Metadata()) {
+	for _, imported := range compiler.SourceImports(meta) {
 		child, childErr := compileSource(ctx, cfg, imported.Source)
 		if childErr != nil {
 			return Compilation{}, compiler.SourceError(imported.Position, "@include %s: %w", imported.Namespace, childErr)
@@ -205,7 +206,6 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 		}
 	}
 
-	meta := prepared.Metadata()
 	if syms := compiler.SymbolsFromMeta(meta); len(syms) > 0 {
 		ctx = compiler.WithLocalSymbols(ctx, syms)
 	}

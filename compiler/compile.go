@@ -34,12 +34,17 @@ type PreparedSource struct {
 	actionIntrospection bool
 }
 
-// Metadata returns the directive metadata associated with this source.
+// Metadata returns a defensive snapshot of the directive metadata associated with this source.
+// It copies the top-level map and supported compiler-owned mutable containers,
+// including source provenance, source-scope containers, and @symbols maps. Nested
+// values are cloned only when supported by the compiler or implementing
+// MetaClone. Other values remain shared and must be treated as immutable and
+// read-only; this is not a universal deep copy.
 func (p *PreparedSource) Metadata() map[string]any {
 	if p == nil {
 		return nil
 	}
-	return p.meta
+	return cloneMetadataSnapshot(p.meta)
 }
 
 // SourceName returns the original source name without exposing source text.
