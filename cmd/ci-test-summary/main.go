@@ -15,11 +15,12 @@ import (
 )
 
 type testEvent struct {
-	Action  string  `json:"Action"`
-	Package string  `json:"Package"`
-	Test    string  `json:"Test"`
-	Output  string  `json:"Output"`
-	Elapsed float64 `json:"Elapsed"`
+	Action     string  `json:"Action"`
+	Package    string  `json:"Package"`
+	ImportPath string  `json:"ImportPath"`
+	Test       string  `json:"Test"`
+	Output     string  `json:"Output"`
+	Elapsed    float64 `json:"Elapsed"`
 }
 
 type testKey struct {
@@ -152,14 +153,18 @@ func parseTestEvents(input io.Reader) (testReport, error) {
 			}
 			continue
 		}
-		if event.Package != "" {
-			report.packages[event.Package] = true
+		pkg := event.Package
+		if pkg == "" {
+			pkg = event.ImportPath
 		}
-		if event.Action == "output" {
+		if pkg != "" {
+			report.packages[pkg] = true
+		}
+		if event.Action == "output" || event.Action == "build-output" {
 			if event.Test == "" {
-				report.packageOutput[event.Package] = appendOutput(report.packageOutput[event.Package], event.Output)
+				report.packageOutput[pkg] = appendOutput(report.packageOutput[pkg], event.Output)
 			} else {
-				key := testKey{pkg: event.Package, test: event.Test}
+				key := testKey{pkg: pkg, test: event.Test}
 				report.testOutput[key] = appendOutput(report.testOutput[key], event.Output)
 			}
 			continue
@@ -171,12 +176,12 @@ func parseTestEvents(input io.Reader) (testReport, error) {
 			case "skip":
 				report.skippedTests++
 			case "fail":
-				report.failedTests = append(report.failedTests, failedTest{pkg: event.Package, test: event.Test, elapsed: event.Elapsed})
+				report.failedTests = append(report.failedTests, failedTest{pkg: pkg, test: event.Test, elapsed: event.Elapsed})
 			}
 			continue
 		}
-		if event.Action == "fail" && event.Package != "" {
-			report.failedPackage[event.Package] = true
+		if (event.Action == "fail" || event.Action == "build-fail") && pkg != "" {
+			report.failedPackage[pkg] = true
 		}
 	}
 	if err := scanner.Err(); err != nil {

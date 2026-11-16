@@ -66,8 +66,8 @@ func TestConformanceFailureSummaryExtractsFeatureAndCause(t *testing.T) {
 	ktest.RequireStringContains(t, joined, "got false")
 }
 
-func TestPackageBuildFailureIncludesCompilerError(t *testing.T) {
-	input := `{"Action":"output","Package":"example/bad","Output":"# example/bad\nexample/bad/file.go:3:2: undefined: missingSymbol\n"}` + "\n" + `{"Action":"fail","Package":"example/bad"}`
+func TestBuildOutputAndBuildFailIncludeCompilerError(t *testing.T) {
+	input := `{"ImportPath":"example/bad","Action":"build-output","Output":"# example/bad\nexample/bad/file.go:3:2: undefined: missingSymbol\n"}` + "\n" + `{"ImportPath":"example/bad","Action":"build-fail"}`
 	report, err := parseTestEvents(strings.NewReader(input))
 	ktest.RequireNoError(t, err)
 
