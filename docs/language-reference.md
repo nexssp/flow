@@ -10,6 +10,17 @@ A `.nflow` file is preprocessed first (directives, included sources, constants a
 
 The syntax below is a composition language for registered actions. It is not a promise that every arbitrary identifier names an action or that every expression is checked against external service data before a run.
 
+## Identifier tokens
+
+The core lexer recognizes bare identifiers using ASCII characters only: the
+first character is an ASCII letter, `_`, `.`, `/`, `~`, or `*`; later
+characters may also include ASCII digits and `-`. The `->` sequence is
+recognized as the pipeline operator instead. This is a lexical rule; individual
+declarations may impose narrower name rules. A non-ASCII rune is emitted as an
+invalid token and rejected by parsing, not accepted as part of an identifier.
+See the [lexer](../compiler/lexer.go#L337-L352) and
+[parser](../compiler/parser.go) for the implementation.
+
 ## Actions, arguments, and data
 
 An action atom is normally a canonical action name, optionally followed by modifiers and a structured argument block:
