@@ -80,6 +80,13 @@ func optionOutput(opts Options) io.Writer {
 	return os.Stdout
 }
 
+func fixtureDiscoveryFailure(feature compiler.SelfTestFeature) error {
+	if feature.DiscoveryError == "" {
+		return nil
+	}
+	return fmt.Errorf("fixture discovery failed: %s", feature.DiscoveryError)
+}
+
 func runWithBundles(ctx context.Context, opts Options, bundles []compiler.Bundle) int {
 	if opts.Out == nil {
 		opts.Out = os.Stdout
@@ -125,6 +132,18 @@ func runWithBundles(ctx context.Context, opts Options, bundles []compiler.Bundle
 		r.SectionStart(s)
 		sectionStart := time.Now()
 		for _, f := range s.Features {
+			if failure := fixtureDiscoveryFailure(f); failure != nil {
+				failRes := Result{
+					SelfTestFeature: f,
+					Section:         s.Name,
+					Status:          StatusFail,
+					Err:             failure,
+				}
+				r.FeatureStart(f)
+				r.FeatureDone(failRes)
+				results = append(results, failRes)
+				continue
+			}
 			if f.Skip != "" {
 				skipRes := Result{
 					SelfTestFeature: f,

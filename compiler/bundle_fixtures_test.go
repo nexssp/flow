@@ -1,9 +1,40 @@
 package compiler
 
 import (
+	"errors"
+	"io/fs"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
+
+type walkErrorFS struct {
+	err error
+}
+
+func (f walkErrorFS) Open(string) (fs.File, error) {
+	return nil, f.err
+}
+
+func TestDiscoverFixturesReportsWalkErrors(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("injected traversal failure")
+	features := discoverFixtures("sample", walkErrorFS{err: wantErr})
+	if len(features) != 1 {
+		t.Fatalf("discovered %d features, want one error diagnostic", len(features))
+	}
+	feature := features[0]
+	if feature.Name != "fixture discovery failed" {
+		t.Errorf("diagnostic name = %q, want %q", feature.Name, "fixture discovery failed")
+	}
+	if feature.Source != "sample" {
+		t.Errorf("diagnostic source = %q, want %q", feature.Source, "sample")
+	}
+	if !strings.Contains(feature.DiscoveryError, wantErr.Error()) {
+		t.Errorf("discovery error = %q, want it to include %q", feature.DiscoveryError, wantErr)
+	}
+}
 
 func TestDiscoverFixtures_LoadsCompanionFilesFromPerFixtureDirectory(t *testing.T) {
 	t.Parallel()

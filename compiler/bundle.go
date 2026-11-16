@@ -27,8 +27,10 @@ type SelfTestFeature struct {
 	Files map[string]string
 	// SyntaxOnly marks fixtures that must be compiled but never executed by
 	// the ordinary self-test path. Fixtures opt in with `# @syntax-only`.
-	SyntaxOnly         bool
-	Skip               string
+	SyntaxOnly bool
+	Skip       string
+	// DiscoveryError is a fixture-enumeration failure that self-test must fail on.
+	DiscoveryError     string
 	Source             string
 	ExpectCompileError string
 }
@@ -267,8 +269,11 @@ func discoverFixtures(bundleID string, fsys fs.FS) []SelfTestFeature {
 		return nil
 	})
 	if walkErr != nil {
-		// fixtures are best-effort; record and continue
-		return nil
+		return []SelfTestFeature{{
+			Name:           "fixture discovery failed",
+			DiscoveryError: walkErr.Error(),
+			Source:         bundleID,
+		}}
 	}
 
 	sort.Strings(candidates)

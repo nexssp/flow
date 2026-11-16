@@ -495,7 +495,9 @@ func runJSON(ctx context.Context, opts Options, cfg flowrunner.Config, sections 
 		js := jsonSection{Name: s.Name}
 		for _, f := range s.Features {
 			var res Result
-			if f.Skip != "" {
+			if failure := fixtureDiscoveryFailure(f); failure != nil {
+				res = Result{SelfTestFeature: f, Status: StatusFail, Err: failure, Section: s.Name}
+			} else if f.Skip != "" {
 				res = Result{SelfTestFeature: f, Status: StatusSkip, SkipReason: f.Skip, Section: s.Name}
 			} else {
 				res = runSelectedFeature(ctx, cfg, f, opts.SyntaxOnly)
