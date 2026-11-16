@@ -137,6 +137,7 @@ type ProjectionExpr struct {
 
 func (*ProjectionExpr) Node()              {}
 func (p *ProjectionExpr) Children() []Expr { return nil }
+func (*ProjectionExpr) ProjectionOutput()  {}
 
 // LoopExpr: loop(body) until(condition).
 type LoopExpr struct {

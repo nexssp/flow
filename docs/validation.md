@@ -8,12 +8,14 @@ This is distinct from named `@schema` pipeline-boundary validation; see
 
 ## The problem
 
-Pipeline edges pass values through the action coercion boundary. When the
-compiler can identify both neighboring capabilities and their typed payloads,
-it checks compatibility before execution. It cannot infer the result of an
-arbitrary projection or other dynamic expression. A runtime map may also
-contain fields that do not map to a typed request field, so use validation tags
-when the resulting request needs required-field or value checks:
+Pipeline edges pass values through the action coercion boundary. For a Flow
+projection immediately followed by a typed action, the compiler compares the
+inferred JSON shapes of explicit fields, including nested objects and arrays;
+a definite shape mismatch is rejected before execution. Numeric-to-numeric
+conversions and dynamic/interface values remain subject to runtime coercion,
+which may reject particular values. A runtime map may also contain fields that
+do not map to a typed request field, so use validation tags when the resulting
+request needs required-field or value checks:
 
 ```
 A: {name: "x", tier: "pro"}
@@ -22,11 +24,14 @@ B: fields populated according to its JSON field names; validation tags
   can reject absent or invalid required values
 ```
 
-The compiler's typed-edge analysis is in `compiler/analyze.go`. It checks
-adjacent edges for which it has contracts; it does not statically infer data
-shapes produced by projections. Runtime strict validation is useful for typed
-action request structs whose `validate:` tags should be enforced after request
-coercion.
+The compiler's typed-edge and expression analysis is in
+`compiler/analyze.go` and `compiler/typed_analysis.go`. It propagates declared
+action outputs and inferable projection shapes. Ordinary typed edges use
+conservative contract compatibility; projection edges reject definite JSON
+shape mismatches while leaving value-dependent numeric conversions and
+dynamic values to runtime coercion. Runtime strict validation is useful for
+typed action request structs whose `validate:` tags should be enforced after
+request coercion.
 
 ## Four validation states
 
@@ -110,9 +115,10 @@ failure into an HTTP request.
 - **Does not validate responses.** It validates the action request only.
 - **Does not validate arbitrary `any` or map requests.** The validation
   package's hook is enabled for eligible typed request structures.
-- **Does not perform compile-time payload validation.** The separate typed
-  edge analysis in `compiler/analyze.go` checks compatible statically known
-  edges, not future input values or arbitrary projection results.
+- **Does not perform compile-time payload validation itself.** The separate
+  typed analysis checks statically known action edges and inferable projection
+  results; it does not prove future or dynamic values or enforce request
+  validation tags.
 - **Does not prohibit action argument binding.** Validation applies to the
   typed request the action receives after the atom's inputs are assembled.
 - **Does not replace `@schema`.** Named schemas validate/default pipeline

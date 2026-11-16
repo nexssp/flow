@@ -23,6 +23,7 @@ type TypeAnalysisContext struct {
 	SymbolNamespaces   map[string]SymbolNamespace
 	CheckExpression    TypedSourceExpressionChecker
 	ExpressionCompiler ExpressionCompiler
+	projectionInput    bool
 }
 
 // TypedExpressionAnalyzer is an optional static-analysis contract for AST
@@ -31,6 +32,13 @@ type TypeAnalysisContext struct {
 // whose context it owns. Unknown types are represented by a nil Type.
 type TypedExpressionAnalyzer interface {
 	AnalyzeTypes(TypeAnalysisContext) (TypeDescriptor, error)
+}
+
+// TypedProjectionOutput marks expressions whose inferred output is a Flow
+// projection and therefore uses projection-specific edge compatibility.
+type TypedProjectionOutput interface {
+	Expr
+	ProjectionOutput()
 }
 
 // TypedExpressionCheck lets a core AST node delegate type-aware validation to
@@ -76,6 +84,15 @@ func analyzeTypedNode(ctx TypeAnalysisContext, node Expr) (TypeDescriptor, error
 		return analyzer.AnalyzeTypes(ctx)
 	}
 	if contract, ok := contractForExpr(ctx.Resolver, node); ok {
+		var err error
+		if ctx.projectionInput {
+			err = requireProjectionShapeCompatible(ctx.Input, contract.Input, contract.Name)
+		} else {
+			err = requireCompatible(ctx.Input, contract.Input, "pipeline value", contract.Name)
+		}
+		if err != nil {
+			return TypeDescriptor{}, err
+		}
 		if isIdentityAction(ctx.Resolver, node) {
 			return ctx.Input, nil
 		}
@@ -124,10 +141,12 @@ func analyzeTypedPipe(ctx TypeAnalysisContext, pipe *PipeExpr) (TypeDescriptor, 
 	state := ctx.Input
 	localBindings := cloneTypeBindings(ctx.Bindings)
 	localBindingNames := clonePipelineBindingNames(ctx.PipelineBindings)
+	projectionInput := false
 	for _, step := range flattenPipe(pipe) {
 		inner, binding := unwrapBinding(step)
 		stepContext := ctx
 		stepContext.Input = state
+		stepContext.projectionInput = projectionInput
 		stepContext.Bindings = localBindings
 		stepContext.PipelineBindings = localBindingNames
 		output, err := analyzeTypedNode(stepContext, inner)
@@ -139,8 +158,23 @@ func analyzeTypedPipe(ctx TypeAnalysisContext, pipe *PipeExpr) (TypeDescriptor, 
 			localBindingNames[binding.Name] = struct{}{}
 		}
 		state = output
+		projectionInput = isProjectionOutput(inner)
 	}
 	return state, true, nil
+}
+
+func isProjectionOutput(node Expr) bool {
+	for {
+		switch current := node.(type) {
+		case *BindingExpr:
+			node = current.Inner
+		case *DecoratedExpr:
+			node = current.Inner
+		default:
+			_, ok := node.(TypedProjectionOutput)
+			return ok
+		}
+	}
 }
 
 func analyzeTypedExpressionNode(ctx TypeAnalysisContext, node Expr) (TypeDescriptor, error) {

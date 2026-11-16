@@ -160,6 +160,160 @@ func requireCompatible(produced, consumed TypeDescriptor, producer, consumer str
 	return nil
 }
 
+func requireProjectionShapeCompatible(produced, consumed TypeDescriptor, consumer string) error {
+	if produced.Stream != consumed.Stream {
+		return requireCompatible(produced, consumed, "pipeline value", consumer)
+	}
+	mismatch := findProjectionTypeShapeMismatch(
+		produced.Type,
+		consumed.Type,
+		"",
+		make(map[coercionTypePair]struct{}),
+	)
+	if mismatch == nil {
+		return nil
+	}
+	detail := fmt.Sprintf("JSON value type %s is not compatible with %s", mismatch.produced, mismatch.consumed)
+	if mismatch.field != "" {
+		detail = fmt.Sprintf("field %q: %s", mismatch.field, detail)
+	}
+	return xerr.Validation(fmt.Sprintf("contract mismatch pipeline value -> %s: %s", consumer, detail))
+}
+
+type projectionTypeShapeMismatch struct {
+	field    string
+	produced reflect.Type
+	consumed reflect.Type
+}
+
+func findProjectionTypeShapeMismatch(
+	produced, consumed reflect.Type,
+	field string,
+	seen map[coercionTypePair]struct{},
+) *projectionTypeShapeMismatch {
+	if produced == nil || consumed == nil {
+		return nil
+	}
+	for produced.Kind() == reflect.Pointer {
+		produced = produced.Elem()
+	}
+	for consumed.Kind() == reflect.Pointer {
+		consumed = consumed.Elem()
+	}
+	if produced.AssignableTo(consumed) || produced.Kind() == reflect.Interface || consumed.Kind() == reflect.Interface {
+		return nil
+	}
+	// JSON numbers share a value shape; coercion remains a runtime concern.
+	if isNumericKind(produced.Kind()) && isNumericKind(consumed.Kind()) {
+		return nil
+	}
+	pair := coercionTypePair{produced: produced, consumed: consumed}
+	if _, ok := seen[pair]; ok {
+		return nil
+	}
+	seen[pair] = struct{}{}
+	defer delete(seen, pair)
+
+	if jsonShape(produced) != jsonShape(consumed) {
+		return &projectionTypeShapeMismatch{field: field, produced: produced, consumed: consumed}
+	}
+	//nolint:exhaustive // only JSON container kinds need nested shape comparison
+	switch produced.Kind() {
+	case reflect.Struct:
+		return findProjectionStructShapeMismatch(produced, consumed, field, seen)
+	case reflect.Array, reflect.Slice:
+		return findProjectionSequenceShapeMismatch(produced, consumed, field, seen)
+	}
+	return nil
+}
+
+func findProjectionStructShapeMismatch(
+	produced, consumed reflect.Type,
+	field string,
+	seen map[coercionTypePair]struct{},
+) *projectionTypeShapeMismatch {
+	producedFields, err := jsonTypeFields(produced)
+	if err != nil {
+		return nil
+	}
+	//nolint:exhaustive // only object-shaped JSON targets need field comparison
+	switch consumed.Kind() {
+	case reflect.Struct:
+		return findProjectionStructFieldsShapeMismatch(producedFields, consumed, field, seen)
+	case reflect.Map:
+		return findProjectionStructMapShapeMismatch(producedFields, consumed, field, seen)
+	}
+	return nil
+}
+
+func findProjectionStructFieldsShapeMismatch(
+	producedFields []jsonTypeField,
+	consumed reflect.Type,
+	field string,
+	seen map[coercionTypePair]struct{},
+) *projectionTypeShapeMismatch {
+	consumedFields, err := jsonTypeFields(consumed)
+	if err != nil {
+		return nil
+	}
+	for _, producedField := range producedFields {
+		consumedField, ok, err := findJSONTypeField(consumedFields, producedField.name)
+		if err != nil || !ok {
+			continue
+		}
+		if mismatch := findProjectionTypeShapeMismatch(
+			producedField.typeOf,
+			consumedField.typeOf,
+			projectionFieldPath(field, producedField.name),
+			seen,
+		); mismatch != nil {
+			return mismatch
+		}
+	}
+	return nil
+}
+
+func findProjectionStructMapShapeMismatch(
+	producedFields []jsonTypeField,
+	consumed reflect.Type,
+	field string,
+	seen map[coercionTypePair]struct{},
+) *projectionTypeShapeMismatch {
+	stringType := reflect.TypeFor[string]()
+	if !jsonMapKeyCanUnmarshal(consumed.Key()) || !jsonMapKeysCompatible(stringType, consumed.Key()) {
+		return &projectionTypeShapeMismatch{field: field, produced: stringType, consumed: consumed.Key()}
+	}
+	for _, producedField := range producedFields {
+		if mismatch := findProjectionTypeShapeMismatch(
+			producedField.typeOf,
+			consumed.Elem(),
+			projectionFieldPath(field, producedField.name),
+			seen,
+		); mismatch != nil {
+			return mismatch
+		}
+	}
+	return nil
+}
+
+func findProjectionSequenceShapeMismatch(
+	produced, consumed reflect.Type,
+	field string,
+	seen map[coercionTypePair]struct{},
+) *projectionTypeShapeMismatch {
+	if consumed.Kind() != reflect.Array && consumed.Kind() != reflect.Slice {
+		return nil
+	}
+	return findProjectionTypeShapeMismatch(produced.Elem(), consumed.Elem(), field+"[]", seen)
+}
+
+func projectionFieldPath(parent, field string) string {
+	if parent == "" {
+		return field
+	}
+	return parent + "." + field
+}
+
 type coercionTypePair struct {
 	produced reflect.Type
 	consumed reflect.Type

@@ -1,0 +1,4 @@
+@description "Statically incompatible projection fields fail before a typed action runs"
+# @expect-compile-error contract mismatch pipeline value -> template.render
+{ template: "Hello {{.name}}", variables: "not-an-object" }
+  -> template.render

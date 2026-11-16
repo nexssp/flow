@@ -623,7 +623,7 @@ func projectionMapOutputType(node *ast.MapNode, staticTypes map[string]reflect.T
 		field := reflect.StructField{
 			Name: fmt.Sprintf("Field%d", len(fields)),
 			Type: fieldType,
-			Tag:  reflect.StructTag("expr:" + strconv.Quote(key) + " flow_projection:\"true\""),
+			Tag:  projectionOutputFieldTag(key),
 		}
 		if index, exists := indices[key]; exists {
 			field.Name = fields[index].Name
@@ -640,6 +640,14 @@ func projectionMapOutputType(node *ast.MapNode, staticTypes map[string]reflect.T
 		return schema
 	}
 	return reflect.TypeFor[map[string]any]()
+}
+
+func projectionOutputFieldTag(key string) reflect.StructTag {
+	tag := "expr:" + strconv.Quote(key) + " flow_projection:\"true\""
+	if key == "" || strings.ContainsAny(key, ",\\'\"") || strings.ContainsRune(key, '`') {
+		return reflect.StructTag(tag)
+	}
+	return reflect.StructTag("json:" + strconv.Quote(key) + " " + tag)
 }
 
 func projectionArrayOutputType(node *ast.ArrayNode, staticTypes map[string]reflect.Type) reflect.Type {

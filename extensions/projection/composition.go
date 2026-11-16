@@ -23,6 +23,8 @@ type composedProjection struct {
 	ctxName   string
 }
 
+func (*composedProjection) ProjectionOutput() {}
+
 type projectionBinding struct {
 	name string
 	node compiler.Expr
