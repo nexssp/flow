@@ -1,0 +1,7 @@
+# @expect-compile-error custom JSON codec
+@description "Slice-to-raw-JSON coercion is rejected when runtime byte conversion is not guaranteed"
+@pipeline projection_typed_json_value_array
+  cov.integer_array
+  -> cov.json_value
+@end
+pipeline.projection_typed_json_value_array

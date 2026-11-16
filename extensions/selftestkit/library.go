@@ -6,8 +6,11 @@ package selftestkit
 import (
 	"context"
 	"embed"
+	"encoding/json"
+	"encoding/json/jsontext"
 	"iter"
 	"maps"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -71,6 +74,7 @@ func library() action.Library {
 			covEcho(), covDouble(), covFast(), covSlow(), covFlaky(),
 			covBoom(), covRecoverable(), covFailTimeout(), covFailUnavailable(),
 			covStubAction(), covReset(), covIncrement(), covCount(), covTypedProjection(),
+			covJSONValue(), covIntegerArray(), covFloat32(), covUint64Field(), covStringField(),
 		},
 		Sources: []action.AnyStreamAction{covItems()},
 	}
@@ -90,6 +94,59 @@ type covProjectionResult struct {
 }
 
 func (result covProjectionResult) Summary() string { return result.Stdout }
+
+type covFloat32Request struct {
+	Score float32 `json:"score"`
+}
+
+type covUint64Request struct {
+	Count uint64 `json:"count"`
+}
+
+type covStringRequest struct {
+	Value string `json:"value"`
+}
+
+func covJSONValue() action.AnyAction {
+	return action.New[jsontext.Value, string]("cov.json_value", func(_ context.Context, input jsontext.Value) (string, error) {
+		var value any
+		if err := json.Unmarshal([]byte(input), &value); err != nil {
+			return "", err
+		}
+		switch value.(type) {
+		case map[string]any:
+			return "object", nil
+		case []any:
+			return "array", nil
+		default:
+			return "scalar", nil
+		}
+	}).Build()
+}
+
+func covIntegerArray() action.AnyAction {
+	return action.New("cov.integer_array", func(_ context.Context, _ any) ([]int, error) {
+		return []int{1, 2, 3}, nil
+	}).Build()
+}
+
+func covFloat32() action.AnyAction {
+	return action.New[covFloat32Request, string]("cov.float32", func(_ context.Context, input covFloat32Request) (string, error) {
+		return strconv.FormatFloat(float64(input.Score), 'f', -1, 32), nil
+	}).Build()
+}
+
+func covUint64Field() action.AnyAction {
+	return action.New[covUint64Request, string]("cov.uint64_field", func(_ context.Context, input covUint64Request) (string, error) {
+		return strconv.FormatUint(input.Count, 10), nil
+	}).Build()
+}
+
+func covStringField() action.AnyAction {
+	return action.New[covStringRequest, string]("cov.string_field", func(_ context.Context, input covStringRequest) (string, error) {
+		return input.Value, nil
+	}).Build()
+}
 
 func covTypedProjection() action.AnyAction {
 	return action.New("cov.typed_projection", func(_ context.Context, _ any) (covProjectionResult, error) {

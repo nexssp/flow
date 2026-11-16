@@ -1,0 +1,12 @@
+# @syntax-only
+@description "A schema-derived uint32 safely widens into a uint64 action field"
+@assert: result == "7"
+@schema WidenedSampleCountInput {
+  count uint32
+}
+@pipeline projection_typed_schema_uint32_to_uint64
+  :request-schema=!WidenedSampleCountInput
+  { count: .count }
+  -> cov.uint64_field
+@end
+pipeline.projection_typed_schema_uint32_to_uint64

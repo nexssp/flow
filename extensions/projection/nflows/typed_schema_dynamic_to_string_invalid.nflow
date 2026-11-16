@@ -1,0 +1,11 @@
+# @expect-compile-error contract mismatch pipeline value -> cov.string_field
+@description "A schema-derived dynamic interface is not guaranteed to be a string"
+@schema DynamicStringInput {
+  value any
+}
+@pipeline projection_typed_dynamic_to_string
+  :request-schema=!DynamicStringInput
+  { value: .value }
+  -> cov.string_field
+@end
+pipeline.projection_typed_dynamic_to_string

@@ -1,0 +1,12 @@
+# @syntax-only
+@description "A schema-derived optional float32 can feed a float32 action input"
+@assert: result == "0.75"
+@schema PointerScoreInput {
+  score *float32
+}
+@pipeline projection_pointer_float32_to_float32
+  :request-schema=!PointerScoreInput
+  { score: .score }
+  -> cov.float32
+@end
+pipeline.projection_pointer_float32_to_float32

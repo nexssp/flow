@@ -200,11 +200,29 @@ func findProjectionTypeShapeMismatch(
 	for consumed.Kind() == reflect.Pointer {
 		consumed = consumed.Elem()
 	}
-	if produced.AssignableTo(consumed) || produced.Kind() == reflect.Interface || consumed.Kind() == reflect.Interface {
+	if isJSONValueType(consumed) && isJSONValueSourceShape(produced) {
 		return nil
 	}
-	// JSON numbers share a value shape; coercion remains a runtime concern.
+	if produced.AssignableTo(consumed) {
+		return nil
+	}
+	if produced.Kind() == reflect.Interface {
+		if consumed.Kind() == reflect.Interface && consumed.NumMethod() == 0 {
+			return nil
+		}
+		return &projectionTypeShapeMismatch{field: field, produced: produced, consumed: consumed}
+	}
+	if consumed.Kind() == reflect.Interface {
+		if consumed.NumMethod() == 0 {
+			return nil
+		}
+		return &projectionTypeShapeMismatch{field: field, produced: produced, consumed: consumed}
+	}
+	// Matching JSON-number shapes do not guarantee a safe conversion.
 	if isNumericKind(produced.Kind()) && isNumericKind(consumed.Kind()) {
+		if err := valueDependentCoercion(produced, consumed); err != nil {
+			return &projectionTypeShapeMismatch{field: field, produced: produced, consumed: consumed}
+		}
 		return nil
 	}
 	pair := coercionTypePair{produced: produced, consumed: consumed}
@@ -343,10 +361,7 @@ func valueDependentCoercion(produced, consumed reflect.Type) error {
 }
 
 func valueDependentCoercionSeen(produced, consumed reflect.Type, seen map[coercionTypePair]struct{}) error {
-	if produced == nil || consumed == nil {
-		return nil
-	}
-	if produced.AssignableTo(consumed) {
+	if produced == nil || consumed == nil || produced.AssignableTo(consumed) {
 		return nil
 	}
 	pair := coercionTypePair{produced: produced, consumed: consumed}
@@ -355,14 +370,25 @@ func valueDependentCoercionSeen(produced, consumed reflect.Type, seen map[coerci
 	}
 	seen[pair] = struct{}{}
 
+	produced, consumed, needsInspection, err := prepareJSONCoercion(produced, consumed)
+	if err != nil {
+		return err
+	}
+	if !needsInspection {
+		return nil
+	}
+	return inspectJSONCoercion(produced, consumed, seen)
+}
+
+func prepareJSONCoercion(produced, consumed reflect.Type) (normalizedProduced, normalizedConsumed reflect.Type, needsInspection bool, err error) {
 	if consumed.Kind() == reflect.Interface {
 		if consumed.NumMethod() == 0 {
-			return nil
+			return nil, nil, false, nil
 		}
-		return fmt.Errorf("JSON cannot guarantee a value for interface %s", consumed)
+		return nil, nil, false, fmt.Errorf("JSON cannot guarantee a value for interface %s", consumed)
 	}
 	if produced.Kind() == reflect.Interface {
-		return fmt.Errorf("dynamic value type %s is not guaranteed compatible with %s", produced, consumed)
+		return nil, nil, false, fmt.Errorf("dynamic value type %s is not guaranteed compatible with %s", produced, consumed)
 	}
 	for produced.Kind() == reflect.Pointer {
 		produced = produced.Elem()
@@ -370,20 +396,24 @@ func valueDependentCoercionSeen(produced, consumed reflect.Type, seen map[coerci
 	for consumed.Kind() == reflect.Pointer {
 		consumed = consumed.Elem()
 	}
+	if produced == consumed || isJSONValueType(consumed) && isJSONValueSourceShape(produced) {
+		return nil, nil, false, nil
+	}
 	if hasCustomJSONMethod(produced, true) || hasCustomJSONMethod(consumed, false) {
-		return fmt.Errorf("custom JSON codec on %s or %s prevents guaranteed compatibility", produced, consumed)
+		return nil, nil, false, fmt.Errorf("custom JSON codec on %s or %s prevents guaranteed compatibility", produced, consumed)
 	}
 	if produced.Kind() == reflect.String && isByteSlice(consumed) {
-		return fmt.Errorf("JSON base64 decoding from %s to %s is not guaranteed", produced, consumed)
+		return nil, nil, false, fmt.Errorf("JSON base64 decoding from %s to %s is not guaranteed", produced, consumed)
 	}
-	if jsonShape(produced) == reflect.Invalid || jsonShape(produced) != jsonShape(consumed) {
-		return fmt.Errorf("JSON value type %s is not guaranteed compatible with %s", produced, consumed)
+	producedShape, consumedShape := jsonShape(produced), jsonShape(consumed)
+	if producedShape == reflect.Invalid || producedShape != consumedShape {
+		return nil, nil, false, fmt.Errorf("JSON value type %s is not guaranteed compatible with %s", produced, consumed)
 	}
 
 	if isNumericKind(produced.Kind()) && isNumericKind(consumed.Kind()) && !numericCoercionIsSafe(produced, consumed) {
-		return fmt.Errorf("value-dependent numeric coercion from %s to %s is not guaranteed", produced, consumed)
+		return nil, nil, false, fmt.Errorf("value-dependent numeric coercion from %s to %s is not guaranteed", produced, consumed)
 	}
-	return inspectJSONCoercion(produced, consumed, seen)
+	return produced, consumed, true, nil
 }
 
 func runtimeCoercionIsGuaranteed(produced, consumed reflect.Type) bool {
@@ -394,8 +424,33 @@ func runtimeCoercionIsGuaranteed(produced, consumed reflect.Type) bool {
 		(produced == reflect.TypeFor[string]() || produced.Implements(reflect.TypeFor[fmt.Stringer]()))
 }
 
+// isJSONValueType reports whether valueType is encoding/json/jsontext.Value,
+// including a pointer wrapper.
+func isJSONValueType(valueType reflect.Type) bool {
+	for valueType != nil && valueType.Kind() == reflect.Pointer {
+		valueType = valueType.Elem()
+	}
+	return valueType == reflect.TypeFor[jsontext.Value]()
+}
+
+func isJSONValueSourceShape(valueType reflect.Type) bool {
+	// Kernel's slice coercion can reinterpret numeric slices as bytes instead
+	// of JSON-encoding them, so only object and scalar shapes are guaranteed.
+	switch valueType.Kind() {
+	case reflect.Struct, reflect.Map, reflect.Bool, reflect.String:
+		return true
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64:
+		return true
+	case reflect.Invalid, reflect.Array, reflect.Chan, reflect.Complex64, reflect.Complex128,
+		reflect.Func, reflect.Interface, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		return false
+	}
+	return false
+}
+
 func jsonShape(valueType reflect.Type) reflect.Kind {
-	//nolint:exhaustive // only JSON value shapes are classified
 	switch valueType.Kind() {
 	case reflect.Struct, reflect.Map:
 		return reflect.Map
@@ -406,12 +461,15 @@ func jsonShape(valueType reflect.Type) reflect.Kind {
 		return reflect.Slice
 	case reflect.Bool, reflect.String:
 		return valueType.Kind()
-	default:
-		if isNumericKind(valueType.Kind()) {
-			return reflect.Float64
-		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64:
+		return reflect.Float64
+	case reflect.Invalid, reflect.Chan, reflect.Func, reflect.Interface, reflect.Pointer,
+		reflect.UnsafePointer, reflect.Complex64, reflect.Complex128:
 		return reflect.Invalid
 	}
+	return reflect.Invalid
 }
 
 func isByteSlice(valueType reflect.Type) bool {

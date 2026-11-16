@@ -1,10 +1,19 @@
+# @syntax-only
 @description "Supervisor: concurrent child pipelines with per-child isolation"
 
-# Each child has its own DSL, its own payload, its own error budget.
-# A failing child does not stop its siblings. Results preserve input
-# order, so the caller always knows which child produced which output.
-# This is the pattern for batch jobs, per-tenant work, and any fan-out
-# where each unit is a small pipeline.
+# Each child has its own DSL, its own payload, and its own error budget.
+# A failing child does not stop its siblings. Results preserve input order.
+
+@schema SupervisorChildTask struct {
+  ID string `json:"id" validate:"required"`
+  DSL string `json:"dsl" validate:"required"`
+  Payload any `json:"payload"`
+  TimeoutMS int64 `json:"timeout_ms,omitempty"`
+}
+
+@schema SupervisorInput struct {
+  Tasks []SupervisorChildTask `json:"tasks" validate:"required,min=1"`
+}
 
 @assert: result.total == 3
 @assert: result.succeeded == 2
@@ -15,11 +24,9 @@
 @assert: result.results[2].task_id == "echo"
 @assert: result.results[2].output.greeting == "hi"
 
-{
-  tasks: [
-    { id: "num",  dsl: "const @{ value: 42 }",        payload: {} },
-    { id: "boom", dsl: "fail",                        payload: {} },
-    { id: "echo", dsl: "with @{ echoed: true }",      payload: { greeting: "hi" } },
-  ]
-}
--> supervisor.run
+@pipeline supervisor_children
+  :request-schema=!SupervisorInput
+  { tasks: .tasks }
+  -> supervisor.run
+@end
+pipeline.supervisor_children

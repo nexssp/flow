@@ -1,0 +1,7 @@
+@description "Projected JSON scalars can feed a raw JSON-value action"
+@assert: result == "scalar"
+@pipeline projection_typed_json_value_scalar
+  "hello"
+  -> cov.json_value
+@end
+pipeline.projection_typed_json_value_scalar

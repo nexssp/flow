@@ -1,0 +1,11 @@
+# @expect-compile-error contract mismatch pipeline value -> cov.uint64_field
+@description "A schema-derived signed integer is not guaranteed to fit a uint64 action field"
+@schema SignedSampleCountInput {
+  count int
+}
+@pipeline projection_typed_int_to_uint64
+  :request-schema=!SignedSampleCountInput
+  { count: .count }
+  -> cov.uint64_field
+@end
+pipeline.projection_typed_int_to_uint64

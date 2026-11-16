@@ -1,0 +1,12 @@
+# @syntax-only
+@description "A schema-derived uint64 projection feeds a typed action request"
+@assert: result == "7"
+@schema SampleCountInput {
+  count uint64
+}
+@pipeline projection_typed_schema_uint64
+  :request-schema=!SampleCountInput
+  { count: .count }
+  -> cov.uint64_field
+@end
+pipeline.projection_typed_schema_uint64
