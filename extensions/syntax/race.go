@@ -41,6 +41,8 @@ func (raceKeyword) Parse(p *compiler.Parser) (compiler.Expr, error) {
 				p.Advance()
 				return &RaceExpr{candidates: candidates}, nil
 			}
+		case compiler.TokInvalid:
+			return nil, p.Fail(p.Current().Line, "unexpected character %q", p.Current().Lit)
 		case compiler.TokRBrace:
 			p.Advance()
 			return &RaceExpr{candidates: candidates}, nil

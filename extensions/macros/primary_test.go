@@ -84,6 +84,24 @@ func TestReadArgs(t *testing.T) {
 	}
 }
 
+func TestReadArgs_RejectsInvalidCharacter(t *testing.T) {
+	t.Parallel()
+	byName := map[string]Declaration{
+		"ignore": {Name: "ignore", Params: []string{"value"}, Body: `runtime.noop`},
+	}
+	_, err := newTestParser(t, byName, `@ignore(§)`).Parse()
+	ktest.RequireErrorContains(t, err, "unexpected character")
+}
+
+func TestReadArgs_PreservesExpressionPunctuation(t *testing.T) {
+	t.Parallel()
+	p := newTestParser(t, nil, `@unused(.score >= 50)`)
+	p.Advance() // consume @unused
+	args, err := readArgs(p)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, args, []string{`.score >= 50`})
+}
+
 func TestPrimaryQualifiedMacroCall(t *testing.T) {
 	t.Parallel()
 	byName := map[string]Declaration{

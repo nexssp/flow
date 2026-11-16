@@ -70,6 +70,7 @@ func TestParse_Errors(t *testing.T) {
 		{"missing until", `loop(noop)`, "expected 'until'"},
 		{"missing until open paren", `loop(noop) until .n >= 3`, "expected '('"},
 		{"unclosed until paren", `loop(noop) until(.n >= 3`, "unclosed"},
+		{"invalid character", `loop(noop) until(.n >= 3 §)`, "unexpected character"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

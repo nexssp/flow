@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/extensions/internal/exprsyntax"
 )
 
 // assertKeyword parses `assert(cond)` or `assert(cond, "msg")` and
@@ -36,6 +37,10 @@ scan:
 			depth--
 			if depth == 0 {
 				break scan
+			}
+		case compiler.TokInvalid:
+			if !exprsyntax.IsExpressionPunctuation(p.Current().Lit) {
+				return nil, p.Fail(p.Current().Line, "unexpected character %q", p.Current().Lit)
 			}
 		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
 			compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr,

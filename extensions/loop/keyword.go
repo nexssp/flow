@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/extensions/internal/exprsyntax"
 )
 
 // loopKeyword is the compile-time parser extension. It has no runtime
@@ -55,6 +56,10 @@ scan:
 			untilDepth--
 			if untilDepth == 0 {
 				break scan
+			}
+		case compiler.TokInvalid:
+			if !exprsyntax.IsExpressionPunctuation(p.Current().Lit) {
+				return nil, p.Fail(p.Current().Line, "unexpected character %q", p.Current().Lit)
 			}
 		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
 			compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr,

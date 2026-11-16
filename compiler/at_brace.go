@@ -515,7 +515,7 @@ func (b *braceScanner) readNumber() (*Value, error) {
 	if f, err := strconv.ParseFloat(raw, 64); err == nil {
 		return &Value{Kind: ValueNumber, Num: f}, nil
 	}
-	return &Value{Kind: ValueBare, Str: raw}, nil
+	return nil, b.errf("invalid numeric literal %q", raw)
 }
 
 func (b *braceScanner) readKeyword() (*Value, error) {

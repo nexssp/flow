@@ -1,7 +1,7 @@
 package compiler
 
 import (
-	"fmt"
+	"unicode/utf8"
 
 	"github.com/nexssp/flow/internal/lexical"
 )
@@ -80,8 +80,19 @@ func (l *Lexer) nextToken() Token {
 	if isIdentStart(c) {
 		return l.scanIdent()
 	}
-	l.pos++
-	return Token{Type: TokIdent, Lit: fmt.Sprintf("%c", c), Line: line}
+	return l.scanUnknown(line)
+}
+
+func (l *Lexer) scanUnknown(line int) Token {
+	start := l.pos
+	if l.src[l.pos] == '!' {
+		// ! prefixes strict schema modifiers and remains modifier value text.
+		l.pos++
+		return Token{Type: TokIdent, Lit: l.src[start:l.pos], Line: line}
+	}
+	_, size := utf8.DecodeRuneInString(l.src[l.pos:])
+	l.pos += size
+	return Token{Type: TokInvalid, Lit: l.src[start:l.pos], Line: line}
 }
 
 func (l *Lexer) scanOperator(line int, c byte) (Token, bool) {

@@ -104,6 +104,10 @@ func (p *Parser) errorf(_ int, format string, args ...any) error {
 	return SourceError(p.currentPos(), format, args...)
 }
 
+func (p *Parser) unexpectedCharacter() error {
+	return p.errorf(p.Cur().Line, "unexpected character %q", p.Cur().Lit)
+}
+
 func (p *Parser) currentPos() Position {
 	tok := p.Cur()
 	col := 0
@@ -154,6 +158,9 @@ func (p *Parser) Parse() (Expr, error) {
 		return nil, err
 	}
 	if p.Cur().Type != TokEOF {
+		if p.Cur().Type == TokInvalid {
+			return nil, p.unexpectedCharacter()
+		}
 		return nil, p.errorf(p.Cur().Line, "unexpected token %q after expression", p.Cur().Lit)
 	}
 	return e, nil
@@ -240,6 +247,9 @@ func (p *Parser) parseExpr(minPrec int) (Expr, error) {
 }
 
 func (p *Parser) parsePrimary() (Expr, error) {
+	if p.Cur().Type == TokInvalid {
+		return nil, p.unexpectedCharacter()
+	}
 	startPos := p.currentPos()
 	startLine := p.Cur().Line
 	_, isExtensionPrimary := p.primaries.ByToken(p.Cur().Type)
@@ -318,6 +328,9 @@ func (p *Parser) parsePrimaryInner() (Expr, error) {
 			return nil, err
 		}
 		if p.Cur().Type != TokRParen {
+			if p.Cur().Type == TokInvalid {
+				return nil, p.unexpectedCharacter()
+			}
 			return nil, p.errorf(p.Cur().Line, "expected ')', got %q", p.Cur().Lit)
 		}
 		p.Next()
@@ -498,7 +511,7 @@ func (p *Parser) parseAtomSuffix(a *Atom) (bool, error) {
 		p.Next()
 		return true, nil
 
-	case TokEOF, TokIdent, TokString, TokNumber, TokArrow, TokPipe,
+	case TokEOF, TokIdent, TokString, TokNumber, TokInvalid, TokArrow, TokPipe,
 		TokAmpersand, TokOrOr, TokLParen, TokRParen, TokLBrace,
 		TokRBrace, TokEquals, TokComma, TokQuestion:
 		return false, nil
@@ -543,7 +556,7 @@ func (p *Parser) parseDirectConstInput(a *Atom) (bool, error) {
 			return false, nil
 		}
 		value = &Value{Kind: ValueRef, Ref: reference}
-	case TokEOF, TokArrow, TokPipe, TokAmpersand, TokOrOr,
+	case TokEOF, TokInvalid, TokArrow, TokPipe, TokAmpersand, TokOrOr,
 		TokLParen, TokRParen, TokLBrace, TokRBrace, TokColon,
 		TokEquals, TokComma, TokQuestion, TokHash, TokTilde, TokAtBrace:
 		return false, nil
@@ -796,7 +809,7 @@ func (p *Parser) valueTokenContinues() bool {
 	}
 
 	switch t {
-	case TokIdent, TokNumber, TokString,
+	case TokIdent, TokNumber, TokString, TokInvalid,
 		TokAtPrompt, TokTilde, TokHash, TokComma, TokColon:
 		return true
 	case TokEOF, TokArrow, TokPipe, TokAmpersand, TokOrOr,
@@ -818,7 +831,7 @@ func (p *Parser) writeValueToken(sb *strings.Builder) {
 		sb.WriteByte('#')
 	case TokColon:
 		sb.WriteByte(':')
-	case TokEOF, TokIdent, TokString, TokNumber, TokArrow, TokPipe,
+	case TokEOF, TokIdent, TokString, TokNumber, TokInvalid, TokArrow, TokPipe,
 		TokAmpersand, TokOrOr, TokLParen, TokRParen, TokLBrace,
 		TokRBrace, TokEquals, TokComma, TokQuestion, TokAtBrace:
 		// Other tokens write only their literal value.

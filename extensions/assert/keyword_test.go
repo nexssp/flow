@@ -100,6 +100,7 @@ func TestParse_Errors(t *testing.T) {
 	}{
 		{"missing open paren", `assert .score >= 50`, "expected '('"},
 		{"unclosed paren", `assert(.score >= 50`, "unclosed"},
+		{"invalid character", `assert(x §)`, "unexpected character"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

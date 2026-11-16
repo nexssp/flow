@@ -591,7 +591,7 @@ func formatExpressionLines(line string) []string {
 			if depth == 0 {
 				arrows = append(arrows, token.Offset)
 			}
-		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
+		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber, compiler.TokInvalid,
 			compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr, compiler.TokColon,
 			compiler.TokEquals, compiler.TokComma, compiler.TokQuestion, compiler.TokHash,
 			compiler.TokTilde, compiler.TokAtBrace, compiler.TokAtPrompt:
@@ -649,7 +649,7 @@ func formatModifierSpacing(body string) string {
 			if depth > 0 {
 				depth--
 			}
-		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
+		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber, compiler.TokInvalid,
 			compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr, compiler.TokColon,
 			compiler.TokEquals, compiler.TokComma, compiler.TokQuestion, compiler.TokHash,
 			compiler.TokTilde, compiler.TokAtBrace, compiler.TokAtPrompt:

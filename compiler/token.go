@@ -28,9 +28,10 @@ const (
 	TokTilde
 	TokAtBrace
 	TokAtPrompt
+	TokInvalid
 )
 
-var tokenNames = [20]string{
+var tokenNames = [21]string{
 	TokEOF:       "eof",
 	TokIdent:     "ident",
 	TokString:    stringKindName,
@@ -51,6 +52,7 @@ var tokenNames = [20]string{
 	TokTilde:     "~",
 	TokAtBrace:   "@{",
 	TokAtPrompt:  "@",
+	TokInvalid:   "invalid",
 }
 
 func (t TokenType) String() string {

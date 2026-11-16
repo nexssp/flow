@@ -164,7 +164,7 @@ func sourceTokens(source string, base int) []SourceToken {
 				}
 				projectionBraces = projectionBraces[:last]
 			}
-		case TokEOF, TokIdent, TokString, TokNumber, TokArrow, TokPipe,
+		case TokEOF, TokIdent, TokString, TokNumber, TokInvalid, TokArrow, TokPipe,
 			TokAmpersand, TokOrOr, TokLParen, TokRParen, TokColon, TokEquals,
 			TokComma, TokQuestion, TokHash, TokTilde, TokAtBrace, TokAtPrompt:
 			// These tokens do not affect projection-depth tracking.

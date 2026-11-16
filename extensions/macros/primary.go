@@ -9,6 +9,7 @@ import (
 	"github.com/nexssp/kernel/xctx"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/extensions/internal/exprsyntax"
 	"github.com/nexssp/flow/internal/identifier"
 )
 
@@ -357,6 +358,10 @@ func readArgs(p *compiler.Parser) ([]string, error) {
 			depth--
 			if depth == 0 {
 				endOffset = p.Current().Offset
+			}
+		case compiler.TokInvalid:
+			if !exprsyntax.IsExpressionPunctuation(p.Current().Lit) {
+				return nil, p.Fail(p.Current().Line, "unexpected character %q", p.Current().Lit)
 			}
 		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
 			compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr,
