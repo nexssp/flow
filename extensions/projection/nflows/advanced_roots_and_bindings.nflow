@@ -1,0 +1,21 @@
+@description "Projection: distinguish current input, original request, and pipeline bindings"
+@pipeline advanced_roots_and_bindings
+  const @{ value: { tool: { name: "bound" }, stage: "bound-stage" } } as previous
+  -> const @{ value: { tool: { name: "current" }, stage: "current-stage" } }
+  -> {
+    current_tool: .tool.name,
+    original_tool: input.tool.name,
+    tool,
+    current_stage: .stage,
+    original_request_id: input.request_id,
+    previous_tool: previous.tool.name
+  }
+@end
+@assert: result.current_tool == "current"
+@assert: result.original_tool == "original"
+@assert: result.tool.name == "current"
+@assert: result.current_stage == "current-stage"
+@assert: result.original_request_id == "REQ-17"
+@assert: result.previous_tool == "bound"
+const @{ value: { request_id: "REQ-17", tool: { name: "original" }, stage: "request-stage" } }
+-> pipeline.advanced_roots_and_bindings
