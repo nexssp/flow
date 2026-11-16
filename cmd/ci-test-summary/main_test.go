@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,18 @@ import (
 
 	"github.com/nexssp/kernel/xtest/ktest"
 )
+
+func TestHarnessTestCommandSkipsOnlyNFlowConformanceWhenRequested(t *testing.T) {
+	t.Setenv(skipTestAllNFlowConformanceEnv, "")
+	ktest.RequireEqual(t, newHarnessTestCommand(context.Background()).Args, []string{
+		"go", "test", "-json", "-count=1", "./builder", "./cli/...",
+	})
+
+	t.Setenv(skipTestAllNFlowConformanceEnv, "1")
+	ktest.RequireEqual(t, newHarnessTestCommand(context.Background()).Args, []string{
+		"go", "test", "-json", "-count=1", "-skip=" + testAllNFlowConformanceSkipRegex, "./builder", "./cli/...",
+	})
+}
 
 func TestFailureSummaryShowsFailingTestWithoutPassingNoise(t *testing.T) {
 	events := []testEvent{

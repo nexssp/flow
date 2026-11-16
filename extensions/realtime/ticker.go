@@ -29,10 +29,46 @@ func TickerSource() action.AnyStreamAction {
 		return stream.Ticks(ctx, req.Hz, maxCatchupDuration), nil
 	})
 
-	// StreamAction has no fluent builder; modify Describe() directly.
-	meta := src.Describe()
+	meta := *src.Describe()
 	meta.Description = "Emit fixed-timestep tick durations to drive a real-time loop"
 	meta.Tags = []string{"realtime", "loop"}
 
-	return src
+	return &tickerMetadataStream{AnyStreamAction: src, meta: meta}
+}
+
+type tickerMetadataStream struct {
+	action.AnyStreamAction
+	meta action.Meta
+}
+
+var _ action.AnyStreamAction = (*tickerMetadataStream)(nil)
+
+func (s *tickerMetadataStream) Describe() *action.Meta {
+	if s == nil {
+		return nil
+	}
+	meta := cloneTickerMeta(s.meta)
+	return &meta
+}
+
+func (s *tickerMetadataStream) CloneWithHooks(hooks ...action.AnyHook) action.AnyStreamAction {
+	if s == nil || s.AnyStreamAction == nil {
+		return nil
+	}
+	inner := s.AnyStreamAction.CloneWithHooks(hooks...)
+	if inner == nil {
+		return nil
+	}
+	return &tickerMetadataStream{
+		AnyStreamAction: inner,
+		meta:            cloneTickerMeta(s.meta),
+	}
+}
+
+func cloneTickerMeta(meta action.Meta) action.Meta {
+	meta.Tags = append([]string(nil), meta.Tags...)
+	meta.RequiredRoles = append([]string(nil), meta.RequiredRoles...)
+	meta.RequiredPermissions = append([]string(nil), meta.RequiredPermissions...)
+	meta.RequiredFeatures = append([]string(nil), meta.RequiredFeatures...)
+	return meta
 }

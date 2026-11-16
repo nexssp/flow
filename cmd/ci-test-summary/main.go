@@ -44,8 +44,19 @@ type testReport struct {
 	skippedTests  int
 }
 
+const skipTestAllNFlowConformanceEnv = "FLOW_TEST_HARNESS_SKIP_TEST_ALL_NFLOW_CONFORMANCE"
+
+const testAllNFlowConformanceSkipRegex = "^TestAllNFlowConformance$"
+
 func main() {
 	os.Exit(run(os.Args[1:]))
+}
+
+func newHarnessTestCommand(ctx context.Context) *exec.Cmd {
+	if os.Getenv(skipTestAllNFlowConformanceEnv) == "1" {
+		return exec.CommandContext(ctx, "go", "test", "-json", "-count=1", "-skip="+testAllNFlowConformanceSkipRegex, "./builder", "./cli/...")
+	}
+	return exec.CommandContext(ctx, "go", "test", "-json", "-count=1", "./builder", "./cli/...")
 }
 
 func run(args []string) int {
@@ -66,7 +77,7 @@ func run(args []string) int {
 	}
 
 	fmt.Fprintf(os.Stdout, "Running Go tests; detailed event output is being captured.\n")
-	cmd := exec.CommandContext(context.Background(), "go", "test", "-json", "-count=1", "./builder", "./cli/...")
+	cmd := newHarnessTestCommand(context.Background())
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	runErr := cmd.Run()

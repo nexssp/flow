@@ -14,6 +14,37 @@ import (
 	"github.com/nexssp/flow/extensions/realtime"
 )
 
+func TestRealtime_TickerSourceMetadataSurvivesDescribeAndClone(t *testing.T) {
+	t.Parallel()
+
+	source := realtime.TickerSource()
+	requireTickerMetadata(t, source)
+
+	meta := source.Describe()
+	meta.Tags[0] = "changed"
+	requireTickerMetadata(t, source)
+
+	clone := source.CloneWithHooks()
+	requireTickerMetadata(t, clone)
+	clone.Describe().Tags[1] = "changed"
+	requireTickerMetadata(t, clone)
+	requireTickerMetadata(t, source)
+}
+
+func requireTickerMetadata(t *testing.T, source action.AnyStreamAction) {
+	t.Helper()
+	meta := source.Describe()
+	if meta == nil {
+		t.Fatal("ticker metadata is nil")
+	}
+	if got, want := meta.Description, "Emit fixed-timestep tick durations to drive a real-time loop"; got != want {
+		t.Fatalf("ticker description = %q, want %q", got, want)
+	}
+	if len(meta.Tags) != 2 || meta.Tags[0] != "realtime" || meta.Tags[1] != "loop" {
+		t.Fatalf("ticker tags = %#v, want [realtime loop]", meta.Tags)
+	}
+}
+
 func TestRealtime_TopicPublish(t *testing.T) {
 	t.Parallel()
 

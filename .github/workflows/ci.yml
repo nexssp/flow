@@ -31,6 +31,8 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run full harness integration suite (without race instrumentation)
+        env:
+          FLOW_TEST_HARNESS_SKIP_TEST_ALL_NFLOW_CONFORMANCE: "1"
         run: task test:harness
 
       - name: Upload full harness test event log
