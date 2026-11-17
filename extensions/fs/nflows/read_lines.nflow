@@ -1,0 +1,5 @@
+@description "Read and normalize repository references from a text file"
+@assert: len(result) == 2
+@assert: result[0] == "github.com/nexssp/kernel"
+@assert: result[1] == "github.com/nexssp/flow"
+fs.read_lines @{ path: "repositories.txt", comment_prefix: "#" }

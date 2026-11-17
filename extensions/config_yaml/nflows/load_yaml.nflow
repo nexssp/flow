@@ -1,5 +1,5 @@
-@description "Load YAML configuration from a local file"
-@config.load:path="settings.yml"
-@assert: result.host == "api.example.test"
-@assert: result.port == "8443"
-runtime.const @{ value: { host: "@config.host", port: "@config.port" } }
+@description "Load a YAML object from a runtime file path"
+@assert: result.repositories[0] == "nexssp/kernel"
+@assert: result.repositories[1] == "nexssp/flow"
+@assert: result.metadata.source == "fixture"
+config_yaml.load @{ path: "repopeek.yml" }

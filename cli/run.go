@@ -519,7 +519,7 @@ func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string,
 		observer.PrintSummary(os.Stderr)
 	}
 
-	emitPreparedOutput(ex.Output, suppressOutput, wantJSON, isTerm, useColorOut)
+	emitPreparedOutput(ex.Output, suppressOutput || ex.SuppressOutput, wantJSON, isTerm, useColorOut)
 
 	asserts, positions := runner.CollectAsserts(ex.Meta, flagsToAsserts(flags))
 	return runner.RunAssertionsContextWithPositions(

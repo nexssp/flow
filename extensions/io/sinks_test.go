@@ -75,6 +75,9 @@ func TestBundle_WiresExpectedAtoms(t *testing.T) {
 	}
 
 	lib := bundle.Libraries[0]
+	if len(lib.Actions) != 1 || lib.Actions[0].Describe().Name != "io.write_text" {
+		t.Fatalf("action wiring: %#v", lib.Actions)
+	}
 	if len(lib.Sources) != 1 || lib.Sources[0].Describe().Name != "io.stdin" {
 		t.Fatalf("source wiring: %#v", lib.Sources)
 	}

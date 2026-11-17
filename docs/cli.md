@@ -298,6 +298,8 @@ Runtime options:
 | `--json` | Suppress the embedded version banner; run output is already JSON. |
 | `--suppress-output` | Suppress the runner's final result on stdout so a workflow transport can own the stream. Supported by `nflow run` and standalone binaries; output written directly by workflow actions remains visible. |
 
+An action that renders its own final output can return `runner.SuppressOutput(value)`. The runner omits its additional stdout rendering while unwrapping `value` for post-run assertions and callers. Direct writes made by the action remain visible.
+
 Values supplied with CLI flags and positionals, and values loaded into
 compile-time config, are raw text. A `const` action preserves `@flag.key`,
 `@arg.N`, and `@config.key` as strings even when they look numeric, boolean,

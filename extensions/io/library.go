@@ -1,7 +1,8 @@
-// Package io ships process-stdio stream primitives: io.stdin reads
-// newline-delimited items from standard input; io.stdout and io.stderr
-// write each item as a line and pass it through. Neither sink owns the
-// stream — the CLI still writes the final payload to stdout.
+// Package io ships process-stdio primitives: io.stdin reads newline-delimited
+// items from standard input; io.stdout and io.stderr write each item as a line
+// and pass it through. The io.write_text action writes raw rendered text to
+// stdout and passes its input through. Neither sink owns the stream — the CLI
+// still writes the final payload to stdout.
 package io
 
 import (
@@ -32,6 +33,9 @@ func Bundle(_ map[string]string) compiler.Bundle {
 func Library() action.Library {
 	return action.Library{
 		Name: ID,
+		Actions: []action.AnyAction{
+			WriteTextAction,
+		},
 		Sources: []action.AnyStreamAction{
 			InSource(),
 		},

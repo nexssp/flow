@@ -31,5 +31,5 @@ func TestFixtures_EmbeddedAndDescribed(t *testing.T) {
 		return nil
 	})
 	ktest.RequireNoError(t, err)
-	ktest.RequireEqual(t, found, 2)
+	ktest.RequireEqual(t, found, 3)
 }

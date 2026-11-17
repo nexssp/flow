@@ -1,0 +1,5 @@
+repositories:
+  - nexssp/kernel
+  - nexssp/flow
+metadata:
+  source: fixture

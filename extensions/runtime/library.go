@@ -1,7 +1,8 @@
 // Package runtime ships the primitive actions every .nflow pipeline
 // starts from: runtime.const, runtime.noop, runtime.debug, runtime.fail,
 // runtime.pick, runtime.wrap, runtime.with, runtime.env, runtime.uuid,
-// runtime.call, runtime.dispatch_by_prefix, json.clean, runtime.sleep. This is a native bundle —
+// runtime.call, runtime.dispatch_by_prefix, json.clean, runtime.sleep,
+// runtime.flatten, and runtime.is_terminal. This is a native bundle —
 // always mounted by native.Bundles().
 //
 // Typical use:
@@ -59,6 +60,7 @@ func library() action.Library {
 			JSONClean,
 			Sleep,
 			Flatten,
+			IsTerminal,
 		},
 	}
 }

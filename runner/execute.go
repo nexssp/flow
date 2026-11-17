@@ -18,6 +18,7 @@ import (
 type Execution struct {
 	ExecutionID     string
 	Output          any
+	SuppressOutput  bool
 	Suspension      *ApprovalSuspension
 	Meta            map[string]any
 	Resolver        compiler.CapabilityResolver
@@ -158,6 +159,7 @@ func ExecutePrepared(
 			})
 		},
 	)
+	output, suppressOutput := unwrapOutput(output)
 	runDuration := time.Since(runStart)
 	if cfg.MeasureAllocs {
 		readMemStats(&runStats)
@@ -166,6 +168,7 @@ func ExecutePrepared(
 	result := Execution{
 		ExecutionID:     executionID,
 		Output:          output,
+		SuppressOutput:  suppressOutput,
 		Suspension:      suspension,
 		Meta:            compiled.Meta,
 		Resolver:        compiled.Resolver,
@@ -414,6 +417,7 @@ func executeCompiled(
 			})
 		},
 	)
+	output, suppressOutput := unwrapOutput(output)
 	runDuration := time.Since(runStart)
 
 	if cfg.MeasureAllocs {
@@ -423,6 +427,7 @@ func executeCompiled(
 	result := Execution{
 		ExecutionID:     executionID,
 		Output:          output,
+		SuppressOutput:  suppressOutput,
 		Suspension:      suspension,
 		Meta:            compiled.Meta,
 		Resolver:        compiled.Resolver,

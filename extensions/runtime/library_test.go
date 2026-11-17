@@ -21,7 +21,7 @@ func TestBundle_WiresLibrary(t *testing.T) {
 func TestLibrary_ActionCount(t *testing.T) {
 	t.Parallel()
 	lib := library()
-	ktest.RequireEqual(t, len(lib.Actions), 15)
+	ktest.RequireEqual(t, len(lib.Actions), 16)
 }
 
 func TestLibrary_ActionNames(t *testing.T) {
@@ -29,6 +29,7 @@ func TestLibrary_ActionNames(t *testing.T) {
 	want := []string{
 		"runtime.const", "runtime.debug", "runtime.print", "runtime.noop", "runtime.fail", "runtime.wrap", "runtime.pick",
 		"runtime.with", "runtime.env", "runtime.uuid", "runtime.call", "runtime.dispatch_by_prefix", "json.clean", "runtime.sleep",
+		"runtime.is_terminal",
 	}
 	got := make(map[string]bool, len(want))
 	for _, a := range library().Actions {

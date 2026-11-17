@@ -152,31 +152,17 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 	}
 
 	if err != nil {
-		if ex.Suspension != nil {
-			fmt.Fprintf(stderr, "Approval required: gate %s (role %s): %s\n", ex.Suspension.Gate, ex.Suspension.Role, ex.Suspension.Reason)
-			if !ex.Suspension.Persisted {
-				fmt.Fprintln(stderr, "Approval pause was not persisted; configure a suspension-capable journal to resume safely.")
-			}
-			return 3
-		}
-		useColor := terminal.IsTerminal(stderr)
-		heading := diagnosticPaint("✗ Pipeline Execution Failed", diagnosticANSIRed, useColor)
-		fmt.Fprintf(stderr, "\n%s\n\n  %s\n\n", heading, FormatErrorDetail(err, src, name, useColor))
-		if opts.Verbosity >= 1 {
-			if trace := FormatErrorTrace(err); trace != "" {
-				fmt.Fprintln(stderr, trace)
-			}
-			observer.PrintSummary(stderr)
-		}
-		return 1
+		return reportRunSourceError(ex, err, src, name, stderr, observer, opts.Verbosity)
 	}
 
 	if opts.Verbosity >= 1 {
-		fmt.Fprintf(stdout, "✓ %v\n", ex.Output)
+		if !ex.SuppressOutput {
+			fmt.Fprintf(stdout, "✓ %v\n", ex.Output)
+		}
 		fmt.Fprintf(stdout, "  compile: %s\n", FormatDuration(ex.CompileDuration))
 		fmt.Fprintf(stdout, "  run:     %s\n", FormatDuration(ex.RunDuration))
 		observer.PrintSummary(stdout)
-	} else {
+	} else if !ex.SuppressOutput {
 		fmt.Fprintln(stdout, formatOutput(ex.Output))
 	}
 
@@ -193,6 +179,26 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 		opts.Verbosity,
 		compiler.SymbolsFromMeta(ex.Meta),
 	)
+}
+
+func reportRunSourceError(ex Execution, err error, src, name string, stderr io.Writer, observer *Observer, verbosity int) int {
+	if ex.Suspension != nil {
+		fmt.Fprintf(stderr, "Approval required: gate %s (role %s): %s\n", ex.Suspension.Gate, ex.Suspension.Role, ex.Suspension.Reason)
+		if !ex.Suspension.Persisted {
+			fmt.Fprintln(stderr, "Approval pause was not persisted; configure a suspension-capable journal to resume safely.")
+		}
+		return 3
+	}
+	useColor := terminal.IsTerminal(stderr)
+	heading := diagnosticPaint("✗ Pipeline Execution Failed", diagnosticANSIRed, useColor)
+	fmt.Fprintf(stderr, "\n%s\n\n  %s\n\n", heading, FormatErrorDetail(err, src, name, useColor))
+	if verbosity >= 1 {
+		if trace := FormatErrorTrace(err); trace != "" {
+			fmt.Fprintln(stderr, trace)
+		}
+		observer.PrintSummary(stderr)
+	}
+	return 1
 }
 
 func configureRunSourceJournal(cfg *Config, journalDir string, stderr io.Writer) (journal *FileJournal, exitCode int) {

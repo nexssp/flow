@@ -1,5 +1,5 @@
-// Package config_yaml registers a YAML decoder with extensions/config.
-// It is not a native bundle: users opt in with
+// Package config_yaml registers a YAML decoder with extensions/config and the
+// config_yaml.load runtime action. Users opt in with
 //
 //	@require config_yaml
 //
@@ -29,7 +29,7 @@ func init() {
 func Bundle(_ map[string]string) compiler.Bundle {
 	return compiler.Bundle{
 		ID:        ID,
-		Libraries: []action.Library{{Name: ID}},
+		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{LoadAction}}},
 		Fixtures:  fixturesFS,
 	}
 }
