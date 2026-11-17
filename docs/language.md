@@ -244,16 +244,22 @@ Inside `@{ }`:
 | `key: "text"` | String literal |
 | `key: 42` | Number |
 | `key: true` | Boolean |
+| `key: null` | Null value |
 | `key: [1, 2, 3]` | Array |
 | `key: { a: 1 }` | Nested object |
 | `key: .path.to.field` | Reference to the current input |
 | `key: .` | The whole input |
-| `name` | Same-name reference to `.name` |
+| `name` (entry/key position) | Same-name reference to `.name` |
+| `key: input.name` or `key: person.name` | Literal string; value-position names do not look up `input` or an `as` binding |
+| `key: pricing.echo(input.name)` | Qualified `@func` expression; it can read `input` and visible `as` bindings |
 | `... .defaults` | Spread the referenced object into the argument map |
 | `key: noop` | A capability reference (see §4) |
 
-References read from the current pipeline state — the value flowing
-into this atom.
+Path references and the bare-entry shorthand read from the current pipeline
+state — the value flowing into this atom. The shorthand is not the same as a
+bare identifier or dotted name used as a value. Qualified `@func` calls are the
+supported expression-valued form; use them when a pure calculation needs the
+original `input` or a visible `as` binding.
 
 Argument-map spreads are available at the top level of `@{ ... }`; they are
 useful for shared defaults. If two spreads, or a spread and an explicit field,
