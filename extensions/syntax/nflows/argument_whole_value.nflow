@@ -1,0 +1,34 @@
+@description "Whole-value dot and expressions preserve scalar and collection current inputs"
+@func whole_value.echo(value string) string = value
+@pipeline scalar_passthrough
+  runtime.noop
+@end
+@assert: result.text == "the exact scalar"
+@assert: result.number == 37.5
+@assert: result.boolean == false
+@assert: result.null_value == nil
+@assert: result.list[0] == 1 && result.list[1] == 2
+@assert: result.nested.items[0] == "nested scalar"
+@assert: result.expression == "expression scalar"
+@assert: result.object.value.name == "Julia" && result.object.value.nested.count == 2 && result.object.first_name == "Julia"
+@assert: result.named_pipeline.request == "the exact named scalar"
+parallel {
+  text: const "the exact scalar"
+    -> const @{ value: . },
+  number: const 37.5
+    -> const @{ value: . },
+  boolean: const false
+    -> const @{ value: . },
+  null_value: const null
+    -> const @{ value: . },
+  list: const @{ value: [1, 2] }
+    -> const @{ value: . },
+  nested: const "nested scalar"
+    -> const @{ value: { items: [.] } },
+  expression: const "expression scalar"
+    -> const @{ value: whole_value.echo(.) },
+  named_pipeline: const "the exact named scalar"
+    -> pipeline.scalar_passthrough @{ request: . },
+  object: { name: "Julia", nested: { count: 2 } }
+    -> runtime.noop @{ value: ., first_name: .name }
+}

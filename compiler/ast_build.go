@@ -1124,7 +1124,7 @@ func buildPayload(ctx context.Context, in any, a *Atom) (map[string]any, error) 
 		}
 		maps.Copy(out, spreads)
 		for k, v := range a.Args {
-			resolved, err := resolveValue(ctx, v, m)
+			resolved, err := resolveValue(ctx, v, in)
 			if err != nil {
 				return nil, err
 			}
@@ -1153,7 +1153,7 @@ func buildPayload(ctx context.Context, in any, a *Atom) (map[string]any, error) 
 	}
 	maps.Copy(merged, spreads)
 	for k, v := range a.Args {
-		resolved, err := resolveValue(ctx, v, m)
+		resolved, err := resolveValue(ctx, v, in)
 		if err != nil {
 			return nil, err
 		}
@@ -1184,7 +1184,7 @@ func buildNamedPipelinePayload(ctx context.Context, in any, a *Atom) (map[string
 	}
 	maps.Copy(out, spreads)
 	for key, value := range a.Args {
-		resolved, err := resolveValue(ctx, value, state)
+		resolved, err := resolveValue(ctx, value, in)
 		if err != nil {
 			return nil, err
 		}
@@ -1241,7 +1241,8 @@ func resolveArgumentSpreads(ctx context.Context, state map[string]any, a *Atom) 
 	return spreadValues, nil
 }
 
-func resolveValue(ctx context.Context, v *Value, state map[string]any) (any, error) {
+// Path references remain map-scoped; whole-value references and expressions receive the exact input.
+func resolveValue(ctx context.Context, v *Value, state any) (any, error) {
 	if v == nil {
 		return nil, nil //nolint:nilnil // A missing Value preserves the existing null resolution.
 	}
@@ -1265,7 +1266,8 @@ func resolveValue(ctx context.Context, v *Value, state map[string]any) (any, err
 		if v.Ref == "" {
 			return state, nil
 		}
-		val, _ := maputil.LookupPath(state, v.Ref)
+		input, _ := state.(map[string]any)
+		val, _ := maputil.LookupPath(input, v.Ref)
 		return val, nil
 	case ValueExpression:
 		if v.Program == nil {
