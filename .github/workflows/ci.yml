@@ -149,8 +149,8 @@ jobs:
           verify: false
           args: ./...
 
-  race:
-    name: race tests
+  race-core:
+    name: race core packages
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -164,8 +164,26 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run race-enabled tests
-        run: go test -race -short -count=1 ./...
+      - name: Run race-enabled core tests
+        run: go test -race -short -count=1 ./builder ./cli/... ./internal/... ./runner
+
+  race-runtime:
+    name: race runtime packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run race-enabled runtime tests
+        run: go test -race -short -count=1 ./cmd/... ./compiler ./extensions/... ./formatter ./native
 
   vulnerability:
     name: vulnerability scan
@@ -216,7 +234,8 @@ jobs:
       - module-tidy
       - acceptance
       - lint
-      - race
+      - race-core
+      - race-runtime
       - vulnerability
       - benchmark
       - harness-builder
@@ -231,7 +250,8 @@ jobs:
             "${{ needs.module-tidy.result }}"
             "${{ needs.acceptance.result }}"
             "${{ needs.lint.result }}"
-            "${{ needs.race.result }}"
+            "${{ needs.race-core.result }}"
+            "${{ needs.race-runtime.result }}"
             "${{ needs.vulnerability.result }}"
             "${{ needs.benchmark.result }}"
             "${{ needs.harness-builder.result }}"
