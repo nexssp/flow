@@ -1,0 +1,9 @@
+@description "if runs only the true branch and skips later conditions and else branches"
+@assert: result == "first"
+if (true) {
+  const "first"
+} else if (1 / 0 > 0) {
+  fail @{ message: "later condition was evaluated eagerly" }
+} else {
+  fail @{ message: "else branch was evaluated eagerly" }
+}

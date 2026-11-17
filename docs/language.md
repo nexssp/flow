@@ -32,8 +32,15 @@ The pipeline is the flow. These forms cover its operators and structured express
 | `(a & b)` | Run `a` and `b` concurrently, gather both |
 | `parallel { label: expr, ... }` | Run branches concurrently and gather results under explicit labels |
 | `race { expr, ... }` | Run candidates concurrently and return the first successful result |
+| `if (condition) { expr } else { expr }` | Run the selected branch for a canonical `bool` condition; `else if` is supported and an omitted `else` passes the input through |
 | `{ key: expr, ... }` | Project a new object from the current input |
 | `a ? b : c` | Conditional: `b` when `a` is truthy, else `c` |
+
+`if` is reserved syntax supplied by the standard `syntax` bundle; it is not a
+bare action or identifier name. Conditions are evaluated in order and lazily.
+Known non-boolean conditions are compile errors, while unknown/interface values
+are checked at runtime and must produce a boolean. Branch-local bindings do not
+leak out of their branch.
 
 The smallest pipeline:
 
@@ -111,7 +118,7 @@ delay the result. Unlike `||`, all race candidates are started concurrently.
 
 ## 2. Native keywords
 
-Ten keyword names are part of the language itself. They compile to
+Ten action keyword names are part of the language itself. They compile to
 canonical actions at parse time and cannot be overridden by any bundle.
 
 | Keyword | Compiles to | Meaning |
@@ -137,6 +144,9 @@ Both forms are valid; prefer the keyword.
 (`runtime.const`) remains valid and is what you'll see in
 `nflow explain` output, but a bundle cannot register an action named
 `const` — the mount rejects it.
+
+The control-flow keyword `if` is also reserved when the standard `syntax`
+bundle is loaded, but it does not name or compile to a single action.
 
 `const` accepts a direct string, number, boolean, or `null` scalar after the
 keyword:

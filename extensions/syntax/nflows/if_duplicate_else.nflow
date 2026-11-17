@@ -1,0 +1,3 @@
+@description "if rejects a duplicate else clause"
+# @expect-compile-error if: duplicate else clause
+if (true) { noop } else { noop } else { noop }

@@ -1,0 +1,3 @@
+@description "compile-error: if requires a braced else expression"
+# @expect-compile-error if: expected '{' after else
+if (true) { noop } else noop

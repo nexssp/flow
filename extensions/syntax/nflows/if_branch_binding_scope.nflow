@@ -1,0 +1,7 @@
+@description "a new binding inside an if branch does not leak outside the branch"
+@assert: result.after == nil
+const @{ value: { enabled: true } } as parent
+-> if (.enabled) {
+  const @{ value: "branch" } as branch_only
+}
+-> { after: branch_only }

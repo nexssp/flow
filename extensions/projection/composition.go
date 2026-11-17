@@ -196,6 +196,8 @@ func isFlowValue(p *compiler.Parser) bool {
 		return false
 	}
 	switch p.Cur().Lit {
+	case "if":
+		return p.Peek(1).Type == compiler.TokLParen
 	case "parallel", "race":
 		return p.Peek(1).Type == compiler.TokLBrace
 	case "match":

@@ -1,0 +1,3 @@
+@description "compile-error: if condition must be bool"
+# @expect-compile-error if: condition must be bool
+if (42) { noop } else { noop }

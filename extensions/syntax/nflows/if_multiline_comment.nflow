@@ -1,0 +1,12 @@
+@description "if supports multiline conditions with hash comments"
+@assert: result == "commented"
+const @{ value: { enabled: true, ready: true } }
+-> if (
+  .enabled == true # ignored condition comment
+  && .ready == true
+  && 2 ^ 1 == 2
+) {
+  const "commented"
+} else {
+  fail @{ message: "multiline commented condition evaluated incorrectly" }
+}

@@ -43,6 +43,8 @@ type ActionGraphDescription struct {
 	Name        string
 	Form        ActionGraphForm
 	ChildLabels []string
+	// PassThroughLabels are choice outcomes that return the input unchanged.
+	PassThroughLabels []string
 }
 
 type ActionGraphProvider interface {
@@ -295,6 +297,9 @@ func (b *actionGraphBuilder) buildChoice(
 		b.addEdge(gate, segment.entry, label)
 		b.addEdge(segment.exit, join, "result:"+label)
 	}
+	for _, label := range spec.PassThroughLabels {
+		b.addEdge(gate, join, label)
+	}
 	return actionGraphSegment{entry: gate, exit: join}, nil
 }
 
@@ -422,6 +427,9 @@ func expressionPosition(expr Expr) Position {
 	case *LiteralExpr:
 		return node.Pos
 	default:
+		if positioned, ok := expr.(interface{ Position() Position }); ok {
+			return positioned.Position()
+		}
 		return Position{}
 	}
 }

@@ -1,0 +1,14 @@
+@description "if evaluates false and else-if conditions in order, then selects an else branch"
+@assert: result == "else"
+if (false) {
+  fail @{ message: "false condition invoked the then branch" }
+} else if (true) {
+  const "else-if"
+} else {
+  fail @{ message: "else-if condition was not evaluated" }
+}
+-> if (false) {
+  fail @{ message: "false condition invoked the then branch" }
+} else {
+  const "else"
+}

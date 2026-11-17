@@ -1,0 +1,6 @@
+@description "a false boolean passes through an if without else unchanged"
+@assert: result == false
+const false
+-> if (.) {
+  const true
+}
