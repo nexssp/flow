@@ -40,6 +40,17 @@ Prefer the right-hand form when the stated condition holds:
 
 A leading-dot path in a projection derives its output key from the final path segment; a bare nested name such as `user.id` is not path shorthand. Use an explicit `key: value` entry when the desired output key differs.
 
+### Review a workflow as a whole
+
+For a substantial application flow, read the complete entrypoint and follow its payloads before changing individual lines. Prefer these patterns when they preserve the behavior:
+
+- **Use the right state source.** `input` is the original request for the current pipeline; `.` is the payload currently flowing between steps. Do not add `noop as app` only to copy fields from those sources. Use `input.field` or `.field` directly, and use `as name` only when a step's result is reused. An `as` binding is lexical; it does not add a field to the payload. If `app` is only an alias of the current map, replace `{ cli: app.cli, config: app.config }` with `{ .cli, .config }` and omit the unnecessary alias.
+- **Avoid field-by-field copies.** In projections, use same-name shorthand such as `{ cli, config }`, path shorthand such as `{ .user.id }`, and whole-input spread such as `{ ..., status: "ready" }`. In action arguments, `@{ ... }` is a structured argument map: `name` and `.name` refer to the current atom input, while bare identifiers in value positions are not expr-lang references to `as` bindings. Do not assume `@{ value: printed }` inserts a variable named `printed`; keep the intended payload flowing or use a supported current-input reference. `const` constructs its declared result rather than passing through unspecified input, so use `noop` for a genuine pass-through.
+- **Validate in sequence.** For ordered fail-fast checks, chain `assert(condition, "message")`; each successful assertion returns its input unchanged and a failed assertion returns a validation error. Reserve `match` for real branching or selection rather than nesting it to emulate sequential guards.
+- **Share the real repeated work.** If several views differ only in selected data, template, or failure text, use one shared collect/render/report path instead of near-duplicate pipelines. Use `@func` for repeated pure calculations such as status labels or color codes. Move long static templates to an `@include`d NFlow module when that makes the entrypoint clearer; verify the target build packages the included source.
+
+After a refactor, compare the full dataflow and observable output with the original. Add or run a host-matched fixture that checks the rendered result and error path; syntax or lint success alone will not catch a wrong payload or a literal returned in place of a bound value.
+
 ### Other compact forms and readability choices
 
 - Bind a step's output with postfix `as name` when later expressions need to refer to it. The binding is pipeline-local and does not change the value passed to the next step or add a result field; do not insert a projection solely to carry the output forward.
