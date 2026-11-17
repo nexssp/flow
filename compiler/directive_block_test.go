@@ -89,6 +89,27 @@ func TestReadBlockWithSpansBalancesNestedBracesAndIgnoresCommentsAndStrings(t *t
 	}
 }
 
+func TestReadBlockWithSpansTreatsBackticksAsRawInExpressionClauses(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{
+		`@on_error {`,
+		"  when value == `raw\\` + `}` -> error.info",
+		`}`,
+		`runtime.noop`,
+	}
+	block, err := ReadBlockWithSpans(lines, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if block.Next != 3 {
+		t.Fatalf("next = %d, want 3", block.Next)
+	}
+	if len(block.Body) != 1 || block.Body[0] != strings.TrimSpace(lines[1]) {
+		t.Fatalf("body = %#v, want the complete expression clause", block.Body)
+	}
+}
+
 func TestParseList(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -113,5 +134,26 @@ func TestParseList(t *testing.T) {
 				break
 			}
 		}
+	}
+}
+
+func TestTopLevelScannersTreatBackticksAsRawStrings(t *testing.T) {
+	t.Parallel()
+
+	source := "`raw\\` + first, second"
+	got := SplitTopLevel(source, ',')
+	want := []string{"`raw\\` + first", " second"}
+	if len(got) != len(want) {
+		t.Fatalf("SplitTopLevel(%q) = %#v, want %#v", source, got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("SplitTopLevel(%q)[%d] = %q, want %q", source, i, got[i], want[i])
+		}
+	}
+
+	wantIndex := strings.IndexByte(source, ',')
+	if gotIndex := IndexTopLevel(source, ','); gotIndex != wantIndex {
+		t.Fatalf("IndexTopLevel(%q, ',') = %d, want %d", source, gotIndex, wantIndex)
 	}
 }

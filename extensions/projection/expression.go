@@ -219,7 +219,7 @@ func projectionLetTerminator(raw string, position int) (int, error) {
 
 func advanceProjectionQuote(raw string, position int, quote byte) (next int, nextQuote byte) {
 	c := raw[position]
-	if c == '\\' && position+1 < len(raw) {
+	if c == '\\' && quote != '`' && position+1 < len(raw) {
 		return position + 2, quote
 	}
 	if c == quote {
@@ -356,16 +356,10 @@ func (s *projectionShorthandScanner) rewriteAt(index int) int {
 }
 
 func (s *projectionShorthandScanner) copyQuoted(index int) int {
-	c := s.raw[index]
-	s.rewritten.WriteByte(c)
-	if c == '\\' && index+1 < len(s.raw) {
-		s.rewritten.WriteByte(s.raw[index+1])
-		return index + 2
-	}
-	if c == s.quote {
-		s.quote = 0
-	}
-	return index + 1
+	next, quote := advanceProjectionQuote(s.raw, index, s.quote)
+	s.rewritten.WriteString(s.raw[index:next])
+	s.quote = quote
+	return next
 }
 
 func (s *projectionShorthandScanner) copyComment(index int) int {

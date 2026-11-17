@@ -115,3 +115,30 @@ func TestDirective_Errors(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractMacroRefsAfterRawBacktickEndingWithBackslash(t *testing.T) {
+	t.Parallel()
+
+	body := "`raw\\` + @needed()"
+	ktest.RequireEqual(t, extractMacroRefs(body), []string{"needed"})
+}
+
+func TestDirective_MultilineBodyKeepsProjectionBoundaryAfterRawBacktick(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{
+		`@macro identity() {`,
+		`  source`,
+		`  -> {`,
+		"    text: `raw\\` + `}`",
+		`  }`,
+		`}`,
+	}
+	out, res, err := runDirective(t, lines...)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, res.Next, len(lines))
+
+	decls, _ := out[DeclarationKey].([]Declaration)
+	ktest.RequireEqual(t, len(decls), 1)
+	ktest.RequireEqual(t, decls[0].Body, "source\n  -> {\n    text: `raw\\` + `}`\n  }")
+}

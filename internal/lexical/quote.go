@@ -12,3 +12,9 @@ func CanStartQuote(source string, position, start int) bool {
 	}
 	return true
 }
+
+// BackslashEscapesNext reports whether the current backslash consumes the
+// following byte in a quoted string. Backtick strings are raw.
+func BackslashEscapesNext(quote, current byte, hasNext bool) bool {
+	return quote != '`' && current == '\\' && hasNext
+}

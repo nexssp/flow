@@ -1438,7 +1438,7 @@ func PreprocessDots(src string) string {
 
 		if quote != 0 {
 			out.WriteByte(c)
-			if c == '\\' && i+1 < n {
+			if c == '\\' && quote != '`' && i+1 < n {
 				out.WriteByte(src[i+1])
 				i += 2
 				continue

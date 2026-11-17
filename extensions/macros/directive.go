@@ -153,14 +153,14 @@ func extractMacroRefs(body string) []string {
 }
 
 // skipQuoted advances past a quoted string starting at s[i] (which must
-// be a quote byte). Escapes inside are honored; unterminated strings
-// consume the rest of the input.
+// be a quote byte). Backslash escapes apply to single- and double-quoted
+// strings; backticks use expr-lang raw-string boundaries.
 func skipQuoted(s string, i int) int {
 	quote := s[i]
 	i++
 	for i < len(s) {
 		switch {
-		case s[i] == '\\' && i+1 < len(s):
+		case s[i] == '\\' && quote != '`' && i+1 < len(s):
 			i += 2
 		case s[i] == quote:
 			return i + 1
@@ -341,7 +341,7 @@ func lineBraceDelta(line string) int {
 	for i := 0; i < len(line); i++ {
 		c := line[i]
 		if quote != 0 {
-			if c == '\\' && i+1 < len(line) {
+			if c == '\\' && quote != '`' && i+1 < len(line) {
 				i++
 				continue
 			}

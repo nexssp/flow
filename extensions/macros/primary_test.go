@@ -102,6 +102,22 @@ func TestReadArgs_PreservesExpressionPunctuation(t *testing.T) {
 	ktest.RequireEqual(t, args, []string{`.score >= 50`})
 }
 
+func TestArgumentMapScannersTreatBackticksAsRaw(t *testing.T) {
+	t.Parallel()
+
+	call := "call(`prefix\\` + `)`, next)"
+	end, body, ok := readCallBody(call, 4)
+	ktest.RequireEqual(t, ok, true)
+	ktest.RequireEqual(t, end, len(call))
+	ktest.RequireEqual(t, body, "`prefix\\` + `)`, next")
+
+	entries := splitArgumentEntries("value: `prefix\\` + `,`, next: 1")
+	ktest.RequireEqual(t, entries, []string{
+		"value: `prefix\\` + `,`",
+		" next: 1",
+	})
+}
+
 func TestPrimaryQualifiedMacroCall(t *testing.T) {
 	t.Parallel()
 	byName := map[string]Declaration{

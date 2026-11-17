@@ -140,7 +140,7 @@ func (l *Lexer) scanAtBrace() Token {
 
 func (l *Lexer) scanAtBraceQuotedByte(quote byte) byte {
 	c := l.src[l.pos]
-	if c == '\\' && l.pos+1 < len(l.src) {
+	if lexical.BackslashEscapesNext(quote, c, l.pos+1 < len(l.src)) {
 		if l.src[l.pos+1] == '\n' {
 			l.line++
 		}
@@ -302,7 +302,7 @@ func (l *Lexer) scanString(q byte) Token {
 	start := l.pos
 	terminated := false
 	for l.pos < len(l.src) && l.src[l.pos] != q {
-		if l.src[l.pos] == '\\' && l.pos+1 < len(l.src) {
+		if lexical.BackslashEscapesNext(q, l.src[l.pos], l.pos+1 < len(l.src)) {
 			if l.src[l.pos+1] == '\n' {
 				l.line++
 			}

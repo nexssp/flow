@@ -153,6 +153,20 @@ func TestDirective_CompactFormSplitsOnlyTopLevelCommas(t *testing.T) {
 	})
 }
 
+func TestDirective_CompactFormTreatsBackticksAsRaw(t *testing.T) {
+	t.Parallel()
+
+	line := "@assert: { result.value == `prefix\\` + `}`, result.ok == true }"
+	out, err := runDirective(t, line)
+	ktest.RequireNoError(t, err)
+
+	asserts, _ := out["asserts"].([]string)
+	ktest.RequireEqual(t, asserts, []string{
+		"result.value == `prefix\\` + `}`",
+		"result.ok == true",
+	})
+}
+
 func TestDirective_CompactFormRejectsEmptyListItems(t *testing.T) {
 	t.Parallel()
 	_, err := runDirective(t, `@assert: { a == 1,, b == 2 }`)

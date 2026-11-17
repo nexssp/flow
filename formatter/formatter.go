@@ -758,7 +758,7 @@ func braceDelta(line string) int {
 	for i := 0; i < len(line); i++ {
 		c := line[i]
 		if quote != 0 {
-			if c == '\\' && i+1 < len(line) {
+			if c == '\\' && quote != '`' && i+1 < len(line) {
 				i++
 				continue
 			}

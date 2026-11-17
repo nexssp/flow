@@ -47,8 +47,8 @@ func (e Extension) Parse(p *compiler.Parser) (compiler.Expr, error) {
 }
 
 // scanBalancedBraces returns the index of the closing '}' that matches
-// the opener at openIndex. Quoted strings are skipped; escape
-// sequences inside them are honored.
+// the opener at openIndex. Quoted strings are skipped; backslash escapes
+// apply to single- and double-quoted strings, not raw backtick strings.
 func scanBalancedBraces(src string, openIndex int) (int, error) {
 	depth := 1
 	parenDepth := 0
@@ -59,14 +59,7 @@ func scanBalancedBraces(src string, openIndex int) (int, error) {
 		c := src[i]
 
 		if quote != 0 {
-			if c == '\\' && i+1 < len(src) {
-				i += 2
-				continue
-			}
-			if c == quote {
-				quote = 0
-			}
-			i++
+			i, quote = advanceProjectionQuote(src, i, quote)
 			continue
 		}
 

@@ -37,6 +37,18 @@ func TestBuildProgramSource(t *testing.T) {
 	}
 }
 
+func TestProjectionScannersTreatBackticksAsRaw(t *testing.T) {
+	t.Parallel()
+
+	raw := "`prefix\\` + target"
+	ktest.RequireEqual(t, skipProjectionQuoted(raw, 0), len("`prefix\\`"))
+	ktest.RequireEqual(t, projectionExpressionReferences(raw, "target"), true)
+
+	program, err := buildProgramSource("value: `prefix\\` + `value`, name")
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, program, "{ value: `prefix\\` + `value`, name: name }")
+}
+
 func TestBuildProgramSourceRejectsInvalidLocalBindings(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

@@ -124,7 +124,7 @@ func scanBlockLine(line string, depth int) (nextDepth, closeAt, comment int) {
 	for i := 0; i < len(line); i++ {
 		c := line[i]
 		if quote != 0 {
-			if c == '\\' && i+1 < len(line) {
+			if lexical.BackslashEscapesNext(quote, c, i+1 < len(line)) {
 				i++
 				continue
 			}
@@ -248,8 +248,9 @@ func splitOptionLine(line string) (key, value string, ok bool) {
 }
 
 // SplitTopLevel splits s on sep, respecting quoted strings (" ' `),
-// balanced brackets, and backslash escapes. Returns the raw segments,
-// not trimmed. Callers trim themselves.
+// balanced brackets, and escapes in single- and double-quoted strings.
+// Backtick strings follow expr-lang raw-string semantics. Returns the raw
+// segments, not trimmed. Callers trim themselves.
 func SplitTopLevel(s string, sep byte) []string {
 	var (
 		out   []string
@@ -260,7 +261,7 @@ func SplitTopLevel(s string, sep byte) []string {
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		if inQ != 0 {
-			if c == '\\' && i+1 < len(s) {
+			if c == '\\' && inQ != '`' && i+1 < len(s) {
 				i++
 				continue
 			}
@@ -297,7 +298,7 @@ func IndexTopLevel(s string, target byte) int {
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		if inQ != 0 {
-			if c == '\\' && i+1 < len(s) {
+			if c == '\\' && inQ != '`' && i+1 < len(s) {
 				i++
 				continue
 			}

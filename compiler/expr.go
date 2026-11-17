@@ -53,7 +53,7 @@ func StripExprComments(raw string) string {
 
 		if quote != 0 {
 			sb.WriteByte(c)
-			if c == '\\' && i+1 < len(raw) {
+			if c == '\\' && quote != '`' && i+1 < len(raw) {
 				sb.WriteByte(raw[i+1])
 				i += 2
 				continue

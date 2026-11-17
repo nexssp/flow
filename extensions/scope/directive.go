@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 // metaKey is the private slot where this extension keeps its parsed
@@ -177,7 +178,7 @@ func braceDelta(line string) int {
 		c := line[i]
 
 		if quote != 0 {
-			if c == '\\' && i+1 < len(line) {
+			if lexical.BackslashEscapesNext(quote, c, i+1 < len(line)) {
 				i += 2
 				continue
 			}

@@ -58,6 +58,16 @@ func TestParse_BracesInsideQuotes(t *testing.T) {
 	ktest.RequireEqual(t, strings.TrimSpace(proj.Raw), `a: "}"`)
 }
 
+func TestParse_BraceInsideRawStringAfterBackslash(t *testing.T) {
+	src := "{ value: `raw\\` + `}` }"
+	expr, err := newProjectionParser(t, src).Parse()
+	ktest.RequireNoError(t, err)
+
+	proj, ok := expr.(*compiler.ProjectionExpr)
+	ktest.RequireCondition(t, ok, "got %T, want *compiler.ProjectionExpr", expr)
+	ktest.RequireEqual(t, strings.TrimSpace(proj.Raw), "value: `raw\\` + `}`")
+}
+
 func TestParse_Unclosed(t *testing.T) {
 	_, err := newProjectionParser(t, `{ a: 1`).Parse()
 	ktest.RequireErrorContains(t, err, "unclosed projection")

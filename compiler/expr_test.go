@@ -48,6 +48,11 @@ func TestStripExprComments_DepthAware(t *testing.T) {
 			want: "x == `# raw`",
 		},
 		{
+			name: "backslash does not escape raw string close",
+			in:   "x == `raw\\` # trailing comment",
+			want: "x == `raw\\` " + strings.Repeat(" ", len("# trailing comment")),
+		},
+		{
 			name: "multiline preserves line terminators",
 			in:   "a\n# comment\nb",
 			want: "a\n" + strings.Repeat(" ", len("# comment")) + "\nb",

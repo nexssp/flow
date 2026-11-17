@@ -145,7 +145,7 @@ func readCallBody(s string, open int) (end int, body string, ok bool) {
 	for i := open + 1; i < len(s); i++ {
 		c := s[i]
 		if quote != 0 {
-			if c == '\\' && i+1 < len(s) {
+			if c == '\\' && quote != '`' && i+1 < len(s) {
 				i++
 				continue
 			}
@@ -206,7 +206,7 @@ type argumentEntryScanState struct {
 func (state *argumentEntryScanState) consume(s string, i int) (int, bool) {
 	c := s[i]
 	if state.quote != 0 {
-		if c == '\\' && i+1 < len(s) {
+		if c == '\\' && state.quote != '`' && i+1 < len(s) {
 			return 1, false
 		}
 		if c == state.quote {

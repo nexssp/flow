@@ -362,6 +362,24 @@ func TestParseAtBrace_QuotedBracesAndDuplicateKeys(t *testing.T) {
 	}
 }
 
+func TestLexerAtBrace_RawBacktickCloseAfterBackslash(t *testing.T) {
+	t.Parallel()
+
+	source := "wrap @{ value: raw(`raw\\`) }"
+	lexer := NewLexer(source)
+	lexer.Next() // wrap
+	token := lexer.Next()
+	if token.Type != TokAtBrace {
+		t.Fatalf("token type = %v, want TokAtBrace", token.Type)
+	}
+	if !strings.Contains(token.Lit, "value: raw(") {
+		t.Fatalf("@{} content = %q, want the expression after the raw-string boundary", token.Lit)
+	}
+	if token.EndOffset != len(source) {
+		t.Fatalf("EndOffset = %d, want %d", token.EndOffset, len(source))
+	}
+}
+
 func TestParseRejectsUnterminatedStringOrArgumentBlock(t *testing.T) {
 	t.Parallel()
 	for _, src := range []string{`"unterminated`, `wrap @{ key: "unterminated }`} {

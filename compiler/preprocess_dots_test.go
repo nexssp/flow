@@ -26,6 +26,7 @@ func TestPreprocessDots_UnifiedBehavior(t *testing.T) {
 		{"inside dq string", `"a.b"`, `"a.b"`},
 		{"inside sq string", `'a.b'`, `'a.b'`},
 		{"inside backtick", "`a.b`", "`a.b`"},
+		{"backslash does not escape raw closing tick", "`raw\\` + .value", "`raw\\` + value"},
 		{"escaped quote in string", `"a\"b.c"`, `"a\"b.c"`},
 		{"dot before digit is root", `.123`, `__root__123`},    // regression
 		{"dot before close-paren is member", `foo.)`, `foo.)`}, // regression

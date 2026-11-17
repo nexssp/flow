@@ -59,7 +59,7 @@ func wrapsInBraces(source string) bool {
 	for i := 0; i < len(source); i++ {
 		c := source[i]
 		if quote != 0 {
-			if c == '\\' && i+1 < len(source) {
+			if c == '\\' && quote != '`' && i+1 < len(source) {
 				i++
 				continue
 			}

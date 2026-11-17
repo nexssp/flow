@@ -367,13 +367,11 @@ func projectionStaticFieldType(valueType reflect.Type, selector string) (reflect
 
 func skipProjectionQuoted(raw string, index int) int {
 	quote := raw[index]
-	for index++; index < len(raw); index++ {
-		if raw[index] == '\\' && index+1 < len(raw) {
-			index++
-			continue
-		}
-		if raw[index] == quote {
-			return index + 1
+	for index++; index < len(raw); {
+		var nextQuote byte
+		index, nextQuote = advanceProjectionQuote(raw, index, quote)
+		if nextQuote == 0 {
+			return index
 		}
 	}
 	return len(raw)

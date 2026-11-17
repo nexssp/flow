@@ -399,3 +399,12 @@ func TestFormatPreservesMultilineProjectionText(t *testing.T) {
 		t.Fatalf("multiline raw expression changed:\n got %q\nwant %q", got, input)
 	}
 }
+
+func TestBraceDeltaTreatsBacktickExpressionStringsAsRaw(t *testing.T) {
+	t.Parallel()
+
+	line := "value == `raw\\` + `}`"
+	if got := braceDelta(line); got != 0 {
+		t.Fatalf("braceDelta(%q) = %d, want 0", line, got)
+	}
+}
