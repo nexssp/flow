@@ -159,6 +159,20 @@ func (l *Lexer) scanAtBraceQuotedByte(quote byte) byte {
 
 func (l *Lexer) skipAtBraceComment() bool {
 	c := l.src[l.pos]
+	if c == '/' && l.peek() == '*' {
+		l.pos += 2
+		for l.pos < len(l.src) {
+			if l.src[l.pos] == '*' && l.pos+1 < len(l.src) && l.src[l.pos+1] == '/' {
+				l.pos += 2
+				return true
+			}
+			if l.src[l.pos] == '\n' {
+				l.line++
+			}
+			l.pos++
+		}
+		return true
+	}
 	if (c == '/' && l.peek() == '/') || (c == '#' && l.hashStartsComment()) {
 		for l.pos < len(l.src) && l.src[l.pos] != '\n' {
 			l.pos++

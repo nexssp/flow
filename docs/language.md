@@ -261,22 +261,28 @@ Inside `@{ }`:
 | `key: .` | The whole input |
 | `name` (entry/key position) | Same-name reference to `.name` |
 | `key: input.name` or `key: person.name` | Literal string; value-position names do not look up `input` or an `as` binding |
+| `key: (input.count + 1)` | Explicit expr-lang expression evaluated against the current input, original `input`, and visible `as` bindings |
 | `key: pricing.echo(input.name)` | Qualified `@func` expression; it can read `input` and visible `as` bindings |
 | `... .defaults` | Spread the referenced object into the argument map |
 | `key: noop` | A capability reference (see §4) |
 
 Path references and the bare-entry shorthand read from the current pipeline
 state — the value flowing into this atom. The shorthand is not the same as a
-bare identifier or dotted name used as a value. Qualified `@func` calls are the
-supported expression-valued form; use them when a pure calculation needs the
-original `input` or a visible `as` binding.
+bare identifier or dotted name used as a value. Parenthesized `(expr)` values
+are an explicit opt-in to expr-lang evaluation; they can use the current atom
+input (`.`), original request (`input`), and visible `as` bindings. Values not
+parenthesized retain their existing data semantics. Qualified `@func` calls
+remain available for named pure calculations.
 
 Argument-map spreads are available at the top level of `@{ ... }`; they are
 useful for shared defaults. If two spreads, or a spread and an explicit field,
 provide the same key, execution fails with a collision error rather than
 silently choosing one value. A spread value must resolve to an object. Inside
 an argument map, `#` and `//` start line comments; quoted strings keep those
-characters as data.
+characters as data. Inside `(expr)`, expr-lang `//` and `/* ... */` comments
+are ignored while finding the closing parenthesis. A standalone Flow `#`
+comment at the expression's outer level is also removed; `#` inside a nested
+expr-lang expression remains expression syntax.
 
 ---
 

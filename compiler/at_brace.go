@@ -210,6 +210,8 @@ func (b *braceScanner) readValue() (*Value, error) {
 		return b.readObject()
 	case c == '[':
 		return b.readArray()
+	case c == '(':
+		return b.readParenthesizedExpression()
 	case c == '"' || c == '\'' || c == '`':
 		return b.readQuoted()
 	case c == '.' || c == '@':
@@ -347,6 +349,140 @@ func (b *braceScanner) functionExpressionValue(start, end int) (*Value, bool, er
 		return nil, true, b.errf("empty function expression")
 	}
 	return &Value{Kind: ValueExpression, Expression: expression}, true, nil
+}
+
+func (b *braceScanner) readParenthesizedExpression() (*Value, error) {
+	start := b.pos + 1
+	depth := functionExpressionDepth{parentheses: 1}
+	var expressionBuilder strings.Builder
+	expressionStart := start
+	hasHashComment := false
+	if b.depth+depth.parentheses > maxParseDepth {
+		return nil, b.errf("parse depth exceeded (%d)", maxParseDepth)
+	}
+	for scan := start; scan < len(b.src); scan++ {
+		current := b.src[scan]
+		if depth.quote != 0 {
+			scan = skipFunctionExpressionQuote(b.src, scan, &depth.quote)
+			continue
+		}
+		if isFunctionExpressionQuote(current) {
+			depth.quote = current
+			continue
+		}
+		commentEnd, isComment, err := b.parenthesizedExpressionCommentEnd(scan)
+		if err != nil {
+			return nil, err
+		}
+		if isComment {
+			scan = commentEnd
+			continue
+		}
+		if commentEnd, isComment := b.parenthesizedHashCommentEnd(scan, depth); isComment {
+			if !hasHashComment {
+				expressionBuilder.WriteString(b.src[start:scan])
+				hasHashComment = true
+			} else {
+				expressionBuilder.WriteString(b.src[expressionStart:scan])
+			}
+			if commentEnd < len(b.src) {
+				expressionBuilder.WriteByte('\n')
+			}
+			expressionStart = commentEnd + 1
+			scan = commentEnd
+			continue
+		}
+		closed, err := b.consumeParenthesizedDelimiter(current, &depth)
+		if err != nil {
+			return nil, err
+		}
+		if closed {
+			expressionSource := b.src[start:scan]
+			if hasHashComment {
+				expressionBuilder.WriteString(b.src[expressionStart:scan])
+				expressionSource = expressionBuilder.String()
+			}
+			expression := strings.TrimSpace(expressionSource)
+			if expression == "" {
+				return nil, b.errf("empty parenthesized expression")
+			}
+			b.pos = scan + 1
+			return &Value{Kind: ValueExpression, Expression: expression}, nil
+		}
+		if b.depth+depth.parentheses+depth.brackets+depth.braces > maxParseDepth {
+			return nil, b.errf("parse depth exceeded (%d)", maxParseDepth)
+		}
+	}
+	return nil, b.errf("unclosed parenthesized expression")
+}
+
+func (b *braceScanner) parenthesizedExpressionCommentEnd(position int) (end int, isComment bool, err error) {
+	end = position
+	if position+1 >= len(b.src) || b.src[position] != '/' {
+		return end, false, nil
+	}
+	switch b.src[position+1] {
+	case '/':
+		for end < len(b.src) && b.src[end] != '\n' {
+			end++
+		}
+		return end, true, nil
+	case '*':
+		commentEnd := strings.Index(b.src[position+2:], "*/")
+		if commentEnd < 0 {
+			return position, true, b.errf("unclosed block comment in parenthesized expression")
+		}
+		return position + commentEnd + 3, true, nil
+	default:
+		return end, false, nil
+	}
+}
+
+func (b *braceScanner) parenthesizedHashCommentEnd(position int, depth functionExpressionDepth) (end int, isComment bool) {
+	end = position
+	if b.src[position] != '#' || depth.parentheses != 1 || depth.brackets != 0 || depth.braces != 0 || !b.hashStartsCommentAt(position) {
+		return end, false
+	}
+	for end < len(b.src) {
+		if b.src[end] == '\n' {
+			return end, true
+		}
+		end++
+	}
+	return end, true
+}
+
+func (b *braceScanner) consumeParenthesizedDelimiter(current byte, depth *functionExpressionDepth) (closed bool, err error) {
+	switch current {
+	case '(':
+		depth.parentheses++
+	case ')':
+		if depth.parentheses == 0 {
+			return false, b.errf("unmatched ')' in parenthesized expression")
+		}
+		if depth.parentheses == 1 {
+			if depth.brackets != 0 || depth.braces != 0 {
+				return false, b.errf("unclosed delimiter in parenthesized expression")
+			}
+			return true, nil
+		}
+		depth.parentheses--
+	case '[':
+		depth.brackets++
+	case ']':
+		if depth.brackets == 0 {
+			return false, b.errf("unmatched ']' in parenthesized expression")
+		}
+		depth.brackets--
+	case '{':
+		depth.braces++
+	case '}':
+		if depth.braces == 0 {
+			return false, b.errf("unclosed parenthesized expression")
+		}
+		depth.braces--
+	}
+	return false, nil
 }
 
 func (b *braceScanner) hashStartsCommentAt(position int) bool {

@@ -1,0 +1,3 @@
+@description "Malformed parenthesized argument expressions fail compilation"
+# @expect-compile-error unexpected token EOF
+const @{ value: (1 + ) }

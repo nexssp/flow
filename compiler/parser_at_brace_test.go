@@ -460,3 +460,118 @@ func TestParseAtBrace_PathShorthandPreservesArgumentSpread(t *testing.T) {
 		t.Fatalf("attempt_id = %+v, want reference current.attempt.attempt_id", value)
 	}
 }
+
+func TestParseAtBrace_ParenthesizedExpressionsAreExplicitAndRecursive(t *testing.T) {
+	t.Parallel()
+	source := `wrap @{
+		expression: (1 + 2),
+		condition: (.count > 1 ? true : false),
+		nested: { computed: (input.count + 1) },
+		items: [(person.count + 1), (input.count * 2)],
+		...{ value: (len([")", "(", "}"]) > 0) },
+		bare_input: input.name,
+		bare_binding: person,
+		bare_path: person.name,
+		quoted: "person.name",
+		current: .,
+		qualified: whole_value.echo(input.name)
+	}`
+	parsed, err := newTestParser(t, source).Parse()
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	atom, ok := parsed.(*Atom)
+	if !ok {
+		t.Fatalf("Parse() returned %T, want *Atom", parsed)
+	}
+
+	assertExpression := func(name string, value *Value, want string) {
+		t.Helper()
+		if value == nil || value.Kind != ValueExpression || value.Expression != want {
+			t.Errorf("%s = %+v, want expression %q", name, value, want)
+		}
+	}
+	assertExpression("expression", atom.Args["expression"], "1 + 2")
+	assertExpression("condition", atom.Args["condition"], ".count > 1 ? true : false")
+	assertExpression("nested expression", atom.Args["nested"].Map[0].Value, "input.count + 1")
+	assertExpression("slice expression", atom.Args["items"].Slice[1], "input.count * 2")
+	if len(atom.ArgSpreads) != 1 || atom.ArgSpreads[0].Kind != ValueMap {
+		t.Fatalf("argument spreads = %+v, want one map spread", atom.ArgSpreads)
+	}
+	assertExpression("spread expression", atom.ArgSpreads[0].Map[0].Value, `len([")", "(", "}"]) > 0`)
+
+	for name, want := range map[string]string{
+		"bare_input":   "input.name",
+		"bare_binding": "person",
+		"bare_path":    "person.name",
+	} {
+		value := atom.Args[name]
+		if value == nil || value.Kind != ValueBare || value.Str != want {
+			t.Errorf("%s = %+v, want unchanged bare value %q", name, value, want)
+		}
+	}
+	if value := atom.Args["quoted"]; value == nil || value.Kind != ValueString || value.Str != "person.name" {
+		t.Errorf("quoted = %+v, want unchanged string value", value)
+	}
+	if value := atom.Args["current"]; value == nil || value.Kind != ValueRef || value.Ref != "" {
+		t.Errorf("current = %+v, want unchanged whole-state reference", value)
+	}
+	if value := atom.Args["qualified"]; value == nil || value.Kind != ValueExpression || value.Expression != "whole_value.echo(input.name)" {
+		t.Errorf("qualified = %+v, want existing qualified function expression", value)
+	}
+}
+
+func TestParseAtBrace_ParenthesizedExpressionsIgnoreCommentDelimiters(t *testing.T) {
+	t.Parallel()
+	source := `wrap @{
+			block: (1 /* ) ] } " */ + 2),
+			line: (1 + // ) ] }
+			  2),
+			hash: (1 +
+			  # ) ] } ignored
+			  2)
+		}`
+	parsed, err := newTestParser(t, source).Parse()
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	atom, ok := parsed.(*Atom)
+	if !ok {
+		t.Fatalf("Parse() returned %T, want *Atom", parsed)
+	}
+	for _, name := range []string{"block", "line", "hash"} {
+		value := atom.Args[name]
+		if value == nil || value.Kind != ValueExpression {
+			t.Fatalf("%s = %+v, want expression", name, value)
+		}
+	}
+	if got := atom.Args["block"].Expression; got != `1 /* ) ] } " */ + 2` {
+		t.Errorf("block expression = %q, want comment preserved and delimiters ignored", got)
+	}
+	if got := atom.Args["line"].Expression; !strings.Contains(got, "// ) ] }") || !strings.Contains(got, "\n") {
+		t.Errorf("line expression = %q, want line comment preserved and delimiters ignored", got)
+	}
+	if got := atom.Args["hash"].Expression; strings.Contains(got, "#") || !strings.Contains(got, "1 +") || !strings.Contains(got, "2") {
+		t.Errorf("hash expression = %q, want comment removed and expression retained", got)
+	}
+}
+
+func TestParseAtBrace_ParenthesizedExpressionDelimiterErrors(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		source string
+		want   string
+	}{
+		{source: `wrap @{ value: () }`, want: "empty parenthesized expression"},
+		{source: `wrap @{ value: (1 + 2 }`, want: "unclosed parenthesized expression"},
+		{source: `wrap @{ value: ([1) }`, want: "unclosed delimiter in parenthesized expression"},
+	} {
+		t.Run(tc.source, func(t *testing.T) {
+			t.Parallel()
+			_, err := newTestParser(t, tc.source).Parse()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Parse(%q) error = %v, want diagnostic containing %q", tc.source, err, tc.want)
+			}
+		})
+	}
+}
