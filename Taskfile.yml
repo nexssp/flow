@@ -6,6 +6,7 @@ version: '3'
 
 vars:
   NFLOW: 'go run ./cmd/nflow'
+  NFLOW_BIN: '{{.NFLOW_BIN | default "bin/nflow"}}'
   BASE:
     sh: git merge-base HEAD origin/main 2>/dev/null || echo HEAD
   CENTRAL_REF: 'main'
@@ -16,6 +17,11 @@ tasks:
 
   build:     { desc: "go build [./...]",                              cmds: ['go build {{.CLI_ARGS | default "./..."}}'] }
   build:bin: { desc: "go build -trimpath -o bin/ ./cmd/...",        cmds: [go build -trimpath -o bin/ ./cmd/...] }
+  build:ci:
+    desc: Build the nflow CLI once for CI
+    cmds:
+      - mkdir -p "$(dirname '{{.NFLOW_BIN}}')"
+      - go build -trimpath -o '{{.NFLOW_BIN}}' ./cmd/nflow
   tidy:      { desc: "go mod tidy",                                 cmds: [go mod tidy] }
   clean:     { desc: "rm -rf bin coverage.out",                     cmds: [rm -rf bin coverage.out] }
 
@@ -54,6 +60,28 @@ tasks:
     cmds:
       - '{{.NFLOW}} lint ./spec'
 
+  self:bin:
+    desc: Run the self-test with the already-built nflow binary
+    cmds:
+      - '{{.NFLOW_BIN}} self test'
+
+  specs:bin:
+    desc: Execute specs with the already-built nflow binary
+    cmds:
+      - '{{.NFLOW_BIN}} test ./spec'
+
+  lint:nflow:bin:
+    desc: Lint specs with the already-built nflow binary
+    cmds:
+      - '{{.NFLOW_BIN}} lint ./spec'
+
+  acceptance:bin:
+    desc: Run binary-based self-test and acceptance checks sequentially
+    cmds:
+      - task: self:bin
+      - task: specs:bin
+      - task: lint:nflow:bin
+
 
   fmt:       { desc: "golangci-lint fmt", cmds: [golangci-lint fmt] }
   lint:      { desc: "golangci-lint run [./...]", cmds: ['golangci-lint run {{.CLI_ARGS | default "./..."}}'] }
@@ -72,7 +100,7 @@ tasks:
 
   ci:fast:
     desc: "Core CI gate; harness integration tests run in a separate job"
-    deps: [self, specs, lint, test:race:nocache:short, vuln]
+    deps: [acceptance:bin, lint, test:race:nocache:short, vuln]
     output: prefixed
 
   tools:     { desc: "go install -> gotest.tools/gotestsum@latest golang.org/x/vuln/cmd/govulncheck@latest",  cmds: ["go install gotest.tools/gotestsum@latest", "go install golang.org/x/vuln/cmd/govulncheck@latest"] }

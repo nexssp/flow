@@ -85,8 +85,8 @@ jobs:
       - name: Tools
         run: task tools
 
-      - name: Build
-        run: task build
+      - name: Build nflow once for verification
+        run: task build:ci
 
       - name: Run core CI gate (harness integration runs in parallel)
         run: task ci:fast
