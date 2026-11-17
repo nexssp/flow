@@ -44,8 +44,33 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  verify:
-    name: build · lint · test
+  module-tidy:
+    name: module tidy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify go.mod and go.sum are tidy
+        run: |
+          go mod tidy
+          if [ -n "$(git status --porcelain -- go.mod go.sum)" ]; then
+            echo "::error::go.mod or go.sum is not tidy. Run 'go mod tidy' locally and commit the result."
+            git status --porcelain -- go.mod go.sum
+            git diff -- go.mod go.sum
+            exit 1
+          fi
+
+  acceptance:
+    name: acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -59,37 +84,129 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Setup Task
-        uses: arduino/setup-task@v2
-        with:
-          version: 3.x
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build all packages
+        run: go build ./...
 
-      # Fast binary install (~2s), isolates linter dependencies from go.mod
-      - name: Install golangci-lint
+      - name: Run self-test
+        run: go run ./cmd/nflow self test
+
+      - name: Run integrated specifications
+        run: go run ./cmd/nflow test ./spec
+
+      - name: Lint NFlow specifications
+        run: go run ./cmd/nflow lint ./spec
+
+  lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9.3.0
         with:
           version: v2.15.0
-          install-only: true
+          verify: false
+          args: ./...
 
-      - name: Verify go.mod and go.sum are tidy
+  race:
+    name: race tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run race-enabled tests
+        run: go test -race -short -count=1 ./...
+
+  vulnerability:
+    name: vulnerability scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: govulncheck -show=version ./...
+
+  benchmark:
+    name: benchmark smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run benchmark smoke check
+        run: >-
+          go test -run='^$'
+          -bench='^(BenchmarkResilienceWorkflow|BenchmarkExpressionValueViewTypedProjectionOutput|BenchmarkExprEvaluatorTypedProjectionOutput)$'
+          -benchmem ./...
+
+  verify:
+    name: build · lint · test
+    if: ${{ always() }}
+    needs:
+      - module-tidy
+      - acceptance
+      - lint
+      - race
+      - vulnerability
+      - benchmark
+      - harness-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Require all verification jobs to pass
         run: |
-          task tidy
-          if [ -n "$(git status --porcelain -- go.mod go.sum)" ]; then
-            echo "::error::go.mod or go.sum is not tidy. Run 'task tidy' locally and commit the result."
-            git status --porcelain -- go.mod go.sum
-            git diff -- go.mod go.sum
-            exit 1
-          fi
-
-      - name: Tools
-        run: task tools
-
-      - name: Build
-        run: task build
-
-      - name: Run core CI gate (harness integration runs in parallel)
-        run: task ci:fast
-
-      - name: Fast benchmark smoke check (exclude cold harness builds)
-        run: task bench
+          results=(
+            "${{ needs.module-tidy.result }}"
+            "${{ needs.acceptance.result }}"
+            "${{ needs.lint.result }}"
+            "${{ needs.race.result }}"
+            "${{ needs.vulnerability.result }}"
+            "${{ needs.benchmark.result }}"
+            "${{ needs.harness-integration.result }}"
+          )
+          for result in "${results[@]}"; do
+            if [ "$result" != "success" ]; then
+              echo "::error::A required CI job finished with result: $result"
+              exit 1
+            fi
+          done
