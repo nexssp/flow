@@ -345,7 +345,7 @@ func validateBareProjectionIdentifier(source string, start, end int, name string
 
 func isProjectionKeyword(name string) bool {
 	switch name {
-	case "true", "false", "nil", "not", "in", "and", "or", "matches", "contains", "startsWith", "endsWith", "let", "if", "else":
+	case "true", "false", "nil", "null", "not", "in", "and", "or", "matches", "contains", "startsWith", "endsWith", "let", "if", "else":
 		return true
 	default:
 		return false

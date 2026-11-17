@@ -199,6 +199,26 @@ func TestProjectionNullCoalescingAllowsMissingSyntheticFieldsOnly(t *testing.T) 
 	}
 }
 
+func TestProjectionNullLiteralCompilesOnTypedStruct(t *testing.T) {
+	metadataType := reflect.StructOf([]reflect.StructField{{
+		Name: "Field0",
+		Type: reflect.TypeFor[string](),
+		Tag:  reflect.StructTag(`expr:"source" flow_projection:"true"`),
+	}})
+	inputType := reflect.StructOf([]reflect.StructField{{
+		Name: "Field0",
+		Type: metadataType,
+		Tag:  reflect.StructTag(`expr:"metadata" flow_projection:"true"`),
+	}})
+	projectionContext := compiler.TypeAnalysisContext{Input: compiler.TypeDescriptor{Type: inputType}}
+	if _, err := CheckTypedSourceExpression(`__root__.metadata != null`, projectionContext, compiler.Position{}); err != nil {
+		t.Fatalf("compile null comparison on typed struct: %v", err)
+	}
+	if _, err := CheckTypedSourceExpression(`__root__.metadata != nil`, projectionContext, compiler.Position{}); err != nil {
+		t.Fatalf("compile nil comparison on typed struct: %v", err)
+	}
+}
+
 func TestDynamicExpressionTypeErrorsAreNarrowlyClassified(t *testing.T) {
 	cases := []struct {
 		message string

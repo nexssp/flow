@@ -1491,7 +1491,7 @@ func dotFieldNeedsRoot(name string) bool {
 	// expr's literal/operator keywords cannot safely become bare identifiers.
 	// __root__ is Flow's own environment binding, not the user's field.
 	switch name {
-	case "true", literalFalse, "nil", "not", "in", "or", "and", "matches", "contains",
+	case "true", literalFalse, "nil", "null", "not", "in", "or", "and", "matches", "contains",
 		"startsWith", "endsWith", "let", "if", "else", "__root__":
 		return true
 	}
