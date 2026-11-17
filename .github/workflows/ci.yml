@@ -116,7 +116,7 @@ jobs:
         with:
           version: v2.15.0
           verify: false
-          args: run ./...
+          args: ./...
 
   race:
     name: race tests
