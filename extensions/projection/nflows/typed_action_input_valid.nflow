@@ -1,7 +1,7 @@
 @description "Statically shaped projections can feed typed actions"
-@assert: result == "Hello Ada"
+@assert: result == "Hello Julia"
 @pipeline projection_typed_action_input
-  { template: "Hello {{.name}}", variables: { name: "Ada" } }
+  { template: "Hello {{.name}}", variables: { name: "Julia" } }
   -> template.render
 @end
 pipeline.projection_typed_action_input

@@ -1,0 +1,11 @@
+# @syntax-only
+@description "A valid namespaced function call in an atom argument compiles against the schema and executes"
+@schema TypedArgumentValidInput {
+  name string
+}
+@func commerce.echo(value string) string = value
+@pipeline typed_argument_expression_valid
+  :request-schema=!TypedArgumentValidInput
+  runtime.const @{ value: commerce.echo(.name) }
+@end
+pipeline.typed_argument_expression_valid

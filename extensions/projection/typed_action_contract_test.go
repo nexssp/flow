@@ -27,6 +27,7 @@ func TestProjectionTypedJSONAndSchemaActionContracts(t *testing.T) {
 		{name: "typed_schema_string_input.nflow", want: "memory note", input: map[string]any{"value": "memory note"}},
 		{name: "typed_schema_uint64_input.nflow", want: "7", input: map[string]any{"count": uint64(7)}},
 		{name: "typed_schema_uint32_to_uint64_input.nflow", want: "7", input: map[string]any{"count": uint32(7)}},
+		{name: "typed_argument_expression_valid.nflow", want: "Julia", input: map[string]any{"name": "Julia"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fixture, err := fs.ReadFile(fixtures, "nflows/"+tc.name)
@@ -59,8 +60,8 @@ func TestProjectionTypedActionInputContracts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute compatible projected request: %v", err)
 	}
-	if result.Output != "Hello Ada" {
-		t.Fatalf("compatible projected request output = %#v, want %q", result.Output, "Hello Ada")
+	if result.Output != "Hello Julia" {
+		t.Fatalf("compatible projected request output = %#v, want %q", result.Output, "Hello Julia")
 	}
 }
 
@@ -75,6 +76,8 @@ func TestProjectionTypedActionContractCompileErrors(t *testing.T) {
 		"typed_json_value_array_input.nflow",
 		"typed_schema_dynamic_to_string_invalid.nflow",
 		"typed_schema_int_to_uint64_invalid.nflow",
+		"typed_argument_expression_invalid.nflow",
+		"typed_argument_spread_expression_invalid.nflow",
 	} {
 		t.Run(name, func(t *testing.T) {
 			fixture, err := fs.ReadFile(fixtures, "nflows/"+name)

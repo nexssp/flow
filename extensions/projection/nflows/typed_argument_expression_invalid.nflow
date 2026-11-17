@@ -1,0 +1,10 @@
+# @expect-compile-error has no field "missing"
+@description "Nested expressions in named arguments are checked against the input schema"
+@schema TypedArgumentInput {
+  name string
+}
+@func commerce.echo(value string) string = value
+@pipeline typed_argument_expression :request-schema=!TypedArgumentInput
+  runtime.const @{ payload: { items: [commerce.echo(.missing)] } }
+@end
+pipeline.typed_argument_expression

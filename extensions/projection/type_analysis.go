@@ -238,10 +238,22 @@ func typedProjectionEnvironment(ctx compiler.TypeAnalysisContext, proxyDepth int
 }
 
 func compileTypedExpression(source string, env map[string]any, staticTypes map[string]reflect.Type, expressionCompiler compiler.ExpressionCompiler, pos compiler.Position) (*vm.Program, error) {
+	// Rewrite local @func callees first so their namespace prefixes are not
+	// mistaken for fields on a concrete input schema during path validation.
+	functions, hasFunctions := expressionCompiler.(*FunctionSet)
+	if hasFunctions && functions == nil {
+		expressionCompiler = nil
+	}
+	if hasFunctions && functions != nil {
+		if err := functions.prepare(); err != nil {
+			return nil, err
+		}
+		source, _ = functions.rewriteCalls(source)
+	}
 	if err := validateTypedExpressionPaths(source, pos, staticTypes, true); err != nil {
 		return nil, err
 	}
-	if functions, ok := expressionCompiler.(*FunctionSet); ok {
+	if hasFunctions && functions != nil {
 		program, err := compileWithFunctionSet(source, env, functions)
 		if err == nil {
 			return program, nil
@@ -295,14 +307,13 @@ func compileWithFunctionSet(source string, env map[string]any, functions *Functi
 	if err := functions.prepare(); err != nil {
 		return nil, err
 	}
-	rewritten, _ := functions.rewriteCalls(source)
 	functionOptions, err := functions.expressionOptions()
 	if err != nil {
 		return nil, err
 	}
 	options := []expr.Option{expr.Env(env), expr.AllowUndefinedVariables(), expr.DisableBuiltin("now"), spreadMergeOption}
 	options = append(options, functionOptions...)
-	return compiler.CompileExpression(rewritten, options...)
+	return compiler.CompileExpression(source, options...)
 }
 
 func setProjectionStaticAlias(environment map[string]any, name string, value any) {

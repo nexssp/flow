@@ -93,6 +93,11 @@ func analyzeTypedNode(ctx TypeAnalysisContext, node Expr) (TypeDescriptor, error
 		if err != nil {
 			return TypeDescriptor{}, err
 		}
+		if atom, ok := node.(*Atom); ok {
+			if err := analyzeTypedAtomValues(ctx, atom); err != nil {
+				return TypeDescriptor{}, err
+			}
+		}
 		if isIdentityAction(ctx.Resolver, node) {
 			return ctx.Input, nil
 		}
@@ -179,6 +184,8 @@ func isProjectionOutput(node Expr) bool {
 
 func analyzeTypedExpressionNode(ctx TypeAnalysisContext, node Expr) (TypeDescriptor, error) {
 	switch current := node.(type) {
+	case *Atom:
+		return TypeDescriptor{}, analyzeTypedAtomValues(ctx, current)
 	case *LiteralExpr:
 		if current.Val != nil {
 			return TypeDescriptor{Type: reflect.TypeOf(current.Val)}, nil
@@ -287,6 +294,56 @@ func analyzeTypedAssert(ctx TypeAnalysisContext, assertion *AssertExpr) (TypeDes
 		}
 	}
 	return ctx.Input, nil
+}
+
+func analyzeTypedAtomValues(ctx TypeAnalysisContext, atom *Atom) error {
+	if ctx.CheckExpression == nil || atom == nil {
+		return nil
+	}
+	if err := analyzeTypedValueExpressions(ctx, atom.Pos, atom.DirectInput); err != nil {
+		return err
+	}
+	argKeys := make([]string, 0, len(atom.Args))
+	for key := range atom.Args {
+		argKeys = append(argKeys, key)
+	}
+	slices.Sort(argKeys)
+	for _, key := range argKeys {
+		if err := analyzeTypedValueExpressions(ctx, atom.Pos, atom.Args[key]); err != nil {
+			return err
+		}
+	}
+	for _, spread := range atom.ArgSpreads {
+		if err := analyzeTypedValueExpressions(ctx, atom.Pos, spread); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func analyzeTypedValueExpressions(ctx TypeAnalysisContext, pos Position, value *Value) error {
+	if value == nil {
+		return nil
+	}
+	switch value.Kind {
+	case ValueExpression:
+		_, err := ctx.CheckExpression(value.Expression, ctx, pos)
+		return err
+	case ValueMap:
+		for _, entry := range value.Map {
+			if err := analyzeTypedValueExpressions(ctx, pos, entry.Value); err != nil {
+				return err
+			}
+		}
+	case ValueSlice:
+		for _, item := range value.Slice {
+			if err := analyzeTypedValueExpressions(ctx, pos, item); err != nil {
+				return err
+			}
+		}
+	case ValueString, ValueBare, ValueNumber, ValueBool, ValueNull, ValueRef, ValueTyped:
+	}
+	return nil
 }
 
 func analyzeTypedUnknownChildren(ctx TypeAnalysisContext, node Expr) (TypeDescriptor, error) {
