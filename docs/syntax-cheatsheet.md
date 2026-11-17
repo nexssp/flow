@@ -68,6 +68,7 @@ left || fallback
 (left & right)
 parallel { one: left, two: right }
 race { primary, backup }
+list -> each :concurrency=4 { expr }
 condition ? yes : no
 ```
 
@@ -76,6 +77,7 @@ condition ? yes : no
 - `&` gathers concurrent branches under canonical action names.
 - `parallel` gathers concurrent branches under explicit labels.
 - `race` returns the first successful candidate.
+- `each` maps over up to 100,000 list items, returning results in source order; concurrency defaults to 4 and is capped at 256.
 - The ternary else arm is optional.
 
 Name a step's output with a postfix `as name`. The following action still receives the ordinary output of the previous step; the name is an additional immutable lexical binding for later steps:
@@ -135,9 +137,13 @@ match(.score) {
 }
 
 { n: 0 } -> loop( { n: .n + 1 } ) until( .n >= 3 )
+
+const @{ value: [1, 2, 3] } -> each :concurrency=2 {
+  const @{ value: (. * 2) }
+}
 ```
 
-`match` chooses the first matching arm. `_` is the default. Flow bounds the compiled loop to 15 iterations.
+`match` chooses the first matching arm. `_` is the default. Flow bounds the compiled loop to 15 iterations. In `each`, `.` is the current list item and the block's results are returned in input order; a worker error cancels sibling work and propagates after launched actions finish.
 
 ## Errors and assertions
 

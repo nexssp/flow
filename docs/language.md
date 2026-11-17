@@ -33,6 +33,7 @@ The pipeline is the flow. These forms cover its operators and structured express
 | `parallel { label: expr, ... }` | Run branches concurrently and gather results under explicit labels |
 | `race { expr, ... }` | Run candidates concurrently and return the first successful result |
 | `if (condition) { expr } else { expr }` | Run the selected branch for a canonical `bool` condition; `else if` is supported and an omitted `else` passes the input through |
+| `list -> each :concurrency=4 { expr }` | Map a block over list items, returning outputs in input order |
 | `{ key: expr, ... }` | Project a new object from the current input |
 | `a ? b : c` | Conditional: `b` when `a` is truthy, else `c` |
 
@@ -41,6 +42,27 @@ bare action or identifier name. Conditions are evaluated in order and lazily.
 Known non-boolean conditions are compile errors, while unknown/interface values
 are checked at runtime and must produce a boolean. Branch-local bindings do not
 leak out of their branch.
+
+`each` is provided by the `loop` bundle. It accepts a slice or array; inside
+the block, `.` is the current item, earlier `as` bindings remain visible, and
+each item's local bindings stay isolated. Results are returned as a list in
+input order, including an empty list for empty input. Lists are limited to
+100,000 items. The default concurrency is 4 (capped at 256). A worker error
+cancels sibling work, waits for launched actions to finish, then propagates;
+dynamic non-list inputs fail at runtime, while statically known scalar inputs
+fail during compilation.
+
+```nflow
+const @{ value: [1, 2, 3] }
+-> each :concurrency=2 {
+  const @{ value: (. * 2) }
+}
+```
+
+The output is `[2, 4, 6]`. `@scope` follows the usual source-line inheritance
+rules: modifiers on the `each` expression apply to the fan-out, while modifiers
+on body-action lines apply to each item action. A scope spanning both can apply
+at both levels. See the [scoped-modifier fixture](../extensions/loop/nflows/each_scoped_modifier.nflow).
 
 The smallest pipeline:
 

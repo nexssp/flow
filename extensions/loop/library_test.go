@@ -8,20 +8,26 @@ import (
 	"github.com/nexssp/kernel/xtest/ktest"
 )
 
-func TestBundle_WiresKeywordAndFixtures(t *testing.T) {
+func TestBundle_WiresKeywordsAndFixtures(t *testing.T) {
 	t.Parallel()
 	b := Bundle(nil)
 
 	ktest.RequireEqual(t, b.ID, ID)
 	ktest.RequireEqual(t, len(b.Libraries), 1)
 	ktest.RequireEqual(t, b.Libraries[0].Name, ID)
-	ktest.RequireEqual(t, len(b.Primaries), 1)
+	ktest.RequireEqual(t, len(b.Primaries), 2)
 
-	kw, ok := b.Primaries[0].(loopKeyword)
+	loop, ok := b.Primaries[0].(loopKeyword)
 	if !ok {
 		t.Fatalf("Primaries[0] = %T, want loopKeyword", b.Primaries[0])
 	}
-	ktest.RequireEqual(t, kw.Keyword(), "loop")
+	ktest.RequireEqual(t, loop.Keyword(), "loop")
+
+	each, ok := b.Primaries[1].(eachKeyword)
+	if !ok {
+		t.Fatalf("Primaries[1] = %T, want eachKeyword", b.Primaries[1])
+	}
+	ktest.RequireEqual(t, each.Keyword(), "each")
 
 	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
 	ktest.RequireCondition(t, b.SelfTest == nil, "duplicate inline SelfTest remains")

@@ -1,0 +1,5 @@
+@description "each rejects a statically known scalar input"
+# @expect-compile-error each: input must be a list
+
+cov.string_field @{ value: "not-a-list" }
+-> each { noop }

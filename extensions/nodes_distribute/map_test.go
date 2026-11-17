@@ -111,6 +111,47 @@ func TestMapTimeoutDurationChecksLimits(t *testing.T) {
 	}
 }
 
+func TestNormalizeFanoutConcurrency(t *testing.T) {
+	for _, tc := range []struct {
+		input int
+		want  int
+	}{
+		{input: -1, want: defaultConcurrency},
+		{input: 0, want: defaultConcurrency},
+		{input: 2, want: 2},
+		{input: maxConcurrency, want: maxConcurrency},
+		{input: maxConcurrency + 1, want: maxConcurrency},
+		{input: 999, want: maxConcurrency},
+	} {
+		if got := normalizeFanoutConcurrency(tc.input); got != tc.want {
+			t.Errorf("normalizeFanoutConcurrency(%d) = %d, want %d", tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestMapActionRejectsOverLimitWithCounts(t *testing.T) {
+	items := make([]any, maxItems+1)
+	_, err := MapAction(t.Context(), nil, items, 1)
+	if got := xerr.KindFrom(err); got != xerr.KindBadRequest {
+		t.Fatalf("MapAction error kind = %s, want %s: %v", got, xerr.KindBadRequest, err)
+	}
+	want := "fanout: 100001 items exceeds limit of 100000"
+	if !strings.Contains(err.Error(), want) {
+		t.Fatalf("MapAction error = %v, want message containing %q", err, want)
+	}
+}
+
+func TestMapActionRejectsTypedNilTarget(t *testing.T) {
+	var target *action.BuiltAction[any, any]
+	_, err := MapAction(t.Context(), target, []any{1}, 1)
+	if got := xerr.KindFrom(err); got != xerr.KindInternal {
+		t.Fatalf("MapAction error kind = %s, want %s: %v", got, xerr.KindInternal, err)
+	}
+	if !strings.Contains(err.Error(), "fanout: target action is nil") {
+		t.Fatalf("MapAction error = %v, want nil-target diagnostic", err)
+	}
+}
+
 func TestDistributeMapRejectsInvalidTimeoutBeforeEmptyResult(t *testing.T) {
 	maxTimeoutMS := int64(math.MaxInt64) / int64(time.Millisecond)
 	for _, timeout := range []int64{-1, maxTimeoutMS + 1} {

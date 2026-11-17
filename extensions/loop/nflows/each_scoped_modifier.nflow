@@ -1,0 +1,10 @@
+@description "each expression inherits a scoped timeout"
+@assert: result == "scope-applied"
+
+@scope :timeout=50ms {
+  const @{ value: [1] }
+  -> each {
+    sleep @{ duration_ms: 500 }
+  } :concurrency=1
+  || const @{ value: "scope-applied" }
+}

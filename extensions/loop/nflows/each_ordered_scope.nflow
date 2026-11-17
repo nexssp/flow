@@ -1,0 +1,15 @@
+@description "each maps list items in order and sees the current item and outer alias"
+@assert: len(result) == 3
+@assert: result[0].id == "first" && result[0].score == 6 && result[0].batch == "batch-7"
+@assert: result[1].id == "second" && result[1].score == 10 && result[1].batch == "batch-7"
+@assert: result[2].id == "third" && result[2].score == 2 && result[2].batch == "batch-7"
+
+{ batch: "batch-7", samples: [
+  { id: "first", score: 3 },
+  { id: "second", score: 5 },
+  { id: "third", score: 1 },
+] } as source
+-> pick @{ field: "samples" }
+-> each :concurrency=2 {
+  const @{ value: { id: (.id), score: (.score * 2), batch: (source.batch) } }
+}

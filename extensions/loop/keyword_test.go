@@ -22,6 +22,18 @@ func newTestParser(tb testing.TB, source string) *compiler.Parser {
 	)
 }
 
+func newEachTestParser(tb testing.TB, source string) *compiler.Parser {
+	tb.Helper()
+	return compiler.NewParserWithFileOffset(
+		tb.Context(),
+		compiler.NewOperatorTable(),
+		compiler.NewPrimaryExtensionTable(eachKeyword{}),
+		source,
+		"<test>",
+		0,
+	)
+}
+
 func TestKeyword_Identity(t *testing.T) {
 	t.Parallel()
 	kw := loopKeyword{}
@@ -58,7 +70,80 @@ func TestParse_UntilConditionPreserved(t *testing.T) {
 	ktest.RequireEqual(t, loop.Until, cond)
 }
 
-func TestParse_Errors(t *testing.T) {
+func TestEachKeyword_IdentityAndBlock(t *testing.T) {
+	t.Parallel()
+	keyword := eachKeyword{}
+	ktest.RequireEqual(t, keyword.Name(), eachKeywordName)
+	ktest.RequireEqual(t, keyword.Keyword(), eachKeywordName)
+
+	expr, err := newEachTestParser(t, `each { noop }`).Parse()
+	ktest.RequireNoError(t, err)
+	each, ok := expr.(*EachExpr)
+	if !ok {
+		t.Fatalf("got %T, want *EachExpr", expr)
+	}
+	ktest.RequireCondition(t, each.Body != nil, "Body is nil")
+	ktest.RequireEqual(t, each.Concurrency, 0)
+}
+
+func TestEachKeyword_ConcurrencyBeforeOrAfterBlock(t *testing.T) {
+	t.Parallel()
+	for _, source := range []string{
+		`each :concurrency=4 { noop }`,
+		`each { noop } :concurrency=4`,
+	} {
+		t.Run(source, func(t *testing.T) {
+			t.Parallel()
+			expr, err := newEachTestParser(t, source).Parse()
+			ktest.RequireNoError(t, err)
+			each, ok := expr.(*EachExpr)
+			if !ok {
+				t.Fatalf("got %T, want *EachExpr", expr)
+			}
+			ktest.RequireEqual(t, each.Concurrency, 4)
+		})
+	}
+}
+
+func TestEachKeyword_QualifiedActionNameIsNotTheKeyword(t *testing.T) {
+	t.Parallel()
+	expr, err := newEachTestParser(t, `samples.each`).Parse()
+	ktest.RequireNoError(t, err)
+	atom, ok := expr.(*compiler.Atom)
+	if !ok {
+		t.Fatalf("got %T, want *compiler.Atom", expr)
+	}
+	ktest.RequireEqual(t, atom.Name, "samples.each")
+}
+
+func TestEachKeyword_ParseErrors(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		source  string
+		wantSub string
+	}{
+		{"missing block", `each noop`, "expected '{'"},
+		{"empty block", `each {}`, "block must contain"},
+		{"missing concurrency value", `each :concurrency { noop }`, "expected '='"},
+		{"non-integer concurrency", `each :concurrency=fast { noop }`, "must be an integer"},
+		{"zero concurrency", `each :concurrency=0 { noop }`, "must be positive"},
+		{"duplicate concurrency", `each :concurrency=2 { noop } :concurrency=3`, "duplicate :concurrency"},
+		{"duplicate concurrency before block", `each :concurrency=2 :concurrency=3 { noop }`, "duplicate :concurrency"},
+		{"duplicate concurrency after block", `each { noop } :concurrency=2 :concurrency=3`, "duplicate :concurrency"},
+		{"unknown option before block", `each :timeout=1s { noop }`, "expected :concurrency=NUMBER"},
+		{"other modifier after pre-block concurrency", `each :concurrency=2 :timeout=1s { noop }`, "only :concurrency may appear before the block"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := newEachTestParser(t, tc.source).Parse()
+			ktest.RequireErrorContains(t, err, tc.wantSub)
+		})
+	}
+}
+
+func TestLoopKeyword_ParseErrors(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name    string
@@ -72,11 +157,11 @@ func TestParse_Errors(t *testing.T) {
 		{"unclosed until paren", `loop(noop) until(.n >= 3`, "unclosed"},
 		{"invalid character", `loop(noop) until(.n >= 3 §)`, "unexpected character"},
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := newTestParser(t, c.source).Parse()
-			ktest.RequireErrorContains(t, err, c.wantSub)
+			_, err := newTestParser(t, tc.source).Parse()
+			ktest.RequireErrorContains(t, err, tc.wantSub)
 		})
 	}
 }
