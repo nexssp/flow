@@ -74,10 +74,14 @@ func withHarness(ctx context.Context, inv *invocation, subcommand, flowPath stri
 }
 
 func withHarnessRequirements(ctx context.Context, inv *invocation, subcommand, flowPath string, reqs []require.Requirement, args []string, inProcess func(context.Context, *invocation, []string) int) int {
-	if len(reqs) == 0 || os.Getenv(harnessEnv) != "" {
-		return inProcess(ctx, inv, args)
-	}
-	if !requirementsNeedExternalHarness(inv, reqs) {
+	// The registration check — not the NFLOW_HARNESS marker — decides the
+	// dispatch: a plain `nflow` engine exec'd from inside a harness child
+	// inherits NFLOW_HARNESS=1, but it does NOT carry the flow's external
+	// modules, so it must prepare its own harness for them instead of
+	// failing in-process with "bundle ... is not registered in this binary".
+	// In a real harness child the requirements resolve as injected/registered
+	// and the run stays in-process (no recursion).
+	if len(reqs) == 0 || !requirementsNeedExternalHarness(inv, reqs) {
 		return inProcess(ctx, inv, args)
 	}
 
