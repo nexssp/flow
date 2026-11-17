@@ -490,3 +490,25 @@ func TestExpressionViewConvertsDeepAndCyclicRecursiveValues(t *testing.T) {
 		t.Fatal("cyclic slice view did not preserve its self-reference")
 	}
 }
+
+func TestProjectionAnyTypedIdentifierAcceptsFunctionCalls(t *testing.T) {
+	// A stage whose input and bindings are interface-typed (e.g. the any
+	// output of runtime.env) must keep accepting function calls such as
+	// trim(raw): the static env must not type these identifiers as untyped
+	// nil, which rejects every overload at compile time.
+	bindingContext := compiler.TypeAnalysisContext{
+		Bindings: map[string]compiler.TypeDescriptor{
+			"raw": {Type: reflect.TypeFor[any]()},
+		},
+	}
+	if _, err := CheckTypedSourceExpression(`raw != null && len(raw) >= 0`, bindingContext, compiler.Position{}); err != nil {
+		t.Fatalf("compile function call on any-typed binding: %v", err)
+	}
+
+	inputContext := compiler.TypeAnalysisContext{
+		Input: compiler.TypeDescriptor{Type: reflect.TypeFor[any]()},
+	}
+	if _, err := CheckTypedSourceExpression(`input != null && len(input) >= 0`, inputContext, compiler.Position{}); err != nil {
+		t.Fatalf("compile function call on any-typed input: %v", err)
+	}
+}

@@ -180,8 +180,8 @@ func typedProjectionEnvironment(ctx compiler.TypeAnalysisContext, proxyDepth int
 	builder := &projectionStaticTypeBuilder{cache: make(map[projectionStaticTypeKey]reflect.Type)}
 	if ctx.Input.Type != nil && !ctx.Input.Stream {
 		root := projectionStaticValueWithBuilder(ctx.Input.Type, proxyDepth, builder)
-		env[expressionRootName] = root
-		env[expressionStateName] = root
+		setStaticEnvValue(env, expressionRootName, root)
+		setStaticEnvValue(env, expressionStateName, root)
 		staticTypes[expressionRootName] = ctx.Input.Type
 		staticTypes[expressionStateName] = ctx.Input.Type
 		fields := expressionViewFields(ctx.Input.Type)
@@ -216,7 +216,7 @@ func typedProjectionEnvironment(ctx compiler.TypeAnalysisContext, proxyDepth int
 	if inputType == nil || originalInput.Stream {
 		inputType = reflect.TypeFor[any]()
 	}
-	env[expressionInputName] = projectionStaticValueWithBuilder(inputType, proxyDepth, builder)
+	setStaticEnvValue(env, expressionInputName, projectionStaticValueWithBuilder(inputType, proxyDepth, builder))
 	staticTypes[expressionInputName] = inputType
 	for name := range ctx.SymbolNamespaces {
 		setProjectionStaticTypeAlias(staticTypes, name, reflect.TypeFor[map[string]any]())
@@ -228,10 +228,12 @@ func typedProjectionEnvironment(ctx compiler.TypeAnalysisContext, proxyDepth int
 		}
 		// Runtime projection normalization flattens payload fields after merging
 		// pipeline scope, so a same-named payload alias takes precedence.
-		if _, payloadFieldExists := env[name]; payloadFieldExists {
+		// The guard reads staticTypes (written in lockstep with env) so it still
+		// sees interface-typed entries whose nil proxy is skipped in env.
+		if _, payloadFieldExists := staticTypes[name]; payloadFieldExists {
 			continue
 		}
-		env[name] = projectionStaticValueWithBuilder(bindingType, proxyDepth, builder)
+		setStaticEnvValue(env, name, projectionStaticValueWithBuilder(bindingType, proxyDepth, builder))
 		staticTypes[name] = bindingType
 	}
 	return env, staticTypes
@@ -318,6 +320,18 @@ func compileWithFunctionSet(source string, env map[string]any, functions *Functi
 
 func setProjectionStaticAlias(environment map[string]any, name string, value any) {
 	if name == "" {
+		return
+	}
+	setStaticEnvValue(environment, name, value)
+}
+
+// setStaticEnvValue records a static proxy value for an identifier. A nil
+// value means the identifier is interface-typed (any): expr types nil map
+// entries as untyped nil, which rejects every function call using them, so
+// the identifier is left undefined and AllowUndefinedVariables resolves it
+// as any — matching the dynamic runtime value.
+func setStaticEnvValue(environment map[string]any, name string, value any) {
+	if name == "" || value == nil {
 		return
 	}
 	if _, exists := environment[name]; !exists {
