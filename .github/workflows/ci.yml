@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  harness-integration:
-    name: harness integration tests
+  harness-builder:
+    name: harness builder tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -28,23 +28,50 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Setup Task
-        uses: arduino/setup-task@v2
-        with:
-          version: 3.x
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run builder harness tests
+        shell: bash
+        run: |
+          set -o pipefail
+          go test -json -count=1 ./builder | tee "$RUNNER_TEMP/harness-builder.jsonl"
 
-      - name: Run full harness integration suite (without race instrumentation)
-        env:
-          FLOW_TEST_HARNESS_SKIP_TEST_ALL_NFLOW_CONFORMANCE: "1"
-        run: task test:harness
-
-      - name: Upload full harness test event log
+      - name: Upload builder harness test event log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: harness-test-event-log
-          path: ${{ runner.temp }}/flow-test-harness.jsonl
+          name: harness-builder-test-event-log
+          path: ${{ runner.temp }}/harness-builder.jsonl
+          if-no-files-found: ignore
+          retention-days: 7
+
+  harness-cli:
+    name: harness CLI tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run CLI harness tests
+        shell: bash
+        env:
+          FLOW_TEST_HARNESS_SKIP_TEST_ALL_NFLOW_CONFORMANCE: "1"
+        run: |
+          set -o pipefail
+          go test -json -count=1 -skip='^TestAllNFlowConformance$' ./cli/... | tee "$RUNNER_TEMP/harness-cli.jsonl"
+
+      - name: Upload CLI harness test event log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-cli-test-event-log
+          path: ${{ runner.temp }}/harness-cli.jsonl
           if-no-files-found: ignore
           retention-days: 7
 
@@ -192,7 +219,8 @@ jobs:
       - race
       - vulnerability
       - benchmark
-      - harness-integration
+      - harness-builder
+      - harness-cli
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -206,7 +234,8 @@ jobs:
             "${{ needs.race.result }}"
             "${{ needs.vulnerability.result }}"
             "${{ needs.benchmark.result }}"
-            "${{ needs.harness-integration.result }}"
+            "${{ needs.harness-builder.result }}"
+            "${{ needs.harness-cli.result }}"
           )
           for result in "${results[@]}"; do
             if [ "$result" != "success" ]; then
