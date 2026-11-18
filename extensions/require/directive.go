@@ -11,7 +11,7 @@ import (
 
 var Directive = compiler.Directive{
 	Name:    "require",
-	Example: "@require ./locallib as mylib\n@require github.com/nexssp/text-tools v1.0.0 as text_tools",
+	Example: "@require ./locallib as mylib\n@require github.com/nexssp/text-tools@v1.0.0 as text_tools",
 	Handler: handleDirective,
 }
 

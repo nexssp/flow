@@ -2,6 +2,8 @@
 
 `@require` declarations in a `.nflow` file select extension bundles and remote Go modules. Requirement management operates on the direct declarations in the one named file; it does not rewrite included files or create a dependency lock.
 
+Versioned remote requirements use `@require TARGET@VERSION [as ALIAS]`. During migration, the parser still accepts the older `TARGET VERSION` spelling and either legacy alias order; `nflow fmt` rewrites versioned declarations to the attached form. Put a trailing `#` comment after the complete declaration, including after `}` when the requirement has an options block.
+
 ## Commands
 
 ```sh

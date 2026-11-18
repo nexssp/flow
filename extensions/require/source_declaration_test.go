@@ -58,6 +58,19 @@ func TestDirectDeclarationsCaptureOriginalSourceAndOnlyDirectHandlers(t *testing
 	ktest.RequireEqual(t, childDeclarations[0].Requirement.Import, "github.com/nexssp/from-child")
 }
 
+func TestDirectDeclarationsCaptureAttachedSelectorWithoutAtSeparator(t *testing.T) {
+	t.Parallel()
+	line := `@require github.com/example/foo@"release#candidate" as foo # trailing comment`
+	_, meta, err := compiler.Preprocess(t.Context(), compiler.NewDirectiveTable(Directive), line, "<test>")
+	ktest.RequireNoError(t, err)
+	declarations := DirectDeclarations(meta)
+	ktest.RequireEqual(t, len(declarations), 1)
+	declaration := declarations[0]
+	ktest.RequireEqual(t, declaration.Requirement.Version, "release#candidate")
+	ktest.RequireEqual(t, declaration.Requirement.Alias, "foo")
+	ktest.RequireEqual(t, line[declaration.SelectorStart:declaration.SelectorEnd], `"release#candidate"`)
+}
+
 func TestDirectDeclarationsDoNotTreatCommentMarkersInsideTokensAsComments(t *testing.T) {
 	t.Parallel()
 

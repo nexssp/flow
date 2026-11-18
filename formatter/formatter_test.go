@@ -287,6 +287,64 @@ func TestFormatUsesRequireDirectiveParserForInlineAndMultilineOptions(t *testing
 	}
 }
 
+func TestFormatCanonicalizesRequireSelectorsAndOptions(t *testing.T) {
+	tests := []struct {
+		name, source, want string
+	}{
+		{
+			name:   "legacy selector with trailing comment",
+			source: "@require example.com/foo v1.2.3 # keep this comment\n",
+			want:   "@require example.com/foo@v1.2.3 # keep this comment\n",
+		},
+		{
+			name:   "legacy alias after selector",
+			source: "@require example.com/foo v1.2.3 as foo # keep alias\n",
+			want:   "@require example.com/foo@v1.2.3 as foo # keep alias\n",
+		},
+		{
+			name:   "legacy alias before selector",
+			source: "@require example.com/foo as foo v1.2.3 // keep order comment\n",
+			want:   "@require example.com/foo@v1.2.3 as foo // keep order comment\n",
+		},
+		{
+			name:   "already canonical attached selector",
+			source: "@require example.com/foo@release/v2 as foo # keep attached form\n",
+			want:   "@require example.com/foo@release/v2 as foo # keep attached form\n",
+		},
+		{
+			name:   "multiline options with trailing comment",
+			source: "@require resilience\n{\n\tdefault_max: \"2\"\n\tbackoff: \"constant\"\n} # configure resilience defaults\n",
+			want:   "@require resilience {\n  default_max: \"2\"\n  backoff: \"constant\"\n} # configure resilience defaults\n",
+		},
+		{
+			name:   "inline options become canonical block",
+			source: "@require example.com/foo v1.2.3 as foo { id: \"x\", retries: \"3\" } # inline comment\n",
+			want:   "@require example.com/foo@v1.2.3 as foo {\n  id: \"x\"\n  retries: \"3\"\n} # inline comment\n",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, _, err := compiler.Preprocess(t.Context(), compiler.NewDirectiveTable(requireext.Directive), tc.source, "require.nflow"); err != nil {
+				t.Fatalf("parser rejected @require source: %v", err)
+			}
+			got, err := testFormatter().Format(t.Context(), tc.source, "require.nflow")
+			if err != nil {
+				t.Fatalf("Format() error = %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("Format() =\n%s\nwant\n%s", got, tc.want)
+			}
+			second, err := testFormatter().Format(t.Context(), got, "require.nflow")
+			if err != nil {
+				t.Fatalf("Format() rejected its output: %v", err)
+			}
+			if second != got {
+				t.Fatalf("format is not idempotent:\n%s\n!=\n%s", second, got)
+			}
+		})
+	}
+}
+
 func TestFormatPastedTaskAPIExampleAfterSchemaMigration(t *testing.T) {
 	source, err := os.ReadFile("testdata/taskapi_http_nats.nflow")
 	if err != nil {

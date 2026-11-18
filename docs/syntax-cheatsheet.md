@@ -294,8 +294,8 @@ approval.review
 ## Optional bundles
 
 ```nflow
-@require github.com/nexssp/lang/nexssflow v0.2.0
-@require github.com/nexssp/config_yaml vX.Y.Z
+@require github.com/nexssp/lang/nexssflow@v0.2.0
+@require github.com/nexssp/config_yaml@vX.Y.Z
 @embed prompt "prompts/system.txt"
 ```
 

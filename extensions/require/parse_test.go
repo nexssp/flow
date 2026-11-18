@@ -74,6 +74,67 @@ func TestParseRemoteSelectors(t *testing.T) {
 	}
 }
 
+func TestParseVersionedRequirementSpellingsAndAliasOrders(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, spec, version, alias, canonical string
+	}{
+		{
+			name: "legacy selector", spec: "example.com/foo v1.2.3",
+			version: "v1.2.3", canonical: "example.com/foo@v1.2.3",
+		},
+		{
+			name: "attached selector", spec: "example.com/foo@v1.2.3",
+			version: "v1.2.3", canonical: "example.com/foo@v1.2.3",
+		},
+		{
+			name: "legacy selector before alias", spec: "example.com/foo v1.2.3 as foo",
+			version: "v1.2.3", alias: "foo", canonical: "example.com/foo@v1.2.3 as foo",
+		},
+		{
+			name: "legacy selector after alias", spec: "example.com/foo as foo v1.2.3",
+			version: "v1.2.3", alias: "foo", canonical: "example.com/foo@v1.2.3 as foo",
+		},
+		{
+			name: "attached selector before alias", spec: "example.com/foo@v1.2.3 as foo",
+			version: "v1.2.3", alias: "foo", canonical: "example.com/foo@v1.2.3 as foo",
+		},
+		{
+			name: "attached branch selector", spec: "example.com/foo@release/v2",
+			version: "release/v2", canonical: "example.com/foo@release/v2",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := Parse(tc.spec, "", nil, "test.nflow", 1)
+			ktest.RequireNoError(t, err)
+			ktest.RequireEqual(t, got.Version, tc.version)
+			ktest.RequireEqual(t, got.Alias, tc.alias)
+			canonical, err := CanonicalizeSpec(tc.spec)
+			ktest.RequireNoError(t, err)
+			ktest.RequireEqual(t, canonical, tc.canonical)
+		})
+	}
+}
+
+func TestParseRejectsInvalidAttachedSelectors(t *testing.T) {
+	t.Parallel()
+	for _, spec := range []string{
+		"example.com/foo@",
+		"example.com/foo@branch@revision",
+	} {
+		t.Run(spec, func(t *testing.T) {
+			t.Parallel()
+			if _, err := Parse(spec, "", nil, "test.nflow", 1); err == nil {
+				t.Fatalf("Parse(%q) accepted an invalid attached selector", spec)
+			}
+			if _, err := CanonicalizeSpec(spec); err == nil {
+				t.Fatalf("CanonicalizeSpec(%q) accepted an invalid attached selector", spec)
+			}
+		})
+	}
+}
+
 func TestParseRejectsInvalidRemoteSelectors(t *testing.T) {
 	t.Parallel()
 	for _, selector := range []string{

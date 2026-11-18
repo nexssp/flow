@@ -184,11 +184,7 @@ func formatDeclaration(lines []string, index int, file, directive string) (forma
 func (f *Formatter) formatDirectiveLine(lines []string, index int, file, trimmed string, state *formatState) (formatted []string, next int, err error) {
 	line := lines[index]
 	if f.requireEnabled && directiveName(trimmed) == "require" {
-		nextLine, parseErr := f.parseRequireOptions(lines, index, file)
-		if parseErr != nil {
-			return nil, index + 1, parseErr
-		}
-		return lines[index:nextLine], nextLine, nil
+		return f.formatRequireDirective(lines, index, file)
 	}
 	if f.isRawBlockDirective(trimmed) {
 		state.rawDepth = max(braceDelta(line), 0)
@@ -519,9 +515,172 @@ func validateAssertion(assertion, file string, index int) error {
 	return nil
 }
 
-func (f *Formatter) parseRequireOptions(lines []string, start int, file string) (int, error) {
-	_, next, err := requireext.ParseDirectiveOptions(lines, start, file)
-	return next, err
+func (f *Formatter) formatRequireDirective(lines []string, index int, file string) (formattedLines []string, nextLine int, formatErr error) {
+	line := lines[index]
+	indent := leadingWhitespace(line)
+	prefixEnd := len(indent) + len("@require")
+	tailRaw := line[prefixEnd:]
+	tailLeading := len(tailRaw) - len(strings.TrimLeft(tailRaw, " \t"))
+	tailStart := prefixEnd + tailLeading
+	tail := strings.TrimSpace(tailRaw)
+	body, headerComment := splitRequireComment(tail)
+	openInTail := firstUnquotedRequireBrace(body)
+	spec := body
+	openLine, openOffset := -1, -1
+	if openInTail >= 0 {
+		spec = body[:openInTail]
+		openLine, openOffset = index, tailStart+openInTail
+	}
+	canonicalSpec, err := requireext.CanonicalizeSpec(strings.TrimSpace(spec))
+	if err != nil {
+		return nil, index + 1, compiler.SourceError(
+			compiler.Position{File: file, Line: index + 1}, "@require: %v", err)
+	}
+	header := indent + "@require"
+	if canonicalSpec != "" {
+		header += " " + canonicalSpec
+	}
+
+	if openLine < 0 && index+1 < len(lines) {
+		if strings.HasPrefix(strings.TrimSpace(lines[index+1]), "{") {
+			openLine = index + 1
+			openOffset = strings.IndexByte(lines[openLine], '{')
+		}
+	}
+	if openLine < 0 {
+		if headerComment != "" {
+			header += " " + headerComment
+		}
+		return []string{header}, index + 1, nil
+	}
+
+	_, next, err := requireext.ParseDirectiveOptions(lines, index, file)
+	if err != nil {
+		return nil, index + 1, err
+	}
+	options, blockComment, err := requireOptionsText(lines, openLine, openOffset, next)
+	if err != nil {
+		return nil, index + 1, compiler.SourceError(
+			compiler.Position{File: file, Line: index + 1}, "@require options: %v", err)
+	}
+	entries := canonicalRequireOptionEntries(options)
+	trailingComment := blockComment
+	if headerComment != "" && headerComment != blockComment {
+		if trailingComment == "" {
+			trailingComment = headerComment
+		} else {
+			trailingComment = headerComment + " " + trailingComment
+		}
+	}
+	if len(entries) == 0 {
+		formatted := header + " {}"
+		if trailingComment != "" {
+			formatted += " " + trailingComment
+		}
+		return []string{formatted}, next, nil
+	}
+
+	formatted := []string{header + " {"}
+	for _, entry := range entries {
+		formatted = append(formatted, indent+"  "+entry)
+	}
+	closing := indent + "}"
+	if trailingComment != "" {
+		closing += " " + trailingComment
+	}
+	formatted = append(formatted, closing)
+	return formatted, next, nil
+}
+
+func splitRequireComment(text string) (body, comment string) {
+	var quote byte
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if quote != 0 {
+			if c == '\\' {
+				i++
+				continue
+			}
+			if c == quote {
+				quote = 0
+			}
+			continue
+		}
+		if c == '"' || c == '\'' {
+			quote = c
+			continue
+		}
+		if (c == '#' || c == '/' && i+1 < len(text) && text[i+1] == '/') &&
+			(i == 0 || strings.ContainsRune(" \t\r\n", rune(text[i-1]))) {
+			return strings.TrimRight(text[:i], " \t"), strings.TrimSpace(text[i:])
+		}
+	}
+	return text, ""
+}
+
+func firstUnquotedRequireBrace(text string) int {
+	var quote byte
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if quote != 0 {
+			if c == '\\' {
+				i++
+				continue
+			}
+			if c == quote {
+				quote = 0
+			}
+			continue
+		}
+		if c == '"' || c == '\'' {
+			quote = c
+			continue
+		}
+		if c == '{' {
+			return i
+		}
+	}
+	return -1
+}
+
+func requireOptionsText(lines []string, openLine, openOffset, next int) (optionsText, trailingComment string, parseErr error) {
+	var content strings.Builder
+	for lineIndex := openLine; lineIndex < next; lineIndex++ {
+		line := lines[lineIndex]
+		start := 0
+		if lineIndex == openLine {
+			start = openOffset + 1
+		}
+		if start < 0 || start > len(line) {
+			return "", "", errors.New("invalid options block position")
+		}
+		remaining := line[start:]
+		beforeClose, afterClose, hasClose := strings.Cut(remaining, "}")
+		if hasClose {
+			if content.Len() > 0 {
+				content.WriteByte('\n')
+			}
+			content.WriteString(beforeClose)
+			return content.String(), strings.TrimSpace(afterClose), nil
+		}
+		if content.Len() > 0 {
+			content.WriteByte('\n')
+		}
+		content.WriteString(remaining)
+	}
+	return "", "", errors.New("unclosed `{`")
+}
+
+func canonicalRequireOptionEntries(options string) []string {
+	var entries []string
+	for _, commaPart := range compiler.SplitTopLevel(options, ',') {
+		for _, line := range compiler.SplitTopLevel(commaPart, '\n') {
+			if entry := strings.TrimSpace(line); entry != "" {
+				entries = append(entries, entry)
+			}
+		}
+	}
+	return entries
 }
 
 func declarationDirective(line string) (string, bool) {

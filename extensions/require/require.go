@@ -199,7 +199,7 @@ type requirementToken struct {
 
 // SourceDeclaration identifies one direct @require declaration in the source
 // file that produced metadata. Selector offsets are byte offsets into the
-// original, complete directive line and include any selector quote marks.
+// original directive line and include selector quotes, but exclude an attached @.
 type SourceDeclaration struct {
 	// SourceLine is the executed header, used to reject edits after substitutions.
 	SourceLine    string
@@ -223,85 +223,157 @@ func Parse(spec, baseDir string, opts map[string]string, file string, line int) 
 	return requirement, err
 }
 
+// CanonicalizeSpec returns a normalized @require specification, attaching a
+// remote selector to its target and placing any namespace alias afterward.
+func CanonicalizeSpec(spec string) (string, error) {
+	parsed, err := parseRequirementSpec(spec)
+	if err != nil {
+		return "", err
+	}
+	if isLocal(parsed.importPath) && parsed.hasVersion {
+		return "", errors.New("local path must not carry a version")
+	}
+	canonical := parsed.targetRaw
+	if parsed.hasVersion {
+		canonical += "@" + parsed.versionRaw
+	}
+	if parsed.alias != "" {
+		canonical += " as " + parsed.alias
+	}
+	return canonical, nil
+}
+
 // parseRequirement is the single grammar implementation for both public
 // parsing and source declaration capture. The returned selector bounds are
 // relative to spec; when no selector occurs, both are the end of the import
 // token, ready for a source updater to insert one.
 func parseRequirement(spec, baseDir string, opts map[string]string, file string, line int) (requirement Requirement, selectorStart, selectorEnd int, err error) {
-	cleanSpec := stripRequirementComment(spec)
-	parts := tokenizeRequirement(cleanSpec)
-	if len(parts) == 0 {
+	parsed, err := parseRequirementSpec(spec)
+	if err != nil {
 		return Requirement{}, 0, 0, compiler.SourceError(
-			compiler.Position{File: file, Line: line},
-			"@require: missing module target")
+			compiler.Position{File: file, Line: line}, "@require: %v", err)
+	}
+	if isLocal(parsed.importPath) {
+		if parsed.hasVersion {
+			return Requirement{}, 0, 0, compiler.SourceError(
+				compiler.Position{File: file, Line: line},
+				"@require: local path must not carry a version: %q", parsed.importPath)
+		}
+		req, err := resolveLocal(parsed.importPath, baseDir, opts, file, line)
+		if err != nil {
+			return Requirement{}, 0, 0, err
+		}
+		req.Alias = parsed.alias
+		return req, parsed.selectorStart, parsed.selectorEnd, nil
+	}
+
+	return Requirement{
+		Import:  parsed.importPath,
+		Alias:   parsed.alias,
+		Version: parsed.version,
+		Options: opts,
+	}, parsed.selectorStart, parsed.selectorEnd, nil
+}
+
+type parsedRequirementSpec struct {
+	targetRaw     string
+	importPath    string
+	versionRaw    string
+	version       string
+	alias         string
+	hasVersion    bool
+	selectorStart int
+	selectorEnd   int
+}
+
+func parseRequirementSpec(spec string) (parsedRequirementSpec, error) {
+	parts := tokenizeRequirement(stripRequirementComment(spec))
+	if len(parts) == 0 {
+		return parsedRequirementSpec{}, errors.New("missing module target")
 	}
 
 	importToken := parts[0]
-	importPath := strings.Trim(importToken.raw, `"'`)
+	targetRaw, attachedSelector, attachedSelectorOffset, hasAttachedSelector := splitAttachedSelector(importToken.raw)
+	importPath := strings.Trim(targetRaw, `"'`)
+	if importPath == "" {
+		return parsedRequirementSpec{}, errors.New("missing module target")
+	}
+	parsed := parsedRequirementSpec{
+		targetRaw: targetRaw, importPath: importPath,
+		selectorStart: importToken.end, selectorEnd: importToken.end,
+	}
 	parts = parts[1:]
+	if hasAttachedSelector {
+		version, err := parseRemoteSelector(attachedSelector)
+		if err != nil {
+			return parsedRequirementSpec{}, fmt.Errorf("invalid selector %q: %w", attachedSelector, err)
+		}
+		parsed.versionRaw = attachedSelector
+		parsed.version = version
+		parsed.hasVersion = true
+		parsed.selectorStart = importToken.start + attachedSelectorOffset
+		parsed.selectorEnd = importToken.end
+	}
 
-	version := ""
-	hasVersion := false
-	alias := ""
-	selectorStart, selectorEnd = importToken.end, importToken.end
 	for len(parts) > 0 {
 		if parts[0].raw == "as" {
-			if alias != "" {
-				return Requirement{}, 0, 0, compiler.SourceError(
-					compiler.Position{File: file, Line: line},
-					"@require: only one local namespace qualifier is allowed")
+			if parsed.alias != "" {
+				return parsedRequirementSpec{}, errors.New("only one local namespace qualifier is allowed")
 			}
 			if len(parts) < 2 {
-				return Requirement{}, 0, 0, compiler.SourceError(
-					compiler.Position{File: file, Line: line},
-					"@require: missing local namespace qualifier after `as`")
+				return parsedRequirementSpec{}, errors.New("missing local namespace qualifier after `as`")
 			}
-			alias = strings.Trim(parts[1].raw, `"'`)
-			if !compiler.IsValidNamespaceQualifier(alias) {
-				return Requirement{}, 0, 0, compiler.SourceError(
-					compiler.Position{File: file, Line: line},
-					"@require: invalid local namespace qualifier %q", alias)
+			parsed.alias = strings.Trim(parts[1].raw, `"'`)
+			if !compiler.IsValidNamespaceQualifier(parsed.alias) {
+				return parsedRequirementSpec{}, fmt.Errorf("invalid local namespace qualifier %q", parsed.alias)
 			}
 			parts = parts[2:]
 			continue
 		}
-		if hasVersion {
-			return Requirement{}, 0, 0, compiler.SourceError(
-				compiler.Position{File: file, Line: line},
-				"@require: extraneous tokens after declaration: %v", tokenValues(parts))
+		if parsed.hasVersion {
+			return parsedRequirementSpec{}, fmt.Errorf("extraneous tokens after declaration: %v", tokenValues(parts))
 		}
-		var selectorErr error
-		version, selectorErr = parseRemoteSelector(parts[0].raw)
-		if selectorErr != nil {
-			return Requirement{}, 0, 0, compiler.SourceError(
-				compiler.Position{File: file, Line: line},
-				"@require: invalid selector %q: %v", parts[0].raw, selectorErr)
+		version, err := parseRemoteSelector(parts[0].raw)
+		if err != nil {
+			return parsedRequirementSpec{}, fmt.Errorf("invalid selector %q: %w", parts[0].raw, err)
 		}
-		selectorStart, selectorEnd = parts[0].start, parts[0].end
-		hasVersion = true
+		parsed.versionRaw = parts[0].raw
+		parsed.version = version
+		parsed.hasVersion = true
+		parsed.selectorStart, parsed.selectorEnd = parts[0].start, parts[0].end
 		parts = parts[1:]
 	}
+	return parsed, nil
+}
 
-	if isLocal(importPath) {
-		if version != "" {
-			return Requirement{}, 0, 0, compiler.SourceError(
-				compiler.Position{File: file, Line: line},
-				"@require: local path must not carry a version: %q", importPath)
+func splitAttachedSelector(raw string) (target, selector string, selectorOffset int, found bool) {
+	var quote byte
+	for i := 0; i < len(raw); i++ {
+		c := raw[i]
+		if quote != 0 {
+			if c == '\\' {
+				i++
+				continue
+			}
+			if c == quote {
+				quote = 0
+			}
+			continue
 		}
-		req, err := resolveLocal(importPath, baseDir, opts, file, line)
-		if err != nil {
-			return Requirement{}, 0, 0, err
+		if c == '"' || c == '\'' {
+			quote = c
+			continue
 		}
-		req.Alias = alias
-		return req, selectorStart, selectorEnd, nil
+		if c != '@' {
+			continue
+		}
+		prefix := raw[:i]
+		if _, afterScheme, hasScheme := strings.Cut(prefix, "://"); hasScheme && !strings.Contains(afterScheme, "/") {
+			continue
+		}
+		return prefix, raw[i+1:], i + 1, true
 	}
-
-	return Requirement{
-		Import:  importPath,
-		Alias:   alias,
-		Version: version,
-		Options: opts,
-	}, selectorStart, selectorEnd, nil
+	return raw, "", 0, false
 }
 
 func tokenizeRequirement(spec string) []requirementToken {
