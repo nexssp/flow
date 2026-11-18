@@ -6,7 +6,8 @@
   :schema=[]Item
   runtime.noop
 @end
-const @{ value: [{ name: "Ada" }, { name: "Lin" }] }
+const(value: [{ name: "Ada" }, { name: "Lin" }])
+  -> pick(field: "value")
 -> pipeline.echo
 @assert: result[0].name == "Ada"
 @assert: result[1].name == "Lin"

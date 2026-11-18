@@ -2,14 +2,14 @@
 @func whole_value.echo(value string) string = value
 @pipeline argument_scope
   runtime.noop as person
-  -> const @{
+  -> const (
     bare_input: input.name,
     bare_binding: person,
     bare_path: person.name,
     name,
     expression_input: whole_value.echo(input.name),
     expression_binding: whole_value.echo(person.name)
-  }
+  )
 @end
 @pipeline scalar_passthrough
   runtime.noop
@@ -29,23 +29,24 @@
 @assert: result.scope.expression_input == "Julia" && result.scope.expression_binding == "Julia"
 parallel {
   text: const "the exact scalar"
-    -> const @{ value: . },
+    -> const(value: .) -> pick(field: "value"),
   number: const 37.5
-    -> const @{ value: . },
+    -> const(value: .) -> pick(field: "value"),
   boolean: const false
-    -> const @{ value: . },
+    -> const(value: .) -> pick(field: "value"),
   null_value: const null
-    -> const @{ value: . },
-  list: const @{ value: [1, 2] }
-    -> const @{ value: . },
+    -> const(value: .) -> pick(field: "value"),
+  list: const(value: [1, 2])
+    -> pick(field: "value")
+    -> const(value: .) -> pick(field: "value"),
   nested: const "nested scalar"
-    -> const @{ value: { items: [.] } },
+    -> const( items: [.] ),
   expression: const "expression scalar"
-    -> const @{ value: whole_value.echo(.) },
+    -> const(value: whole_value.echo(.)) -> pick(field: "value"),
   named_pipeline: const "the exact named scalar"
-    -> pipeline.scalar_passthrough @{ request: . },
+    -> pipeline.scalar_passthrough ( request: . ),
   object: { name: "Julia", nested: { count: 2 } }
-    -> runtime.noop @{ value: ., first_name: .name },
+    -> runtime.noop ( value: ., first_name: .name ),
   scope: { name: "Julia" }
     -> pipeline.argument_scope
 }

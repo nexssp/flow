@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"strings"
 	"unicode/utf8"
 
 	"github.com/nexssp/flow/internal/lexical"
@@ -15,7 +16,9 @@ type Lexer struct {
 func NewLexer(src string) *Lexer { return &Lexer{src: src, line: 1} }
 
 func (l *Lexer) Next() Token {
-	l.skipSpaceAndComments()
+	if token, ok := l.skipSpaceAndComments(); ok {
+		return token
+	}
 	if l.pos >= len(l.src) {
 		return Token{Type: TokEOF, Line: l.line, Offset: l.pos, EndOffset: l.pos}
 	}
@@ -270,7 +273,7 @@ func (l *Lexer) scanAtPrompt() Token {
 	return Token{Type: TokAtPrompt, Lit: l.src[start:l.pos], Line: startLine}
 }
 
-func (l *Lexer) skipSpaceAndComments() {
+func (l *Lexer) skipSpaceAndComments() (Token, bool) {
 	for l.pos < len(l.src) {
 		switch l.src[l.pos] {
 		case ' ', '\t', '\r':
@@ -285,7 +288,7 @@ func (l *Lexer) skipSpaceAndComments() {
 				}
 				continue
 			}
-			return
+			return Token{}, false
 		case '/':
 			if l.peek() == '/' {
 				for l.pos < len(l.src) && l.src[l.pos] != '\n' {
@@ -293,11 +296,24 @@ func (l *Lexer) skipSpaceAndComments() {
 				}
 				continue
 			}
-			return
+			if l.peek() == '*' {
+				start, line := l.pos, l.line
+				commentEnd := strings.Index(l.src[l.pos+2:], "*/")
+				if commentEnd < 0 {
+					l.pos = len(l.src)
+					return Token{Type: TokInvalid, Lit: l.src[start:], Line: line, Offset: start, EndOffset: l.pos, Unterminated: true}, true
+				}
+				end := l.pos + 2 + commentEnd + 2
+				l.line += strings.Count(l.src[l.pos:end], "\n")
+				l.pos = end
+				continue
+			}
+			return Token{}, false
 		default:
-			return
+			return Token{}, false
 		}
 	}
+	return Token{}, false
 }
 
 func (l *Lexer) isAtLineStart() bool {

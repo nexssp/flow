@@ -28,7 +28,7 @@ type ValidateRequest struct {
 
 var ValidateAction = action.New("schema.validate", func(ctx context.Context, req ValidateRequest) (any, error) {
 	if req.Name == "" {
-		return nil, xerr.BadRequest("schema.validate: schema name is required (use @{ name: \"SchemaName\" })")
+		return nil, xerr.BadRequest("schema.validate: schema name is required (use ( name: \"SchemaName\" ))")
 	}
 
 	schemas, _ := schemasContextKey.From(ctx)

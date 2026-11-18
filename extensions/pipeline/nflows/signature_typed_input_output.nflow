@@ -8,6 +8,6 @@
 @pipeline create_order(req: !CreateRequest): !CreateResponse
   noop
 @end
-const @{ value: { name: "Ada" } }
+const( name: "Ada" )
   -> pipeline.create_order
 @assert: result.name == "Ada"

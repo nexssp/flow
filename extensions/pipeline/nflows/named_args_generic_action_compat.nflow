@@ -4,4 +4,4 @@
   .override == "new value"
 }
 { inherited: "preserved", override: "old value" }
--> with @{ override: "new value" }
+-> with ( override: "new value" )

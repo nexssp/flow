@@ -1,3 +1,5 @@
 @description "Limit a stream to the first two records"
 @assert: len(result) == 2
-cov.items -> stream.take @{ count: 2 } -> collect
+cov.items
+  -> stream.take ( count: 2 )
+  -> collect

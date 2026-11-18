@@ -13,13 +13,16 @@
     nested: { label: match(.peak) { > 90 -> "critical", _ -> "normal" } }
   },
   winner: race {
-    runtime.fail @{ kind: "Unavailable", message: "primary down" },
-    runtime.const @{ value: "replica" }
+    runtime.fail ( kind: "Unavailable", message: "primary down" ),
+    const "replica"
   },
   category: match(.peak) {
-    > 90 -> "CRITICAL_SPIKE",
-    >= 50 -> "ELEVATED",
-    _ -> "NORMAL"
+    > 90
+      -> "CRITICAL_SPIKE",
+    >= 50
+      -> "ELEVATED",
+    _
+      -> "NORMAL"
   },
-  lazy: false ? race { runtime.fail @{ message: "must not run" } } : "skipped"
+  lazy: false ? race { runtime.fail ( message: "must not run" ) } : "skipped"
 }

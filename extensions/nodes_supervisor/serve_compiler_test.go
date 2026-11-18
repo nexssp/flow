@@ -35,37 +35,37 @@ func TestServeAtomAdviceValidatesLiteralGraphsWithFlowCompiler(t *testing.T) {
 	}{
 		{
 			name: "duplicate service id",
-			src: `supervisor.serve @{ services: [
+			src: `supervisor.serve ( services: [
 				{id: "api", action: "thttp.listen"},
 				{id: "api", action: "tworker.listen"}
-			] }`,
+			] )`,
 			want: `duplicate service id "api"`,
 		},
 		{
 			name: "unknown dependency",
-			src: `supervisor.serve @{ services: [
+			src: `supervisor.serve ( services: [
 				{id: "worker", action: "tworker.listen", depends_on: ["missing"]}
-			] }`,
+			] )`,
 			want: `depends on unknown service "missing"`,
 		},
 		{
 			name: "dependency cycle",
-			src: `supervisor.serve @{ services: [
+			src: `supervisor.serve ( services: [
 				{id: "api", action: "thttp.listen", depends_on: ["worker"]},
 				{id: "worker", action: "tworker.listen", depends_on: ["api"]}
-			] }`,
+			] )`,
 			want: "dependency cycle",
 		},
 		{
 			name: "dynamic service graph rejected",
-			src:  `supervisor.serve @{ services: @.services }`,
+			src:  `supervisor.serve ( services: @.services )`,
 			want: "non-empty literal list",
 		},
 		{
 			name: "typo rejected",
-			src: `supervisor.serve @{ services: [
+			src: `supervisor.serve ( services: [
 				{id: "api", action: "thttp.listen", depend_on: ["db"]}
-			] }`,
+			] )`,
 			want: `unknown field "depend_on"`,
 		},
 	}
@@ -82,12 +82,12 @@ func TestServeAtomAdviceValidatesLiteralGraphsWithFlowCompiler(t *testing.T) {
 // Keep the runtime-reference sample inline so its compile and run cases share
 // the exact source while the documentation keeps its own user-facing example.
 const serveRuntimeRefsExample = `@pipeline backend_services
-  supervisor.serve @{
+  supervisor.serve (
     services: [
       { id: "http", action: "thttp.listen", payload: .http_config },
       { id: "worker", action: "tworker.listen", depends_on: ["http"], enabled: .worker_enabled, payload: .worker_config }
     ]
-  }
+  )
 @end`
 
 // Fixtures cannot supply the mock action resolver and typed pipeline input
@@ -206,9 +206,9 @@ func TestBareActionNameResolvesThroughActualFlowCompiler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	compiled, err := runner.Compile(t.Context(), cfg, `supervisor.serve @{ services: [
+	compiled, err := runner.Compile(t.Context(), cfg, `supervisor.serve ( services: [
 		{id: "service", action: test.ready}
-	] }`, "serve-bare-action.nflow")
+	] )`, "serve-bare-action.nflow")
 	if err != nil {
 		t.Fatalf("compile bare action name with Flow v0.49.0: %v", err)
 	}

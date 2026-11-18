@@ -157,7 +157,7 @@ func TestJSONNormalizeSelfBenchScenario(t *testing.T) {
 
 func TestRunFailuresAndList(t *testing.T) {
 	withConfig(t, func(ctx context.Context, cfg runner.Config) {
-		for _, source := range []string{"no_such_action", "runtime.fail @{ message: \"expected\" }", ""} {
+		for _, source := range []string{"no_such_action", "runtime.fail ( message: \"expected\" )", ""} {
 			var output bytes.Buffer
 			code := Run(ctx, cfg, []Scenario{{Name: "bad.nflow", File: "bad.nflow", Source: source}}, Options{Out: &output, Iterations: 1, JSON: true})
 			xtest.RequireEqual(t, code, 1)

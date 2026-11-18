@@ -18,7 +18,7 @@ func TestRunSource_ReportsAssertionSourceLine(t *testing.T) {
 	source := `@assert {
   result.ok == false
 }
-const @{ value: { ok: true } }`
+const( ok: true )`
 	var stdout, stderr bytes.Buffer
 	code := runner.RunSource(t.Context(), cfg, source, "assert-source.nflow", nil, runner.Opts{
 		Stdout: &stdout,

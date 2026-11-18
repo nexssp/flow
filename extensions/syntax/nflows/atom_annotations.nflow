@@ -3,4 +3,4 @@
 @assert: result.prompt == "review"
 @assert: result.targets[0] == "alpha" && result.targets[1] == "beta"
 @assert: result.excludes[0] == "legacy" && result.excludes[1] == "untrusted"
-runtime.noop #alpha,beta ~legacy,untrusted @review @{ request: "kept" }
+runtime.noop #alpha,beta ~legacy,untrusted @review ( request: "kept" )

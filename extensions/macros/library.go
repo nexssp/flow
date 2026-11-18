@@ -7,8 +7,8 @@
 //
 // Typical use:
 //
-//	@macro greet(name) { runtime.const @{ value: $name } }
-//	@greet("World")   // expands to: runtime.const @{ value: "World" }
+//	@macro greet(name) { const $name }
+//	@greet("World")   // expands to: const "World"
 //
 // Without this bundle, @name is "unexpected token @name".
 package macros

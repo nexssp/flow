@@ -6,7 +6,7 @@
   Features []string `json:"features" validate:"required,min=1,dive,required"`
 }
 {}
-  -> config_runtime.load @{ path: "settings.json" }
+  -> config_runtime.load ( path: "settings.json" )
   -> AppSettings.validate
 @assert: result.service == "payments"
 @assert: result.port == 8443

@@ -3,7 +3,7 @@
 //
 // Typical use:
 //
-//	dispatch.run @{ members: [runtime.fail, runtime.const], payload: { value: "x" } }
+//	dispatch.run(members: [fail, const], payload: { value: "x" })
 package nodes_dispatch
 
 import (

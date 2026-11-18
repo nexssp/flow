@@ -217,7 +217,7 @@ func (t *ModifierTable) All() []Modifier {
 // When a modifier name is unknown, the hint path checks whether the
 // name matches a field of the action's request struct. That is the
 // common DSL-author mistake — writing :file=... where the action takes
-// @{ file: ... } — and it produces a fix-the-typo message instead of a
+// a named `file` argument — and it produces a fix-the-typo message instead of a
 // bare "unknown modifier".
 func (t *ModifierTable) ApplyAll(target action.AnyAction, raws []string) (action.AnyAction, error) {
 	values := make([]ModifierValue, len(raws))

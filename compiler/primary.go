@@ -36,8 +36,8 @@ type PostfixExtension interface {
 	ParsePostfix(p *Parser, left Expr) (Expr, error)
 }
 
-// ArgumentMapExpander may rewrite raw @{...} contents before the compiler's
-// argument-map parser reads keys and values. It is intended for syntax that
+// ArgumentMapExpander may rewrite raw parenthesized argument contents before
+// the compiler's named-argument parser reads keys and values. It is intended for syntax that
 // composes map entries, such as macros; ordinary map parsing remains in core.
 type ArgumentMapExpander interface {
 	PrimaryExtension

@@ -43,7 +43,7 @@ func TestProjectionShorthandForms(t *testing.T) {
 		},
 		{
 			name:   "generic object argument stays explicit",
-			source: `const @{ value: { name: "Ada", email: "ada@example.test" } }`,
+			source: `const( name: "Ada", email: "ada@example.test" )`,
 			assert: []string{`result.name == "Ada"`, `result.email == "ada@example.test"`},
 		},
 	}
@@ -56,7 +56,7 @@ func TestProjectionShorthandForms(t *testing.T) {
 		})
 	}
 	execution, err := runner.Execute(t.Context(), cfg,
-		`{ name: "Ada" } -> const @{ value: { name } }`, "argument-map-shorthand.nflow", nil)
+		`{ name: "Ada" } -> const( name )`, "argument-map-shorthand.nflow", nil)
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, len(runner.EvaluateAssertions(execution.Output, []string{`result.name == "Ada"`})), 0)
 }
@@ -69,8 +69,8 @@ func TestProjectionControlValues(t *testing.T) {
 		assert string
 	}{
 		{"deep nesting", `{ peak: 98 } -> { obj: { values: [race { { result: match(.peak) { >= 98 -> "high", _ -> "low" } } }] } }`, `result.obj.values[0].result == "high"`},
-		{"lazy ternary", `{ value: false ? race { runtime.fail @{ message: "must not run" } } : "skipped" }`, `result.value == "skipped"`},
-		{"lazy coalescing", `{ value: "present" ?? race { runtime.fail @{ message: "must not run" } } }`, `result.value == "present"`},
+		{"lazy ternary", `{ value: false ? race { runtime.fail ( message: "must not run" ) } : "skipped" }`, `result.value == "skipped"`},
+		{"lazy coalescing", `{ value: "present" ?? race { runtime.fail ( message: "must not run" ) } }`, `result.value == "present"`},
 		{"strings and keys", `{ race: "race { ignored }", match: "match(.x) { ignored }", value: race { "ok" } }`, `result.race == "race { ignored }" && result.value == "ok"`},
 		{"internal names cannot collide", `{ __flow_projection_context__: "user", value: race { "ok" } }`, `result.__flow_projection_context__ == "user" && result.value == "ok"`},
 		{"scalar input", `42 -> { copy: race { runtime.noop }, category: match(.) { >= 42 -> "high", _ -> "low" } }`, `result.copy == 42 && result.category == "high"`},
@@ -175,7 +175,7 @@ func TestProjectionPreservesWrappedAppError(t *testing.T) {
 	t.Parallel()
 	cfg, err := runner.BuildConfig(native.Bundles())
 	ktest.RequireNoError(t, err)
-	compiled, err := runner.Compile(t.Context(), cfg, `{ value: race { runtime.fail @{ kind: "Unavailable", message: "upstream failed" } } }`, "app-error-values.nflow")
+	compiled, err := runner.Compile(t.Context(), cfg, `{ value: race { runtime.fail ( kind: "Unavailable", message: "upstream failed" ) } }`, "app-error-values.nflow")
 	ktest.RequireNoError(t, err)
 	_, err = action.InvokeAny(t.Context(), compiled.Program, nil)
 	ktest.RequireCondition(t, err != nil, "expected projection failure")

@@ -1,10 +1,10 @@
 @description "The expression short form accepts a parenthesized recovery pipeline"
 @pipeline first_recovery
-  const @{ value: "first" }
+  const "first"
 @end
 @pipeline second_recovery
-  const @{ value: "second" }
+  const "second"
 @end
 @assert: result == "second"
-runtime.fail @{ kind: "NotFound", message: "missing" }
+runtime.fail ( kind: "NotFound", message: "missing" )
 ? on_error (pipeline.first_recovery -> pipeline.second_recovery)

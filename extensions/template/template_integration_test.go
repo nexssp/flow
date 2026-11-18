@@ -21,9 +21,9 @@ func TestRuntimeFileContentIsTemplateSource(t *testing.T) {
 @assert: result.items[0].ok == true
 @assert: result.items[0].result == "Welcome Ada — Grüß Gott, 世界 🌍\\n"
 @pipeline render_runtime_template_file
-  template.render @{ template_bytes: .Content, variables: { name: "Ada" } }
+  template.render ( template_bytes: .Content, variables: { name: "Ada" } )
 @end
-fs.walk @{ dir: %q, ext: "tmpl" } -> fs.read -> collect -> { files: . } -> distribute.map @{ action: pipeline.render_runtime_template_file, items: .files }`, dir)
+fs.walk ( dir: %q, ext: "tmpl" ) -> fs.read -> collect -> { files: . } -> distribute.map ( action: pipeline.render_runtime_template_file, items: .files )`, dir)
 	cfg, err := runner.BuildConfig(native.SelftestBundles())
 	if err != nil {
 		t.Fatal(err)

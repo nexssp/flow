@@ -2,7 +2,7 @@
 @assert: result == "ok"
 @pipeline benchmark
   :concurrency=4
-  const @{ value: "ok" }
+  const "ok"
 @end
 {}
 -> pipeline.benchmark

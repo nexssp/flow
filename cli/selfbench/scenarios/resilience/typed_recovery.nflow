@@ -3,8 +3,10 @@
   result.status == "recovered"
   result.error_kind == "Unavailable"
 }
-fail @{ kind: "Unavailable", message: "deterministic typed-recovery benchmark failure" }
+fail ( kind: "Unavailable", message: "deterministic typed-recovery benchmark failure" )
 ? on_error {
-  xerr.KindUnavailable -> const @{ status: "recovered", error_kind: "Unavailable" },
-  else                 -> error.reraise
+  xerr.KindUnavailable
+    -> const ( status: "recovered", error_kind: "Unavailable" ),
+  else
+    -> error.reraise
 }

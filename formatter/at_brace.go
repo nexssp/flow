@@ -30,6 +30,155 @@ func formatAtBraceBlocks(source string, lines []string) []string {
 	}
 }
 
+type parenthesizedArgumentSpan struct {
+	openIndex  int
+	closeIndex int
+}
+
+func parenthesizedArgumentSpans(source string) ([]compiler.Token, []parenthesizedArgumentSpan) {
+	lexer := compiler.NewLexer(source)
+	var tokens []compiler.Token
+	for {
+		token := lexer.Next()
+		tokens = append(tokens, token)
+		if token.Type == compiler.TokEOF {
+			break
+		}
+	}
+
+	var spans []parenthesizedArgumentSpan
+	for index := 0; index < len(tokens); {
+		if tokens[index].Type != compiler.TokLParen || !startsNamedArgumentList(source, tokens, index) {
+			index++
+			continue
+		}
+		depth := 1
+		closeIndex := -1
+		for next := index + 1; next < len(tokens); next++ {
+			switch tokens[next].Type {
+			case compiler.TokLParen:
+				depth++
+			case compiler.TokRParen:
+				depth--
+				if depth == 0 {
+					closeIndex = next
+				}
+			case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
+				compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr,
+				compiler.TokLBrace, compiler.TokRBrace, compiler.TokLBracket, compiler.TokRBracket,
+				compiler.TokColon, compiler.TokEquals, compiler.TokComma, compiler.TokQuestion,
+				compiler.TokHash, compiler.TokTilde, compiler.TokAtBrace, compiler.TokAtPrompt, compiler.TokInvalid:
+				// Non-parenthesis tokens do not affect the nesting depth.
+			}
+			if closeIndex >= 0 {
+				break
+			}
+		}
+		if closeIndex < 0 {
+			index++
+			continue
+		}
+		spans = append(spans, parenthesizedArgumentSpan{openIndex: index, closeIndex: closeIndex})
+		index = closeIndex + 1
+	}
+	return tokens, spans
+}
+
+func startsNamedArgumentList(source string, tokens []compiler.Token, openIndex int) bool {
+	if openIndex+1 >= len(tokens) {
+		return false
+	}
+	first := tokens[openIndex+1]
+	if first.Type == compiler.TokIdent && openIndex+2 < len(tokens) {
+		next := tokens[openIndex+2].Type
+		if next == compiler.TokColon || next == compiler.TokComma {
+			return true
+		}
+	}
+	return strings.HasPrefix(strings.TrimSpace(source[tokens[openIndex].EndOffset:]), "...")
+}
+
+func formatParenthesizedArgumentLists(source string, lines []string, opaqueLines map[int]bool) []string {
+	lineStarts := make([]int, len(lines))
+	offset := 0
+	for index, line := range lines {
+		lineStarts[index] = offset
+		offset += len(line) + 1
+	}
+	tokens, spans := parenthesizedArgumentSpans(source)
+	for _, span := range spans {
+		openToken, closeToken := tokens[span.openIndex], tokens[span.closeIndex]
+		if closeToken.Line <= openToken.Line {
+			continue
+		}
+		reindentParenthesizedArgumentList(source, lines, lineStarts, tokens, span, opaqueLines)
+	}
+	return lines
+}
+
+func reindentParenthesizedArgumentList(source string, lines []string, lineStarts []int, tokens []compiler.Token, span parenthesizedArgumentSpan, opaqueLines map[int]bool) {
+	open := tokens[span.openIndex]
+	firstLine := open.Line - 1
+	lastLine := tokens[span.closeIndex].Line - 1
+	if firstLine < 0 || lastLine >= len(lines) || firstLine >= len(lineStarts) {
+		return
+	}
+	baseIndent := leadingWhitespace(source[lineStarts[firstLine]:open.Offset])
+	depth := 1
+	tokenIndex := span.openIndex + 1
+	for tokenIndex < span.closeIndex && tokens[tokenIndex].Line <= open.Line {
+		depth = adjustDelimiterDepth(depth, tokens[tokenIndex].Type)
+		tokenIndex++
+	}
+	for lineIndex := firstLine + 1; lineIndex <= lastLine; lineIndex++ {
+		if !opaqueLines[lineIndex] {
+			trimmed := strings.TrimLeft(lines[lineIndex], " \t")
+			if strings.TrimSpace(trimmed) == "" {
+				lines[lineIndex] = ""
+			} else {
+				indentDepth := depth - leadingClosingDelimiterCount(trimmed)
+				indentDepth = max(indentDepth, 0)
+				lines[lineIndex] = baseIndent + strings.Repeat(" ", indentDepth*2) + trimmed
+			}
+		}
+		lineNumber := lineIndex + 1
+		for tokenIndex <= span.closeIndex && tokens[tokenIndex].Line <= lineNumber {
+			depth = adjustDelimiterDepth(depth, tokens[tokenIndex].Type)
+			tokenIndex++
+		}
+	}
+}
+
+func leadingClosingDelimiterCount(line string) int {
+	line = strings.TrimLeft(line, " \t")
+	count := 0
+	for line != "" {
+		switch line[0] {
+		case ')', '}', ']':
+			count++
+			line = strings.TrimLeft(line[1:], " \t")
+		default:
+			return count
+		}
+	}
+	return count
+}
+
+func adjustDelimiterDepth(depth int, token compiler.TokenType) int {
+	switch token {
+	case compiler.TokLParen, compiler.TokLBrace, compiler.TokLBracket:
+		return depth + 1
+	case compiler.TokRParen, compiler.TokRBrace, compiler.TokRBracket:
+		return depth - 1
+	case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
+		compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr,
+		compiler.TokColon, compiler.TokEquals, compiler.TokComma, compiler.TokQuestion,
+		compiler.TokHash, compiler.TokTilde, compiler.TokAtBrace, compiler.TokAtPrompt, compiler.TokInvalid:
+		return depth
+	}
+	return depth
+}
+
 func reindentArgumentBlock(source string, lines []string, lineStarts []int, token compiler.Token) {
 	bodyStart := token.Offset + 2
 	closeOffset := bodyStart + len(token.Lit)

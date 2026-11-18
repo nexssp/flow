@@ -41,7 +41,7 @@
 # Compiled here; invoked separately by the Go test with an explicit host store.
 @pipeline resilient_ingest
   :profile=base_resilience
-  runtime.const
+  const
     :timeout=2s
     :retry=3
     :cache=10s
@@ -51,16 +51,19 @@
     :dedup
     :coalesce
     :tag="resilience,core"
-    :desc="Maks: ingest, Julia: verify"
-    @{ value: { ingest_status: "SUCCESS", storage_code: 201 } }
+    :desc="Maks: ingest, Julia: verify" ( ingest_status: "SUCCESS", storage_code: 201 )
 @end
 @pipeline auth_fallback
-  runtime.const :auth :role="admin" @{ value: "unauthorized_data" }
+  const :auth :role="admin" "unauthorized_data"
   ? on_error {
-    xerr.KindUnauthorized -> { recovery: "intercepted_unauthorized", handled: true },
-    xerr.KindForbidden -> { recovery: "intercepted_forbidden", handled: true },
-    xerr.KindUnavailable -> { recovery: "intercepted_unavailable", handled: true },
-    else -> error.reraise
+    xerr.KindUnauthorized
+      -> { recovery: "intercepted_unauthorized", handled: true },
+    xerr.KindForbidden
+      -> { recovery: "intercepted_forbidden", handled: true },
+    xerr.KindUnavailable
+      -> { recovery: "intercepted_unavailable", handled: true },
+    else
+      -> error.reraise
   }
 @end
 @pipeline drain_buffer
@@ -68,9 +71,9 @@
   -> loop({ pending: .pending - 1, drained: .drained + 1 }) until(.pending <= 0)
 @end
 @pipeline sample_ticks
-  realtime.ticks @{ hz: 100, max_catchup_ms: 20 }
-  -> stream.take @{ count: 3 }
-  -> stream.map @{ expression: "item" }
+  realtime.ticks ( hz: 100, max_catchup_ms: 20 )
+  -> stream.take ( count: 3 )
+  -> stream.map ( expression: "item" )
   -> collect
 @end
 # Flow primaries are composed as branches, never nested inside projections.
@@ -84,15 +87,18 @@ parallel {
   drain: pipeline.drain_buffer,
   ticks: pipeline.sample_ticks,
   winner: race {
-    runtime.fail @{ kind: "Unavailable", message: "primary endpoint degraded" },
-    runtime.const @{ value: "replica_b_won" }
+    runtime.fail ( kind: "Unavailable", message: "primary endpoint degraded" ),
+    const "replica_b_won"
   },
   category: (
     { peak: 98 }
     -> match {
-      .peak > 90 -> "CRITICAL_SPIKE",
-      .peak > 50 -> "ELEVATED",
-      _ -> "NORMAL"
+      .peak > 90
+        -> "CRITICAL_SPIKE",
+      .peak > 50
+        -> "ELEVATED",
+      _
+        -> "NORMAL"
     }
   )
 }

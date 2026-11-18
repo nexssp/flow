@@ -3,15 +3,17 @@
   Role    string `json:"role" validate:"required"`
   Content string `json:"content" validate:"required"`
 }
-@pipeline strict_output :out-schema=!ChatTurn
-  runtime.const @{ value: { role: .role, content: .content, unexpected: true } }
+@pipeline strict_output
+  :out-schema=!ChatTurn
+  const( role: .role, content: .content, unexpected: true )
 @end
 @pipeline response_rejected
-  runtime.const @{ value: { route: "strict-response-rejected" } }
+  const( route: "strict-response-rejected" )
 @end
 @on_error {
   when error.kind == xerr.KindValidation -> pipeline.response_rejected,
   else -> error.info
 }
-{ role: "assistant", content: "hello" } -> pipeline.strict_output
+{ role: "assistant", content: "hello" }
+  -> pipeline.strict_output
 @assert: result.route == "strict-response-rejected"

@@ -1,7 +1,7 @@
 # @syntax-only
 @description "runtime-conflict: reject a bare identifier shared by a dynamic input field and pipeline binding"
 @pipeline ambiguous_binding_runtime
-  runtime.const @{ value: { tool: { name: "payload" } } } as tool
+  const( tool: { name: "payload" } ) as tool
   -> { value: tool.name }
 @end
 pipeline.ambiguous_binding_runtime

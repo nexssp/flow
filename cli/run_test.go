@@ -39,7 +39,7 @@ func TestRunSourceInProcess_InfoWithDirectives(t *testing.T) {
 	// the tree. Before the fix, the info path parsed the raw source
 	// and reported `unexpected token "description"` on line 1.
 	src := `@description "test flow"
-const @{ value: "hi" }
+const "hi"
 `
 	_ = captureStdout(t, func() {
 		rc := runSourceInProcess(context.Background(), src, "test.nflow", []string{"--info"})
@@ -51,7 +51,7 @@ func TestRunSourceInProcess_InfoWithMacros(t *testing.T) {
 	// Source declares a macro and uses it. Info must parse cleanly
 	// (requires the macro primary) and list the resulting atoms.
 	src := `
-@macro hi() { runtime.const @{ value: "hi" } }
+@macro hi() { const "hi" }
 @hi()
 `
 	_ = captureStdout(t, func() {
@@ -65,7 +65,7 @@ func TestRunSourceInProcess_InfoWithPipeline(t *testing.T) {
 	// is whitespace; info must still succeed.
 	src := `
 @pipeline p
-  const @{ value: "x" }
+  const "x"
 @end
 pipeline.p
 `

@@ -9,7 +9,7 @@
   { id: "second", score: 5 },
   { id: "third", score: 1 },
 ] } as source
--> pick @{ field: "samples" }
+-> pick ( field: "samples" )
 -> each :concurrency=2 {
-  const @{ value: { id: (.id), score: (.score * 2), batch: (source.batch) } }
+  const( id: (.id), score: (.score * 2), batch: (source.batch) )
 }

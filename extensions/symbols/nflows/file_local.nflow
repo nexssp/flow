@@ -5,9 +5,12 @@
   max_retries:   "3"
 }
 
-{ queue: "billing-operations" } -> match {
-  .queue == routing.primary_queue -> const @{ value: "routed" },
-  _                               -> const @{ value: "fallback" }
+{ queue: "billing-operations" }
+  -> match {
+  .queue == routing.primary_queue
+    -> const "routed",
+  _
+    -> const "fallback"
 }
 
 @assert: result == "routed"

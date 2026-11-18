@@ -29,18 +29,21 @@ An action call uses a canonical action name, optional modifiers, and named argum
 orders.fetch :timeout=3s (order_id: .order_id)
 ```
 
-Named arguments use the same typed data values and schema checks as the former `@{ ... }` block. Values include strings, numbers, booleans, arrays, nested objects, the current input (`.`), and paths such as `.order_id` or `.customer.id`. Parenthesized expressions like `count: (.count + 1)` explicitly opt into expr-lang evaluation; they can read the current atom input (`.`), original request (`input`), and visible pipeline `as` bindings. A bare field such as `name` remains shorthand for a same-name input reference (`name: .name`). Duplicate argument names are errors. A top-level `... .defaults` entry spreads an object into the call; the spread must resolve to an object, and duplicate keys fail with a collision error. `ArgString`, `ArgInt`, and `ArgBool` schemas reject incompatible literal values at compile time (`ArgInt` also rejects fractional numbers). Dynamic references and expressions remain the receiving action's responsibility at runtime. Unknown action names, invalid modifiers, and unresolved declared capabilities are compile-time errors. For the introductory syntax walkthrough, see [`docs/language.md`](language.md); see also the [argument schema/compiler tests](../compiler/arg_schema.go).
+Named arguments use typed data values and schema checks. Values include strings, numbers, booleans, arrays, nested objects, the current input (`.`), and paths such as `.order_id` or `.customer.id`. Parenthesized expressions like `count: (.count + 1)` explicitly opt into expr-lang evaluation; they can read the current atom input (`.`), original request (`input`), and visible pipeline `as` bindings. A bare field such as `name` remains shorthand for a same-name input reference (`name: .name`). Duplicate argument names are errors. A top-level `... .defaults` entry spreads an object into the call; the spread must resolve to an object, and duplicate keys fail with a collision error. `ArgString`, `ArgInt`, and `ArgBool` schemas reject incompatible literal values at compile time (`ArgInt` also rejects fractional numbers). Dynamic references and expressions remain the receiving action's responsibility at runtime. Unknown action names, invalid modifiers, and unresolved declared capabilities are compile-time errors. For the introductory syntax walkthrough, see [`docs/language.md`](language.md); see also the [argument schema/compiler tests](../compiler/arg_schema.go).
 
 `null` is also a structured data value. In an ordinary unparenthesized value field, a bare identifier or dotted name such as `input.name`, `person`, or `person.name` remains a literal string; it does not look up the original input or a pipeline `as` binding. Declared capability references and known symbols follow their separate data-position rules. This differs from a bare entry such as `name`, which references the same-named field on the current atom input. A qualified `@func` call remains available for named pure helpers; parenthesized `(expr)` values provide the general explicit expression form. See the `@func` section below.
 
-Quoted string values in `@{ ... }` preserve backslash sequences as data: the tested `\n`, `\q`, `\xGG`, and `\uZZZZ` remain verbatim and are neither decoded nor validated as escapes. `@assert` strings are parsed by expr-lang separately; the fixtures verify that `\n` is accepted there and that the three malformed examples are rejected. This clarification does not change other quoted forms or modifier parsing. See [`string_escape_data.nflow`](../extensions/syntax/nflows/string_escape_data.nflow) and the [`q`](../extensions/syntax/nflows/invalid_expr_escape_q.nflow), [`hex`](../extensions/syntax/nflows/invalid_expr_escape_hex.nflow), and [`Unicode`](../extensions/syntax/nflows/invalid_expr_escape_unicode.nflow) expected-error fixtures.
+Quoted strings in parenthesized named arguments preserve backslash sequences as data: the tested `\n`, `\q`, `\xGG`, and `\uZZZZ` remain verbatim and are neither decoded nor validated as escapes. `@assert` strings are parsed by expr-lang separately; the fixtures verify that `\n` is accepted there and that the three malformed examples are rejected. This clarification does not change other quoted forms or modifier parsing. See [`string_escape_data.nflow`](../extensions/syntax/nflows/string_escape_data.nflow) and the [`q`](../extensions/syntax/nflows/invalid_expr_escape_q.nflow), [`hex`](../extensions/syntax/nflows/invalid_expr_escape_hex.nflow), and [`Unicode`](../extensions/syntax/nflows/invalid_expr_escape_unicode.nflow) expected-error fixtures.
 
-The older `action(key=value, ...)` and `action @{ ... }` spellings remain accepted for existing flows; use `action(key: value)` in new code. The old argument block is compatibility-only, not a second preferred form. Ordinary non-`const` `key=value` calls remain warning-free. The const-specific `const(value=...)` and `const(val=...)` forms also retain legacy scalar unwrapping; use a direct typed value for scalars or `const(field: value)` for objects.
+The old `action @{ ... }` spelling is now a compile error with a direct
+replacement hint; use `action(key: value)`. The distinct
+`action(key=value, ...)` spelling remains accepted for existing flows, and
+ordinary non-`const` calls using it remain warning-free. The const-specific
+`const(value=...)` and `const(val=...)` key=value forms still unwrap scalars and
+receive a source-located `nflow lint` warning. Use a direct typed value for a
+scalar or `const(field: value)` for an object.
 
-During the migration release, `nflow lint` reports a source-located warning and
-fix hint for legacy action blocks and const magic-key forms. Ordinary compilation
-continues to accept them during this period. Action argument details are
-assembled in [`compiler/parser.go`](../compiler/parser.go),
+Action argument details are assembled in [`compiler/parser.go`](../compiler/parser.go),
 [`compiler/at_brace.go`](../compiler/at_brace.go), and
 [`compiler/ast_build.go`](../compiler/ast_build.go).
 
@@ -66,14 +69,16 @@ stays a string, and numeric, boolean, `null`, array, and object forms keep their
 written types. For example, `"42"` is text, `42` is an integer, and
 `[1, 2, 3]` is an array. `@config.*`, `@flag.*`, and `@arg.N` references yield
 text; they are never guessed to be numbers, booleans, `null`, or JSON. Convert
-only where the receiving schema and intended data type are known. Legacy
-`const @{...}` blocks and `const(value=...)` / `const(val=...)` still invoke the
-old scalar unwrapping behavior and receive source-located `nflow lint` warnings;
-if both keys appear, `value` wins. Legacy strings can be auto-parsed. The
-`coerce` flag only changes a preserved CLI/config/arg string when it reaches the
-runtime as a boolean `true`; literal `coerce=true` in key=value syntax is text,
-not a boolean. In new colon syntax, `value`, `val`, and `coerce` are ordinary
-object fields, not magic keys.
+only where the receiving schema and intended data type are known. The old
+`const @{...}` form is rejected; use a direct typed value for a scalar
+or parenthesized named arguments to construct an object. The separate
+`const(value=...)` / `const(val=...)` key=value forms still invoke the old scalar
+unwrapping behavior and receive source-located `nflow lint` warnings; if both
+keys appear, `value` wins. Legacy strings can be auto-parsed. The `coerce` flag
+only changes a preserved CLI/config/arg string when it reaches the runtime as a
+boolean `true`; literal `coerce=true` in key=value syntax is text, not a
+boolean. In new colon syntax, `value`, `val`, and `coerce` are ordinary object
+fields, not magic keys.
 
 ### Migration: make conversions explicit
 
@@ -169,7 +174,7 @@ request -> ai.decide as decision
 
 The alias names the immediately preceding step's output; it does not wrap or rewrite the value passed by `->`. A binding is immutable, must be one identifier, and is visible only to later expressions in that pipeline invocation. Duplicate names in one pipeline fail during compilation. The initial request remains available as `input`, while the usual map shorthand, `__root__`, and `__state__` keep their existing meanings. A binding is not added to the pipeline result: return it explicitly in a projection if callers need it. Declared pipelines receive fresh scopes, so their names do not leak to callers. Loop iterations get fresh body-local scopes; they can read earlier outer bindings, but body bindings do not escape the loop. A later `? on_error` handler can read aliases from successful earlier steps; a step that fails does not create its own binding. See the runnable built-in-action example [`named_bindings.nflow`](../extensions/syntax/nflows/named_bindings.nflow) and the [decision-router adaptation](examples/named-bindings-from-decision-router.md).
 
-For a named pipeline, `pipeline.NAME(field: value, ...)` passes its named fields as the complete request object. Argument values such as `.search_text` and `.` are evaluated at runtime against the incoming state; request-schema defaults and validation then apply to the resulting object. This differs from a generic action call such as `action(field: value)`, which merges its fields into the incoming object. The existing `{ ... } -> pipeline.NAME` form is unchanged. The legacy `pipeline.NAME @{...}` spelling remains compatibility-only and receives a lint warning. See the executable [`named_args_runtime_refs.nflow`](../extensions/pipeline/nflows/named_args_runtime_refs.nflow) and [`named_args_legacy_compat.nflow`](../extensions/pipeline/nflows/named_args_legacy_compat.nflow) fixtures.
+For a named pipeline, `pipeline.NAME(field: value, ...)` passes its named fields as the complete request object. Argument values such as `.search_text` and `.` are evaluated at runtime against the incoming state; request-schema defaults and validation then apply to the resulting object. This differs from a generic action call such as `action(field: value)`, which merges its fields into the incoming object. The existing `{ ... } -> pipeline.NAME` form is unchanged. The old `pipeline.NAME @{...}` spelling now fails compilation with a direct replacement hint; use `pipeline.NAME(field: value, ...)`. See the executable [`named_args_runtime_refs.nflow`](../extensions/pipeline/nflows/named_args_runtime_refs.nflow) fixture.
 
 `match` chooses the first matching arm. It accepts predicate arms against the current input, or a subject expression with literal/pattern arms; subject-relative relational arms (`>`, `>=`, `<`, `<=`) compare the evaluated subject with the arm expression. `_` is the default arm:
 
@@ -367,7 +372,7 @@ nflow list --flow path/to/flow.nflow
 - The language is registry-driven: a syntax feature found in a non-default extension is not universally available. Check the active registry instead of inferring availability from a package directory or documentation example.
 - The stock schema feature does not statically type-check future request payloads, reject unknown keys, or enforce application-specific semantics that are not declared as validation tags. Keep those checks in the appropriate runtime action or business rule.
 
-Flow `parallel`, `race`, and `match` expressions may also appear as projection property values. They remain real Flow AST children: they are analyzed and built through the active registry, and each receives the projection’s incoming root as input. Sibling values do not form a sequential dependency chain. The surrounding object expression is still evaluated by expr-lang, so conditional branches remain lazy; control-level `parallel`/`race` use Kernel cancellation and joining, while ordinary object fields are not implicitly concurrent. Typed errors and cancellation propagate. An expr-lang iterator item (for example `#` in `map` or `filter`) is not automatically rebound as the Flow control input: controls use the projection root. This does not make `@{ ... }` an arbitrary interpolation/expression block.
+Flow `parallel`, `race`, and `match` expressions may also appear as projection property values. They remain real Flow AST children: they are analyzed and built through the active registry, and each receives the projection’s incoming root as input. Sibling values do not form a sequential dependency chain. The surrounding object expression is still evaluated by expr-lang, so conditional branches remain lazy; control-level `parallel`/`race` use Kernel cancellation and joining, while ordinary object fields are not implicitly concurrent. Typed errors and cancellation propagate. An expr-lang iterator item (for example `#` in `map` or `filter`) is not automatically rebound as the Flow control input: controls use the projection root. Parenthesized action arguments are also not arbitrary interpolation/expression blocks; calculations must use explicit `(expr)` values.
 
 ## Implementation references
 

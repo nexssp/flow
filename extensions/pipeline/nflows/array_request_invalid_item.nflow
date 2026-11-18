@@ -6,7 +6,8 @@
   :request-schema=[]Item
   runtime.noop
 @end
-const @{ value: [{ name: "" }] }
+const(value: [{ name: "" }])
+  -> pick(field: "value")
 -> pipeline.items ? on_error {
   xerr.KindValidation
     -> { rejected: true },

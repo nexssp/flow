@@ -475,7 +475,7 @@ func (v refValidator) validateExpressionRef(name string) error {
 	if err := v.validateRef(name); err != nil {
 		return err
 	}
-	return xerr.Validation(fmt.Sprintf("embed.%s must be passed as a typed @{ ... } value", name))
+	return xerr.Validation(fmt.Sprintf("embed.%s must be passed as a typed ( ... ) value", name))
 }
 
 func (v refValidator) walk(node compiler.Expr) error {

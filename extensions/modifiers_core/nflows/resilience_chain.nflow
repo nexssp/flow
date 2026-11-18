@@ -10,8 +10,8 @@
 
 @assert: result == "recovered"
 
-runtime.fail:timeout=100ms:retry=2 @{
+runtime.fail :timeout=100ms :retry=2 (
   kind: "Timeout",
   message: "upstream slow",
-}
-|| const @{ value: "recovered" }
+)
+|| const "recovered"

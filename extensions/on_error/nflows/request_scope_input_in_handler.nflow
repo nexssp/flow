@@ -6,11 +6,11 @@
 @pipeline request_scope_input_in_handler
   :request-schema=Request
   cov.typed_projection
-  -> (runtime.fail @{ kind: "Unavailable", message: "expected failure" }
+  -> (runtime.fail ( kind: "Unavailable", message: "expected failure" )
       ? on_error {
         xerr.KindUnavailable
           -> { original_request: input.request }
       })
 @end
-runtime.const @{ value: { request: "original request" } }
+const( request: "original request" )
 -> pipeline.request_scope_input_in_handler

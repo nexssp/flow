@@ -95,6 +95,7 @@ func (f *Formatter) Format(ctx context.Context, source, file string) (string, er
 		return "", err
 	}
 	lines = formatAtBraceBlocks(source, lines)
+	lines = formatParenthesizedArgumentLists(source, lines, multilineStringLines(source, lines))
 	out, err := f.formatLines(lines, file, opaqueSourceLines(source, lines))
 	if err != nil {
 		return "", err
@@ -238,7 +239,42 @@ func opaqueSourceLines(source string, lines []string) map[int]bool {
 			}
 		}
 	}
+	tokens, spans := parenthesizedArgumentSpans(source)
+	for _, span := range spans {
+		first := tokens[span.openIndex].Line
+		last := tokens[span.closeIndex].Line - 1
+		for line := first; line <= last && line < len(lines); line++ {
+			if line >= 0 {
+				opaque[line] = true
+			}
+		}
+	}
 	return opaque
+}
+
+func multilineStringLines(source string, lines []string) map[int]bool {
+	opaque := make(map[int]bool)
+	lexer := compiler.NewLexer(source)
+	for {
+		token := lexer.Next()
+		if token.Type == compiler.TokEOF {
+			return opaque
+		}
+		if token.Type != compiler.TokString {
+			continue
+		}
+		span := strings.Count(token.Lit, "\n")
+		if span == 0 {
+			continue
+		}
+		first := token.Line - 1
+		last := min(len(lines)-1, first+span)
+		for line := first; line <= last; line++ {
+			if line >= 0 {
+				opaque[line] = true
+			}
+		}
+	}
 }
 
 func (f *Formatter) validate(ctx context.Context, lines []string, file string) error {
@@ -302,13 +338,33 @@ func (state *validationState) addLine(index int, line string) {
 
 func (state *validationState) hasUnterminatedArgumentBlock() bool {
 	lexer := compiler.NewLexer(strings.Join(state.segment, "\n"))
+	parenDepth, braceDepth, bracketDepth := 0, 0, 0
 	for {
 		token := lexer.Next()
 		if token.Type == compiler.TokEOF {
-			return false
+			return parenDepth > 0 || braceDepth > 0 || bracketDepth > 0
 		}
 		if token.Type == compiler.TokAtBrace && token.Unterminated {
 			return true
+		}
+		switch token.Type {
+		case compiler.TokLParen:
+			parenDepth++
+		case compiler.TokRParen:
+			parenDepth--
+		case compiler.TokLBrace:
+			braceDepth++
+		case compiler.TokRBrace:
+			braceDepth--
+		case compiler.TokLBracket:
+			bracketDepth++
+		case compiler.TokRBracket:
+			bracketDepth--
+		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
+			compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr,
+			compiler.TokColon, compiler.TokEquals, compiler.TokComma, compiler.TokQuestion,
+			compiler.TokHash, compiler.TokTilde, compiler.TokAtBrace, compiler.TokAtPrompt, compiler.TokInvalid:
+			// Non-delimiter tokens do not affect the tracked depths.
 		}
 	}
 }

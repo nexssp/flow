@@ -27,7 +27,7 @@ func TestEmbedDirectiveCompilesTypedRefWithoutAssetBytesInMeta(t *testing.T) {
 		"assets/logo.svg": &fstest.MapFile{Data: asset},
 	}, "test.static", 128)
 	dt := compiler.NewDirectiveTable(bundle.Directives...)
-	_, meta, err := compiler.Preprocess(t.Context(), dt, "@embed logo \"assets/logo.svg\"\ntest.noop @{ value: embed.logo }", "test.nflow")
+	_, meta, err := compiler.Preprocess(t.Context(), dt, "@embed logo \"assets/logo.svg\"\ntest.noop ( value: embed.logo )", "test.nflow")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestUnknownEmbedNameFailsCompile(t *testing.T) {
 		compiler.DefaultPrimaryExtensions(),
 		compiler.BundleConfig(bundle)...,
 	)
-	_, err = compile.Do(t.Context(), compiler.CompileReq{Source: "@embed declared \"ok.txt\"\ntest.noop @{ value: embed.missing }", Name: "test.nflow"})
+	_, err = compile.Do(t.Context(), compiler.CompileReq{Source: "@embed declared \"ok.txt\"\ntest.noop ( value: embed.missing )", Name: "test.nflow"})
 	if err == nil || !strings.Contains(err.Error(), "unknown embed.missing") {
 		t.Fatalf("compile error = %v, want unknown embed name", err)
 	}
@@ -170,7 +170,7 @@ func TestUnknownEmbedNameFailsCompileWithoutDeclaration(t *testing.T) {
 		compiler.DefaultPrimaryExtensions(),
 		compiler.BundleConfig(bundle)...,
 	)
-	_, err = compile.Do(t.Context(), compiler.CompileReq{Source: "test.noop @{ value: embed.missing }", Name: "test.nflow"})
+	_, err = compile.Do(t.Context(), compiler.CompileReq{Source: "test.noop ( value: embed.missing )", Name: "test.nflow"})
 	if err == nil || !strings.Contains(err.Error(), "unknown embed.missing") {
 		t.Fatalf("compile error = %v, want unknown embed name", err)
 	}
@@ -192,7 +192,7 @@ func TestKnownEmbedCannotBePassedAsLegacyStringParameter(t *testing.T) {
 		compiler.BundleConfig(bundle)...,
 	)
 	_, err = compile.Do(t.Context(), compiler.CompileReq{Source: "@embed declared \"ok.txt\"\ntest.noop(value=embed.declared)", Name: "test.nflow"})
-	if err == nil || !strings.Contains(err.Error(), "typed @{ ... } value") {
+	if err == nil || !strings.Contains(err.Error(), "typed ( ... ) value") {
 		t.Fatalf("compile error = %v, want typed-value guidance", err)
 	}
 }
@@ -212,7 +212,7 @@ func TestKnownEmbedCompilesToTypedRef(t *testing.T) {
 		compiler.DefaultPrimaryExtensions(),
 		compiler.BundleConfig(bundle)...,
 	)
-	result, err := compile.Do(t.Context(), compiler.CompileReq{Source: "@embed declared \"ok.txt\"\ntest.noop @{ value: embed.declared }", Name: "test.nflow"})
+	result, err := compile.Do(t.Context(), compiler.CompileReq{Source: "@embed declared \"ok.txt\"\ntest.noop ( value: embed.declared )", Name: "test.nflow"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestExpressionValidatorIgnoresQuotedTextButRejectsUnknown(t *testing.T) {
 	if err := validateRefs(&compiler.LoopExpr{Until: "embed.loop_missing == true"}, meta); err == nil || !strings.Contains(err.Error(), "unknown embed.loop_missing") {
 		t.Fatalf("unknown loop-condition ref error = %v", err)
 	}
-	if err := validateRefs(&compiler.LoopExpr{Until: "embed.known == true"}, meta); err == nil || !strings.Contains(err.Error(), "typed @{ ... } value") {
+	if err := validateRefs(&compiler.LoopExpr{Until: "embed.known == true"}, meta); err == nil || !strings.Contains(err.Error(), "typed ( ... ) value") {
 		t.Fatalf("known loop-condition ref error = %v, want typed-value guidance", err)
 	}
 }

@@ -12,7 +12,7 @@ func TestRunSourceInProcess_ResumesFromDurableJournal(t *testing.T) {
 	args := []string{"--journal-dir", journalDir, "--execution-id", executionID, "--json"}
 
 	stdout, stderr := captureIO(t, func() {
-		if code := runSourceInProcess(t.Context(), `const @{ value: "saved" }`, "resume.nflow", args); code != 0 {
+		if code := runSourceInProcess(t.Context(), `const "saved"`, "resume.nflow", args); code != 0 {
 			t.Fatalf("first run returned %d", code)
 		}
 	})
@@ -24,7 +24,7 @@ func TestRunSourceInProcess_ResumesFromDurableJournal(t *testing.T) {
 	}
 
 	stdout, stderr = captureIO(t, func() {
-		if code := runSourceInProcess(t.Context(), `const @{ value: "edited" }`, "resume.nflow", args); code != 0 {
+		if code := runSourceInProcess(t.Context(), `const "edited"`, "resume.nflow", args); code != 0 {
 			t.Fatalf("resume returned %d", code)
 		}
 	})
@@ -38,7 +38,7 @@ func TestRunSourceInProcess_ResumesFromDurableJournal(t *testing.T) {
 
 func TestRunSourceInProcess_ExecutionIDRequiresJournal(t *testing.T) {
 	_, stderr := captureIO(t, func() {
-		if code := runSourceInProcess(t.Context(), `const @{ value: "value" }`, "resume.nflow", []string{"--execution-id=run-1"}); code != 2 {
+		if code := runSourceInProcess(t.Context(), `const "value"`, "resume.nflow", []string{"--execution-id=run-1"}); code != 2 {
 			t.Fatalf("run returned %d, want 2", code)
 		}
 	})

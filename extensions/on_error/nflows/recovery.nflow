@@ -1,9 +1,11 @@
 @description "spec: expression error guard catches typed xerr kind"
 
-fail @{ kind: "Unavailable", message: "db node is down" }
+fail ( kind: "Unavailable", message: "db node is down" )
 ? on_error {
-  xerr.KindUnavailable -> const @{ value: "recovered-from-db" },
-  else                 -> const @{ value: "unhandled-failure" }
+  xerr.KindUnavailable
+    -> const "recovered-from-db",
+  else
+    -> const "unhandled-failure"
 }
 
 @assert: result == "recovered-from-db"

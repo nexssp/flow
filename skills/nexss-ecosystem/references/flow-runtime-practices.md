@@ -24,7 +24,7 @@ See the current [CLI guide](https://github.com/nexssp/flow/blob/main/docs/cli.md
 
 ## Respect data and validation boundaries
 
-- `@{ ... }` primarily builds action argument data/references; do not assume it is a general-purpose expression block. Use a projection or supported condition for calculations.
+- Parenthesized action arguments such as `action(key: value)` build typed data and references; they are not a general-purpose expression block. Wrap calculations explicitly as `(expr)` or use a projection or supported condition.
 - `@func` packages a pure expression-level calculation. It does not call actions, perform I/O, or replace a schema or workflow boundary.
 - Request schemas validate and apply defaults at a pipeline input boundary, before the body. A default fills an absent field, not an explicit `null`, `0`, or empty value.
 - Response schemas validate the returned value and do not apply defaults. Prefix a schema with `!` to reject unknown fields at that schema boundary; request and response strictness are independent.

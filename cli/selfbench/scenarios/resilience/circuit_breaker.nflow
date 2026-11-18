@@ -9,5 +9,5 @@
 }
 @description "Circuit-breaker benchmark: trip once, then measure the open-circuit fallback path"
 @assert: result == "recovered"
-fail @{ kind: "Unavailable", message: "deterministic breaker benchmark failure" } :circuit_breaker=bench-open
-|| const @{ value: "recovered" }
+fail ( kind: "Unavailable", message: "deterministic breaker benchmark failure" ) :circuit_breaker=bench-open
+|| const "recovered"

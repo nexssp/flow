@@ -322,7 +322,7 @@ func lintFileWithContext(ctx context.Context, path, src string, cfg runner.Confi
 	var warnings []LintIssue
 	compileOpts := append([]compiler.CompileOption(nil), cfg.CompileOpts...)
 	compileOpts = append(compileOpts, compiler.WithASTContextValidators(func(_ context.Context, ast compiler.Expr, _ map[string]any) error {
-		warnings = append(warnings, legacyArgumentWarnings(path, ast)...)
+		warnings = append(warnings, legacyConstParamsWarnings(path, ast)...)
 		return nil
 	}))
 	cfg.CompileOpts = compileOpts

@@ -69,7 +69,7 @@ func TestBundleWithoutHostRootFailsClosed(t *testing.T) {
 		t.Fatalf("BuildConfig: %v", err)
 	}
 	_, err = runner.Execute(t.Context(), cfg,
-		`config_runtime.load @{ path: "settings.json" }`, "unconfigured.nflow", nil)
+		`config_runtime.load ( path: "settings.json" )`, "unconfigured.nflow", nil)
 	if xerr.KindFrom(err) != xerr.KindUnavailable {
 		t.Fatalf("execution error = %v, want unavailable without a host root", err)
 	}
@@ -88,7 +88,7 @@ func TestLoadRejectsPathTraversal(t *testing.T) {
 	bundle, cfg := buildConfigWithRoot(t, rootPath)
 	closeBundle(t, bundle)
 	for _, path := range []string{"../outside.json", filepath.ToSlash(outsidePath)} {
-		source := `config_runtime.load @{ path: "` + path + `" }`
+		source := `config_runtime.load(path: "` + path + `")`
 		_, err := runner.Execute(t.Context(), cfg, source, "traversal.nflow", nil)
 		if xerr.KindFrom(err) != xerr.KindForbidden {
 			t.Errorf("load path %q error = %v, want forbidden path escape", path, err)
@@ -113,7 +113,7 @@ func TestLoadRejectsSymlinkEscape(t *testing.T) {
 	bundle, cfg := buildConfigWithRoot(t, rootPath)
 	closeBundle(t, bundle)
 	_, err := runner.Execute(t.Context(), cfg,
-		`config_runtime.load @{ path: "escape.json" }`, "symlink.nflow", nil)
+		`config_runtime.load ( path: "escape.json" )`, "symlink.nflow", nil)
 	if err == nil {
 		t.Fatal("loading a symlink outside the host root unexpectedly succeeded")
 	}

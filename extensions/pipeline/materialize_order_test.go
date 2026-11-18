@@ -28,7 +28,7 @@ func TestMaterializeCompilesReverseAlphabeticalDependencies(t *testing.T) {
   pipeline.c
 @end
 @pipeline c
-  runtime.const @{ value: "compiled in dependency order" }
+  const "compiled in dependency order"
 @end
 pipeline.a
 `
@@ -45,10 +45,10 @@ pipeline.a
 func TestMaterializeRetriesDistributeMapForwardPipelineCapability(t *testing.T) {
 	cfg := pipelineTestConfig(t)
 	source := `@pipeline a_process_batch
-  distribute.map @{ action: pipeline.normalize_order, items: [1] }
+  distribute.map ( action: pipeline.normalize_order, items: [1] )
 @end
 @pipeline normalize_order
-  runtime.const @{ value: "normalized" }
+  const "normalized"
 @end
 pipeline.a_process_batch
 `

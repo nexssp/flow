@@ -1,9 +1,10 @@
 @description "Macro: reusable inside a @pipeline definition"
 @macro constant_answer() {
-  const @{ value: 42 }
+  const 42
 }
 @pipeline compute
   @constant_answer()
 @end
 @assert: result == 42
-{} -> pipeline.compute
+{}
+  -> pipeline.compute

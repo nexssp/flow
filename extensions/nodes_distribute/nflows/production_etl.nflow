@@ -27,14 +27,14 @@
 }
 
 # ── 4. Resilient Dispatch via Kernel: Rate-Limited, Retried Fan-Out ──
--> distribute.map @{
+-> distribute.map (
   action: noop,
   items: .premium,
   concurrency: 4,
   rate_limit: 50,
   timeout_ms: 1000,
   retries: 2
-}
+)
 
 # ── 5. Verifications ─────────────────────────────────────────────────
 @assert: result.succeeded == 2

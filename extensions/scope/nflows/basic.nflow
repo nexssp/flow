@@ -1,5 +1,5 @@
 @description "Scope wraps atoms and the pipeline still runs"
 @scope :tag="scoped" {
-  const @{ value: "ok" }
+  const "ok"
 }
 @assert: result == "ok"

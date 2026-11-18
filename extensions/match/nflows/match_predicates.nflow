@@ -2,9 +2,12 @@
 
 { level: 4, danger: true }
 -> match {
-  .danger && .level > 3 -> const @{ value: "critical" },
-  .danger               -> const @{ value: "warning" },
-  _                     -> const @{ value: "nominal" }
+  .danger && .level > 3
+    -> const "critical",
+  .danger
+    -> const "warning",
+  _
+    -> const "nominal"
 }
 
 @assert: result == "critical"

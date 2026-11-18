@@ -17,8 +17,8 @@ func TestFlags_ResolvesKnownFlag(t *testing.T) {
 		source string
 	}{
 		{name: "direct scalar", source: `const @flag.x`},
-		{name: "named reference", source: `const @{ value: @flag.x }`},
-		{name: "quoted reference", source: `const @{ value: "@flag.x" }`},
+		{name: "named reference", source: `const(value: @flag.x) -> pick(field: "value")`},
+		{name: "quoted reference", source: `const(value: "@flag.x") -> pick(field: "value")`},
 		{name: "legacy parameter", source: `const(value=@flag.x)`},
 		{name: "legacy quoted parameter", source: `const(value="@flag.x")`},
 	} {
@@ -34,15 +34,15 @@ func TestFlags_ResolvesKnownFlag(t *testing.T) {
 	}
 }
 
-func TestFlags_ExplicitlyCoercesKnownFlag(t *testing.T) {
+func TestFlagsNamedArgumentsPreserveRawStringType(t *testing.T) {
 	t.Parallel()
 
-	src := `const @{ value: @flag.x, coerce: true }`
+	src := `const(value: @flag.x, coerce: true)`
 	out, _, code := captureLintOutput(t, func() int {
 		return runSourceInProcess(context.Background(), src, "inline", []string{"-x=42", "--json"})
 	})
 	ktest.RequireEqual(t, code, 0)
-	ktest.RequireEqual(t, strings.TrimSpace(out), "42")
+	ktest.RequireEqual(t, strings.TrimSpace(out), `{"coerce":true,"value":"42"}`)
 }
 
 func TestLegacyConstKeyValueMagicParameters(t *testing.T) {
@@ -82,8 +82,8 @@ func TestPositionalArgsRemainStrings(t *testing.T) {
 		source string
 	}{
 		{name: "direct scalar", source: `const @arg.1`},
-		{name: "named reference", source: `const @{ value: @arg.1 }`},
-		{name: "quoted reference", source: `const @{ value: "@arg.1" }`},
+		{name: "named reference", source: `const(value: @arg.1) -> pick(field: "value")`},
+		{name: "quoted reference", source: `const "@arg.1"`},
 		{name: "legacy parameter", source: `const(value=@arg.1)`},
 		{name: "legacy quoted parameter", source: `const(value="@arg.1")`},
 	} {
@@ -99,21 +99,21 @@ func TestPositionalArgsRemainStrings(t *testing.T) {
 	}
 }
 
-func TestPositionalArgs_ExplicitlyCoerce(t *testing.T) {
+func TestPositionalNamedArgumentsPreserveRawStringType(t *testing.T) {
 	t.Parallel()
 
-	src := `const @{ value: @arg.1, coerce: true }`
+	src := `const(value: @arg.1, coerce: true)`
 	out, _, code := captureLintOutput(t, func() int {
 		return runSourceInProcess(context.Background(), src, "inline", []string{"42", "--json"})
 	})
 	ktest.RequireEqual(t, code, 0)
-	ktest.RequireEqual(t, strings.TrimSpace(out), "42")
+	ktest.RequireEqual(t, strings.TrimSpace(out), `{"coerce":true,"value":"42"}`)
 }
 
 func TestFlags_RejectsUnknownFlag(t *testing.T) {
 	t.Parallel()
 
-	src := `const @{ value: "@flag.y" }`
+	src := `const(value: "@flag.y") -> pick(field: "value")`
 	_, stderr, code := captureLintOutput(t, func() int {
 		return runSourceInProcess(context.Background(), src, "inline", []string{"-x=42"})
 	})
@@ -125,7 +125,7 @@ func TestFlags_RejectsUnknownFlag(t *testing.T) {
 func TestFlags_RejectsWhenNoFlagsPassed(t *testing.T) {
 	t.Parallel()
 
-	src := `const @{ value: "@flag.debug" }`
+	src := `const(value: "@flag.debug") -> pick(field: "value")`
 	_, stderr, code := captureLintOutput(t, func() int {
 		return runSourceInProcess(context.Background(), src, "inline", []string{"--json"})
 	})

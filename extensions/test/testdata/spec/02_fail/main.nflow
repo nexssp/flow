@@ -1,2 +1,2 @@
-const @{ value: "not-ok" }
+const "not-ok"
 @test: result == "ok"

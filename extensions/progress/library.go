@@ -12,8 +12,8 @@
 //	@require progress
 //
 //	{ duration_ms: 2000 }
-//	-> progress.wrap @{ action: runtime.sleep, message: "Slow op" }
-//	-> progress.step @{ message: "Ready" }
+//	-> progress.wrap(action: sleep, message: "Slow op")
+//	-> progress.step(message: "Ready")
 package progress
 
 import (

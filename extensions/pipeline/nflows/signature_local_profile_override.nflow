@@ -22,6 +22,6 @@
   :profile=defaults
   noop
 @end
-const @{ value: { name: "Lin" } }
+const( name: "Lin" )
   -> pipeline.local_before_profile
 @assert: result.name == "Lin"

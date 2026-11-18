@@ -4,7 +4,8 @@
 }
 @pipeline items
   :response-schema=[]Item
-  runtime.const @{ value: [{ name: "Ada" }, { name: "Lin" }] }
+  const(value: [{ name: "Ada" }, { name: "Lin" }])
+    -> pick(field: "value")
 @end
 pipeline.items
 @assert: result[0].name == "Ada"

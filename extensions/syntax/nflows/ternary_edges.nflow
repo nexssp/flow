@@ -1,7 +1,7 @@
 @description "Ternary right associativity and colon data execute as expected"
 @assert: result == "inner-then"
-runtime.const @{ value: false }
-? runtime.const @{ value: "outer" }
-: runtime.const @{ value: true }
-  ? runtime.const @{ value: "inner-then" }
-  : runtime.const @{ value: "inner-else" }
+const false
+? const "outer"
+: const true
+  ? const "inner-then"
+  : const "inner-else"

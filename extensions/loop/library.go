@@ -5,7 +5,7 @@
 // Typical use:
 //
 //	{ n: 0 } -> loop( { n: .n + 1 } ) until( .n >= 3 )
-//	pick @{ field: "samples" } -> each :concurrency=4 { analyze_sample }
+//	pick(field: "samples") -> each :concurrency=4 { analyze_sample }
 //
 // DSL fixtures live under nflows/ and are discovered by
 // compiler.Bundle.AllSelfTests; there is no inline SelfTest.

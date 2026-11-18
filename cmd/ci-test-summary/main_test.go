@@ -13,14 +13,39 @@ import (
 
 func TestHarnessTestCommandSkipsOnlyNFlowConformanceWhenRequested(t *testing.T) {
 	t.Setenv(skipTestAllNFlowConformanceEnv, "")
-	ktest.RequireEqual(t, newHarnessTestCommand(context.Background()).Args, []string{
+	ktest.RequireEqual(t, newHarnessTestCommand(context.Background(), []string{"./builder", "./cli/..."}).Args, []string{
 		"go", "test", "-json", "-count=1", "./builder", "./cli/...",
 	})
 
 	t.Setenv(skipTestAllNFlowConformanceEnv, "1")
-	ktest.RequireEqual(t, newHarnessTestCommand(context.Background()).Args, []string{
+	ktest.RequireEqual(t, newHarnessTestCommand(context.Background(), []string{"./builder", "./cli/..."}).Args, []string{
 		"go", "test", "-json", "-count=1", "-skip=" + testAllNFlowConformanceSkipRegex, "./builder", "./cli/...",
 	})
+}
+
+func TestHarnessTestPackagesSelectsCIJobScope(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		args     []string
+		want     []string
+		wantFail bool
+	}{
+		{name: "default", want: []string{"./builder", "./cli/..."}},
+		{name: "builder", args: []string{"builder"}, want: []string{"./builder"}},
+		{name: "cli", args: []string{"cli"}, want: []string{"./cli/..."}},
+		{name: "unknown scope", args: []string{"runner"}, wantFail: true},
+		{name: "multiple scopes", args: []string{"builder", "cli"}, wantFail: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := harnessTestPackages(tc.args)
+			if tc.wantFail {
+				ktest.RequireErrorContains(t, err, "usage: go run ./cmd/ci-test-summary [builder|cli]")
+				return
+			}
+			ktest.RequireNoError(t, err)
+			ktest.RequireEqual(t, got, tc.want)
+		})
+	}
 }
 
 func TestFailureSummaryShowsFailingTestWithoutPassingNoise(t *testing.T) {

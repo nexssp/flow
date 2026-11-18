@@ -1,6 +1,6 @@
 @description "Short form ? on_error target recovers from any error"
 @pipeline recover
-  runtime.const @{ value: "recovered" }
+  const "recovered"
 @end
 @assert: result == "recovered"
-runtime.fail @{ kind: "Internal", message: "boom" } ? on_error pipeline.recover
+runtime.fail ( kind: "Internal", message: "boom" ) ? on_error pipeline.recover

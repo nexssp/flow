@@ -9,22 +9,22 @@ import (
 )
 
 // Flatten unwraps a struct into a map so its fields become top-level
-// keys in downstream @{} payloads.
+// keys in downstream parenthesized action arguments.
 //
 // Why this exists: a pipe carries typed values. When an action returns
 // a struct (distribute.map returns DistributeMapRes, a custom action
-// returns its own DTO), the next action's @{} args are merged on top of
+// returns its own DTO), the next action's named arguments are merged on top of
 // a wrapper map, not the struct's fields. A ref like `items` or
-// `.items` in the following @{} atom does not reach the struct field.
+// `.items` in the following parenthesized call does not reach the struct field.
 //
 // Flatten solves it with one explicit step: marshal the struct to JSON,
 // unmarshal it as a map, hand the map downstream. Now every field is a
-// top-level key and @{} refs work as expected.
+// top-level key and named-argument references work as expected.
 //
 // map[string]any passes through untouched. Slices, primitives, and nil
 // pass through untouched. Only structs (and pointers to structs) are
 // converted, because they are the only shape whose fields cannot be
-// addressed by downstream @{} refs.
+// addressed by downstream named-argument references.
 var Flatten = action.New("runtime.flatten", func(_ context.Context, in any) (any, error) {
 	if in == nil {
 		return in, nil

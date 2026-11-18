@@ -75,7 +75,7 @@ func TestReadRunInput_PreserveStdin(t *testing.T) {
 func TestRunSource_SuppressOutput(t *testing.T) {
 	withStdin(t, "")
 	out := captureStdout(t, func() {
-		rc := runSourceInProcess(t.Context(), `runtime.const @{ value: "hidden" }`, "suppress-output.nflow", []string{"--suppress-output"})
+		rc := runSourceInProcess(t.Context(), `const "hidden"`, "suppress-output.nflow", []string{"--suppress-output"})
 		ktest.RequireEqual(t, rc, 0)
 	})
 	ktest.RequireEqual(t, out, "")
@@ -83,7 +83,7 @@ func TestRunSource_SuppressOutput(t *testing.T) {
 
 func TestRunSource_SuppressOutputPreservesDirectStdout(t *testing.T) {
 	withStdin(t, "")
-	source := `runtime.const @{ value: "runner-result" } -> runtime.print @{ stream: "stdout", label: "direct-stdout" }`
+	source := `const "runner-result" -> runtime.print ( stream: "stdout", label: "direct-stdout" )`
 	suppressed := captureStdout(t, func() {
 		rc := runSourceInProcess(t.Context(), source, "direct-stdout.nflow", []string{"--json", "--suppress-output"})
 		ktest.RequireEqual(t, rc, 0)

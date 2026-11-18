@@ -3,5 +3,5 @@
 @assert: !("message" in result)
 @assert: !("action" in result)
 { ok: true }
--> progress.step @{ message: "Validation step" }
--> progress.wrap @{ action: runtime.noop, message: "Wrapped noop" }
+-> progress.step ( message: "Validation step" )
+-> progress.wrap ( action: runtime.noop, message: "Wrapped noop" )

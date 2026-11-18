@@ -4,7 +4,8 @@
   name string
 }
 @func commerce.echo(value string) string = value
-@pipeline typed_argument_spread_expression :request-schema=!TypedSpreadInput
-  runtime.const @{ ... { payload: [commerce.echo(.missing)] } }
+@pipeline typed_argument_spread_expression
+  :request-schema=!TypedSpreadInput
+  runtime.const ( ... { payload: [commerce.echo(.missing)] } )
 @end
 pipeline.typed_argument_spread_expression

@@ -228,8 +228,8 @@ func missingCapabilityFieldError(atom *Atom, field ArgFieldSpec) error {
 		example = "[runtime.fail, runtime.const]"
 	}
 	return SourceError(atom.Pos,
-		`%s: field %q is a required capability reference and must be declared in the atom's @{ ... } block, not supplied only through pipeline input`+
-			"\n  hint: %s @{ %s: %s }",
+		`%s: field %q is a required capability reference and must be declared in the atom's named arguments, not supplied only through pipeline input`+
+			"\n  hint: %s ( %s: %s )",
 		atom.Name, field.Name, atom.Name, field.Name, example)
 }
 

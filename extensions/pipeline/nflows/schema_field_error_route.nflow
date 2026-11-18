@@ -16,20 +16,20 @@
   @on_error {
     when error.kind == xerr.KindValidation -> pipeline.inner_body_recovery
   }
-  const @{ id: "task-1" }
+  const ( id: "task-1" )
 @end
 
 @pipeline inner_body_recovery
-  const @{ route: "inner-body-catch" }
+  const ( route: "inner-body-catch" )
 @end
 @pipeline request_schema_recovery
-  const @{ route: "request-schema", kind: "Validation" }
+  const ( route: "request-schema", kind: "Validation" )
 @end
 @pipeline email_field_recovery
-  const @{ route: "email-field", kind: "Validation" }
+  const ( route: "email-field", kind: "Validation" )
 @end
 @pipeline response_schema_recovery
-  const @{ route: "response-schema", kind: "Validation" }
+  const ( route: "response-schema", kind: "Validation" )
 @end
 
 @on_error {
@@ -39,7 +39,8 @@
   else -> error.info
 }
 
-{ email: "not-an-email", title: "Boundary test" } -> pipeline.create_task
+{ email: "not-an-email", title: "Boundary test" }
+  -> pipeline.create_task
 
 @assert: result.route == "email-field"
 @assert: result.kind == "Validation"

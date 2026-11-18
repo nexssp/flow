@@ -2,7 +2,7 @@
 //
 // Typical use:
 //
-//	fs.walk -> stream.batch @{ size: 100 } -> process
+//	fs.walk -> stream.batch(size: 100) -> process
 package stream_ops
 
 import (

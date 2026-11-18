@@ -10,21 +10,28 @@ import (
 	"github.com/nexssp/kernel/xtest/ktest"
 )
 
-func TestLintWarnsOnLegacyArgumentBlocksAtTokenLocation(t *testing.T) {
-	source := `runtime.noop @{ key: "x" } -> const @{ value: "x" }`
-	issues := lintOne(t, source)
-	ktest.RequireLen(t, issues, 2)
-
-	wantColumns := []int{strings.Index(source, "@{") + 1, strings.LastIndex(source, "@{") + 1}
-	for i, issue := range issues {
-		ktest.RequireEqual(t, issue.File, "test.nflow")
-		ktest.RequireEqual(t, issue.Line, 1)
-		ktest.RequireEqual(t, issue.Column, wantColumns[i])
-		ktest.RequireEqual(t, issue.Kind, lintIssueWarning)
-		ktest.RequireStringContains(t, issue.Message, "hint:")
+func TestLintRejectsLegacyArgumentBlocksWithReplacementHints(t *testing.T) {
+	for _, tc := range []struct {
+		source string
+		want   string
+	}{
+		{
+			source: `wrap @{ key: "greeting" }`,
+			want:   "legacy `@{...}` arguments are not supported; replace them with `wrap(key: value)`",
+		},
+		{
+			source: `const @{ value: "Julia" }`,
+			want:   "legacy `const @{...}` arguments are not supported; use `const <value>` for a scalar or `const(key: value)` to construct an object",
+		},
+	} {
+		t.Run(tc.source, func(t *testing.T) {
+			issues := lintOne(t, tc.source)
+			ktest.RequireLen(t, issues, 1)
+			ktest.RequireEqual(t, issues[0].File, "test.nflow")
+			ktest.RequireEqual(t, issues[0].Kind, lintIssueCompile)
+			ktest.RequireStringContains(t, issues[0].Message, tc.want)
+		})
 	}
-	ktest.RequireStringContains(t, issues[0].Message, "runtime.noop(key: value)")
-	ktest.RequireStringContains(t, issues[1].Message, "contained literal or reference")
 }
 
 func TestLintWarnsOnLegacyConstKeyValueMagicParameters(t *testing.T) {
@@ -75,29 +82,29 @@ func TestLintDoesNotWarnOnParenthesizedOrKeyEqualsCallsOrExpressionPipes(t *test
 		`{ items: [{ line: 1, severity: "low" }, { line: 2, severity: "high" }] } -> { top: items | filter(#.severity == "high") | sortBy(#.line, "desc") | take(1) }`,
 	} {
 		if issues := lintOne(t, source); len(issues) != 0 {
-			t.Errorf("lint(%q) = %#v, want no warnings", source, issues)
+			t.Errorf("lint(%q) = %#v, want no warnings or errors", source, issues)
 		}
 	}
 }
 
-func TestLintWarningsDoNotFailLintCommand(t *testing.T) {
+func TestLintCommandReportsLegacyArgumentCompileError(t *testing.T) {
+	const source = `runtime.noop @{ key: "x" }`
 	path := filepath.Join(t.TempDir(), "legacy.nflow")
-	if err := os.WriteFile(path, []byte(`runtime.noop @{ key: "x" }`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	stdout, stderr, exitCode := captureLintOutput(t, func() int {
 		return runLint([]string{path})
 	})
-	ktest.RequireEqual(t, exitCode, 0)
+	ktest.RequireEqual(t, exitCode, 1)
 	ktest.RequireEqual(t, stderr, "")
 
 	var issues []LintIssue
 	if err := json.Unmarshal([]byte(stdout), &issues); err != nil {
-		t.Fatalf("decode lint warnings: %v\nstdout: %s", err, stdout)
+		t.Fatalf("decode lint issues: %v\nstdout: %s", err, stdout)
 	}
 	ktest.RequireLen(t, issues, 1)
-	ktest.RequireEqual(t, issues[0].Kind, lintIssueWarning)
-	ktest.RequireEqual(t, issues[0].Line, 1)
-	ktest.RequireEqual(t, issues[0].Column, strings.Index(`runtime.noop @{ key: "x" }`, "@{")+1)
+	ktest.RequireEqual(t, issues[0].Kind, lintIssueCompile)
+	ktest.RequireStringContains(t, issues[0].Message, "replace them with `noop(key: value)`")
 }

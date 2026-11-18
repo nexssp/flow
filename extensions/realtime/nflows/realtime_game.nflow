@@ -1,8 +1,8 @@
 @description "spec: authoritative 60Hz game loop with fixed-timesteps, abilities, and broadcast"
 
 # ── Step 1: Drive Game Simulation at 60Hz (Capped to 3 ticks for test)
-realtime.ticks @{ hz: 60, max_catchup_ms: 32 }
--> stream.take @{ count: 3 }
+realtime.ticks ( hz: 60, max_catchup_ms: 32 )
+-> stream.take ( count: 3 )
 -> collect
 
 # ── Step 2-3: Step world physics, resolve cooldowns, and reshape ──────

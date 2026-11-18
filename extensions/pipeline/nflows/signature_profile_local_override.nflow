@@ -22,6 +22,6 @@
   :response-schema=!LocalResponse
   noop
 @end
-const @{ value: { name: "Ada" } }
+const( name: "Ada" )
   -> pipeline.profile_before_local
 @assert: result.name == "Ada"

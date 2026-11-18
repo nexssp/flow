@@ -86,8 +86,8 @@ func collectBuildTokens(source string, names map[string]bool, types map[TokenTyp
 					modifiers[tok.Lit] = true
 				}
 			}
-			// @{...} contains embedded Flow syntax and is opaque to the
-			// enclosing lexer; re-lex its body without treating strings as names.
+			// A legacy @{...} token is rejected later by the parser, but its
+			// embedded body is opaque here; re-lex it to preserve usage analysis.
 			if tok.Type == TokAtBrace {
 				collect(tok.Lit)
 			}

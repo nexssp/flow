@@ -7,11 +7,16 @@
   completed: "COMPLETED"
 }
 
-{ state: "APPROVED" } -> match {
-  .state == status.approved  -> const @{ value: "proceed" },
-  .state == status.pending   -> const @{ value: "wait" },
-  .state == status.rejected  -> const @{ value: "halt" },
-  _                          -> const @{ value: "unknown" }
+{ state: "APPROVED" }
+  -> match {
+  .state == status.approved
+    -> const "proceed",
+  .state == status.pending
+    -> const "wait",
+  .state == status.rejected
+    -> const "halt",
+  _
+    -> const "unknown"
 }
 
 @assert: result == "proceed"

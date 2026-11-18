@@ -421,7 +421,7 @@ func TestMaybeLaunchToolchainUsesExactOverrideAndStripsSelectorForHandoff(t *tes
 	t.Cleanup(func() { runResolvedCoreProcess = oldRunner })
 
 	root := t.TempDir()
-	source := []byte("@nflow_version \">=0.44.0 <0.45.0\"\nconst @{ value: \"ok\" }\n")
+	source := []byte("@nflow_version \">=0.44.0 <0.45.0\"\nconst \"ok\"\n")
 	path := filepath.Join(root, "workflow.nflow")
 	if err := os.WriteFile(path, source, 0o600); err != nil {
 		t.Fatal(err)
@@ -469,7 +469,7 @@ func TestToolchainCurrentCompatibleFmtLintRunDoNotDownloadOrModifyFiles(t *testi
 	t.Cleanup(func() { createToolchainResolver = oldFactory })
 
 	root := t.TempDir()
-	source := []byte("@nflow_version \">=0.44.0 <0.45.0\"\nconst @{ value: \"ok\" }\n")
+	source := []byte("@nflow_version \">=0.44.0 <0.45.0\"\nconst \"ok\"\n")
 	path := filepath.Join(root, "workflow.nflow")
 	if err := os.WriteFile(path, source, 0o600); err != nil {
 		t.Fatal(err)

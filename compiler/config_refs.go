@@ -162,7 +162,7 @@ func validateAllFlagRefs(ast Expr, cliArgs []string) error {
 }
 
 // walkAtomValues visits every string-carrying position on one atom:
-// legacy parenthesised params, @{...} args (recursively), and modifier
+// parenthesized params, named arguments (recursively), and modifier
 // values. It never descends into Value kinds that cannot hold a textual
 // reference (numbers, bools, state references).
 func walkAtomValues(atom *Atom, visit func(raw, where string) error) error {

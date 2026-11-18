@@ -74,8 +74,8 @@ func TestFormatContinuationEdgesDoNotAddTrailingWhitespace(t *testing.T) {
 }
 
 func TestFormatDeclarationHeadersKeepsModifierOrderAndComments(t *testing.T) {
-	input := "@profile reliable:timeout=2s:retry=4\n@pipeline fetch:profile=reliable\n  # header note\n  :tag=api:retry=2\n  http.request @{ url: \"https://api.example/x:y\" }\n@end\n"
-	want := "@profile reliable\n  :timeout=2s\n  :retry=4\n@pipeline fetch\n  :profile=reliable\n  # header note\n  :tag=api\n  :retry=2\n  http.request @{ url: \"https://api.example/x:y\" }\n@end\n"
+	input := "@profile reliable:timeout=2s:retry=4\n@pipeline fetch:profile=reliable\n  # header note\n  :tag=api:retry=2\n  http.request ( url: \"https://api.example/x:y\" )\n@end\n"
+	want := "@profile reliable\n  :timeout=2s\n  :retry=4\n@pipeline fetch\n  :profile=reliable\n  # header note\n  :tag=api\n  :retry=2\n  http.request ( url: \"https://api.example/x:y\" )\n@end\n"
 	got, err := testFormatter().Format(t.Context(), input, "headers.nflow")
 	if err != nil {
 		t.Fatal(err)
@@ -127,8 +127,8 @@ func TestFormatPipelineSignatureHeaders(t *testing.T) {
 }
 
 func TestFormatPreservesStringsCommentsAndExpressionText(t *testing.T) {
-	input := "// comment: keep\nservice.call:desc=\"Maks: ingest, Julia: verify\" @{ text: \"x:y -> z\" } # tail\n"
-	want := "// comment: keep\nservice.call :desc=\"Maks: ingest, Julia: verify\" @{ text: \"x:y -> z\" } # tail\n"
+	input := "// comment: keep\nservice.call:desc=\"Maks: ingest, Julia: verify\" ( text: \"x:y -> z\" ) # tail\n"
+	want := "// comment: keep\nservice.call :desc=\"Maks: ingest, Julia: verify\" ( text: \"x:y -> z\" ) # tail\n"
 	got, err := testFormatter().Format(t.Context(), input, "strings.nflow")
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +164,7 @@ func TestHashCommentDetectionMatchesCompilerLexer(t *testing.T) {
 }
 
 func TestFormatPreservesTernarySeparator(t *testing.T) {
-	input := "runtime.const @{ value: condition ? yes : no }\n"
+	input := "const(value: condition ? yes : no) -> pick(field: \"value\")\n"
 	got, err := testFormatter().Format(t.Context(), input, "ternary.nflow")
 	if err != nil {
 		t.Fatal(err)
@@ -254,10 +254,10 @@ func TestFormatUsesRequireDirectiveParserForInlineAndMultilineOptions(t *testing
 		source string
 	}{{
 		name:   "inline",
-		source: "@require example.com/http as http { addr: \"127.0.0.1:8080\" }\nruntime.const @{ value: true }\n",
+		source: "@require example.com/http as http { addr: \"127.0.0.1:8080\" }\nconst true\n",
 	}, {
 		name:   "multiline",
-		source: "@require example.com/http as http\n{\n  addr: \"127.0.0.1:8080\",\n  timeout: \"5s\"\n}\nruntime.const @{ value: true }\n",
+		source: "@require example.com/http as http\n{\n  addr: \"127.0.0.1:8080\",\n  timeout: \"5s\"\n}\nconst true\n",
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -357,7 +357,7 @@ func TestFormatPreservesOnErrorDirectiveBlock(t *testing.T) {
 func TestFormatValidatesScopeExpressionInsidePipeline(t *testing.T) {
 	input := "@pipeline scoped_example\n" +
 		"  @scope :retry=3 :timeout=1s {\n" +
-		"    const @{ value: \"scoped\" }\n" +
+		"    const \"scoped\"\n" +
 		"  }\n" +
 		"  -> { scoped: .value }\n" +
 		"@end\n"
@@ -378,7 +378,7 @@ func TestFormatTemplateRenderArgumentBlockWithBlankLines(t *testing.T) {
 	template := `Hi {{.customer}},\n\nYour order {{.order_id}} is confirmed. Estimated delivery: {{.delivery_date}}.\n\nItems:\n{{range .items}}- {{.}}\n{{end}}\nThanks,\n{{.store}}`
 	input := "@description \"Draft an order confirmation\"\n" +
 		"@require template\n\n" +
-		"template.render @{\n" +
+		"template.render(\n" +
 		"  template: \"" + template + "\",\n" +
 		"  variables: {\n" +
 		"    customer: \"Ada Lovelace\",\n\n\n" +
@@ -386,10 +386,10 @@ func TestFormatTemplateRenderArgumentBlockWithBlankLines(t *testing.T) {
 		"    delivery_date: \"Tuesday, Oct 28\",\n" +
 		"    items: [\"Notebook\", \"Pen\"],\n" +
 		"    store: \"Northstar\"\n" +
-		"  }\n}\n"
+		"  }\n)\n"
 	want := "@description \"Draft an order confirmation\"\n" +
 		"@require template\n\n" +
-		"template.render @{\n" +
+		"template.render(\n" +
 		"  template: \"" + template + "\",\n" +
 		"  variables: {\n" +
 		"    customer: \"Ada Lovelace\",\n\n" +
@@ -397,7 +397,7 @@ func TestFormatTemplateRenderArgumentBlockWithBlankLines(t *testing.T) {
 		"    delivery_date: \"Tuesday, Oct 28\",\n" +
 		"    items: [\"Notebook\", \"Pen\"],\n" +
 		"    store: \"Northstar\"\n" +
-		"  }\n}\n"
+		"  }\n)\n"
 
 	got, err := testFormatter().Format(t.Context(), input, "test-template.nflow")
 	if err != nil {
@@ -419,8 +419,8 @@ func TestFormatTemplateRenderArgumentBlockWithBlankLines(t *testing.T) {
 }
 
 func TestFormatReindentsNestedArgumentBraces(t *testing.T) {
-	input := "runtime.const @{\nvalue: {\nanswer: 42\n}\n}\n"
-	want := "runtime.const @{\n  value: {\n    answer: 42\n  }\n}\n"
+	input := "const(\nnested: {\nanswer: 42\n}\n)\n"
+	want := "const(\n  nested: {\n    answer: 42\n  }\n)\n"
 	got, err := testFormatter().Format(t.Context(), input, "argument-block.nflow")
 	if err != nil {
 		t.Fatal(err)
@@ -431,7 +431,7 @@ func TestFormatReindentsNestedArgumentBraces(t *testing.T) {
 }
 
 func TestFormatPreservesMultilineProjectionText(t *testing.T) {
-	input := "runtime.const @{ value: `first\n  second->third:keep\nlast` }\n"
+	input := "const `first\n  second->third:keep\nlast`\n"
 	got, err := testFormatter().Format(t.Context(), input, "multiline.nflow")
 	if err != nil {
 		t.Fatal(err)

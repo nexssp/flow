@@ -4,5 +4,5 @@
   reason: confirm the transfer
   expires: 30m
 }
-const @{ value: "declaration loaded" }
+const "declaration loaded"
 @assert: result == "declaration loaded"

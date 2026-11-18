@@ -3,8 +3,8 @@
   result.symbol == "ACME/USD"
   result.price == 41.9
 }
-const @{
+const (
   symbol: "ACME/USD",
   price: 41.9,
   status: "snapshot-loaded"
-}
+)

@@ -1,4 +1,4 @@
 @description "Parallel ampersand joins both branch results under canonical action keys"
 @assert: result["runtime.const#1"] == "left"
 @assert: result["runtime.const#2"] == "right"
-( runtime.const @{ value: "left" } & runtime.const @{ value: "right" } )
+( const "left" & const "right" )

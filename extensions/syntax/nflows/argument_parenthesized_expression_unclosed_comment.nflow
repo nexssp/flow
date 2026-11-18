@@ -1,3 +1,3 @@
 @description "Unclosed block comments in parenthesized argument expressions fail compilation"
-# @expect-compile-error unterminated argument block; expected '}'
-const @{ value: (1 /* unclosed ) }
+# @expect-compile-error unclosed block comment in parenthesized expression
+const(value: (1 /* unclosed )

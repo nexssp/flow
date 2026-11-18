@@ -12,8 +12,9 @@
   :retry=1
   :circuit_breaker=benchmark-read
   :concurrency=4
-@pipeline benchmark :profile=benchmark_read
-  const @{ status: "ok", scenario: "resilient" }
+@pipeline benchmark
+  :profile=benchmark_read
+  const ( status: "ok", scenario: "resilient" )
 @end
 @assert: result.status == "ok"
 @assert: result.scenario == "resilient"

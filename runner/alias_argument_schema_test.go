@@ -30,7 +30,7 @@ func TestAliasedBundleArgumentSchemasRemainEnforced(t *testing.T) {
 		t.Fatalf("BuildConfig: %v", err)
 	}
 
-	if _, err := runner.Compile(t.Context(), cfg, "local.wrap @{ action: runtime.noop }", "aliased-schema.nflow"); err != nil {
+	if _, err := runner.Compile(t.Context(), cfg, "local.wrap ( action: runtime.noop )", "aliased-schema.nflow"); err != nil {
 		t.Fatalf("valid aliased capability reference failed to compile: %v", err)
 	}
 
@@ -39,8 +39,8 @@ func TestAliasedBundleArgumentSchemasRemainEnforced(t *testing.T) {
 		source string
 		want   string
 	}{
-		{name: "required field", source: "local.wrap @{}", want: "required capability reference"},
-		{name: "quoted reference", source: `local.wrap @{ action: "runtime.noop" }`, want: "use a bare capability reference"},
+		{name: "required field", source: "local.wrap ()", want: "required capability reference"},
+		{name: "quoted reference", source: `local.wrap ( action: "runtime.noop" )`, want: "use a bare capability reference"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

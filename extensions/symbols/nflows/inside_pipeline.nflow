@@ -6,12 +6,16 @@
 }
 
 @pipeline classify
-  { amount: "1000" } -> match {
-    .amount == thresholds.high_value -> const @{ value: "over_high_value" },
-    _                                -> const @{ value: "under_high_value" }
+  { amount: "1000" }
+    -> match {
+    .amount == thresholds.high_value
+      -> const "over_high_value",
+    _
+      -> const "under_high_value"
   }
 @end
 
-{} -> pipeline.classify
+{}
+  -> pipeline.classify
 
 @assert: result == "over_high_value"

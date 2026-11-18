@@ -1,11 +1,17 @@
 @description "Recover a domainless action by Kernel error kind and continue"
 @assert: result == "deferred"
 
-fail @{ kind: "Timeout", message: "temporary processing failure" } ? on_error {
-  xerr.KindTimeout -> match(.error.kind) {
-    xerr.KindTimeout -> const @{ value: "deferred" },
-    default -> const @{ value: "unexpected kind" }
+fail ( kind: "Timeout", message: "temporary processing failure" ) ? on_error {
+  xerr.KindTimeout
+    -> match(.error.kind) {
+    xerr.KindTimeout
+      -> const "deferred",
+    default
+      -> const "unexpected kind"
   },
-  xerr.KindNotFound -> const @{ value: "missing" },
-  else -> const @{ value: "failed" }
-} -> noop
+  xerr.KindNotFound
+    -> const "missing",
+  else
+    -> const "failed"
+}
+  -> noop

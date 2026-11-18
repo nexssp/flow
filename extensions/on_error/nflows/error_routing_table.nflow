@@ -7,11 +7,11 @@
 # optional; without it, unmatched errors propagate unchanged.
 
 @pipeline on_timeout
-  const @{ value: "timeout-recovered" }
+  const "timeout-recovered"
 @end
 
 @pipeline on_missing
-  const @{ value: "missing-recovered" }
+  const "missing-recovered"
 @end
 
 @on_error {
@@ -22,4 +22,4 @@
 
 @assert: result == "timeout-recovered"
 
-fail @{ kind: "Timeout", message: "slow upstream" }
+fail ( kind: "Timeout", message: "slow upstream" )

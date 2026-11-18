@@ -52,7 +52,7 @@ func TestParseExplainOptions_RejectsConflictingViews(t *testing.T) {
 
 func TestExplainActionGraph_TextJSONAndDOT(t *testing.T) {
 	cfg := explainConfig(t)
-	source := `noop @{ authorization: "must-not-appear" } -> noop`
+	source := `noop ( authorization: "must-not-appear" ) -> noop`
 	var text bytes.Buffer
 	if err := renderExplainActionGraph(context.Background(), &text, cfg, source, "test.nflow", false, false); err != nil {
 		t.Fatal(err)
@@ -140,8 +140,8 @@ pipeline.work`
 
 func TestExplainActionGraph_DescribesNamedParallelBranches(t *testing.T) {
 	source := `parallel {
-  profile: runtime.const @{ value: "profile-secret" },
-  metrics: runtime.const @{ value: "metrics-secret" },
+  profile: const "profile-secret",
+  metrics: const "metrics-secret",
 }`
 	graph := compileExplainGraph(t, explainConfig(t), source)
 	if graph.Nodes[0].Kind != "parallel.named" {
@@ -155,10 +155,10 @@ func TestExplainActionGraph_DescribesNamedParallelBranches(t *testing.T) {
 
 func TestExplainActionGraph_DescribesMatchWithoutConditions(t *testing.T) {
 	cfg := explainConfigWithBundles(t, match.Bundle(nil))
-	source := `const @{ value: { status: "ACTIVE" } }
+	source := `const( status: "ACTIVE" )
 -> match(.status) {
-  "ACTIVE" -> const @{ value: "running-secret" },
-  _ -> const @{ value: "other-secret" }
+  "ACTIVE" -> const "running-secret",
+  _ -> const "other-secret"
 }`
 	graph := compileExplainGraph(t, cfg, source)
 	matchNode := findGraphNodeKind(graph, "match")
@@ -173,9 +173,9 @@ func TestExplainActionGraph_DescribesMatchWithoutConditions(t *testing.T) {
 
 func TestExplainActionGraph_DescribesErrorRecoveryBranches(t *testing.T) {
 	cfg := explainConfigWithBundles(t, on_error.Bundle(nil))
-	source := `fail @{ kind: "Unavailable", message: "db node is down" } ? on_error {
-  xerr.KindUnavailable -> runtime.const @{ value: "recovered-secret" },
-  else -> runtime.const @{ value: "fallback-secret" }
+	source := `fail ( kind: "Unavailable", message: "db node is down" ) ? on_error {
+  xerr.KindUnavailable -> const "recovered-secret",
+  else -> const "fallback-secret"
 }`
 	graph := compileExplainGraph(t, cfg, source)
 	node := findGraphNodeKind(graph, "error_recovery")
@@ -223,7 +223,7 @@ func TestCompileActionIntrospectionIsOptIn(t *testing.T) {
 
 func TestExplainActionPlan_IsSeparateAndOmitsModifiers(t *testing.T) {
 	cfg := explainConfig(t)
-	source := `noop @{ authorization: "must-not-appear" } -> noop`
+	source := `noop ( authorization: "must-not-appear" ) -> noop`
 	var output bytes.Buffer
 	if err := renderExplainActionPlan(context.Background(), &output, cfg, source, "plan.nflow", true, false); err != nil {
 		t.Fatal(err)

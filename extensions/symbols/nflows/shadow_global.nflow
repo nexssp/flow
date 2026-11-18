@@ -6,9 +6,12 @@
   KindTimeout: "local_timeout_sentinel"
 }
 
-{ signal: "local_timeout_sentinel" } -> match {
-  .signal == xerr.KindTimeout -> const @{ value: "handled_locally" },
-  _                           -> const @{ value: "unhandled" }
+{ signal: "local_timeout_sentinel" }
+  -> match {
+  .signal == xerr.KindTimeout
+    -> const "handled_locally",
+  _
+    -> const "unhandled"
 }
 
 @assert: result == "handled_locally"

@@ -5,7 +5,7 @@
   Enabled bool   `json:"enabled"`
 }
 {}
-  -> config_runtime.load @{ path: "settings.yml" }
+  -> config_runtime.load ( path: "settings.yml" )
   -> WebSettings.validate
 @assert: result.host == "api.example.test"
 @assert: result.port == 8443

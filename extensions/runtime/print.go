@@ -35,7 +35,7 @@ var printConfigKeys = map[string]struct{}{
 	"label": {}, "limit": {}, "depth": {}, "strings": {}, "stream": {},
 }
 
-// printConfig is the parsed subset of @{ ... } args that runtime.print
+// printConfig is the parsed subset of parenthesized named arguments that runtime.print
 // consumes. Defaults are applied when a field is missing or invalid.
 type printConfig struct {
 	label   string

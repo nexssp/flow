@@ -3,7 +3,8 @@
   Request map[string]any `json:"request" validate:"required"`
   Region  string          `json:"region"  default:"eu" validate:"oneof=eu us"`
 }
-@pipeline lookup :request-schema=!LookupRequest
+@pipeline lookup
+  :request-schema=!LookupRequest
   {
     query: .request.search_text,
     region: .region
@@ -14,4 +15,4 @@
   .region == "eu"
 }
 { search_text: "from runtime input", trace: "must stay inside request" }
--> pipeline.lookup @{ request: ., region: "eu" }
+-> pipeline.lookup ( request: ., region: "eu" )

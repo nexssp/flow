@@ -24,7 +24,7 @@ var Env = action.New("runtime.env", func(_ context.Context, in any) (any, error)
 	}
 
 	if name == "" {
-		return nil, xerr.BadRequest(`env: name is required (use: env @{ name: "HOME" })`)
+		return nil, xerr.BadRequest(`env: name is required (use: env ( name: "HOME" ))`)
 	}
 
 	value, ok := os.LookupEnv(name)

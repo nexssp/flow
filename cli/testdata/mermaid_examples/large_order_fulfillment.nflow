@@ -211,35 +211,35 @@
   }
 @end
 
-runtime.const @{ value: {
-    order: {
-      id: "ORD-5600",
-      customer: {
-        id: "CUS-4410",
-        name: "Julia",
-        email: "julia@example.test",
-        status: "active"
-      },
-      item: {
-        sku: "BOOK-204",
-        units: 2,
-        price_cents: 2499,
-        family: "books"
-      },
-      payment: {
-        profile: "profile-test-7",
-        risk: "standard",
-        currency: "USD"
-      },
-      fulfillment: {
-        region: "north",
-        warehouse: "WH-03",
-        window: "weekday-evening",
-        zone: "zone-b"
-      }
+const(
+  order: {
+    id: "ORD-5600",
+    customer: {
+      id: "CUS-4410",
+      name: "Julia",
+      email: "julia@example.test",
+      status: "active"
     },
-    private_note: "PAYLOAD-MUST-NOT-RENDER"
-} }
+    item: {
+      sku: "BOOK-204",
+      units: 2,
+      price_cents: 2499,
+      family: "books"
+    },
+    payment: {
+      profile: "profile-test-7",
+      risk: "standard",
+      currency: "USD"
+    },
+    fulfillment: {
+      region: "north",
+      warehouse: "WH-03",
+      window: "weekday-evening",
+      zone: "zone-b"
+    }
+  },
+  private_note: "PAYLOAD-MUST-NOT-RENDER"
+)
 -> pipeline.normalize_order
 -> pipeline.verify_customer
 -> pipeline.enrich_catalog

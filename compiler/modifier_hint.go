@@ -12,7 +12,7 @@ import (
 // better fix than "unknown modifier" is available.
 //
 // The dominant real-world mistake: the author writes :file=... where
-// the action takes @{ file: ... }. The check against the action's Req
+// the action takes a named file argument. The check against the action's Req
 // struct catches that before the runtime sees a modifier-table miss.
 func SuggestModifierFix(target action.AnyAction, name string) string {
 	fields := requestFieldNames(target)
@@ -21,7 +21,7 @@ func SuggestModifierFix(target action.AnyAction, name string) string {
 	}
 	return "modifier :" + name + " is not registered, but " +
 		actionDisplayName(target) + " takes a request field \"" + name + "\"; " +
-		"use @{ " + name + ": ... } instead"
+		"pass it as a named argument: " + actionDisplayName(target) + "(" + name + ": ...)"
 }
 
 // requestFieldNames returns the JSON names of every exported field of

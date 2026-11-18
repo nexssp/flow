@@ -39,7 +39,7 @@ var Const = action.New("runtime.const", func(_ context.Context, in any) (any, er
 		return constValue(raw, coerceRequested), nil
 	}
 
-	// 2. Object mode: const @{ server: "alpha", port: 8080 }
+	// 2. Object mode: const(server: "alpha", port: 8080)
 	if len(m) > 0 {
 		clean := make(map[string]any, len(m))
 		for k, v := range m {

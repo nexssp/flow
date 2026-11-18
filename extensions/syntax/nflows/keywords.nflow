@@ -1,3 +1,4 @@
 @description "Native syntax keywords compile to canonical actions"
 @assert: result == 42
-const @{ value: 42 } -> noop
+const 42
+  -> noop

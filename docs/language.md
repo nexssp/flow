@@ -191,18 +191,22 @@ boolean, and `null` literals retain their declared types. Config, CLI, and
 positional references remain strings unless a deliberate typed conversion is
 used at a known field boundary.
 
-Legacy `const @{ ... }` and `action @{ ... }` argument blocks remain accepted
-during migration; `nflow lint` reports source-located warnings and fix hints.
-The same warning applies to `const(value=...)` and `const(val=...)`: those
-key=value forms still unwrap a scalar, with `value` taking precedence if both
-keys are present, and legacy strings may be auto-parsed. `coerce` affects that
-wrapper only when it reaches the runtime as a typed boolean `true` for a
-preserved CLI/config/arg string; literal `coerce=true` in key=value syntax is
-text, not a boolean. Without `value` or `val`, `coerce` remains an object field
-and does not trigger this warning. In the new `const(value: ...)` spelling,
-`value`, `val`, and `coerce` are ordinary object keys. Check the old output type
-before replacing a wrapper, and do not mechanically turn `coerce: true` into a
-generic cast.
+Old `action @{ ... }` and `const @{ ... }` argument blocks now fail compilation
+with a source-located replacement hint. Write `action(key: value)` for named
+arguments, `const X` for a scalar, or `const(key: value)` to construct an
+object. Direct values preserve their declared types: for example, `const "42"`
+returns text, not the number `42`.
+
+The separate `const(value=...)` and `const(val=...)` key=value forms remain
+accepted with lint warnings. They still unwrap a scalar, with `value` taking
+precedence if both keys are present, and legacy strings may be auto-parsed.
+`coerce` affects that wrapper only when it reaches the runtime as a typed
+boolean `true` for a preserved CLI/config/arg string; literal `coerce=true` in
+key=value syntax is text, not a boolean. Without `value` or `val`, `coerce`
+remains an object field and does not trigger this warning. In the current
+`const(value: ...)` spelling, `value`, `val`, and `coerce` are ordinary object
+keys. Check the old output type before replacing a wrapper, and do not
+mechanically turn `coerce: true` into a generic cast.
 
 An object can be written directly as a projection:
 
@@ -309,16 +313,15 @@ object. Inside action arguments, `#` and `//` start line comments; quoted
 strings keep those characters as data. Inside `(expr)`, expr-lang `//` and
 `/* ... */` comments are ignored when finding the closing parenthesis.
 
-**Compatibility only:** the older `action @{ key: value }` spelling remains
-accepted during migration, but `nflow lint` reports a source-located warning
-and fix hint. Use `action(key: value)` in new flows. The old `const @{ value: X
-}` wrapper produced `X`; replace it with `X` directly. In the new
-`const(value: X)` form, `value` is an ordinary object key, as are `val` and
-`coerce`. Do not mechanically turn legacy `coerce: true` into a cast; choose an
-explicit conversion only when the receiving field requires one. The separate
+**Old argument blocks are rejected:** replace `action @{ key: value }` with
+`action(key: value)`. Replace `const @{ value: X }` with `const X` for a scalar,
+or use `const(key: value)` when the output should be an object. The separate
 `action(key=value, ...)` spelling remains accepted for compatibility; ordinary
-non-const actions using it do not warn. For `const`, the `value`/`val` keys
-still invoke the old scalar wrapper and are warned as described above.
+non-const actions using it do not warn. For `const`, the distinct
+`const(value=...)` and `const(val=...)` forms still use the old scalar wrapper
+and are warned as described above. Do not mechanically turn `coerce: true`
+into a cast; choose an explicit conversion only when the receiving field
+requires one.
 
 ---
 
@@ -371,8 +374,8 @@ Use `key: value` when the output key differs or the value needs an expression;
 the two forms can be mixed in one projection. Both projections and action
 argument maps accept a same-name shorthand, but their evaluation models differ:
 projections are expr-lang expressions, while action-argument shorthand means a
-reference to the current pipeline input. Legacy `@{ ... }` argument blocks use
-that same shorthand only for compatibility.
+reference to the current pipeline input. Named arguments use the same shorthand
+inside the current parenthesized call syntax, `action(name: value)`.
 
 Projections can spread the whole input with `...`:
 
@@ -419,7 +422,8 @@ invoice status, and support priority.
 
 `{ ... }` is data. `noop` inside a projection is a variable lookup, not
 a capability. Use a bare registered capability name in its declared named
-argument, for example `action: noop`; `@{ ... }` is compatibility syntax only.
+argument, for example `action: noop`; the old `@{ ... }` action-argument form
+is rejected with a compile error and a direct replacement hint.
 
 Flow controls can also be values in projection fields. Each nested control is
 an analyzed/built Flow AST child and receives the same incoming projection root;

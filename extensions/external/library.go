@@ -6,9 +6,9 @@
 //
 // Typical use:
 //
-//	external.exec @{ cmd: "python3 enhancer.py", input: .payload }
-//	http.request @{ url: "https://api.example/v1/items", method: "GET" }
-//	external.wasm @{ path: "plugins/transform.wasm", input: .data }
+//	external.exec(cmd: "python3 enhancer.py", input: .payload)
+//	http.request(url: "https://api.example/v1/items", method: "GET")
+//	external.wasm(path: "plugins/transform.wasm", input: .data)
 package external
 
 import (

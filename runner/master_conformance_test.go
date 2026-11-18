@@ -105,7 +105,7 @@ func TestAttachedMasterShowcasePreservesPipelineData(t *testing.T) {
 func TestMasterModifierChainCompilesWithNativeBundles(t *testing.T) {
 	cfg, err := runner.BuildConfig(native.Bundles())
 	ktest.RequireNoError(t, err)
-	source := `runtime.const :rate_limit=50 :idempotent :dedup :coalesce :tag="resilience,core" :desc="Hardened ingest endpoint" @{ value: "ok" }`
+	source := `const :rate_limit=50 :idempotent :dedup :coalesce :tag="resilience,core" :desc="Hardened ingest endpoint" "ok"`
 	_, err = runner.Compile(t.Context(), cfg, source, "modifier-chain.nflow")
 	ktest.RequireNoError(t, err)
 }
@@ -113,7 +113,7 @@ func TestMasterModifierChainCompilesWithNativeBundles(t *testing.T) {
 func TestMasterNestedProjectionCompositionExecutes(t *testing.T) {
 	cfg, err := runner.BuildConfig(native.Bundles())
 	ktest.RequireNoError(t, err)
-	source := `{ peak: 98, keep: "same" } -> { snapshot: ., branches: parallel { first: { peak: .peak, keep: .keep }, second: race { runtime.fail @{ kind: "Unavailable", message: "first fails" }, runtime.const @{ value: { peak: .peak, keep: .keep } } } }, category: match(.peak) { > 90 -> "HIGH", _ -> "NORMAL" } }`
+	source := `{ peak: 98, keep: "same" } -> { snapshot: ., branches: parallel { first: { peak: .peak, keep: .keep }, second: race { runtime.fail ( kind: "Unavailable", message: "first fails" ), const( peak: .peak, keep: .keep ) } }, category: match(.peak) { > 90 -> "HIGH", _ -> "NORMAL" } }`
 	execution, err := runner.Execute(t.Context(), cfg, source, "composition.nflow", nil)
 	ktest.RequireNoError(t, err)
 	if failures := runner.EvaluateAssertions(execution.Output, []string{
@@ -127,7 +127,7 @@ func TestMasterNestedProjectionCompositionExecutes(t *testing.T) {
 func TestCompositionErrorReachesOuterTypedRecovery(t *testing.T) {
 	cfg, err := runner.BuildConfig(native.Bundles())
 	ktest.RequireNoError(t, err)
-	source := `{ result: parallel { failed: runtime.fail @{ kind: "Unavailable", message: "nested source failed" } } } ? on_error { xerr.KindUnavailable -> { recovered: true }, else -> error.reraise }`
+	source := `{ result: parallel { failed: runtime.fail ( kind: "Unavailable", message: "nested source failed" ) } } ? on_error { xerr.KindUnavailable -> { recovered: true }, else -> error.reraise }`
 	execution, err := runner.Execute(t.Context(), cfg, source, "composition-recovery.nflow", nil)
 	ktest.RequireNoError(t, err)
 	if failures := runner.EvaluateAssertions(execution.Output, []string{`result.recovered == true`}); len(failures) != 0 {

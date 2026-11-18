@@ -17,7 +17,7 @@ import (
 	"github.com/nexssp/flow/runner"
 )
 
-const observerTestSource = `runtime.const @{ value: { api_key: "topsecret", token: "response-secret", visible: "ok" } } -> probe.echo`
+const observerTestSource = `probe.echo(api_key: "topsecret", token: "response-secret", visible: "ok")`
 
 func TestObserverHookCapturesKernelLifecycleAndKeepsLegacyTrace(t *testing.T) {
 	var live bytes.Buffer
@@ -170,8 +170,8 @@ func TestRunSourcePreservesLegacyVerbosityAndTraceRedaction(t *testing.T) {
 		want      []string
 		absent    []string
 	}{
-		{verbosity: 0, want: []string{`{"api_key":"topsecret","token":"response-secret","visible":"ok"}`}, absent: []string{"EXECUTION TRACE", "      in:  ", "✓ probe.echo"}},
-		{verbosity: 1, want: []string{"✓ map[api_key:topsecret token:response-secret visible:ok]", "compile:", "run:", "EXECUTION TRACE"}, absent: []string{"      in:  "}},
+		{verbosity: 0, want: []string{`{"__root__":null,"api_key":"topsecret","token":"response-secret","visible":"ok"}`}, absent: []string{"EXECUTION TRACE", "      in:  ", "✓ probe.echo"}},
+		{verbosity: 1, want: []string{"✓ map[__root__:map[] api_key:topsecret token:response-secret visible:ok]", "compile:", "run:", "EXECUTION TRACE"}, absent: []string{"      in:  "}},
 		{verbosity: 2, want: []string{"✓ probe.echo", "EXECUTION TRACE"}, absent: []string{"      in:  "}},
 		{verbosity: 3, want: []string{"✓ probe.echo", "EXECUTION TRACE", `"api_key":"[REDACTED]"`, `"token":"[REDACTED]"`}},
 	} {
@@ -195,7 +195,7 @@ func TestRunSourcePreservesLegacyVerbosityAndTraceRedaction(t *testing.T) {
 				t.Errorf("verbosity %d output unexpectedly contains %q:\n%s", tc.verbosity, absent, got)
 			}
 		}
-		if tc.verbosity == 0 && got != `{"api_key":"topsecret","token":"response-secret","visible":"ok"}`+"\n" {
+		if tc.verbosity == 0 && got != `{"__root__":null,"api_key":"topsecret","token":"response-secret","visible":"ok"}`+"\n" {
 			t.Errorf("verbosity 0 stdout changed: got %q", got)
 		}
 		if tc.verbosity >= 3 {

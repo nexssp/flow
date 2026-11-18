@@ -96,7 +96,7 @@ func TestIfConditionEvaluationErrorsReturnValidationAndPreserveCause(t *testing.
 		t.Fatalf("build self-test config: %v", err)
 	}
 	_, err = runner.Execute(t.Context(), cfg,
-		`if (input.value > 0) { const "yes" } else { fail @{ message: "condition error became false" } }`,
+		`if (input.value > 0) { const "yes" } else { fail ( message: "condition error became false" ) }`,
 		"if-condition-error.nflow", map[string]any{"value": "not a number"})
 	if err == nil {
 		t.Fatal("condition evaluation error was treated as false")

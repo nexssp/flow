@@ -43,7 +43,7 @@ func TestOrdinaryIncludeExportsMacroAlongsidePipelinesSchemasAndSymbols(t *testi
 	t.Parallel()
 	dir := t.TempDir()
 	writeMacroImportFixture(t, dir, "helpers.nflow", `@macro echo(value: Expr) {
-  runtime.const @{ value: $value }
+  const $value
 }
 `)
 	writeMacroImportFixture(t, dir, "reporting.nflow", `@const PRIVATE_REPORT = "module-only"
@@ -59,7 +59,7 @@ func TestOrdinaryIncludeExportsMacroAlongsidePipelinesSchemasAndSymbols(t *testi
   $field: "configured"
 }
 @macro echo(value: Expr) {
-  runtime.const @{ value: $value }
+  const $value
 }
 @macro through_local(value: Expr) {
   @echo($value)
@@ -75,7 +75,7 @@ func TestOrdinaryIncludeExportsMacroAlongsidePipelinesSchemasAndSymbols(t *testi
 	rootFile := filepath.Join(dir, "main.nflow")
 	cfg := macroImportConfig(t)
 	compiled, err := runner.Compile(t.Context(), cfg,
-		"@include ./reporting.nflow AS reporting\nruntime.const @{ reporting.@stats_config(tree_only) }",
+		"@include ./reporting.nflow AS reporting\nruntime.const ( reporting.@stats_config(tree_only) )",
 		rootFile)
 	ktest.RequireNoError(t, err)
 
@@ -122,14 +122,14 @@ func TestOrdinaryIncludeExportsMacroAlongsidePipelinesSchemasAndSymbols(t *testi
 func TestIncludedMacrosWithSameLeafNameRemainUnambiguous(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	writeMacroImportFixture(t, dir, "first.nflow", `@macro shared() { runtime.const @{ value: "first" } }
+	writeMacroImportFixture(t, dir, "first.nflow", `@macro shared() { const "first" }
 `)
-	writeMacroImportFixture(t, dir, "second.nflow", `@macro shared() { runtime.const @{ value: "second" } }
+	writeMacroImportFixture(t, dir, "second.nflow", `@macro shared() { const "second" }
 `)
 	rootFile := filepath.Join(dir, "main.nflow")
 	prefix := `@include ./first.nflow AS first
 @include ./second.nflow AS second
-@macro shared() { runtime.const @{ value: "local" } }
+@macro shared() { const "local" }
 `
 	cfg := macroImportConfig(t)
 	for _, tc := range []struct {

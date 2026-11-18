@@ -58,7 +58,7 @@ func TestSelfBenchResolvesRequiredResilienceBundle(t *testing.T) {
 @assert: result == "ok"
 @pipeline bench
   :circuit_breaker=self-bench-required
-  const @{ value: "ok" }
+  const "ok"
 @end
 {}
 -> pipeline.bench

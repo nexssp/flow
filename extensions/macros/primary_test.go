@@ -43,7 +43,7 @@ func TestSubstituteParams(t *testing.T) {
 		args   []string
 		want   string
 	}{
-		{"single", `runtime.const @{ value: $v }`, []string{"v"}, []string{`"hi"`}, `runtime.const @{ value: "hi" }`},
+		{"single", `const $v`, []string{"v"}, []string{`"hi"`}, `const "hi"`},
 		{"multiple", `$a -> $b`, []string{"a", "b"}, []string{"runtime.noop", "runtime.debug"}, `runtime.noop -> runtime.debug`},
 		{"missing arg", `$a -> $b`, []string{"a", "b"}, []string{"noop"}, `noop -> $b`},
 		{"repeated", `$v + $v`, []string{"v"}, []string{"1"}, `1 + 1`},
@@ -66,10 +66,10 @@ func TestReadArgs(t *testing.T) {
 		body   string
 		params []string
 	}{
-		{"no parens", `@echo`, `runtime.const @{ value: "default" }`, nil},
-		{"empty parens", `@echo()`, `runtime.const @{ value: "default" }`, nil},
-		{"single arg", `@echo("x")`, `runtime.const @{ value: $v }`, []string{"v"}},
-		{"comma in quotes", `@echo("a,b")`, `runtime.const @{ value: $v }`, []string{"v"}},
+		{"no parens", `@echo`, `const "default"`, nil},
+		{"empty parens", `@echo()`, `const "default"`, nil},
+		{"single arg", `@echo("x")`, `const $v`, []string{"v"}},
+		{"comma in quotes", `@echo("a,b")`, `const $v`, []string{"v"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -124,7 +124,7 @@ func TestPrimaryQualifiedMacroCall(t *testing.T) {
 		"reporting.echo": {
 			Name:   "echo",
 			Params: []string{"value"},
-			Body:   `runtime.const @{ value: $value }`,
+			Body:   `const(value: $value)`,
 		},
 	}
 	expr, err := newTestParser(t, byName, `reporting.@echo("qualified")`).Parse()
@@ -161,7 +161,7 @@ func TestArgumentMapMacroSplicesEntries(t *testing.T) {
 		},
 	}
 	parsed, err := newTestParser(t, byName,
-		`runtime.const @{ @stats_config(tree_only), @stats_config(full_tree) }`).Parse()
+		`runtime.const ( @stats_config(tree_only), @stats_config(full_tree) )`).Parse()
 	ktest.RequireNoError(t, err)
 	atom, ok := parsed.(*compiler.Atom)
 	ktest.RequireCondition(t, ok, "expected atom, got %T", parsed)
@@ -180,7 +180,7 @@ func TestArgumentMapQualifiedMacroSplicesEntries(t *testing.T) {
 			Body:       `$field: 7`,
 		},
 	}
-	parsed, err := newTestParser(t, byName, `runtime.const @{ reporting.@stats_config(tree_only) }`).Parse()
+	parsed, err := newTestParser(t, byName, `runtime.const ( reporting.@stats_config(tree_only) )`).Parse()
 	ktest.RequireNoError(t, err)
 	atom, ok := parsed.(*compiler.Atom)
 	ktest.RequireCondition(t, ok, "expected atom, got %T", parsed)
@@ -192,15 +192,15 @@ func TestArgumentMapMacroExpansionSkipsStringsAndComments(t *testing.T) {
 	byName := map[string]Declaration{
 		"field": {Name: "field", Params: []string{"key"}, Body: "$key: 7"},
 	}
-	parsed, err := newTestParser(t, byName, "runtime.const @{\n"+
-		`  text: "@field(hidden) # }",`+"\n"+
-		"  # @field(commented) }\n"+
+	parsed, err := newTestParser(t, byName, "const (\n"+
+		`  text: "@field(hidden) # )",`+"\n"+
+		"  # @field(commented) )\n"+
 		"  @field(real)\n"+
-		"}").Parse()
+		")").Parse()
 	ktest.RequireNoError(t, err)
 	atom, ok := parsed.(*compiler.Atom)
 	ktest.RequireCondition(t, ok, "expected atom, got %T", parsed)
-	ktest.RequireEqual(t, atom.Args["text"].Str, "@field(hidden) # }")
+	ktest.RequireEqual(t, atom.Args["text"].Str, "@field(hidden) # )")
 	ktest.RequireEqual(t, atom.Args["real"].Num, float64(7))
 	ktest.RequireEqual(t, len(atom.Args), 2)
 }
@@ -210,13 +210,13 @@ func TestArgumentMapMacroDuplicateKeyStillFails(t *testing.T) {
 	byName := map[string]Declaration{
 		"field": {Name: "field", Params: []string{"key"}, Body: "$key: 7"},
 	}
-	_, err := newTestParser(t, byName, `runtime.const @{ @field(foo), foo: 8 }`).Parse()
+	_, err := newTestParser(t, byName, `runtime.const ( @field(foo), foo: 8 )`).Parse()
 	ktest.RequireErrorContains(t, err, "duplicate key \"foo\"")
 }
 
 func TestArgumentMapMacroReportsUnknownInvocation(t *testing.T) {
 	t.Parallel()
-	_, err := newTestParser(t, nil, `runtime.const @{ @missing() }`).Parse()
+	_, err := newTestParser(t, nil, `runtime.const ( @missing() )`).Parse()
 	ktest.RequireErrorContains(t, err, "unknown macro @missing")
 }
 

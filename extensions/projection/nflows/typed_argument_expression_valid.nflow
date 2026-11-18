@@ -6,6 +6,7 @@
 @func commerce.echo(value string) string = value
 @pipeline typed_argument_expression_valid
   :request-schema=!TypedArgumentValidInput
-  runtime.const @{ value: commerce.echo(.name) }
+  const(value: commerce.echo(.name))
+    -> pick(field: "value")
 @end
 pipeline.typed_argument_expression_valid

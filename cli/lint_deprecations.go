@@ -7,31 +7,12 @@ import (
 	"github.com/nexssp/flow/compiler"
 )
 
-func legacyArgumentWarnings(path string, ast compiler.Expr) []LintIssue {
+func legacyConstParamsWarnings(path string, ast compiler.Expr) []LintIssue {
 	var issues []LintIssue
 	var visit func(compiler.Expr)
 	visit = func(expr compiler.Expr) {
 		if expr == nil {
 			return
-		}
-		if atom, ok := expr.(*compiler.Atom); ok && atom.LegacyArgumentBlock {
-			positions := atom.LegacyArgumentPositions
-			if len(positions) == 0 {
-				positions = []compiler.Position{atom.Pos}
-			}
-			for _, pos := range positions {
-				file := pos.File
-				if file == "" {
-					file = path
-				}
-				issues = append(issues, LintIssue{
-					File:    file,
-					Line:    pos.Line,
-					Column:  pos.Col,
-					Kind:    lintIssueWarning,
-					Message: legacyArgumentWarningMessage(atom),
-				})
-			}
 		}
 		if atom, ok := expr.(*compiler.Atom); ok {
 			if message, found := legacyConstParamsWarning(atom); found {
@@ -83,25 +64,4 @@ func legacyConstParamsWarning(atom *compiler.Atom) (string, bool) {
 		message += ". In key=value syntax, literal `coerce=true` is text, not a boolean; only a typed boolean true can coerce a preserved CLI/config/arg string, so do not translate it into a generic cast"
 	}
 	return message, true
-}
-
-func legacyArgumentWarningMessage(atom *compiler.Atom) string {
-	if atom.Name == "runtime.const" {
-		_, hasValue := atom.Args["value"]
-		_, hasVal := atom.Args["val"]
-		if hasValue || hasVal {
-			hint := "remove the legacy `const @{ value: ... }` wrapper and start with its contained literal or reference"
-			if _, hasCoerce := atom.Args["coerce"]; hasCoerce {
-				hint += "; choose an explicit typed conversion only if the receiving field requires it, rather than translating `coerce: true` mechanically"
-			}
-			return "deprecated legacy const value wrapper; hint: " + hint
-		}
-		return "deprecated legacy const argument object; hint: use `const(key: value)` to keep an object result, or start with the literal/reference for a scalar"
-	}
-
-	name := atom.Name
-	if name == "" {
-		name = "action"
-	}
-	return fmt.Sprintf("deprecated legacy `@{...}` action argument block; hint: use `%s(key: value)` for named arguments", name)
 }

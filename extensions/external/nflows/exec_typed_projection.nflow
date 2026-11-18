@@ -3,7 +3,7 @@
 @assert: result.exit_code == 0
 @assert: result.ok == true
 @assert: result.passed == true
-external.exec @{ cmd: "echo hello" } as execution
+external.exec ( cmd: "echo hello" ) as execution
 -> {
   stdout: execution.stdout,
   exit_code: execution.exit_code,

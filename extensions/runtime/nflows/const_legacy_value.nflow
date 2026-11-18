@@ -1,3 +1,0 @@
-@description "Legacy const value wrapper keeps its historical string coercion"
-@assert: result == 42
-const @{ value: "42" }

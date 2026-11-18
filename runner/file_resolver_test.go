@@ -102,7 +102,7 @@ func TestBundleWithFileResolverStagesEmbedAndComposesStorage(t *testing.T) {
 
 	ctx := xctx.WithUserID(t.Context(), "test-caller")
 	ctx = xctx.WithTenantID(ctx, "test-tenant")
-	result, err := Execute(ctx, cfg, "@embed logo \"assets/logo.svg\"\ntest.stage @{ asset: embed.logo }", "test.nflow", nil)
+	result, err := Execute(ctx, cfg, "@embed logo \"assets/logo.svg\"\ntest.stage ( asset: embed.logo )", "test.nflow", nil)
 	if err != nil {
 		t.Fatalf("execute staged embed: %v", err)
 	}

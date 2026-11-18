@@ -190,7 +190,7 @@ func formatASTArgs(args map[string]*compiler.Value, spreads []*compiler.Value, u
 	sort.Strings(keys)
 
 	var b strings.Builder
-	b.WriteString("  @{")
+	b.WriteString("  (")
 	first := true
 	for _, spread := range spreads {
 		if !first {
@@ -210,7 +210,7 @@ func formatASTArgs(args map[string]*compiler.Value, spreads []*compiler.Value, u
 		b.WriteString(formatASTValue(args[k]))
 		first = false
 	}
-	b.WriteString(" }")
+	b.WriteString(" )")
 	return dim(b.String(), useColor)
 }
 

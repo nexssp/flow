@@ -8,7 +8,7 @@
 //
 // Typical flow use:
 //
-// {} -> config_runtime.load @{ path: "settings.json" } -> AppConfig.validate
+//	{} -> config_runtime.load(path: "settings.json") -> AppConfig.validate
 package config_runtime
 
 import (

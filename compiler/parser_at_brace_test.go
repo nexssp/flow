@@ -13,7 +13,7 @@ func newTestParser(t testing.TB, src string) *Parser {
 
 func TestParseAtBrace_ScalarValues(t *testing.T) {
 	t.Parallel()
-	p := newTestParser(t, `wrap @{ key: "outer", count: 3, enabled: true, empty: null }`)
+	p := newTestParser(t, `wrap ( key: "outer", count: 3, enabled: true, empty: null )`)
 	expr, err := p.Parse()
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -41,7 +41,7 @@ func TestParseAtBrace_ScalarValues(t *testing.T) {
 
 func TestParseAtBrace_NestedObjectAndSlice(t *testing.T) {
 	t.Parallel()
-	p := newTestParser(t, `wrap @{ meta: { retry: 3, tags: ["a", "b"] } }`)
+	p := newTestParser(t, `wrap ( meta: { retry: 3, tags: ["a", "b"] } )`)
 	expr, err := p.Parse()
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -73,7 +73,7 @@ func TestParseAtBrace_NestedObjectAndSlice(t *testing.T) {
 
 func TestParseAtBrace_References(t *testing.T) {
 	t.Parallel()
-	p := newTestParser(t, `wrap @{ from: .user.name, whole: . }`)
+	p := newTestParser(t, `wrap ( from: .user.name, whole: . )`)
 	expr, err := p.Parse()
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -93,7 +93,7 @@ func TestParseAtBrace_References(t *testing.T) {
 
 func TestParseAtBrace_SameNameFieldShorthand(t *testing.T) {
 	t.Parallel()
-	parsed, err := newTestParser(t, `wrap @{ name, email, profile: { account_id } }`).Parse()
+	parsed, err := newTestParser(t, `wrap ( name, email, profile: { account_id } )`).Parse()
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestParseAtBrace_SameNameFieldShorthand(t *testing.T) {
 
 func TestParseAtBrace_CollectsArgumentMapSpreads(t *testing.T) {
 	t.Parallel()
-	parsed, err := newTestParser(t, `wrap @{ ... .defaults, url: .url }`).Parse()
+	parsed, err := newTestParser(t, `wrap ( ... .defaults, url: .url )`).Parse()
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -134,11 +134,11 @@ func TestParseAtBrace_CollectsArgumentMapSpreads(t *testing.T) {
 
 func TestParseAtBrace_CommentsAndQuotedCommentMarkers(t *testing.T) {
 	t.Parallel()
-	src := "wrap @{\n" +
-		"  full_tree: true, # closing brace here must not end the map }\n" +
-		"  text: \"# literal // literal }\", // } also ignored\n" +
+	src := "wrap (\n" +
+		"  full_tree: true, # closing parenthesis here must not end the map )\n" +
+		"  text: \"# literal // literal )\", // ) also ignored\n" +
 		"  depth: 3 # final value comment\n" +
-		"}"
+		")"
 	parsed, err := newTestParser(t, src).Parse()
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -150,7 +150,7 @@ func TestParseAtBrace_CommentsAndQuotedCommentMarkers(t *testing.T) {
 	if atom.Args["full_tree"].Kind != ValueBool || !atom.Args["full_tree"].Bool {
 		t.Errorf("full_tree = %+v, want true", atom.Args["full_tree"])
 	}
-	if atom.Args["text"].Str != "# literal // literal }" {
+	if atom.Args["text"].Str != "# literal // literal )" {
 		t.Errorf("text = %q, want quoted comment markers", atom.Args["text"].Str)
 	}
 	if atom.Args["depth"].Num != 3 {
@@ -165,10 +165,10 @@ func TestParseAtBraceRecordsObjectPresence(t *testing.T) {
 		src  string
 		want bool
 	}{
-		{name: "pipeline call", src: `pipeline.lookup @{ request: ., region: "eu" }`, want: true},
-		{name: "imported pipeline call", src: `billing.pipeline.lookup @{ request: . }`, want: true},
-		{name: "empty pipeline call", src: `pipeline.lookup @{ }`, want: true},
-		{name: "generic action", src: `runtime.noop @{ request: . }`, want: true},
+		{name: "pipeline call", src: `pipeline.lookup ( request: ., region: "eu" )`, want: true},
+		{name: "imported pipeline call", src: `billing.pipeline.lookup ( request: . )`, want: true},
+		{name: "empty pipeline call", src: `pipeline.lookup ( )`, want: true},
+		{name: "generic action", src: `runtime.noop ( request: . )`, want: true},
 		{name: "call without an object", src: `pipeline.lookup`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -240,9 +240,9 @@ func TestParseConstDirectScalarInput(t *testing.T) {
 func TestParseConstNamedArgumentObjectRemainsNamed(t *testing.T) {
 	t.Parallel()
 	for _, src := range []string{
-		`const @{ value: "hello" }`,
-		`const @{ count: 3, enabled: true }`,
-		`const @{ }`,
+		`const(value: "hello")`,
+		`const ( count: 3, enabled: true )`,
+		`const ( )`,
 	} {
 		t.Run(src, func(t *testing.T) {
 			t.Parallel()
@@ -264,8 +264,8 @@ func TestParseConstNamedArgumentObjectRemainsNamed(t *testing.T) {
 func TestParseConstRejectsMixedDirectAndNamedInputs(t *testing.T) {
 	t.Parallel()
 	for _, src := range []string{
-		`const 42 @{ value: 1 }`,
-		`const @{ value: 1 } 42`,
+		`const 42 1`,
+		`const 1 42`,
 		`const(value=1) 42`,
 	} {
 		t.Run(src, func(t *testing.T) {
@@ -286,7 +286,7 @@ func TestParseConstRejectsMalformedNumber(t *testing.T) {
 
 func TestParseAtBrace_Empty(t *testing.T) {
 	t.Parallel()
-	p := newTestParser(t, `wrap @{ }`)
+	p := newTestParser(t, `wrap ( )`)
 	expr, err := p.Parse()
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -302,7 +302,7 @@ func TestParseAtBrace_Empty(t *testing.T) {
 
 func TestParseAtBrace_AfterModifier(t *testing.T) {
 	t.Parallel()
-	p := newTestParser(t, `wrap:timeout=5s @{ key: "outer" }`)
+	p := newTestParser(t, `wrap:timeout=5s ( key: "outer" )`)
 	expr, err := p.Parse()
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -322,9 +322,9 @@ func TestParseAtBrace_AfterModifier(t *testing.T) {
 func TestParseAtBrace_RejectsMalformed(t *testing.T) {
 	t.Parallel()
 	cases := []string{
-		`wrap @{ key value }`,
-		`wrap @{ key: }`,
-		`wrap @{ : "v" }`,
+		`wrap ( key value )`,
+		`wrap ( key: )`,
+		`wrap ( : "v" )`,
 	}
 	for _, src := range cases {
 		t.Run(src, func(t *testing.T) {
@@ -338,7 +338,7 @@ func TestParseAtBrace_RejectsMalformed(t *testing.T) {
 
 func TestParseAtBrace_QuotedBracesAndDuplicateKeys(t *testing.T) {
 	t.Parallel()
-	parsed, err := newTestParser(t, `wrap @{ text: "{ nested }" }`).Parse()
+	parsed, err := newTestParser(t, `wrap ( text: "{ nested }" )`).Parse()
 	if err != nil {
 		t.Fatalf("quoted braces should not close the argument block: %v", err)
 	}
@@ -350,15 +350,22 @@ func TestParseAtBrace_QuotedBracesAndDuplicateKeys(t *testing.T) {
 		t.Fatalf("text = %q, want quoted braces", got)
 	}
 	for _, src := range []string{
-		`wrap @{ key: 1, key: 2 }`,
-		`wrap @{ outer: { key: 1, key: 2 } }`,
-		`wrap @{ key, key: 2 }`,
-		`wrap @{ key: 1 } @{ key: 2 }`,
+		`wrap ( key: 1, key: 2 )`,
+		`wrap ( outer: { key: 1, key: 2 } )`,
+		`wrap ( key, key: 2 )`,
 		`wrap(key=1, key=2)`,
 	} {
 		if _, err := newTestParser(t, src).Parse(); err == nil || !strings.Contains(err.Error(), "duplicate") {
 			t.Errorf("Parse(%q) error = %v, want duplicate-key/parameter error", src, err)
 		}
+	}
+}
+
+func TestParseRejectsMultipleNamedArgumentObjects(t *testing.T) {
+	t.Parallel()
+	_, err := newTestParser(t, `wrap ( key: 1 ) ( key: 2 )`).Parse()
+	if err == nil || !strings.Contains(err.Error(), "already has a named argument object") {
+		t.Fatalf("Parse() error = %v, want duplicate-object error", err)
 	}
 }
 
@@ -373,7 +380,7 @@ func TestLexerAtBrace_RawBacktickCloseAfterBackslash(t *testing.T) {
 		t.Fatalf("token type = %v, want TokAtBrace", token.Type)
 	}
 	if !strings.Contains(token.Lit, "value: raw(") {
-		t.Fatalf("@{} content = %q, want the expression after the raw-string boundary", token.Lit)
+		t.Fatalf("legacy argument token content = %q, want the expression after the raw-string boundary", token.Lit)
 	}
 	if token.EndOffset != len(source) {
 		t.Fatalf("EndOffset = %d, want %d", token.EndOffset, len(source))
@@ -382,7 +389,7 @@ func TestLexerAtBrace_RawBacktickCloseAfterBackslash(t *testing.T) {
 
 func TestParseRejectsUnterminatedStringOrArgumentBlock(t *testing.T) {
 	t.Parallel()
-	for _, src := range []string{`"unterminated`, `wrap @{ key: "unterminated }`} {
+	for _, src := range []string{`"unterminated`, `wrap(key: "unterminated)`} {
 		if _, err := newTestParser(t, src).Parse(); err == nil {
 			t.Errorf("Parse(%q) unexpectedly succeeded", src)
 		}
@@ -399,7 +406,7 @@ func TestParseLimitsNestedExpressionDepth(t *testing.T) {
 
 func TestParseLimitsNestedArgumentDepth(t *testing.T) {
 	t.Parallel()
-	src := "wrap @{ value: " + strings.Repeat("{value: ", maxParseDepth+1) + "null" + strings.Repeat("}", maxParseDepth+1) + " }"
+	src := "wrap(value: " + strings.Repeat("{value: ", maxParseDepth+1) + "null" + strings.Repeat("}", maxParseDepth+1) + ")"
 	if _, err := newTestParser(t, src).Parse(); err == nil || !strings.Contains(err.Error(), "parse depth exceeded") {
 		t.Fatalf("Parse(deep argument) error = %v, want parse-depth diagnostic", err)
 	}
@@ -407,7 +414,7 @@ func TestParseLimitsNestedArgumentDepth(t *testing.T) {
 
 func TestParseAtBrace_PathShorthandDerivesFinalSegment(t *testing.T) {
 	t.Parallel()
-	parsed, err := newTestParser(t, `wrap @{ .current.attempt.attempt_id, nested: { .user.profile.email } }`).Parse()
+	parsed, err := newTestParser(t, `wrap ( .current.attempt.attempt_id, nested: { .user.profile.email } )`).Parse()
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -428,9 +435,9 @@ func TestParseAtBrace_PathShorthandDerivesFinalSegment(t *testing.T) {
 func TestParseAtBrace_PathShorthandRejectsDuplicateDerivedKeys(t *testing.T) {
 	t.Parallel()
 	for _, source := range []string{
-		`wrap @{ .user.id, id: .other }`,
-		`wrap @{ id: .other, .user.id }`,
-		`wrap @{ nested: { .user.id, id: .other } }`,
+		`wrap ( .user.id, id: .other )`,
+		`wrap ( id: .other, .user.id )`,
+		`wrap ( nested: { .user.id, id: .other } )`,
 	} {
 		t.Run(source, func(t *testing.T) {
 			t.Parallel()
@@ -444,7 +451,7 @@ func TestParseAtBrace_PathShorthandRejectsDuplicateDerivedKeys(t *testing.T) {
 
 func TestParseAtBrace_PathShorthandPreservesArgumentSpread(t *testing.T) {
 	t.Parallel()
-	parsed, err := newTestParser(t, `wrap @{ ... .defaults, .current.attempt.attempt_id }`).Parse()
+	parsed, err := newTestParser(t, `wrap ( ... .defaults, .current.attempt.attempt_id )`).Parse()
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -463,7 +470,7 @@ func TestParseAtBrace_PathShorthandPreservesArgumentSpread(t *testing.T) {
 
 func TestParseAtBrace_ParenthesizedExpressionsAreExplicitAndRecursive(t *testing.T) {
 	t.Parallel()
-	source := `wrap @{
+	source := `wrap (
 		expression: (1 + 2),
 		condition: (.count > 1 ? true : false),
 		nested: { computed: (input.count + 1) },
@@ -475,7 +482,7 @@ func TestParseAtBrace_ParenthesizedExpressionsAreExplicitAndRecursive(t *testing
 		quoted: "person.name",
 		current: .,
 		qualified: whole_value.echo(input.name)
-	}`
+	)`
 	parsed, err := newTestParser(t, source).Parse()
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -523,14 +530,14 @@ func TestParseAtBrace_ParenthesizedExpressionsAreExplicitAndRecursive(t *testing
 
 func TestParseAtBrace_ParenthesizedExpressionsIgnoreCommentDelimiters(t *testing.T) {
 	t.Parallel()
-	source := `wrap @{
+	source := `wrap (
 			block: (1 /* ) ] } " */ + 2),
 			line: (1 + // ) ] }
 			  2),
 			hash: (1 +
 			  # ) ] } ignored
 			  2)
-		}`
+		)`
 	parsed, err := newTestParser(t, source).Parse()
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -562,9 +569,9 @@ func TestParseAtBrace_ParenthesizedExpressionDelimiterErrors(t *testing.T) {
 		source string
 		want   string
 	}{
-		{source: `wrap @{ value: () }`, want: "empty parenthesized expression"},
-		{source: `wrap @{ value: (1 + 2 }`, want: "unclosed parenthesized expression"},
-		{source: `wrap @{ value: ([1) }`, want: "unclosed delimiter in parenthesized expression"},
+		{source: `wrap ( value: () )`, want: "empty parenthesized expression"},
+		{source: `wrap ( value: (1 + 2 )`, want: "expected ')'"},
+		{source: `wrap ( value: ([1) )`, want: "unclosed delimiter in parenthesized expression"},
 	} {
 		t.Run(tc.source, func(t *testing.T) {
 			t.Parallel()

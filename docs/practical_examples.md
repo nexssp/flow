@@ -1,29 +1,27 @@
 # Nexss Flow practical examples
 
-> **Compatibility-only archive:** Snippets in this guide that use legacy `@{...}`
-> argument blocks or `const @{ value: ... }` scalar wrappers are retained for
-> migration reference, not as recommended syntax for new flows. Use direct typed
-> values and `action(key: value)` calls as shown in the [language guide](language.md)
-> and [cookbook](cookbook.md).
+> These examples use the current syntax: direct typed values for `const` and
+> parenthesized named arguments such as `action(key: value)`. See the
+> [language guide](language.md) and [cookbook](cookbook.md) for details.
 
 ## 1. Literal values and core actions
 
 ### Return a scalar
 
 ```exs
-const @{ value: "ready" }
+const "ready"
 ```
 
 ### Return an object
 
 ```exs
-const @{ order_id: "ORD-1042", status: "queued" }
+const ( order_id: "ORD-1042", status: "queued" )
 ```
 
 ### Return an array
 
 ```exs
-const @{ value: ["orders.read", "orders.write"] }
+const(value: ["orders.read", "orders.write"]) -> pick(field: "value")
 ```
 
 ### Pass the current value through
@@ -35,37 +33,37 @@ noop
 ### Merge fields into the current object
 
 ```exs
-with @{ status: "approved", reviewed_by: "Julia" }
+with ( status: "approved", reviewed_by: "Julia" )
 ```
 
 ### Select a field
 
 ```exs
-pick @{ field: "customer.email" }
+pick ( field: "customer.email" )
 ```
 
 ### Wrap the current value
 
 ```exs
-wrap @{ key: "payload" }
+wrap ( key: "payload" )
 ```
 
 ### Stop with an error
 
 ```exs
-fail @{ kind: "Validation", message: "order total is required" }
+fail ( kind: "Validation", message: "order total is required" )
 ```
 
 ### Wait before polling again
 
 ```exs
-sleep @{ duration_ms: 250 }
+sleep ( duration_ms: 250 )
 ```
 
 ### Read an environment value
 
 ```exs
-const @{ value: "PAYMENTS_REGION" } -> env
+const "PAYMENTS_REGION" -> env
 ```
 
 ### Generate an identifier
@@ -77,7 +75,7 @@ uuid
 ### Clean a JSON response
 
 ```exs
-const @{ value: .model_response } -> json
+const(value: .model_response) -> pick(field: "value") -> json
 ```
 
 ### Print a diagnostic value
@@ -97,67 +95,67 @@ flatten
 ### Send structured input
 
 ```exs
-orders.get @{ order_id: .order_id, include_items: true }
+orders.get ( order_id: .order_id, include_items: true )
 ```
 
 ### Pass the whole input
 
 ```exs
-orders.update @{ payload: . }
+orders.update ( payload: . )
 ```
 
 ### Pass a nested input path
 
 ```exs
-orders.get @{ order_id: .customer.latest_order_id }
+orders.get ( order_id: .customer.latest_order_id )
 ```
 
 ### Use an array and nested object
 
 ```exs
-orders.create @{ customer: { id: .customer_id }, items: [.item_id], priority: "high" }
+orders.create ( customer: { id: .customer_id }, items: [.item_id], priority: "high" )
 ```
 
 ### Combine modifiers and arguments
 
 ```exs
-payments.charge :timeout=5s :retry=2 @{ amount: .amount, currency: "EUR" }
+payments.charge :timeout=5s :retry=2 ( amount: .amount, currency: "EUR" )
 ```
 
 ### Compact modifier spelling
 
 ```exs
-payments.charge:timeout=5s:retry=2 @{ amount: .amount }
+payments.charge:timeout=5s:retry=2 ( amount: .amount )
 ```
 
 ### Attach metadata
 
 ```exs
-orders.create :name="create-order" :tag="orders" :status=201 @{ customer_id: .customer_id }
+orders.create :name="create-order" :tag="orders" :status=201 ( customer_id: .customer_id )
 ```
 
 ### Restrict a feature
 
 ```exs
-payments.refund :feature="refunds" :role="finance" :permission="payments.refund" @{ payment_id: .payment_id }
+payments.refund :feature="refunds" :role="finance" :permission="payments.refund" ( payment_id: .payment_id )
 ```
 
 ### Enable strict request validation
 
 ```exs
-orders.create :strict @{ customer_id: .customer_id, items: .items }
+orders.create :strict ( customer_id: .customer_id, items: .items )
 ```
 
 ### Disable inherited strict validation
 
 ```exs
-orders.create :lenient @{ customer_id: .customer_id }
+orders.create :lenient ( customer_id: .customer_id )
 ```
 
 ### Use a read-only action
 
 ```exs
-customers.lookup :read_only @{ customer_id: .customer_id }
+customers.lookup :read_only ( customer_id: .customer_id )
 ```
 
 ## 3. Data flow and operators
@@ -165,30 +163,30 @@ customers.lookup :read_only @{ customer_id: .customer_id }
 ### Project output with `->`
 
 ```exs
-orders.get @{ order_id: .order_id }
+orders.get ( order_id: .order_id )
 -> { id: .id, total: .total, status: .status }
 ```
 
 ### Select a field with `->`
 
 ```exs
-orders.get @{ order_id: .order_id }
--> pick @{ field: "customer.email" }
+orders.get ( order_id: .order_id )
+-> pick ( field: "customer.email" )
 ```
 
 ### Recover with `||`
 
 ```exs
-payments.primary @{ payment_id: .payment_id }
-|| payments.backup @{ payment_id: .payment_id }
+payments.primary ( payment_id: .payment_id )
+|| payments.backup ( payment_id: .payment_id )
 ```
 
 ### Run concurrent branches with `&`
 
 ```exs
 (
-  customers.get @{ id: .customer_id }
-  & orders.list @{ customer_id: .customer_id }
+  customers.get ( id: .customer_id )
+  & orders.list ( customer_id: .customer_id )
 )
 ```
 
@@ -201,7 +199,7 @@ payments.primary @{ payment_id: .payment_id }
 ### Conditional action without an else branch
 
 ```exs
-.status == "ready" ? notifications.send @{ channel: "email", to: .email }
+.status == "ready" ? notifications.send ( channel: "email", to: .email )
 ```
 
 ### Use a parenthesized expression as an action input
@@ -279,8 +277,8 @@ payments.primary @{ payment_id: .payment_id }
 
 ```exs
 parallel {
-  customer: customers.get @{ id: .customer_id },
-  balance: billing.balance @{ customer_id: .customer_id },
+  customer: customers.get ( id: .customer_id ),
+  balance: billing.balance ( customer_id: .customer_id ),
 }
 ```
 
@@ -297,8 +295,8 @@ parallel {
 
 ```exs
 parallel {
-  profile: const :tag="profile" @{ value: "profile-ready" },
-  metrics: metrics.collect :timeout=2s @{ service: "orders" },
+  profile: const :tag="profile" "profile-ready",
+  metrics: metrics.collect :timeout=2s ( service: "orders" ),
 }
 ```
 
@@ -306,8 +304,8 @@ parallel {
 
 ```exs
 race {
-  catalog.primary @{ sku: .sku },
-  catalog.replica @{ sku: .sku },
+  catalog.primary ( sku: .sku ),
+  catalog.replica ( sku: .sku ),
 }
 ```
 
@@ -315,8 +313,8 @@ race {
 
 ```exs
 race {
-  transport.eu @{ path: "/health" },
-  transport.us @{ path: "/health" },
+  transport.eu ( path: "/health" ),
+  transport.us ( path: "/health" ),
 }
 ```
 
@@ -324,8 +322,8 @@ race {
 
 ```exs
 parallel {
-  customer: customers.get @{ id: .customer_id },
-  orders: orders.list @{ customer_id: .customer_id },
+  customer: customers.get ( id: .customer_id ),
+  orders: orders.list ( customer_id: .customer_id ),
 }
 -> { customer: .customer, order_count: len(.orders) }
 ```
@@ -334,10 +332,10 @@ parallel {
 
 ```exs
 {
-  customer: customers.get @{ id: .customer_id },
+  customer: customers.get ( id: .customer_id ),
   payment: race {
-    payments.primary @{ customer_id: .customer_id },
-    payments.replica @{ customer_id: .customer_id },
+    payments.primary ( customer_id: .customer_id ),
+    payments.replica ( customer_id: .customer_id ),
   }
 }
 ```
@@ -358,9 +356,9 @@ match {
 
 ```exs
 match(.score) {
-  > 90 -> const @{ value: "gold" },
-  >= 60 -> const @{ value: "silver" },
-  _ -> const @{ value: "bronze" },
+  > 90 -> const "gold",
+  >= 60 -> const "silver",
+  _ -> const "bronze",
 }
 ```
 
@@ -377,8 +375,8 @@ match(.status) {
 ### Poll until a job completes
 
 ```exs
-jobs.start @{ type: "report" }
--> loop(jobs.status @{ job_id: .job_id }) until(.status == "completed")
+jobs.start ( type: "report" )
+-> loop(jobs.status ( job_id: .job_id )) until(.status == "completed")
 ```
 
 ### Increment a bounded retry state
@@ -393,21 +391,21 @@ jobs.start @{ type: "report" }
 ### Fallback to a backup service
 
 ```exs
-inventory.primary @{ sku: .sku }
-|| inventory.backup @{ sku: .sku }
+inventory.primary ( sku: .sku )
+|| inventory.backup ( sku: .sku )
 ```
 
 ### Handle one action error
 
 ```exs
-payments.charge @{ payment_id: .payment_id }
-? on_error payments.recover @{ payment_id: .payment_id }
+payments.charge ( payment_id: .payment_id )
+? on_error payments.recover ( payment_id: .payment_id )
 ```
 
 ### Route typed errors
 
 ```exs
-payments.charge @{ payment_id: .payment_id }
+payments.charge ( payment_id: .payment_id )
 ? on_error {
   when .kind == "Unavailable" -> payments.retry,
   when .kind == "Forbidden" -> support.escalate,
@@ -428,21 +426,21 @@ payments.charge
 ### Assert during execution
 
 ```exs
-orders.get @{ order_id: .order_id }
+orders.get ( order_id: .order_id )
 -> assert(.status != "deleted", "deleted order")
 ```
 
 ### Assert the final result
 
 ```exs
-orders.get @{ order_id: .order_id }
+orders.get ( order_id: .order_id )
 @assert: result.id != ""
 ```
 
 ### Assert multiple final conditions
 
 ```exs
-orders.get @{ order_id: .order_id }
+orders.get ( order_id: .order_id )
 @assert {
   result.id != ""
   result.status != "deleted"
@@ -453,14 +451,14 @@ orders.get @{ order_id: .order_id }
 ### Use a compact assertion list
 
 ```exs
-orders.get @{ order_id: .order_id }
+orders.get ( order_id: .order_id )
 @assert: { result.id != "", result.status != "deleted" }
 ```
 
 ### Test a flow result
 
 ```exs
-const @{ status: "ready" }
+const ( status: "ready" )
 @test: result.status == "ready"
 ```
 
@@ -470,7 +468,7 @@ const @{ status: "ready" }
 
 ```exs
 @pipeline get_customer
-  customers.get @{ id: .customer_id }
+  customers.get ( id: .customer_id )
 @end
 
 pipeline.get_customer
@@ -480,20 +478,20 @@ pipeline.get_customer
 
 ```exs
 @pipeline get_customer
-  customers.get @{ id: .customer_id }
+  customers.get ( id: .customer_id )
 @end
 
-pipeline.get_customer @{ customer_id: "CUS-42" }
+pipeline.get_customer ( customer_id: "CUS-42" )
 ```
 
 ### Pass named pipeline input
 
 ```exs
 @pipeline create_order
-  orders.create @{ customer_id: .customer_id, items: .items }
+  orders.create ( customer_id: .customer_id, items: .items )
 @end
 
-pipeline.create_order @{ customer_id: .customer_id, items: .items }
+pipeline.create_order ( customer_id: .customer_id, items: .items )
 ```
 
 ### Use a pipeline request schema
@@ -505,7 +503,7 @@ pipeline.create_order @{ customer_id: .customer_id, items: .items }
 
 @pipeline get_customer
   :request-schema=CustomerRequest
-  customers.get @{ id: .customer_id }
+  customers.get ( id: .customer_id )
 @end
 ```
 
@@ -563,7 +561,7 @@ orders.create
 ```exs
 @include "billing.nflow" AS billing
 
-billing.pipeline.charge @{ payment_id: .payment_id }
+billing.pipeline.charge ( payment_id: .payment_id )
 ```
 
 ### Include a bundle module
@@ -572,17 +570,17 @@ billing.pipeline.charge @{ payment_id: .payment_id }
 @require github.com/nexssp/si-ai v1.2.3 as ai
 @include ai:nflows/lib/critic.nflow AS critic
 
-critic.pipeline.review @{ text: .text }
+critic.pipeline.review ( text: .text )
 ```
 
 ### Declare a macro
 
 ```exs
 @macro audit_label(value) {
-  wrap @{ key: "audit_label", value: value }
+  wrap ( key: "audit_label", value: value )
 }
 
-const @{ value: "approved" } -> @audit_label("approval")
+const "approved" -> @audit_label("approval")
 ```
 
 ### Use a macro for a repeated policy shape
@@ -627,7 +625,7 @@ orders.create
 @const DEFAULT_REGION = "eu-west-1"
 @const MAX_ITEMS = 100
 
-orders.list @{ region: DEFAULT_REGION, limit: MAX_ITEMS }
+orders.list ( region: DEFAULT_REGION, limit: MAX_ITEMS )
 ```
 
 ### Load JSON constants
@@ -635,7 +633,7 @@ orders.list @{ region: DEFAULT_REGION, limit: MAX_ITEMS }
 ```exs
 @const.load "settings.json" as settings
 
-http.request @{ base_url: settings.api_url, timeout: settings.timeout }
+http.request ( base_url: settings.api_url, timeout: settings.timeout )
 ```
 
 ### Validate loaded constants
@@ -647,7 +645,7 @@ http.request @{ base_url: settings.api_url, timeout: settings.timeout }
 
 @const.load "settings.json" as settings :schema=Settings
 
-http.request @{ base_url: settings.api_url }
+http.request ( base_url: settings.api_url )
 ```
 
 ### Declare configuration
@@ -667,7 +665,7 @@ orders.list
 ```exs
 @config.load:path="settings.json" :prefix="app" :required=true
 
-http.request @{ base_url: app.api_url }
+http.request ( base_url: app.api_url )
 ```
 
 ### Enable strict typed requests
@@ -675,7 +673,7 @@ http.request @{ base_url: app.api_url }
 ```exs
 @config:strict=true
 
-orders.create @{ customer_id: .customer_id, items: .items }
+orders.create ( customer_id: .customer_id, items: .items )
 ```
 
 ### Constrain compiler version
@@ -683,7 +681,7 @@ orders.create @{ customer_id: .customer_id, items: .items }
 ```exs
 @nflow_version ">=0.60.0"
 
-orders.get @{ order_id: .order_id }
+orders.get ( order_id: .order_id )
 ```
 
 ## 12. Symbols
@@ -697,7 +695,7 @@ orders.get @{ order_id: .order_id }
   cancelled: "CANCELLED"
 }
 
-orders.update @{ status: status.paid }
+orders.update ( status: status.paid )
 ```
 
 ### Declare identity-valued symbols
@@ -705,7 +703,7 @@ orders.update @{ status: status.paid }
 ```exs
 @symbols queues { orders payments notifications }
 
-jobs.enqueue @{ queue: queues.payments }
+jobs.enqueue ( queue: queues.payments )
 ```
 
 ### Declare one-line symbols
@@ -719,7 +717,7 @@ jobs.enqueue @{ queue: queues.payments }
 ```exs
 @symbols labels { pending, done: }
 
-const @{ label: labels.done }
+const ( label: labels.done )
 ```
 
 ### Declare typed symbols
@@ -748,7 +746,7 @@ orders.get
 ```exs
 @include "shared-symbols.nflow" AS shared
 
-orders.update @{ status: shared.status.paid }
+orders.update ( status: shared.status.paid )
 ```
 
 ## 13. Profiles and scopes
@@ -805,7 +803,7 @@ http.request :profile=reliable_api
 ### Combine flags and values
 
 ```exs
-payments.charge :timeout=5s :retry=2 :idempotent :dedup :coalesce @{ payment_id: .payment_id }
+payments.charge :timeout=5s :retry=2 :idempotent :dedup :coalesce ( payment_id: .payment_id )
 ```
 
 ## 14. Pools, dispatch, and distribution
@@ -846,19 +844,19 @@ pool.tenant_workers
 ```exs
 @pool workers [orders.worker_a, orders.worker_b]
 
-dispatch.run @{ members: [pool.workers], payload: . }
+dispatch.run ( members: [pool.workers], payload: . )
 ```
 
 ### Distribute work over items
 
 ```exs
-distribute.map @{ action: orders.validate, items: .orders }
+distribute.map ( action: orders.validate, items: .orders )
 ```
 
 ### Distribute with a native action
 
 ```exs
-distribute.map @{ action: noop, items: [1, 2, 3] }
+distribute.map ( action: noop, items: [1, 2, 3] )
 ```
 
 ## 15. Streams and files
@@ -867,7 +865,7 @@ distribute.map @{ action: noop, items: [1, 2, 3] }
 
 ```exs
 io.stdin
--> stream.take @{ count: 100 }
+-> stream.take ( count: 100 )
 -> collect
 ```
 
@@ -875,7 +873,7 @@ io.stdin
 
 ```exs
 io.stdin
--> stream.map @{ expression: "item.email" }
+-> stream.map ( expression: "item.email" )
 -> collect
 ```
 
@@ -883,7 +881,7 @@ io.stdin
 
 ```exs
 io.stdin
--> stream.filter @{ expression: "item.status == 'ready'" }
+-> stream.filter ( expression: "item.status == 'ready'" )
 -> collect
 ```
 
@@ -891,18 +889,18 @@ io.stdin
 
 ```exs
 io.stdin
--> stream.fold @{ expression: "acc + item.amount", initial: 0 }
+-> stream.fold ( expression: "acc + item.amount", initial: 0 )
 -> collect
 ```
 
 ### Walk and read files
 
 ```exs
-fs.walk @{ root: "./incoming" }
+fs.walk ( root: "./incoming" )
 -> fs.read
--> fs.filter @{ expression: ".size > 0" }
--> fs.sort @{ by: "name" }
--> out.file @{ path: "./out/records.jsonl" }
+-> fs.filter ( expression: ".size > 0" )
+-> fs.sort ( by: "name" )
+-> out.file ( path: "./out/records.jsonl" )
 ```
 
 ### Download files with byte progress and resume
@@ -914,7 +912,7 @@ retains an interrupted `.part` file, resumes with HTTP Range, and can write a
 JSON receipt with caller-provided provenance.
 
 ```nflow
-fs.download @{
+fs.download (
   output_dir: "./models/LFM3-1.7B",
   files: [
     { url: .config_url, path: "config.json", expected_bytes: .config_bytes },
@@ -922,7 +920,7 @@ fs.download @{
   ],
   receipt_path: ".download-receipt.json",
   provenance: { repo_id: .repo_id, resolved_commit: .resolved_commit }
-}
+)
 ```
 
 This action is generic filesystem/network infrastructure; repository metadata,
@@ -933,16 +931,16 @@ calling `.nflow` workflow.
 
 ```exs
 orders.export
--> out.file @{ path: "./out/orders.json" }
+-> out.file ( path: "./out/orders.json" )
 ```
 
 ### Render a text template
 
 ```exs
-template.render @{
+template.render (
   template: "Hello {{.customer_name}}, your order is {{.order_id}}.",
   variables: .
-}
+)
 ```
 
 ## 16. External capabilities and requirements
@@ -954,7 +952,7 @@ template.render @{
   addr: ":8080"
 }
 @pipeline health:route="GET /health"
-  runtime.const @{ value: "ok" }
+  const "ok"
 @end
 thttp.listen
 ```
@@ -964,7 +962,7 @@ thttp.listen
 ```exs
 @require github.com/nexssp/transportai v0.11.0 as ai
 
-ai.complete @{ prompt: .prompt }
+ai.complete ( prompt: .prompt )
 ```
 
 ### Pass bundle options
@@ -1019,19 +1017,19 @@ service.call :retry
 ```exs
 @embed invoice_template "assets/invoice.html"
 
-files.stage @{ file: embed.invoice_template }
+files.stage ( file: embed.invoice_template )
 ```
 
 ### Pass a capability reference
 
 ```exs
-distribute.map @{ action: orders.validate, items: .orders }
+distribute.map ( action: orders.validate, items: .orders )
 ```
 
 ### Pass a list of capabilities
 
 ```exs
-dispatch.run @{ members: [orders.worker_a, orders.worker_b], payload: . }
+dispatch.run ( members: [orders.worker_a, orders.worker_b], payload: . )
 ```
 
 ## 17. Approval and durable execution
@@ -1088,7 +1086,7 @@ payments.commit :idempotent :dedup
 ```exs
 @hook:hook.verify,observe.metrics
 
-orders.create @{ customer_id: .customer_id, items: .items }
+orders.create ( customer_id: .customer_id, items: .items )
 ```
 
 ### Declare an event trigger
@@ -1114,9 +1112,9 @@ payments.reconcile
 ```exs
 @require github.com/nexssp/storage v0.5.0
 
-http.request @{ method: "GET", url: .url }
+http.request ( method: "GET", url: .url )
 -> OrderResponse.validate
--> storage.put @{ key: .order_id, value: . }
+-> storage.put ( key: .order_id, value: . )
 ```
 
 ### AI to schema to business action
@@ -1124,7 +1122,7 @@ http.request @{ method: "GET", url: .url }
 ```exs
 @require github.com/nexssp/ai v0.1.1
 
-ai.complete @{ prompt: .prompt }
+ai.complete ( prompt: .prompt )
 -> json
 -> ParsedResponse.validate
 -> support.route
@@ -1144,7 +1142,7 @@ py.file "./score.py"
 ```exs
 @require resilience
 
-http.request :timeout=5s :retry=3 :rate_limit=100 :circuit_breaker="payments" @{ method: "POST", url: .url, body: .body }
+http.request :timeout=5s :retry=3 :rate_limit=100 :circuit_breaker="payments" ( method: "POST", url: .url, body: .body )
 ```
 
 ## 20. Complete practical flows
@@ -1179,7 +1177,7 @@ http.request :timeout=5s :retry=3 :rate_limit=100 :circuit_breaker="payments" @{
   -> fulfillment.start
 @end
 
-pipeline.create_order @{ customer_id: .customer_id, item_ids: .item_ids }
+pipeline.create_order ( customer_id: .customer_id, item_ids: .item_ids )
 @assert: result.order_id != ""
 ```
 
@@ -1188,9 +1186,9 @@ pipeline.create_order @{ customer_id: .customer_id, item_ids: .item_ids }
 ```exs
 @pipeline dashboard
   parallel {
-    customer: customers.get @{ id: .customer_id },
-    orders: orders.list @{ customer_id: .customer_id },
-    balance: billing.balance @{ customer_id: .customer_id },
+    customer: customers.get ( id: .customer_id ),
+    orders: orders.list ( customer_id: .customer_id ),
+    balance: billing.balance ( customer_id: .customer_id ),
   }
   -> {
     customer: .customer,
@@ -1200,7 +1198,7 @@ pipeline.create_order @{ customer_id: .customer_id, item_ids: .item_ids }
   }
 @end
 
-pipeline.dashboard @{ customer_id: "CUS-42" }
+pipeline.dashboard ( customer_id: "CUS-42" )
 ```
 
 ### Resilient payment
@@ -1223,7 +1221,7 @@ pipeline.dashboard @{ customer_id: "CUS-42" }
   }
 @end
 
-pipeline.charge @{ payment_id: .payment_id, amount: .amount }
+pipeline.charge ( payment_id: .payment_id, amount: .amount )
 ```
 
 ### Approval-controlled release
@@ -1243,7 +1241,7 @@ pipeline.charge @{ payment_id: .payment_id, amount: .amount }
   -> release.verify
 @end
 
-pipeline.release @{ version: .version, environment: "production" }
+pipeline.release ( version: .version, environment: "production" )
 ```
 
 ### Batch file processing
@@ -1255,11 +1253,11 @@ pipeline.release @{ version: .version, environment: "production" }
 
 @pipeline process_batch
   :profile=batch_policy
-  fs.walk @{ root: "./incoming" }
+  fs.walk ( root: "./incoming" )
   -> fs.read
-  -> stream.filter @{ expression: ".size > 0" }
-  -> distribute.map @{ action: records.normalize, items: . }
-  -> out.file @{ path: "./out/normalized.jsonl" }
+  -> stream.filter ( expression: ".size > 0" )
+  -> distribute.map ( action: records.normalize, items: . )
+  -> out.file ( path: "./out/normalized.jsonl" )
 @end
 
 pipeline.process_batch
@@ -1275,5 +1273,5 @@ pipeline.process_batch
 
 payments.fetch
 -> payments.reconcile
--> storage.put @{ key: .payment_id, value: . }
+-> storage.put ( key: .payment_id, value: . )
 ```

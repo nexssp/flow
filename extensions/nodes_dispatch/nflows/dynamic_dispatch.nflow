@@ -2,7 +2,7 @@
 
 @assert: result == "value-here"
 
-dispatch.run @{
+dispatch.run (
   members: [runtime.fail, runtime.const],
   payload: { value: "value-here" },
-}
+)

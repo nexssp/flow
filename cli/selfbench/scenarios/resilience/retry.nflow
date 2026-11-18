@@ -9,5 +9,5 @@
 }
 @description "Retry benchmark: one bounded retry with a 1ms constant backoff, then local recovery"
 @assert: result == "recovered"
-fail @{ kind: "BadRequest", message: "deterministic retry benchmark failure" } :retry=1
-|| const @{ value: "recovered" }
+fail ( kind: "BadRequest", message: "deterministic retry benchmark failure" ) :retry=1
+|| const "recovered"

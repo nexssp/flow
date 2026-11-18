@@ -1,11 +1,11 @@
 @description "Pipelines: named fragments compose like actions"
 
 @pipeline extract_user
-  pick @{ field: "user" }
+  pick ( field: "user" )
 @end
 
 @pipeline stamp
-  with @{ stamped: true }
+  with ( stamped: true )
 @end
 
 @assert: result.id == 42

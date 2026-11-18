@@ -7,8 +7,8 @@
 //
 // Typical use:
 //
-//	{ user_id: 42 } -> runtime.pick @{ field: "user_id" } -> runtime.wrap @{ key: "data" }
-//	runtime.fail @{ kind: "Timeout", message: "upstream" } || runtime.const @{ value: "fallback" }
+//	{ user_id: 42 } -> pick(field: "user_id") -> wrap(key: "data")
+//	fail(kind: "Timeout", message: "upstream") || const "fallback"
 package runtime
 
 import (

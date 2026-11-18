@@ -8,5 +8,5 @@
   cov.typed_projection
   -> { invalid: input.stdout }
 @end
-runtime.const @{ value: { request: "original request" } }
+const( request: "original request" )
 -> pipeline.request_scope_rejects_stage_field_on_input

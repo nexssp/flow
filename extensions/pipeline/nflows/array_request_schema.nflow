@@ -7,7 +7,8 @@
   :request-schema=[]Item
   runtime.noop
 @end
-const @{ value: [{ name: "Ada" }, { name: "Lin", role: "member" }] }
+const(value: [{ name: "Ada" }, { name: "Lin", role: "member" }])
+  -> pick(field: "value")
 -> pipeline.items
 @assert: result[0].role == "guest"
 @assert: result[1].role == "member"

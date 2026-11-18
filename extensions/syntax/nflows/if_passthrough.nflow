@@ -1,6 +1,6 @@
 @description "if with no matching condition passes the current input through unchanged"
 @assert: result.kept == "value" && result.flag == false
-const @{ value: { kept: "value", flag: false } }
+const( kept: "value", flag: false )
 -> if (.flag) {
-  fail @{ message: "true branch was evaluated for a false condition" }
+  fail ( message: "true branch was evaluated for a false condition" )
 }

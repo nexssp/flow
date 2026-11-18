@@ -16,7 +16,7 @@ func TestRunSourceInProcess_PersistsAndResumesApproval(t *testing.T) {
   reason: confirm the transfer
   expires: 1h
 }
-const @{ value: "approved" } -> approval.finance_review`
+const "approved" -> approval.finance_review`
 	args := []string{"--journal-dir", journalDir, "--execution-id", executionID, "--json"}
 	stdout, stderr := captureIO(t, func() {
 		if code := runSourceInProcess(t.Context(), source, "approval-cli.nflow", args); code != 3 {

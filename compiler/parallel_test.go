@@ -26,7 +26,7 @@ func TestParallelExpr_DuplicateActionNamesHaveDeterministicGatherKeys(t *testing
 		ctx,
 		testTable(),
 		DefaultPrimaryExtensions(),
-		`( test.echo @{ value: "first" } & test.keep @{ value: "solo" } & test.echo @{ value: "second" } & test.echo @{ value: "third" } )`,
+		`( test.echo ( value: "first" ) & test.keep ( value: "solo" ) & test.echo ( value: "second" ) & test.echo ( value: "third" ) )`,
 	).Parse()
 	if err != nil {
 		t.Fatalf("Parse: %v", err)

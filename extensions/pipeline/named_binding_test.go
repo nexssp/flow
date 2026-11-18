@@ -57,7 +57,7 @@ func TestNamedPipelineBindings_AIOutputExamples(t *testing.T) {
 func TestNamedPipelineBindings_DoNotEscapeDeclaredPipeline(t *testing.T) {
 	cfg := pipelineTestConfig(t)
 	source := `@pipeline private_binding
-  runtime.const @{ value: { Known: true } } as estimate
+  const( Known: true ) as estimate
   -> { known: estimate.Known }
 @end
 {} -> pipeline.private_binding -> { leaked: estimate.Known }
@@ -85,7 +85,7 @@ func TestNamedPipelineBindings_LoopScopeAndErrorRoute(t *testing.T) {
 	}
 
 	errorSource := `{ Known: true } as estimate_result
-	-> runtime.fail @{ kind: "Internal", message: "expected failure" } ? on_error ({ recovered: estimate_result.Known })
+	-> runtime.fail ( kind: "Internal", message: "expected failure" ) ? on_error ({ recovered: estimate_result.Known })
 `
 	errorResult, err := runner.Execute(context.Background(), cfg, errorSource, "error-binding-scope.nflow", nil)
 	if err != nil {

@@ -13,7 +13,7 @@ import (
 // StepAction renders one progress line and passes its input through
 // unchanged, minus the message key.
 //
-//	{ x: 1 } -> progress.step @{ message: "Loading" } -> { y: 2 }
+//	{ x: 1 } -> progress.step(message: "Loading") -> { y: 2 }
 //
 // After step runs, the pipeline sees { x: 1 }.
 func StepAction() action.AnyAction {
@@ -79,7 +79,7 @@ func readMessageOption(values map[string]any, capability string) (string, error)
 // "action" and "message".
 //
 //	{ duration_ms: 2000 }
-//	-> progress.wrap @{ action: runtime.sleep, message: "Slow op" }
+//	-> progress.wrap(action: sleep, message: "Slow op")
 func WrapAction() action.AnyAction {
 	return action.New("progress.wrap", func(ctx context.Context, req any) (any, error) {
 		resolver := contracts.ActionResolverFromContext(ctx)

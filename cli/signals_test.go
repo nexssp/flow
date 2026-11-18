@@ -32,7 +32,7 @@ func TestRunCLIWithSignals_CancellationWaitsForActionThenShutsDownOnce(t *testin
 				},
 				{
 					name:   "supervisor child",
-					source: `supervisor.run @{ tasks: [{ id: "child", dsl: "lifecycle_cli_signal.run", payload: {} }] }`,
+					source: `supervisor.run ( tasks: [{ id: "child", dsl: "lifecycle_cli_signal.run", payload: {} }] )`,
 				},
 			} {
 				t.Run(test.name, func(t *testing.T) {

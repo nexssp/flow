@@ -1,5 +1,5 @@
 @description "Raw positional and flag input stay strings without a schema"
 # Example: nflow run this-file.nflow 42 --count=42
 # Both @arg.1 and @flag.count resolve to the text "42".
-# To convert intentionally, use: const @{ value: @arg.1, coerce: true }
-const @{ positional: @arg.1, flag: @flag.count }
+# Convert only at an explicit typed boundary when the receiving field requires it.
+const ( positional: @arg.1, flag: @flag.count )

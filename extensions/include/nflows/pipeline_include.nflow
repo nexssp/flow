@@ -2,7 +2,7 @@
 @profile local_policy :retry=1
 
 @pipeline charge :profile=local_policy :tag="parent-module"
-  runtime.const @{ value: "parent-charge" }
+  const "parent-charge"
 @end
 
 @include ./child.nflow AS billing

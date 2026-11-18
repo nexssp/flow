@@ -196,7 +196,7 @@ func TestResolveConfigRefsInModifier(t *testing.T) {
 func TestResolveConfigRefsInUnquotedValues(t *testing.T) {
 	t.Parallel()
 
-	p := NewParser(context.Background(), NewOperatorTable(), `noop @{ config: @config.retries, flag: @flag.editor }`)
+	p := NewParser(context.Background(), NewOperatorTable(), `noop ( config: @config.retries, flag: @flag.editor )`)
 	ast, err := p.Parse()
 	ktest.RequireNoError(t, err)
 	atom, ok := ast.(*Atom)
@@ -235,13 +235,13 @@ func TestValidateConfigRefsInUnquotedValues(t *testing.T) {
 	}{
 		{
 			name: "unknown config reference",
-			src:  `noop @{ value: @config.missing }`,
+			src:  `noop ( value: @config.missing )`,
 			cfg:  map[string]string{"known": "value"},
 			want: "unknown @config.missing",
 		},
 		{
 			name: "unknown flag reference",
-			src:  `noop @{ value: @flag.missing }`,
+			src:  `noop ( value: @flag.missing )`,
 			args: []string{"--known=value"},
 			want: "unknown @flag.missing",
 		},

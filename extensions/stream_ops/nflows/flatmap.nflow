@@ -6,4 +6,6 @@
 @assert: result[3] == "item_2"
 @assert: result[4] == "item_3"
 @assert: result[5] == "item_3"
-cov.items -> stream.flatMap @{ expression: "[item, item]" } -> collect
+cov.items
+  -> stream.flatMap ( expression: "[item, item]" )
+  -> collect

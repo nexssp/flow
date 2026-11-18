@@ -167,10 +167,10 @@ func TestPipelineBoundariesUseQualifiedSchemasFromIncludedModule(t *testing.T) {
 @end
 @pipeline memory_response_invalid
   :out-schema=memory.ChatTurn
-  runtime.const @{ value: { role: "user" } }
+  const( role: "user" )
 @end
 @pipeline memory_validate
-  schema.validate @{ name: "memory.ChatTurn" }
+  schema.validate ( name: "memory.ChatTurn" )
 @end
 pipeline.memory_search
 `

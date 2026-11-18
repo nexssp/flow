@@ -185,7 +185,7 @@ func TestFuncImportsComposeNamespacesAcrossNestedIncludes(t *testing.T) {
 	}
 
 	argumentSource := `@include "./shipping.nflow" AS pricing
-runtime.const @{ shipping: pricing.commerce.shippingFee(.amount) }`
+runtime.const ( shipping: pricing.commerce.shippingFee(.amount) )`
 	argumentExecution, err := runner.Execute(t.Context(), cfg, argumentSource, mainPath, map[string]any{"amount": 21})
 	if err != nil {
 		t.Fatalf("execute imported function in argument map: %v", err)
@@ -213,7 +213,7 @@ func TestFuncWorksInsideImportedTypedMacroExpression(t *testing.T) {
 }`)
 
 	source := `@include "./billing.nflow" AS billing
-billing.@passthrough(runtime.const @{ value: billing.commerce.taxMinor(120) })`
+billing.@passthrough(const(value: billing.commerce.taxMinor(120)) -> pick(field: "value"))`
 	execution, err := runner.Execute(t.Context(), cfg, source, filepath.Join(root, "main.nflow"), nil)
 	if err != nil {
 		t.Fatalf("execute imported typed macro with imported function: %v", err)

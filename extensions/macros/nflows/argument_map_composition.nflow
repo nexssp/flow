@@ -19,14 +19,14 @@
 @assert: result.url == "/v1"
 @assert: result.profile.account_id == "acct-42"
 @assert: result.text == "# literal // remains text"
-runtime.const @{
+runtime.const (
   name: "Keon",
   email: "keon@example.test",
   account_id: "acct-42",
   defaults: { timeout: 5, retries: 2 },
   url: "/v1"
-}
--> runtime.const @{
+)
+-> runtime.const (
   @stats_config(tree_only),
   @stats_config(full_tree),
   @stats_config(tree_files),
@@ -38,4 +38,4 @@ runtime.const @{
   url: .url, # URL remains explicit after spreading defaults
   profile: { account_id },
   text: "# literal // remains text", // Comment markers in quotes are literal,
-}
+)

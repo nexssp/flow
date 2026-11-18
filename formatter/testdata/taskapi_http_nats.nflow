@@ -39,7 +39,7 @@
     key: "tasks/" + .id,
     value: { id: .id, title: .title, done: false }
   }
-  -> taskstore.kv.set @{ key: .key, value: .value }
+  -> taskstore.kv.set ( key: .key, value: .value )
 @end
 
 @pipeline get_task
@@ -48,7 +48,7 @@
   :nats_request="tasks.get"
 
   { key: "tasks/" + .id }
-  -> taskstore.kv.get @{ key: .key }
+  -> taskstore.kv.get ( key: .key )
   -> { found: (.).Hit, task: (.).Value }
 @end
 

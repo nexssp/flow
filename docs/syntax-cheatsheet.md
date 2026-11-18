@@ -34,9 +34,11 @@ string; numeric, boolean, and `null` literals keep their explicit types. Values
 from `@flag.*`, `@arg.N`, and `@config.*` remain strings by default.
 
 For flows, use parenthesized named arguments, projection shorthand, and `->`
-for sequential pipeline composition. The older `action(key=value, ...)` form remains accepted. `action @{ ... }` is
-compatibility-only and warned by `nflow lint`; `const(value=...)` and
-`const(val=...)` also warn because those keys still unwrap legacy scalars.
+for sequential pipeline composition. The older `action(key=value, ...)` form
+remains accepted. The old `action @{ ... }` spelling now fails compilation with
+a direct replacement hint; write `action(key: value)`. `const(value=...)` and
+`const(val=...)` are separate legacy key=value forms and still warn because
+those keys unwrap scalars.
 
 Modifiers and parenthesized arguments may be combined on the same action.
 Modifiers come before the call; both compact and spaced colon forms are accepted:
@@ -301,7 +303,7 @@ approval.review
 
 ## Syntax boundaries to remember
 
-- Legacy `@{ ... }` blocks contain structured data, not arbitrary expressions; use parenthesized calls in new flows.
+- `@{ ... }` action-argument blocks are rejected; replace them with parenthesized calls such as `action(key: value)`.
 - `@const` is compile-time; `const` is a runtime keyword action.
 - `@config` is a directive; an atom-level `@config` marker is a separate configuration-injection feature.
 - `@include` imports source modules; it is not textual expansion.

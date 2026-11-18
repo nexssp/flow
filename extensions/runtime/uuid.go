@@ -11,7 +11,7 @@ import (
 )
 
 // UUID generates a UUID v4. Without args it returns a bare string; with
-// @{ as: "field" } it merges the UUID into the input map under that key.
+// as: "field" in a parenthesized call, it merges the UUID under that key.
 var UUID = action.New("runtime.uuid", func(_ context.Context, in any) (any, error) {
 	id, err := newUUIDv4()
 	if err != nil {
@@ -32,7 +32,7 @@ var UUID = action.New("runtime.uuid", func(_ context.Context, in any) (any, erro
 		return base, nil
 	}
 	return id, nil
-}).Description("Generate a UUID v4; returns a string, or merges under @{ as: ... }").
+}).Description("Generate a UUID v4; returns a string, or merges under ( as: ... )").
 	Tag("base", "runtime").
 	Build()
 

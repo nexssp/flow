@@ -105,7 +105,7 @@ Check the call count before indexing, bind the call once with a projection-local
             tool_arguments: call.function.arguments
           },
       _
-        -> fail @{ message: "The model must return exactly one tool call" }
+        -> fail ( message: "The model must return exactly one tool call" )
     }
   -> match(.tool_name) {
       tool_names.count_words
@@ -113,7 +113,7 @@ Check the call count before indexing, bind the call once with a projection-local
       tool_names.text_stats
         -> pipeline.text_stats,
       _
-        -> fail @{ message: "The model returned a tool name that is not allowlisted" }
+        -> fail ( message: "The model returned a tool name that is not allowlisted" )
     }
 @end
 ```

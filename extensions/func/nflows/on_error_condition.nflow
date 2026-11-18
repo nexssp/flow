@@ -1,11 +1,11 @@
 @description "An included pure function can select an @on_error recovery route"
 @include "helpers.nflow" AS calc
 @pipeline timeout_recovery
-  const @{ value: "function-condition-recovered" }
+  const "function-condition-recovered"
 @end
 @on_error {
   when calc.checks.isTimeout(error.kind) -> pipeline.timeout_recovery
   else -> error.reraise
 }
 @assert: result == "function-condition-recovered"
-runtime.fail @{ kind: "Timeout", message: "expected test failure" }
+runtime.fail ( kind: "Timeout", message: "expected test failure" )

@@ -50,9 +50,9 @@ func TestIncludedPolicyKeepsLocalSymbolScopeAcrossCompilationPaths(t *testing.T)
 			return nil, errors.New("pipeline compiler missing from action context")
 		}
 		program, err := pipelineCompiler.CompilePipeline(`match(.policy.mode) {
-			route.active -> runtime.const @{ value: output_mode.clipboard },
-			_ -> runtime.const @{ value: output_mode.stdout }
-		}`)
+				route.active -> const output_mode.clipboard,
+				_ -> const output_mode.stdout
+			}`)
 		if err != nil {
 			return nil, err
 		}

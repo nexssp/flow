@@ -20,9 +20,9 @@ func TestSupervisorChildrenNFlowUsesTypedSchema(t *testing.T) {
 	}
 	input := map[string]any{
 		"tasks": []any{
-			map[string]any{"id": "num", "dsl": "const @{ value: 42 }", "payload": map[string]any{}},
+			map[string]any{"id": "num", "dsl": "const 42", "payload": map[string]any{}},
 			map[string]any{"id": "boom", "dsl": "fail", "payload": map[string]any{}},
-			map[string]any{"id": "echo", "dsl": "with @{ echoed: true }", "payload": map[string]any{"greeting": "hi"}},
+			map[string]any{"id": "echo", "dsl": "with ( echoed: true )", "payload": map[string]any{"greeting": "hi"}},
 		},
 	}
 	result, err := runner.Execute(t.Context(), cfg, string(fixture), "supervisor_children.nflow", input)

@@ -32,8 +32,8 @@ func TestConfigLoad_YAML(t *testing.T) {
 	ktest.RequireNoError(t, err)
 
 	src := `@config.load:path="` + filepath.ToSlash(ymlPath) + `"
-@assert: result.host == "api.example.test"
-runtime.const @{ value: { host: "@config.host" } }`
+	@assert: result.host == "api.example.test"
+const(host: "@config.host")`
 
 	ex, err := runner.Execute(context.Background(), cfg, src, "test.nflow", nil)
 	ktest.RequireNoError(t, err)

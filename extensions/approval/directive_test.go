@@ -12,12 +12,12 @@ func TestDirectiveParsesApprovalBlock(t *testing.T) {
   reason: "confirm the transfer"
   expires: 45m
 }
-const @{ value: "ready" }`
+const "ready"`
 	clean, meta, err := compiler.Preprocess(t.Context(), compiler.NewDirectiveTable(Directive), source, "approval.nflow")
 	if err != nil {
 		t.Fatalf("preprocess: %v", err)
 	}
-	if clean != "\n\n\n\n\nconst @{ value: \"ready\" }" {
+	if clean != "\n\n\n\n\nconst \"ready\"" {
 		t.Fatalf("clean source = %q", clean)
 	}
 	declarations := DeclarationsFromMeta(meta)

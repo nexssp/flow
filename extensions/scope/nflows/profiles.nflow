@@ -1,16 +1,20 @@
 @description "Profiles: same body runs with different policy per environment"
 
-@profile fast :timeout=1ms
-@profile slow :timeout=10s
+@profile fast
+  :timeout=1ms
+@profile slow
+  :timeout=10s
 
-@pipeline quick :profile=fast
-  sleep @{ duration_ms: 500 }
-  -> const @{ value: "quick-succeeded" }
+@pipeline quick
+  :profile=fast
+  sleep ( duration_ms: 500 )
+  -> const "quick-succeeded"
 @end
 
-@pipeline leisurely :profile=slow
-  sleep @{ duration_ms: 500 }
-  -> const @{ value: "leisurely-succeeded" }
+@pipeline leisurely
+  :profile=slow
+  sleep ( duration_ms: 500 )
+  -> const "leisurely-succeeded"
 @end
 
 # quick hits the 1ms profile timeout during its 500ms sleep and fails.
@@ -19,4 +23,5 @@
 
 @assert: result == "leisurely-succeeded"
 
-{} -> pipeline.quick || pipeline.leisurely
+{}
+  -> pipeline.quick || pipeline.leisurely

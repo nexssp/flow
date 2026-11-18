@@ -6,10 +6,14 @@
   p3: "24h"
 }
 
-{ severity: "high" } -> match {
-  .severity == "critical" -> const @{ value: sla.p1 },
-  .severity == "high"     -> const @{ value: sla.p2 },
-  _                       -> const @{ value: sla.p3 }
+{ severity: "high" }
+  -> match {
+	.severity == "critical"
+	  -> const sla.p1,
+	.severity == "high"
+	  -> const sla.p2,
+	_
+	  -> const sla.p3
 }
 
 @assert: result == "4h"

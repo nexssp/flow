@@ -17,7 +17,6 @@
 #
 # ═══════════════════════════════════════════════════════════════════════════
 
-
 # ───────────────────────────────────────────────────────────────────────────
 # 1. METADATA & VERSIONING
 # ───────────────────────────────────────────────────────────────────────────
@@ -29,7 +28,6 @@
 
 @description "NFlow v0.46.0 master showcase: every directive, keyword, operator, and modifier in one file"
 # @nflow_version ">=0.46.0"  # uncomment after v0.46.0 is released and tagged
-
 
 # ───────────────────────────────────────────────────────────────────────────
 # 2. CONFIGURATION
@@ -45,7 +43,6 @@
   currency: "USD"    :cli="c"
 }
 
-
 # ───────────────────────────────────────────────────────────────────────────
 # 3. CONSTANTS
 # ───────────────────────────────────────────────────────────────────────────
@@ -55,7 +52,6 @@
 @const SUPPORT_EMAIL = "support@example.com"
 @const MAX_ITEMS = 100
 @const ENVIRONMENT = "production"
-
 
 # ───────────────────────────────────────────────────────────────────────────
 # 4. SCHEMAS
@@ -72,7 +68,6 @@
   Currency  string  `json:"currency"   validate:"required,len=3"`
 }
 
-
 # ───────────────────────────────────────────────────────────────────────────
 # 5. SYMBOLS (domain enumerations)
 # ───────────────────────────────────────────────────────────────────────────
@@ -88,7 +83,6 @@
   completed:  "COMPLETED"
 }
 
-
 # ───────────────────────────────────────────────────────────────────────────
 # 6. MACROS (reusable inline functions)
 # ───────────────────────────────────────────────────────────────────────────
@@ -99,7 +93,6 @@
 @macro assert_positive_amount() {
   assert(.amount > 0, "amount must be positive")
 }
-
 
 # ───────────────────────────────────────────────────────────────────────────
 # 7. PROFILES (modifier bundles)
@@ -112,7 +105,6 @@
 @profile production_resilience
   :retry=3
   :timeout=500ms
-
 
 # ───────────────────────────────────────────────────────────────────────────
 # 8. ERROR HANDLING
@@ -127,7 +119,6 @@
   when error.kind == "BadRequest"   -> error.info
   else                              -> error.info
 }
-
 
 # ───────────────────────────────────────────────────────────────────────────
 # 9. PIPELINE DEFINITION
@@ -173,13 +164,15 @@
     total:    .total,
     currency: .currency,
     routing: match(.amount) {
-      > 1000 -> "enterprise_sales",
-      > 100  -> "standard_sales",
-      _      -> "self_service"
+      > 1000
+        -> "enterprise_sales",
+      > 100
+        -> "standard_sales",
+      _
+        -> "self_service"
     }
   }
 @end
-
 
 # ───────────────────────────────────────────────────────────────────────────
 # 10. PARALLEL EXECUTION
@@ -206,7 +199,6 @@
   }
 @end
 
-
 # ───────────────────────────────────────────────────────────────────────────
 # 11. RESILIENCE MODIFIERS
 # ───────────────────────────────────────────────────────────────────────────
@@ -224,7 +216,6 @@
 # :strict         — enforces typed payload validation at runtime.
 # :lenient        — disables strict validation for this action.
 
-
 # ───────────────────────────────────────────────────────────────────────────
 # 12. FALLBACK OPERATOR (||)
 # ───────────────────────────────────────────────────────────────────────────
@@ -236,8 +227,8 @@
   # Simulate an unavailable email transport; const returns its value directly,
   # and the fallback object deliberately preserves the order context.
   (
-    runtime.fail @{ kind: "Unavailable", message: "email transport unavailable" }
-    || const @{ value: {
+    runtime.fail ( kind: "Unavailable", message: "email transport unavailable" )
+    || const(
       order_id: .order_id,
       email: .email,
       amount: .amount,
@@ -248,10 +239,9 @@
       routing: .routing,
       lookups: .lookups,
       notification: { queued: true }
-    } }
+    )
   )
 @end
-
 
 # ───────────────────────────────────────────────────────────────────────────
 # 13. TERNARY EXPRESSION
@@ -266,7 +256,6 @@
   }
 @end
 
-
 # ───────────────────────────────────────────────────────────────────────────
 # 14. LOOP
 # ───────────────────────────────────────────────────────────────────────────
@@ -280,13 +269,11 @@
   -> { count: .idx }
 @end
 
-
 # ───────────────────────────────────────────────────────────────────────────
 # 15. OPTIONAL LANGUAGE ADAPTER
 # ───────────────────────────────────────────────────────────────────────────
 # Polyglot keywords are provided by github.com/nexssp/lang/nexssflow and are
 # exercised through the external @require harness, not this in-process fixture.
-
 
 # ───────────────────────────────────────────────────────────────────────────
 # 16. ASSERTIONS (compile-time + post-run)
@@ -297,7 +284,6 @@
 
 @assert: result.order_id != ""
 @assert: result.total > 0
-
 
 # ───────────────────────────────────────────────────────────────────────────
 # 17. SCOPE (modifier inheritance)
@@ -311,10 +297,9 @@
 
 @pipeline scoped_example
   @scope :retry=3 :timeout=1s {
-    const @{ value: "scoped_action_ran" }
+    const "scoped_action_ran"
   }
 @end
-
 
 # ───────────────────────────────────────────────────────────────────────────
 # 18. HOOKS (cross-cutting concerns)
@@ -325,7 +310,6 @@
 
 # @hook:tracing.span   # (requires a host that registers the hook)
 
-
 # ───────────────────────────────────────────────────────────────────────────
 # 19. POOL (dispatch to a set of actions)
 # ───────────────────────────────────────────────────────────────────────────
@@ -333,7 +317,6 @@
 #   Useful for sharding, A/B testing, or failover pools.
 
 # @pool payment_providers [stripe, adyen, braintree]
-
 
 # ───────────────────────────────────────────────────────────────────────────
 # 20. APPROVAL GATES
@@ -348,7 +331,6 @@
   expires: 30m
 }
 
-
 # ───────────────────────────────────────────────────────────────────────────
 # 21. EMBED (typed asset references)
 # ───────────────────────────────────────────────────────────────────────────
@@ -358,7 +340,6 @@
 
 # @embed terms_of_service "terms.txt"
 
-
 # ───────────────────────────────────────────────────────────────────────────
 # 22. INCLUDE (modular flows)
 # ───────────────────────────────────────────────────────────────────────────
@@ -367,7 +348,6 @@
 #   namespace.name. This is how you split a monolithic flow into modules.
 
 # @include "shared/schemas.nflow" AS shared
-
 
 # ───────────────────────────────────────────────────────────────────────────
 # 23. EVENT SUBSCRIPTION
@@ -379,7 +359,6 @@
 
 # @on event "http::8080"
 # @on event "nats:orders.incoming"
-
 
 # ───────────────────────────────────────────────────────────────────────────
 # 24. THE MAIN PIPELINE — composing everything
@@ -406,7 +385,6 @@
     status:      status.completed
   }
 @end
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # INPUT + EXECUTION

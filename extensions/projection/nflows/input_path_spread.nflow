@@ -1,7 +1,7 @@
 @description "spec: projection input-path spread preserves request state with intentional overrides"
 # The match value is {ok, data}; this state is read from the original request.
 @pipeline candidate_result
-  runtime.const @{ value: { ok: true, data: "candidate answer" } }
+  const( ok: true, data: "candidate answer" )
   -> match {
     .ok == true
       -> {

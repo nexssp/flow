@@ -158,12 +158,12 @@ passed through unchanged only to an action parameter explicitly declared as
 
 ```nflow
 @schema ApiRequest {
-  APIKey secret `json:"api_key" validate:"required"`
+	APIKey secret `json:"api_key" validate:"required"`
 }
 
 @pipeline call_api
   :request-schema=ApiRequest
-  http.request @{ url: "https://api.example/v1/items", bearer: .api_key }
+  http.request(url: "https://api.example/v1/items", bearer: .api_key)
 @end
 ```
 

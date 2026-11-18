@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/nexssp/kernel/xerr"
 
@@ -540,6 +541,10 @@ func analyzeTypedValueUncached(ctx TypeAnalysisContext, pos Position, value *Val
 	case ValueRef:
 		if value.Ref == "" {
 			return ctx.Input, nil
+		}
+		if strings.HasPrefix(value.Ref, "config.") ||
+			strings.HasPrefix(value.Ref, "flag.") || strings.HasPrefix(value.Ref, "arg.") {
+			return TypeDescriptor{Type: reflect.TypeFor[string]()}, nil
 		}
 		if ctx.CheckExpression == nil {
 			if contextContainsSecret(ctx) {

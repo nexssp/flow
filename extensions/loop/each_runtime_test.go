@@ -73,7 +73,7 @@ func TestEachAcceptsTypedSliceAndRejectsDynamicScalar(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build self-test config: %v", err)
 	}
-	const source = `pick @{ field: "items" } -> each { noop }`
+	const source = `pick ( field: "items" ) -> each { noop }`
 	result, err := runner.Execute(t.Context(), cfg, source, "typed_slice.nflow", map[string]any{
 		"items": []int{2, 4, 6},
 	})
@@ -85,7 +85,7 @@ func TestEachAcceptsTypedSliceAndRejectsDynamicScalar(t *testing.T) {
 		t.Fatalf("typed-slice output = %#v, want []any{2, 4, 6}", result.Output)
 	}
 
-	_, err = runner.Execute(t.Context(), cfg, `const @{ value: 42 } -> each { noop }`, "dynamic_scalar.nflow", nil)
+	_, err = runner.Execute(t.Context(), cfg, `const 42 -> each { noop }`, "dynamic_scalar.nflow", nil)
 	if err == nil || xerr.KindFrom(err) != xerr.KindValidation || !strings.Contains(err.Error(), "each: input must be a list") {
 		t.Fatalf("dynamic scalar error = %v, want each list validation error", err)
 	}
@@ -96,7 +96,7 @@ func TestEachRejectsNilInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build self-test config: %v", err)
 	}
-	_, err = runner.Execute(t.Context(), cfg, `const @{ value: null } -> each { noop }`, "nil_input.nflow", nil)
+	_, err = runner.Execute(t.Context(), cfg, `const null -> each { noop }`, "nil_input.nflow", nil)
 	if err == nil || xerr.KindFrom(err) != xerr.KindValidation || !strings.Contains(err.Error(), "each: input must be a list, got nil") {
 		t.Fatalf("nil input error = %v, want each nil-list validation error", err)
 	}
@@ -108,7 +108,7 @@ func TestEachRejectsListOverLimit(t *testing.T) {
 		t.Fatalf("build self-test config: %v", err)
 	}
 	items := make([]any, 100_001)
-	_, err = runner.Execute(t.Context(), cfg, `pick @{ field: "items" } -> each { noop }`, "over_limit.nflow", map[string]any{
+	_, err = runner.Execute(t.Context(), cfg, `pick ( field: "items" ) -> each { noop }`, "over_limit.nflow", map[string]any{
 		"items": items,
 	})
 	if err == nil || xerr.KindFrom(err) != xerr.KindBadRequest || !strings.Contains(err.Error(), "100001 items exceeds limit of 100000") {
@@ -161,7 +161,7 @@ func TestEachBoundsConcurrencyAndPreservesInputOrder(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	result, err := runner.Execute(ctx, cfg, `pick @{ field: "items" } -> each :concurrency=2 { test.each_worker }`, "ordered_concurrency.nflow", map[string]any{
+	result, err := runner.Execute(ctx, cfg, `pick ( field: "items" ) -> each :concurrency=2 { test.each_worker }`, "ordered_concurrency.nflow", map[string]any{
 		"items": []any{1, 2, 3},
 	})
 	if err != nil {
@@ -205,7 +205,7 @@ func TestEachFailureCancelsSiblingsAndWaitsForCleanup(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	_, err := runner.Execute(ctx, cfg, `pick @{ field: "items" } -> each :concurrency=2 { test.each_failure }`, "cancel_siblings.nflow", map[string]any{
+	_, err := runner.Execute(ctx, cfg, `pick ( field: "items" ) -> each :concurrency=2 { test.each_failure }`, "cancel_siblings.nflow", map[string]any{
 		"items": []any{1, 2, 3},
 	})
 	if !errors.Is(err, failure) {

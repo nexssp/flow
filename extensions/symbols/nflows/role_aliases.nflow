@@ -6,10 +6,14 @@
   on_call:        "on-call"
 }
 
-{ requested: "support.triage" } -> match {
-  .requested == roles.support_triage -> const @{ value: roles.support_triage },
-  .requested == roles.billing_refund -> const @{ value: roles.billing_refund },
-  _                                  -> const @{ value: roles.on_call }
+{ requested: "support.triage" }
+  -> match {
+	.requested == roles.support_triage
+	  -> const roles.support_triage,
+	.requested == roles.billing_refund
+	  -> const roles.billing_refund,
+	_
+	  -> const roles.on_call
 }
 
 @assert: result == "support.triage"

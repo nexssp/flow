@@ -2,4 +2,4 @@
 @assert: result.repositories[0] == "nexssp/kernel"
 @assert: result.repositories[1] == "nexssp/flow"
 @assert: result.metadata.source == "fixture"
-config_yaml.load @{ path: "repopeek.yml" }
+config_yaml.load ( path: "repopeek.yml" )

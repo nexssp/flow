@@ -958,7 +958,7 @@ func wrapWithInjections(inner action.AnyAction, a *Atom) action.AnyAction {
 
 func wrapWithSecretGuard(inner action.AnyAction, a *Atom) action.AnyAction {
 	pos := a.Pos
-	return action.New(a.Name, func(ctx context.Context, in any) (any, error) {
+	guarded := action.New(a.Name, func(ctx context.Context, in any) (any, error) {
 		if err := validateSecretDelivery(a, in); err != nil {
 			if pos.File != "" {
 				return nil, SourceError(pos, "%w", err)
@@ -980,6 +980,10 @@ func wrapWithSecretGuard(inner action.AnyAction, a *Atom) action.AnyAction {
 		}
 		return result, nil
 	}).Build()
+	if composition, ok := inner.(action.IntrospectionProvider); ok {
+		return action.WithComposition(guarded, composition.Introspection())
+	}
+	return guarded
 }
 
 func wrapWithDirectInput(inner action.AnyAction, a *Atom) action.AnyAction {
@@ -1036,7 +1040,7 @@ func wrapWithPayloadBuilder(
 			return nil, validationErr
 		}
 		var actionInput any = payload
-		if a.Name == runtimeConstAction && a.HasArgumentObject && !a.LegacyArgumentBlock {
+		if a.Name == runtimeConstAction && a.HasArgumentObject {
 			actionInput = constinput.Direct{Value: payload}
 		}
 		res, err := action.InvokeAny(ctx, inner, actionInput)

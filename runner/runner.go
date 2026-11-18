@@ -63,7 +63,7 @@ type Config struct {
 
 	// ArgSchemas is the merged per-action argument schema published by
 	// every mounted bundle. It is exposed so diagnostics (nflow lint
-	// today) can validate @{...} capability references without building
+	// today) can validate named capability references without building
 	// the action graph. Build-time advisors are the runtime counterpart;
 	// this field makes the same checks reachable from a pure parse.
 	ArgSchemas map[string][]compiler.ArgFieldSpec

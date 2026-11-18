@@ -8,7 +8,7 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
-// Fail always returns an error. The @{ kind: "..." } arg selects the
+// Fail always returns an error. The `kind: "..."` named argument selects the
 // xerr kind; the default is Internal. It is the idiomatic way to
 // simulate a specific failure for fallback pipelines.
 var Fail = action.New("runtime.fail", func(_ context.Context, in any) (any, error) {

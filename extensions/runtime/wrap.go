@@ -9,7 +9,7 @@ import (
 )
 
 // Wrap wraps the input object under a named key. The key is required:
-// wrap @{ key: "data" }.
+// wrap(key: "data").
 var Wrap = action.New("runtime.wrap", func(_ context.Context, in any) (any, error) {
 	m, ok := in.(map[string]any)
 	if !ok {
@@ -17,7 +17,7 @@ var Wrap = action.New("runtime.wrap", func(_ context.Context, in any) (any, erro
 	}
 	key := strings.TrimSpace(readStringArg(m, "key"))
 	if key == "" {
-		return nil, xerr.BadRequest(`wrap: key is required (use: wrap @{ key: "data" })`)
+		return nil, xerr.BadRequest(`wrap: key is required (use: wrap(key: "data"))`)
 	}
 	inner := make(map[string]any, len(m))
 	for k, v := range m {

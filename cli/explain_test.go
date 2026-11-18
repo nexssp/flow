@@ -46,7 +46,7 @@ func explainSource(t *testing.T, src string) string {
 }
 
 func TestExplain_AtomWithoutModifiers(t *testing.T) {
-	out := explainSource(t, `const @{ value: "ok" }`)
+	out := explainSource(t, `const "ok"`)
 	ktest.RequireStringContains(t, out, "runtime.const")
 	ktest.RequireStringContains(t, out, "(no modifiers)")
 }

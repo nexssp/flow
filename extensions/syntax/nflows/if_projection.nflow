@@ -1,6 +1,6 @@
 @description "nested if expressions compose inside projection values"
 @assert: result.choice == "nested-yes"
-const @{ value: { outer: true, inner: true } }
+const( outer: true, inner: true )
 -> {
   choice: if (.outer) {
     if (.inner) { const "nested-yes" } else { const "nested-no" }

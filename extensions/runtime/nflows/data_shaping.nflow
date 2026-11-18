@@ -11,6 +11,6 @@
   secret: "leaked",
   extra: "ignored",
 }
--> pick @{ only: ["id", "name"] }
--> with @{ audited: true }
--> wrap @{ key: "payload" }
+-> pick ( only: ["id", "name"] )
+-> with ( audited: true )
+-> wrap ( key: "payload" )

@@ -36,7 +36,7 @@ func (b *braceScanner) peek() byte {
 func (b *braceScanner) advance() { b.pos++ }
 
 func (b *braceScanner) errf(format string, args ...any) error {
-	return SourceError(b.base, "%s", "@{...}: "+fmt.Sprintf(format, args...))
+	return SourceError(b.base, "%s", "(...): "+fmt.Sprintf(format, args...))
 }
 
 func (b *braceScanner) skipWS() {

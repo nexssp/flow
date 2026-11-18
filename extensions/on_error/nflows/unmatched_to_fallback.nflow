@@ -1,7 +1,8 @@
 @description "An unmatched typed expression handler propagates to the enclosing fallback"
 @assert: result == "fallback"
-runtime.fail @{ kind: "NotFound", message: "missing" }
+runtime.fail ( kind: "NotFound", message: "missing" )
 ? on_error {
-  xerr.KindTimeout -> runtime.const @{ value: "recovered" }
+  xerr.KindTimeout
+    -> const "recovered"
 }
-|| runtime.const @{ value: "fallback" }
+|| const "fallback"

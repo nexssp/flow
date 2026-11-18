@@ -12,8 +12,8 @@ import (
 
 func TestDiscoverTestFlowsOneLevelAndSorted(t *testing.T) {
 	root := t.TempDir()
-	writeTestFlow(t, filepath.Join(root, "scenario-z", "second.nflow"), "const @{ value: \"z\" }\n")
-	writeTestFlow(t, filepath.Join(root, "scenario-a", "main.nflow"), "const @{ value: \"a\" }\n")
+	writeTestFlow(t, filepath.Join(root, "scenario-z", "second.nflow"), "const \"z\"\n")
+	writeTestFlow(t, filepath.Join(root, "scenario-a", "main.nflow"), "const \"a\"\n")
 	writeTestFlow(t, filepath.Join(root, "scenario-a", "nested", "helper.nflow"), "this is not a test entrypoint\n")
 	writeTestFlow(t, filepath.Join(root, "root.nflow"), "this is not a test entrypoint\n")
 
@@ -40,8 +40,8 @@ func TestTestCommandRunsEveryFlowAndEvaluatesAssertions(t *testing.T) {
 	bad := filepath.Join(root, "01_bad", "main.nflow")
 	good := filepath.Join(root, "02_good", "main.nflow")
 	ignored := filepath.Join(root, "02_good", "common", "helper.nflow")
-	writeTestFlow(t, good, "const @{ value: \"good\" }\n@assert: result == \"good\"\n")
-	writeTestFlow(t, bad, "const @{ value: \"bad\" }\n@assert: result == \"good\"\n")
+	writeTestFlow(t, good, "const \"good\"\n@assert: result == \"good\"\n")
+	writeTestFlow(t, bad, "const \"bad\"\n@assert: result == \"good\"\n")
 	writeTestFlow(t, ignored, "not valid Flow source\n")
 
 	code, stdout, stderr := runTestCommand(t, []string{"test", root})
@@ -99,7 +99,7 @@ func TestTestCommandRejectsInvalidInvocation(t *testing.T) {
 
 func TestTestCommandIsNotTreatedAsToolchainFlow(t *testing.T) {
 	flow := filepath.Join(t.TempDir(), "main.nflow")
-	writeTestFlow(t, flow, "const @{ value: \"ok\" }\n")
+	writeTestFlow(t, flow, "const \"ok\"\n")
 	if isFileBasedRuntimeInvocation([]string{"test", flow}) {
 		t.Fatal("nflow test was classified as a file-based run invocation")
 	}

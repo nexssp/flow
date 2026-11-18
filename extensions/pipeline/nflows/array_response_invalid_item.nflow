@@ -4,7 +4,8 @@
 }
 @pipeline items
   :response-schema=[]Item
-  runtime.const @{ value: [{ name: "" }] }
+  const(value: [{ name: "" }])
+    -> pick(field: "value")
 @end
 pipeline.items ? on_error {
   xerr.KindValidation

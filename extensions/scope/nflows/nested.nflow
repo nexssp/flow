@@ -1,7 +1,7 @@
 @description "Nested scopes do not break execution"
 @scope :tag="outer" {
   @scope :tag="inner" {
-    const @{ value: "ok" }
+    const "ok"
   }
 }
 @assert: result == "ok"

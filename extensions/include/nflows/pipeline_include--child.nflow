@@ -2,11 +2,11 @@
 @profile local_policy :retry=2
 
 @pipeline charge
-  runtime.const @{ value: "child-charge" }
+  const "child-charge"
 @end
 
 @pipeline local_support
-  runtime.const @{ value: "child-local-pipeline" }
+  const "child-local-pipeline"
 @end
 
 @pipeline local_chain :profile=local_policy :tag="child-module"

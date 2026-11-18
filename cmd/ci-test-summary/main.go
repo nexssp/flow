@@ -53,16 +53,34 @@ func main() {
 	os.Exit(run(os.Args[1:]))
 }
 
-func newHarnessTestCommand(ctx context.Context) *exec.Cmd {
-	if os.Getenv(skipTestAllNFlowConformanceEnv) == "1" {
-		return exec.CommandContext(ctx, "go", "test", "-json", "-count=1", "-skip="+testAllNFlowConformanceSkipRegex, "./builder", "./cli/...")
+func harnessTestPackages(args []string) ([]string, error) {
+	switch len(args) {
+	case 0:
+		return []string{"./builder", "./cli/..."}, nil
+	case 1:
+		switch args[0] {
+		case "builder":
+			return []string{"./builder"}, nil
+		case "cli":
+			return []string{"./cli/..."}, nil
+		}
 	}
-	return exec.CommandContext(ctx, "go", "test", "-json", "-count=1", "./builder", "./cli/...")
+	return nil, errors.New("usage: go run ./cmd/ci-test-summary [builder|cli]")
+}
+
+func newHarnessTestCommand(ctx context.Context, packages []string) *exec.Cmd {
+	args := []string{"test", "-json", "-count=1"}
+	if os.Getenv(skipTestAllNFlowConformanceEnv) == "1" {
+		args = append(args, "-skip="+testAllNFlowConformanceSkipRegex)
+	}
+	args = append(args, packages...)
+	return exec.CommandContext(ctx, "go", args...)
 }
 
 func run(args []string) int {
-	if len(args) != 0 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./cmd/ci-test-summary")
+	packages, scopeErr := harnessTestPackages(args)
+	if scopeErr != nil {
+		fmt.Fprintln(os.Stderr, scopeErr)
 		return 2
 	}
 
@@ -77,8 +95,7 @@ func run(args []string) int {
 		return 2
 	}
 
-	fmt.Fprintf(os.Stdout, "Running Go tests; detailed event output is being captured.\n")
-	cmd := newHarnessTestCommand(context.Background())
+	cmd := newHarnessTestCommand(context.Background(), packages)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	runErr := cmd.Run()
@@ -95,9 +112,6 @@ func run(args []string) int {
 	}
 
 	if runErr == nil {
-		summary := fmt.Sprintf("Go tests passed: %d test(s) across %d package(s).", report.passedTests, len(report.packages))
-		fmt.Fprintln(os.Stdout, summary)
-		appendGitHubSummary("### Harness tests passed\n\n" + summary + "\n")
 		return 0
 	}
 

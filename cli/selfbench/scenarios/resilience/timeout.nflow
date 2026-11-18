@@ -2,7 +2,7 @@
 @assert: result == "ok"
 @pipeline benchmark
   :timeout=1s
-  const @{ value: "ok" }
+  const "ok"
 @end
 {}
 -> pipeline.benchmark
