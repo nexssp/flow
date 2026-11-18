@@ -34,7 +34,7 @@ legacy `@{ value: ... }` / `@{ val: ... }` form remains supported. Values from
 `@flag.*`, `@arg.N`, and `@config.*` stay strings unless `coerce: true` is
 included with the named value.
 
-For new flows, use structured `@{ ... }` arguments, projection shorthand, and pipeline composition (`->` or `|`). The older `action(key=value, ...)` form is parsed only to keep existing flows working; it is intentionally not used in these examples.
+For flows, use structured `@{ ... }` arguments, projection shorthand, and `->` for sequential pipeline composition. The older `action(key=value, ...)` form is parsed only to keep existing flows working; it is intentionally not used in these examples.
 
 Modifiers and `@{ ... }` may be combined on the same action. Modifiers come
 before the argument block; both compact and spaced colon forms are accepted:
@@ -63,7 +63,6 @@ request.action :timeout=3s :retry=2 @{ id: .id }
 
 ```nflow
 left -> right
-left | right
 left || fallback
 (left & right)
 parallel { one: left, two: right }
@@ -72,7 +71,8 @@ list -> each :concurrency=4 { expr }
 condition ? yes : no
 ```
 
-- `->` and `|` pass the left result to the right action.
+- `->` passes the left result to the right action; `|` is not a sequential Flow operator.
+- `|` remains valid inside expressions, for example in array transformations.
 - `||` runs the right side after a left-side error.
 - `&` gathers concurrent branches under canonical action names.
 - `parallel` gathers concurrent branches under explicit labels.

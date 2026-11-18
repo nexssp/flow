@@ -156,18 +156,18 @@ customers.lookup :read_only @{ customer_id: .customer_id }
 
 ## 3. Data flow and operators
 
-### Pipe with `->`
+### Project output with `->`
 
 ```exs
 orders.get @{ order_id: .order_id }
 -> { id: .id, total: .total, status: .status }
 ```
 
-### Pipe with `|`
+### Select a field with `->`
 
 ```exs
 orders.get @{ order_id: .order_id }
-| pick @{ field: "customer.email" }
+-> pick @{ field: "customer.email" }
 ```
 
 ### Recover with `||`

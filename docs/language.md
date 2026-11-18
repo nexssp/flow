@@ -27,7 +27,6 @@ The pipeline is the flow. These forms cover its operators and structured express
 | Form | Meaning |
 |---|---|
 | `a -> b` | Pass the output of `a` into `b` |
-| `a \| b` | Sugar for `a -> b` |
 | `a \|\| b` | Run `b` if `a` fails |
 | `(a & b)` | Run `a` and `b` concurrently, gather both |
 | `parallel { label: expr, ... }` | Run branches concurrently and gather results under explicit labels |
@@ -36,6 +35,10 @@ The pipeline is the flow. These forms cover its operators and structured express
 | `list -> each :concurrency=4 { expr }` | Map a block over list items, returning outputs in input order |
 | `{ key: expr, ... }` | Project a new object from the current input |
 | `a ? b : c` | Conditional: `b` when `a` is truthy, else `c` |
+
+`->` is the only sequential pipeline operator. A single `|` between Flow steps
+is rejected; replace it with `->`. This does not change `|` inside expressions
+(such as array transformations), or the meanings of `&` and `||`.
 
 `if` is reserved syntax supplied by the standard `syntax` bundle; it is not a
 bare action or identifier name. Conditions are evaluated in order and lazily.

@@ -201,6 +201,26 @@ func TestRunLintExplicitFileKeepsSingleFileSuccessOutput(t *testing.T) {
 	}
 }
 
+func TestRunLintRejectsSinglePipeSequentialOperator(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy-pipe.nflow")
+	if err := os.WriteFile(path, []byte(`runtime.const @{ value: "legacy" } | runtime.noop`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code := captureLintOutput(t, func() int {
+		return runLint([]string{path})
+	})
+	if code == 0 {
+		t.Fatalf("lint accepted the removed sequential pipe; stdout=%q stderr=%q", stdout, stderr)
+	}
+	var issues []LintIssue
+	if err := json.Unmarshal([]byte(stdout), &issues); err != nil {
+		t.Fatalf("decode compile diagnostic: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if len(issues) != 1 || issues[0].Kind != lintIssueCompile || !strings.Contains(issues[0].Message, `unexpected token "|"`) {
+		t.Fatalf("lint diagnostics = %#v, want one single-pipe syntax error", issues)
+	}
+}
+
 func TestRunLintBatchContinuesWhenExternalHarnessIsUnavailable(t *testing.T) {
 	root := t.TempDir()
 	good := filepath.Join(root, "good.nflow")

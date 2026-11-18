@@ -1,5 +1,5 @@
-// Package syntax ships the four binary operators every .nflow file
-// relies on: ->, |, &, ||, plus the structured parallel and race forms.
+// Package syntax ships the standard binary operators every .nflow file
+// relies on: ->, &, ||, plus the structured parallel and race forms.
 //
 // The package is a native bundle — always mounted by native.Bundles()
 // and never requires @require. It lives under extensions/ rather than
@@ -29,7 +29,7 @@ func Bundle(_ map[string]string) compiler.Bundle {
 	return compiler.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID}},
-		Operators: []compiler.Operator{pipe, pipeAlias, parallel, fallback},
+		Operators: []compiler.Operator{pipe, parallel, fallback},
 		Primaries: []compiler.PrimaryExtension{namedParallelKeyword{}, raceKeyword{}, ifKeyword{}, namedBindingPostfix{}},
 		Fixtures:  fixturesFS,
 	}
@@ -43,18 +43,6 @@ var pipe = compiler.Operator{
 		Associativity: compiler.Left,
 		Description:   "Pass left output to right input",
 		Example:       `runtime.const(value=hi) -> runtime.debug`,
-	},
-	Handler: pipeHandler,
-}
-
-var pipeAlias = compiler.Operator{
-	Meta: compiler.OperatorMeta{
-		Name:          "pipe_alias",
-		Token:         compiler.TokPipe,
-		Precedence:    7,
-		Associativity: compiler.Left,
-		Description:   "Syntax sugar for ->; uses the same pipeline semantics",
-		Example:       `runtime.const(value=hi) | runtime.debug`,
 	},
 	Handler: pipeHandler,
 }

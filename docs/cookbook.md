@@ -44,11 +44,7 @@ Use `value` for a scalar, array, or an object that must remain under one field. 
 const @{ value: "Julia" } -> wrap @{ key: "greeting" }
 ```
 
-`|` is an alias for `->`:
-
-```nflow
-const @{ value: "Julia" } | wrap @{ key: "greeting" }
-```
+Use `->` as the only sequential pipeline operator. A single `|` is still valid inside expressions, such as array transformations.
 
 ### Project fields
 

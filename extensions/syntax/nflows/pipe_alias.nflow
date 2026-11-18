@@ -1,3 +1,0 @@
-@description "Pipe alias | behaves like sequential flow"
-@assert: result == "same pipeline result"
-runtime.const @{ value: "same pipeline result" } | runtime.noop
