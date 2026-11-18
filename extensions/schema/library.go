@@ -58,7 +58,7 @@ func Bundle(_ map[string]string) compiler.Bundle {
 	return compiler.Bundle{
 		ID:           ID,
 		Libraries:    []action.Library{Library()},
-		Directives:   []compiler.Directive{Directive},
+		Directives:   []compiler.Directive{Directive, EnumDirective},
 		Modifiers:    []compiler.Modifier{SchemaModifier, RequestSchemaModifier, ResponseSchemaModifier, InSchemaModifier, OutSchemaModifier},
 		OnPreprocess: wireSchemaAdvisor,
 		Materialize:  materialize,

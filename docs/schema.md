@@ -169,6 +169,31 @@ Declare the symbol namespace before the schema; an unknown member inside a
 declared namespace is a compile-time error. See [Symbols](symbols.md) for scope
 and declaration forms.
 
+Use `@symbols` for general file-local constants and `@enum` for a closed set of
+wire strings. An enum member's wire value defaults to its name; explicit values
+must be unique, nonempty, and contain no whitespace. Enum fields accept only
+their declared wire values at runtime, and `ToJSONSchema` emits the full set:
+
+```nflow
+@enum OrderStatus {
+  pending
+  paid = "settled"
+  cancelled = "cancelled_by_user"
+}
+@schema Order {
+  status OrderStatus `json:"status" default:"OrderStatus.pending"`
+  refund_status OrderStatus `json:"refund_status" validate:"required,oneof=OrderStatus.paid OrderStatus.cancelled"`
+}
+{ status: OrderStatus.paid, refund_status: OrderStatus.cancelled } -> Order.validate
+```
+
+Enum defaults must explicitly name a member of that exact enum; Flow does not
+infer a default. On enum fields, `oneof` can narrow the accepted members, but
+each operand must name a member of the same enum. On ordinary string fields,
+`oneof` retains its existing validator behavior. An included enum is visible
+only through its `@include` alias, such as `billing.OrderStatus` and
+`billing.OrderStatus.paid`.
+
 ## Supported values
 
 - `string`, booleans, integer types, and `float32`/`float64` use their natural

@@ -20,6 +20,9 @@ func resolveSchemaSymbols(fields []Field, local map[string]compiler.SymbolNamesp
 
 	for i := range fields {
 		field := &fields[i]
+		if field.EnumType != "" {
+			continue
+		}
 		if field.Tags == nil {
 			continue
 		}

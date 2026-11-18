@@ -79,22 +79,15 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 			return compiler.DirectiveRes{Next: next}, compiler.SourceError(pos, "@schema %s: duplicate declaration", name)
 		}
 	}
+	for _, enum := range EnumsFromMap(req.Out) {
+		if enum.Name == name {
+			return compiler.DirectiveRes{Next: next}, compiler.SourceError(pos, "@schema %s: name conflicts with an enum", name)
+		}
+	}
 
-	raw, embedReferences, err := parseSchemaEntries(block.Entries, body, req, pos, name)
+	raw, embedReferences, err := parseAndValidateSchemaFields(block.Entries, body, req, pos, name, req.Out)
 	if err != nil {
 		return compiler.DirectiveRes{Next: next}, err
-	}
-	if resolveErr := resolveSchemaSymbols(raw, compiler.SymbolsFromMeta(req.Out)); resolveErr != nil {
-		if _, positioned := compiler.PositionOf(resolveErr); positioned {
-			return compiler.DirectiveRes{Next: next}, resolveErr
-		}
-		return compiler.DirectiveRes{Next: next}, compiler.SourceError(pos, "@schema %s: %v", name, resolveErr)
-	}
-	if defaultErr := validateSchemaDefaults(raw); defaultErr != nil {
-		if _, positioned := compiler.PositionOf(defaultErr); positioned {
-			return compiler.DirectiveRes{Next: next}, defaultErr
-		}
-		return compiler.DirectiveRes{Next: next}, compiler.SourceError(pos, "@schema %s: %v", name, defaultErr)
 	}
 	for _, reference := range embedReferences {
 		req.RecordReference(reference)
@@ -108,6 +101,30 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 
 	req.Out["schemas"] = append(existing, Schema{Name: name, Fields: fields})
 	return compiler.DirectiveRes{Next: next}, nil
+}
+
+func parseAndValidateSchemaFields(entries []compiler.BlockEntry, body []string, req compiler.DirectiveReq, pos compiler.Position, name string, meta map[string]any) ([]Field, []compiler.SourceReference, error) {
+	raw, embedReferences, err := parseSchemaEntries(entries, body, req, pos, name)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := resolveEnumFieldTypes(raw, VisibleEnumsFromMeta(meta)); err != nil {
+		return nil, nil, wrapSchemaResolutionError(pos, name, err)
+	}
+	if err := resolveSchemaSymbols(raw, compiler.SymbolsFromMeta(meta)); err != nil {
+		return nil, nil, wrapSchemaResolutionError(pos, name, err)
+	}
+	if err := validateSchemaDefaults(raw); err != nil {
+		return nil, nil, wrapSchemaResolutionError(pos, name, err)
+	}
+	return raw, embedReferences, nil
+}
+
+func wrapSchemaResolutionError(pos compiler.Position, name string, err error) error {
+	if _, positioned := compiler.PositionOf(err); positioned {
+		return err
+	}
+	return compiler.SourceError(pos, "@schema %s: %v", name, err)
 }
 
 // resolveNestedSchemaTypes links named @schema types to earlier declarations.

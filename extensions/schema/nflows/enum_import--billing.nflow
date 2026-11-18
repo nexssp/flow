@@ -1,0 +1,5 @@
+@description "A module-local enum exported only through its include alias"
+@enum OrderStatus {
+  pending
+  paid = "settled"
+}

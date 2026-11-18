@@ -130,6 +130,12 @@ Supported parameter and result types are `int`, `int64`, `float64`, `string`, an
 
 `@symbols NAME { ... }` declares a file-local namespace of string values. In expression positions, refer to them as `NAME.member`; in data positions, an unquoted known symbol resolves to its declared string. Local namespaces shadow same-named global namespaces; current input values take precedence on collisions in expression environments. An included module's public namespace is addressed through its import qualifier, for example `billing.queues.review`; its unqualified declarations remain local to that module. See [`docs/symbols.md`](symbols.md) and [`extensions/symbols/`](../extensions/symbols/).
 
+`@enum NAME { member, other = "wire-value" }` declares a file-local closed
+string type. Refer to members as `NAME.member`; omitted wire values equal the
+member name. Enum wire values must be unique, nonempty, and whitespace-free.
+An included enum is addressed through its explicit module alias, for example
+`billing.OrderStatus.member`. See [`docs/schema.md`](schema.md).
+
 ## Pipeline operators and control flow
 
 The core parser obtains operators from the active table. In the shipped standard set, the supported pipeline operators include:
@@ -218,6 +224,7 @@ Directives are preprocessed declarations, not ordinary action calls. The stock C
 | `@const` / `@const.load` | `@const NAME = VALUE` substitutes compile-time constants. `@const.load "settings.json" as settings [:schema=Settings]` loads JSON into a constant namespace and can validate it against a previously declared schema during preprocessing. |
 | `@nflow_version` | `@nflow_version ">=0.37.0 <0.40.0"`; compile-time compiler-version constraint on `MAJOR.MINOR.PATCH`. Whitespace-separated terms are combined with AND: every comparison must hold. Supports `=`, `==`, `>=`, `<=`, `>`, `<`, or a bare equality version, including a space after an operator. An optional `v` prefix is accepted and pre-release/build suffixes are ignored for comparison. No OR, wildcard, caret, tilde, or hyphen range syntax. Development/unknown compiler builds retain the existing bypass of constraint validation and comparison. |
 | `@symbols` | `@symbols NAME { key: "value" }`; file-local expression/data namespace. |
+| `@enum` | `@enum NAME { member, other = "wire-value" }`; file-local closed set of wire strings, available as `NAME.member`. |
 | `@schema` | `@schema NAME { fields }`; declares a runtime payload schema. Field syntax and tags are shown below. |
 | `@hook` | `@hook:hook.verify,observe.metrics`; attaches registered Kernel hooks to the compiled program. Names must exist in the active Kernel registry or materialization fails. |
 | `@pool` | `@pool workers [action.a, action.b] { strategy: "failover" }`; declares a dispatcher `pool.workers`. Strategies are `round_robin` (default), `failover`, and `hash`; `hash` requires `key: ".field.path"`. |
@@ -245,7 +252,11 @@ A continuation line must begin with indentation (spaces/tabs) deeper than the di
 
 `@include` is a source-based module import, not textual expansion or a metadata merge. One ordinary include exposes pipelines (`billing.pipeline.charge`), schemas (`billing.StatsRequest`), symbols (`billing.output.text`), and macros (`billing.@stats_config(tree_only)` in an expression) under the same alias; no macro-only import form is needed. Without `AS`, the filename stem is the namespace. An imported clean body is retained as the compiled module body and invoked at its import site; declaration-only imports add no execution atom by themselves. Each module has its own declaration environment and resolver: child pipelines resolve their local pipeline/symbol references locally, while the parent keeps its own declarations. Nested imports compose their own qualifiers. Reusing a leaf name across distinct namespaces is allowed because qualified references disambiguate it; repeated aliases within one source are compile errors. Duplicate declarations report the first declaration location. Constants and profiles retain their existing local/preprocessor behavior and are not exported. `@require` remains a separate extension-loading directive and is not affected by module imports.
 
-Constants and profiles are local to their declaring module. Pipelines, schemas, symbols, and macros from an ordinary include are available under its namespace; macro expansion remains expression-only and does not emit declarations. Directive syntax and behavior are implemented in [`extensions/`](../extensions/) by the corresponding directive handlers; tests and embedded `.nflow` fixtures under each extension directory are the accepted examples. The introductory walkthrough of reusable pipelines and macros is in [`docs/language.md`](language.md).
+An imported enum is visible only by its include-qualified type and members, such as
+`billing.OrderStatus` and `billing.OrderStatus.paid`; the unqualified child enum
+name is not imported into the parent.
+
+Constants and profiles are local to their declaring module. Pipelines, schemas, enums, symbols, and macros from an ordinary include are available under its namespace; macro expansion remains expression-only and does not emit declarations. Directive syntax and behavior are implemented in [`extensions/`](../extensions/) by the corresponding directive handlers; tests and embedded `.nflow` fixtures under each extension directory are the accepted examples. The introductory walkthrough of reusable pipelines and macros is in [`docs/language.md`](language.md).
 
 The compiler-version directive is spelled `@nflow_version` only; the previous spelling is no longer registered. This is a breaking syntax change. The extension package remains `extensions/flow_version`.
 
@@ -258,6 +269,12 @@ The compiler-version directive is spelled `@nflow_version` only; the previous sp
 ## Schema declarations and validation boundaries
 
 `@schema` is implemented and is the right construct for declarative input shape/validation. The accepted declaration forms are `@schema NAME { ... }` and `@schema NAME struct { ... }`. Fields use `Field Type` and optional Go-style backtick tags; embedded schemas must be declared earlier. An empty body is valid and represents a zero-property object, including a tool that accepts no arguments. Supported scalar categories include strings, signed/unsigned integers, floats, booleans, and `any`/`interface{}`; slices, maps, pointers and struct-shaped values are recognized by the schema parser. Field names default to a lower-cased initial letter for their JSON key; `json:"..."` overrides it. Declaration syntax, names, tag syntax, defaults, duplicate names and references to unknown schemas are checked before a run.
+
+An earlier `@enum` may be used as a schema field type. Enum fields automatically
+validate against the complete wire-value set and include that set in JSON Schema.
+An enum `default` must explicitly name a member of that exact enum, and enum
+`oneof` operands may narrow only to members of the same enum. Plain string fields
+keep the existing `oneof` behavior.
 
 ```nflow
 @schema Request {

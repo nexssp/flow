@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -44,6 +45,8 @@ type Field struct {
 	Map             bool
 	Tags            map[string]string
 	Embed           string
+	EnumType        string
+	EnumValues      []string
 	TypedDefault    any
 	HasTypedDefault bool
 	NestedSchema    *Schema `json:"-"`
@@ -278,6 +281,10 @@ func validateValues(ctx context.Context, schema Schema, m map[string]any) error 
 			details = append(details, detail)
 			continue
 		}
+		if detail, bad := checkEnumMembership(field, value); bad {
+			details = append(details, detail)
+			continue
+		}
 
 		if rule == "" {
 			continue
@@ -337,6 +344,47 @@ func detailsFromVarError(err error, fieldName string) xerr.ValidationDetails {
 		Validation: "custom",
 		Value:      err.Error(),
 	}}
+}
+
+func checkEnumMembership(field Field, value any) (xerr.ValidationDetail, bool) {
+	if len(field.EnumValues) == 0 || value == nil {
+		return xerr.ValidationDetail{}, false
+	}
+	allowed := func(candidate any) (string, bool) {
+		text, ok := candidate.(string)
+		if !ok {
+			return text, false
+		}
+		return text, slices.Contains(field.EnumValues, text)
+	}
+	if field.Slice {
+		reflected := reflect.ValueOf(value)
+		for index := range reflected.Len() {
+			candidate := reflected.Index(index).Interface()
+			text, ok := allowed(candidate)
+			if !ok {
+				detail := xerr.ValidationDetail{Field: field.JSONName, Validation: "enum"}
+				if _, isString := candidate.(string); !isString {
+					detail.Value = fmt.Sprintf("element %d must be an enum string (got %s)", index, friendlyType(candidate))
+				} else {
+					detail.Value = fmt.Sprintf("element %d must be one of %v (got %q)", index, field.EnumValues, text)
+				}
+				return detail, true
+			}
+		}
+		return xerr.ValidationDetail{}, false
+	}
+	text, ok := allowed(value)
+	if ok {
+		return xerr.ValidationDetail{}, false
+	}
+	detail := xerr.ValidationDetail{Field: field.JSONName, Validation: "enum"}
+	if _, isString := value.(string); !isString {
+		detail.Value = fmt.Sprintf("must be an enum string (got %s)", friendlyType(value))
+	} else {
+		detail.Value = fmt.Sprintf("must be one of %v (got %q)", field.EnumValues, text)
+	}
+	return detail, true
 }
 
 // checkFieldKind compares the runtime kind of value against the
@@ -483,7 +531,15 @@ func ToJSONSchema(s Schema) map[string]any {
 			prop["default"] = defaultValue
 		}
 
-		if enum := f.Tags["enum"]; enum != "" {
+		if len(f.EnumValues) > 0 {
+			if f.Slice {
+				if items, ok := prop["items"].(map[string]any); ok {
+					items["enum"] = append([]string(nil), f.EnumValues...)
+				}
+			} else {
+				prop["enum"] = append([]string(nil), f.EnumValues...)
+			}
+		} else if enum := f.Tags["enum"]; enum != "" {
 			raw := strings.Split(enum, ",")
 			vals := make([]string, 0, len(raw))
 			for _, v := range raw {
