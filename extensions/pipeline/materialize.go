@@ -31,6 +31,7 @@ func materialize(req compiler.MaterializeReq) error {
 	pipelineMods, _ := req.Meta["pipeline_modifiers"].(map[string][]string)
 	pipelineQuoted, _ := req.Meta["pipeline_modifier_quoted"].(map[string][]bool)
 	pipelinePositions, _ := req.Meta["pipeline_declaration_positions"].(map[string]compiler.Position)
+	pipelineSignatures, _ := req.Meta[pipelineSignaturesMetaKey].(map[string]pipelineSignature)
 	definitions := make([]pipelineDefinition, 0, len(pipelines))
 	for name, source := range pipelines {
 		definitions = append(definitions, pipelineDefinition{
@@ -38,6 +39,7 @@ func materialize(req compiler.MaterializeReq) error {
 			source:    source,
 			modifiers: pipelineMods[name],
 			quoted:    pipelineQuoted[name],
+			signature: pipelineSignatures[name],
 			pos:       pipelinePositions[name],
 		})
 	}
@@ -52,27 +54,32 @@ type pipelineDefinition struct {
 	source    string
 	modifiers []string
 	quoted    []bool
+	signature pipelineSignature
 	pos       compiler.Position
 }
 
 func materializePipelines(req compiler.MaterializeReq, definitions []pipelineDefinition) error {
 	pending := make(map[string]struct{}, len(definitions))
-	for _, definition := range definitions {
-		pending[pipelineActionName(definition.name)] = struct{}{}
+	for i := range definitions {
+		pending[pipelineActionName(definitions[i].name)] = struct{}{}
 	}
-	remaining := append([]pipelineDefinition(nil), definitions...)
+	remaining := make([]int, len(definitions))
+	for i := range remaining {
+		remaining[i] = i
+	}
 
 	for len(remaining) > 0 {
-		deferred := make([]pipelineDefinition, 0, len(remaining))
+		deferred := make([]int, 0, len(remaining))
 		deferredErrors := make([]error, 0, len(remaining))
 		terminalErrors := make([]error, 0)
 		madeProgress := false
 
-		for _, definition := range remaining {
+		for _, definitionIndex := range remaining {
+			definition := &definitions[definitionIndex]
 			retry, err := materializePipeline(req, definition, pending)
 			if err != nil {
 				if retry {
-					deferred = append(deferred, definition)
+					deferred = append(deferred, definitionIndex)
 					deferredErrors = append(deferredErrors, err)
 				} else {
 					terminalErrors = append(terminalErrors, err)
@@ -100,15 +107,18 @@ func materializePipelines(req compiler.MaterializeReq, definitions []pipelineDef
 	return nil
 }
 
-func materializePipeline(req compiler.MaterializeReq, definition pipelineDefinition, pending map[string]struct{}) (retry bool, err error) {
+func materializePipeline(req compiler.MaterializeReq, definition *pipelineDefinition, pending map[string]struct{}) (retry bool, err error) {
 	canonicalName := pipelineActionName(definition.name)
 	modifiers := resolvePipelineModifierValues(req.Meta, definition.modifiers, definition.quoted)
 	modifierRaws := make([]string, len(modifiers))
 	for i, modifier := range modifiers {
 		modifierRaws[i] = modifier.Raw
 	}
-	resolvedSchemas, err := resolvePipelineSchemas(req.Meta, definition.name, modifierRaws)
+	resolvedSchemas, err := resolvePipelineSchemas(req.Meta, definition.name, modifierRaws, definition.signature)
 	if err != nil {
+		if definition.pos.Line > 0 {
+			return false, compiler.SourceError(definition.pos, "%w", err)
+		}
 		return false, err
 	}
 	requestSelection := resolvedSchemas.requestSelection
@@ -180,10 +190,22 @@ type schemaBoundaryContract struct {
 	itemType string
 }
 
-func resolvePipelineSchemas(meta map[string]any, pipelineName string, modifierRaws []string) (pipelineSchemaSelections, error) {
+func resolvePipelineSchemas(meta map[string]any, pipelineName string, modifierRaws []string, signature pipelineSignature) (pipelineSchemaSelections, error) {
 	requestSelection, responseSelection, compileMods, err := splitSchemaModifiers(pipelineName, modifierRaws)
 	if err != nil {
 		return pipelineSchemaSelections{}, err
+	}
+	if signature.input != nil {
+		requestSelection, err = mergeSignatureSelection(pipelineName, "input", requestSelection, *signature.input)
+		if err != nil {
+			return pipelineSchemaSelections{}, err
+		}
+	}
+	if signature.output != nil {
+		responseSelection, err = mergeSignatureSelection(pipelineName, "output", responseSelection, *signature.output)
+		if err != nil {
+			return pipelineSchemaSelections{}, err
+		}
 	}
 	requestSchema, hasRequest, err := selectedBoundarySchema(meta, pipelineName, requestSelection, requestSelection.modifierName, false)
 	if err != nil {
@@ -205,7 +227,17 @@ func resolvePipelineSchemas(meta map[string]any, pipelineName string, modifierRa
 	return resolved, nil
 }
 
-func compilePipelineProgram(req compiler.MaterializeReq, definition pipelineDefinition, canonicalName string, compileValues []compiler.ModifierValue, compileMods []string, analysisInput compiler.TypeDescriptor) (action.AnyAction, error) {
+func mergeSignatureSelection(pipelineName, boundary string, legacy, signature schemaSelection) (schemaSelection, error) {
+	if legacy.name == "" {
+		return signature, nil
+	}
+	if legacy.name == signature.name && legacy.strict == signature.strict && legacy.array == signature.array {
+		return legacy, nil
+	}
+	return schemaSelection{}, fmt.Errorf("@pipeline %q: conflicting %s contract declarations: signature %q and legacy modifier %q", pipelineName, boundary, signature.value(), legacy.value())
+}
+
+func compilePipelineProgram(req compiler.MaterializeReq, definition *pipelineDefinition, canonicalName string, compileValues []compiler.ModifierValue, compileMods []string, analysisInput compiler.TypeDescriptor) (action.AnyAction, error) {
 	if req.CompileWithAnalysisInput != nil {
 		return req.CompileWithAnalysisInput(canonicalName, definition.source, compileValues, analysisInput)
 	}
@@ -221,7 +253,7 @@ func compilePipelineProgram(req compiler.MaterializeReq, definition pipelineDefi
 	return req.Compile(canonicalName, definition.source, compileMods...)
 }
 
-func pipelineCompileFailure(definition pipelineDefinition, compileValues []compiler.ModifierValue, pending map[string]struct{}, err error) (bool, error) {
+func pipelineCompileFailure(definition *pipelineDefinition, compileValues []compiler.ModifierValue, pending map[string]struct{}, err error) (bool, error) {
 	wrapped := fmt.Errorf("compile sub-pipeline %q: %w", definition.name, err)
 	if hasTypedPipelineModifier(compileValues) && definition.pos.Line > 0 {
 		wrapped = compiler.SourceError(definition.pos, "%w", wrapped)

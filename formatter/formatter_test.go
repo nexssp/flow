@@ -85,6 +85,47 @@ func TestFormatDeclarationHeadersKeepsModifierOrderAndComments(t *testing.T) {
 	}
 }
 
+func TestFormatPipelineSignatureHeaders(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "typed input and output with modifier",
+			input: "@pipeline create_order(req: !CreateRequest): !CreateResponse :timeout=5s\n  noop\n@end\n",
+			want:  "@pipeline create_order(req: !CreateRequest): !CreateResponse\n  :timeout=5s\n  noop\n@end\n",
+		},
+		{
+			name:  "output only",
+			input: "@pipeline status(): StatusResponse\n  noop\n@end\n",
+			want:  "@pipeline status(): StatusResponse\n  noop\n@end\n",
+		},
+		{
+			name:  "input only",
+			input: "@pipeline lookup(req: LookupRequest)\n  noop\n@end\n",
+			want:  "@pipeline lookup(req: LookupRequest)\n  noop\n@end\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := testFormatter().Format(t.Context(), tc.input, "signature.nflow")
+			if err != nil {
+				t.Fatalf("Format() error = %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("Format() =\n%s\nwant\n%s", got, tc.want)
+			}
+			second, err := testFormatter().Format(t.Context(), got, "signature.nflow")
+			if err != nil {
+				t.Fatalf("Format() rejected its own output: %v", err)
+			}
+			if second != got {
+				t.Fatalf("format is not idempotent:\n%s\n!=\n%s", second, got)
+			}
+		})
+	}
+}
+
 func TestFormatPreservesStringsCommentsAndExpressionText(t *testing.T) {
 	input := "// comment: keep\nservice.call:desc=\"Maks: ingest, Julia: verify\" @{ text: \"x:y -> z\" } # tail\n"
 	want := "// comment: keep\nservice.call :desc=\"Maks: ingest, Julia: verify\" @{ text: \"x:y -> z\" } # tail\n"

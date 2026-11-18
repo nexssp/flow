@@ -1,0 +1,10 @@
+@description "spec: typed pipeline input-only signature validates the request and preserves the result"
+@schema LookupRequest {
+  Name string `json:"name" validate:"required"`
+}
+@pipeline lookup(req: LookupRequest)
+  noop
+@end
+const(name: (input.name ?? "Lin"))
+  -> pipeline.lookup
+@assert: result.name == "Lin"

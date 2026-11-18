@@ -150,8 +150,9 @@ func (f *Formatter) formatLine(lines []string, index int, file string, opaqueLin
 }
 
 func formatDeclaration(lines []string, index int, file, directive string) (formatted []string, next int, err error) {
+	headerLines, signature := declarationLinesForParsing(lines, index, directive)
 	name, _, next, err := compiler.ParseDeclarationHeader(compiler.DirectiveReq{
-		Lines: lines, I: index, File: file,
+		Lines: headerLines, I: index, File: file,
 	}, directive)
 	if err != nil {
 		return nil, index + 1, err
@@ -160,7 +161,7 @@ func formatDeclaration(lines []string, index int, file, directive string) (forma
 		next = index + 1
 	}
 	indent := leadingWhitespace(lines[index])
-	base, firstMods, firstComment := splitDeclarationLine(lines[index], directive, name)
+	base, firstMods, firstComment := splitDeclarationLine(lines[index], directive, name, signature)
 	out := []string{base}
 	appendHeaderParts(&out, indent, firstMods, firstComment)
 	for i := index + 1; i < next; i++ {
@@ -418,7 +419,8 @@ func (f *Formatter) validateDeclaration(ctx context.Context, lines []string, ind
 	if err := state.flush(ctx, f.operators, f.primaries, file); err != nil {
 		return index + 1, err
 	}
-	_, _, next, err := compiler.ParseDeclarationHeader(compiler.DirectiveReq{Lines: lines, I: index, File: file}, directive)
+	headerLines, _ := declarationLinesForParsing(lines, index, directive)
+	_, _, next, err := compiler.ParseDeclarationHeader(compiler.DirectiveReq{Lines: headerLines, I: index, File: file}, directive)
 	if err != nil {
 		return index + 1, err
 	}
@@ -475,19 +477,116 @@ func declarationDirective(line string) (string, bool) {
 	return "", false
 }
 
-func splitDeclarationLine(line, directive, name string) (base string, mods []string, comment string) {
+func splitDeclarationLine(line, directive, name, signature string) (base string, mods []string, comment string) {
 	indent := leadingWhitespace(line)
 	trimmed := strings.TrimSpace(line)
 	prefix := "@" + directive
 	tail := strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
 	tail = strings.TrimPrefix(tail, name)
+	tail = strings.TrimPrefix(tail, signature)
 	mods, comment = splitHeaderModifiers(tail)
-	base = indent + prefix + " " + name
+	base = indent + prefix + " " + name + signature
 	if len(mods) == 0 && comment != "" {
 		base += " " + comment
 		comment = ""
 	}
 	return base, mods, comment
+}
+
+func declarationLinesForParsing(lines []string, index int, directive string) (parsedLines []string, signature string) {
+	if directive != "pipeline" {
+		return lines, ""
+	}
+	start, end, ok := pipelineSignatureSpan(lines[index])
+	if !ok {
+		return lines, ""
+	}
+	line := lines[index]
+	parsedLines = append([]string(nil), lines...)
+	parsedLines[index] = line[:start] + strings.Repeat(" ", end-start) + line[end:]
+	return parsedLines, line[start:end]
+}
+
+func pipelineSignatureSpan(line string) (start, end int, ok bool) {
+	keywordStart := strings.Index(line, "@pipeline")
+	if keywordStart < 0 {
+		return 0, 0, false
+	}
+	nameEnd := keywordStart + len("@pipeline")
+	for nameEnd < len(line) && (line[nameEnd] == ' ' || line[nameEnd] == '\t') {
+		nameEnd++
+	}
+	for nameEnd < len(line) && !strings.ContainsRune("( :\t#", rune(line[nameEnd])) {
+		nameEnd++
+	}
+	if nameEnd >= len(line) || line[nameEnd] != '(' {
+		return 0, 0, false
+	}
+	closeOffset := strings.IndexByte(line[nameEnd+1:], ')')
+	if closeOffset < 0 {
+		return 0, 0, false
+	}
+	end = nameEnd + 1 + closeOffset + 1
+	if outputEnd, ok := pipelineSignatureOutputEnd(line, end); ok {
+		end = outputEnd
+	}
+	return nameEnd, end, true
+}
+
+func pipelineSignatureOutputEnd(line string, start int) (end int, ok bool) {
+	returnColon := pipelineReturnColon(line, start)
+	if returnColon < 0 {
+		return start, false
+	}
+	typeStart, hasWhitespaceAfterColon := pipelineOutputTypeStart(line, returnColon)
+	if !hasWhitespaceAfterColon && !hasPipelineTypePrefix(line, typeStart) {
+		return start, false
+	}
+	typeEnd := pipelineTypeEnd(line, typeStart)
+	if !validPipelineTypeSpan(line, typeStart, typeEnd) {
+		return start, false
+	}
+	return typeEnd, true
+}
+
+func pipelineReturnColon(line string, start int) int {
+	returnColon := start
+	for returnColon < len(line) && (line[returnColon] == ' ' || line[returnColon] == '\t') {
+		returnColon++
+	}
+	if returnColon >= len(line) || line[returnColon] != ':' {
+		return -1
+	}
+	return returnColon
+}
+
+func pipelineOutputTypeStart(line string, returnColon int) (typeStart int, hasWhitespace bool) {
+	typeStart = returnColon + 1
+	hasWhitespace = typeStart < len(line) && (line[typeStart] == ' ' || line[typeStart] == '\t')
+	for typeStart < len(line) && (line[typeStart] == ' ' || line[typeStart] == '\t') {
+		typeStart++
+	}
+	return typeStart, hasWhitespace
+}
+
+func hasPipelineTypePrefix(line string, typeStart int) bool {
+	return typeStart < len(line) && (line[typeStart] == '!' || strings.HasPrefix(line[typeStart:], "[]"))
+}
+
+func pipelineTypeEnd(line string, typeStart int) int {
+	typeEnd := typeStart
+	for typeEnd < len(line) && !strings.ContainsRune(" \t:#", rune(line[typeEnd])) {
+		typeEnd++
+	}
+	return typeEnd
+}
+
+func validPipelineTypeSpan(line string, start, end int) bool {
+	if start == end {
+		return false
+	}
+	typeText := line[start:end]
+	return typeText != "!" && typeText != "[]"
 }
 
 func appendHeaderParts(out *[]string, indent string, mods []string, comment string) {

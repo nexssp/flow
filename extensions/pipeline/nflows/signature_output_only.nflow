@@ -1,0 +1,9 @@
+@description "spec: output-only pipeline signature uses empty parentheses and validates its response"
+@schema CreateResponse {
+  Name string `json:"name" validate:"required"`
+}
+@pipeline fixed_response(): !CreateResponse
+  const @{ value: { name: "created" } }
+@end
+pipeline.fixed_response
+@assert: result.name == "created"

@@ -27,6 +27,29 @@ after the pipeline body without applying defaults. Response schemas must not
 declare any `default` tag; the compiler reports a clear error before execution
 if one is present, even when its value is empty.
 
+New declarations can put those contracts in the pipeline signature:
+
+```nflow
+@pipeline create_order(req: !CreateRequest): !CreateResponse
+  orders.create
+@end
+```
+
+The input parameter is named `req`; omit the input type with `()` when only an
+output contract is declared, as in `@pipeline status(): StatusResponse`. An
+input-only signature can omit the result type, and the existing `@pipeline
+NAME` form remains valid when no signature contract is needed. Types name a
+declared schema (or an array selector such as `[]CreateRequest`). Prefix a type
+with `!` to keep the existing strictness behavior: only that boundary rejects
+unknown fields. The signature does not change how Flow steps are connected;
+`->` remains the dataflow operator.
+
+During migration, `:request-schema=...` and `:response-schema=...` remain
+supported. A signature and a legacy modifier may declare the same boundary
+together only when both the schema selector and strictness agree; conflicting
+declarations fail compilation rather than choosing one silently. Existing
+modifier-only pipelines therefore need no immediate rewrite.
+
 ## Schemas, pipeline arguments, and functions
 
 These features describe different layers. A request schema defines the shape,

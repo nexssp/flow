@@ -62,7 +62,7 @@ func TestPipelineExampleValidatedAgainstRequestSchema(t *testing.T) {
 					"example=" + tc.example,
 				},
 			}
-			_, err = materializePipeline(req, definition, map[string]struct{}{})
+			_, err = materializePipeline(req, &definition, map[string]struct{}{})
 			if tc.wantError != "" {
 				if err == nil || !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tc.wantError)) {
 					t.Fatalf("materializePipeline() error = %v, want it to contain %q", err, tc.wantError)

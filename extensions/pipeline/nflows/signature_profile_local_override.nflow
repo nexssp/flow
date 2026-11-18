@@ -1,0 +1,27 @@
+@description "spec: pipeline-local schemas override inherited profile defaults when the profile appears first"
+@schema ProfileRequest {
+  Name string `json:"name" validate:"required"`
+}
+@schema ProfileResponse {
+  Name string `json:"name" validate:"required"`
+}
+@schema LocalRequest {
+  Name string `json:"name" validate:"required"`
+}
+@schema LocalResponse {
+  Name string `json:"name" validate:"required"`
+}
+@profile base_defaults
+  :request-schema=!ProfileRequest
+  :response-schema=!ProfileResponse
+@profile defaults
+  :parent=base_defaults
+@pipeline profile_before_local(req: !LocalRequest): !LocalResponse
+  :profile=defaults
+  :request-schema=!LocalRequest
+  :response-schema=!LocalResponse
+  noop
+@end
+const @{ value: { name: "Ada" } }
+  -> pipeline.profile_before_local
+@assert: result.name == "Ada"

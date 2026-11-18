@@ -1,0 +1,12 @@
+@description "spec: duplicate legacy request contract declarations with conflicting schemas fail compilation"
+@schema FirstRequest {
+  Name string `json:"name"`
+}
+@schema SecondRequest {
+  Name string `json:"name"`
+}
+@pipeline invalid(req: FirstRequest) :request-schema=FirstRequest :request-schema=SecondRequest
+  noop
+@end
+pipeline.invalid
+# @expect-compile-error conflicting duplicate :request-schema declarations

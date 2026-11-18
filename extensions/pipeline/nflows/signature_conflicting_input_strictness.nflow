@@ -1,0 +1,9 @@
+@description "spec: conflicting signature and legacy request strictness fail compilation"
+@schema Request {
+  Name string `json:"name"`
+}
+@pipeline invalid(req: !Request) :request-schema=Request
+  noop
+@end
+pipeline.invalid
+# @expect-compile-error conflicting input contract declarations

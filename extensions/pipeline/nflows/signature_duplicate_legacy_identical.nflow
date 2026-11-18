@@ -1,0 +1,12 @@
+@description "spec: repeated identical legacy schema declarations and a matching signature are accepted"
+@schema Request {
+  Name string `json:"name" validate:"required"`
+}
+@pipeline repeat(req: Request)
+  :request-schema=Request
+  :request-schema=Request
+  noop
+@end
+const(name: (input.name ?? "repeat"))
+  -> pipeline.repeat
+@assert: result.name == "repeat"

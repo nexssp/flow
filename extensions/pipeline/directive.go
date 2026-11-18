@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	compiler "github.com/nexssp/flow/compiler"
@@ -37,7 +38,7 @@ type AppliedModifier struct {
 
 func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 	pos := compiler.Position{File: req.File, Line: req.I + 1}
-	header, err := compiler.ParseDeclarationHeaderWithSpans(req, ID)
+	header, signature, hasSignature, err := parsePipelineDeclarationHeader(req)
 	if err != nil {
 		return compiler.DirectiveRes{}, err
 	}
@@ -98,6 +99,14 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 	}
 	positions[name] = compiler.Position{File: req.File, Line: req.I + 1, Col: 1}
 	req.Out["pipeline_declaration_positions"] = positions
+	if hasSignature {
+		signatures, _ := req.Out[pipelineSignaturesMetaKey].(map[string]pipelineSignature)
+		if signatures == nil {
+			signatures = make(map[string]pipelineSignature)
+			req.Out[pipelineSignaturesMetaKey] = signatures
+		}
+		signatures[name] = signature
+	}
 
 	if len(applied) > 0 {
 		pipelineMods, _ := req.Out["pipeline_modifiers"].(map[string][]string)
@@ -154,19 +163,30 @@ func expandProfiles(mods []string, quoted []bool, meta map[string]any, pos compi
 
 	var expanded []AppliedModifier
 	index := make(map[string]int)
-	add := func(raw string, src compiler.ModifierSource, isQuoted bool) {
+	add := func(raw string, src compiler.ModifierSource, isQuoted bool) error {
 		n := compiler.ModifierName(raw)
 		if i, ok := index[n]; ok {
-			expanded[i] = AppliedModifier{Raw: raw, Source: src, Quoted: isQuoted}
-			return
+			previous := expanded[i]
+			previousIsLocal := previous.Source.Kind == ID
+			currentIsLocal := src.Kind == ID
+			if isSchemaSelectionModifier(n) && previous.Raw != raw && previousIsLocal && currentIsLocal {
+				return fmt.Errorf("conflicting duplicate :%s declarations %q and %q", n, previous.Raw, raw)
+			}
+			if currentIsLocal || !previousIsLocal {
+				expanded[i] = AppliedModifier{Raw: raw, Source: src, Quoted: isQuoted}
+			}
+			return nil
 		}
 		index[n] = len(expanded)
 		expanded = append(expanded, AppliedModifier{Raw: raw, Source: src, Quoted: isQuoted})
+		return nil
 	}
 
 	for i, raw := range mods {
 		if compiler.ModifierName(raw) != "profile" {
-			add(raw, localSource, quotedAt(quoted, i))
+			if err := add(raw, localSource, quotedAt(quoted, i)); err != nil {
+				return nil, compiler.SourceError(pos, "@pipeline: %v", err)
+			}
 			continue
 		}
 
@@ -185,7 +205,9 @@ func expandProfiles(mods []string, quoted []bool, meta map[string]any, pos compi
 		}
 		profileSource := compiler.ModifierSource{Kind: "profile", Label: value}
 		for i, pm := range profileMods {
-			add(pm, profileSource, quotedAt(profileQuoted, i))
+			if err := add(pm, profileSource, quotedAt(profileQuoted, i)); err != nil {
+				return nil, compiler.SourceError(pos, "@pipeline: %v", err)
+			}
 		}
 	}
 	return expanded, nil
