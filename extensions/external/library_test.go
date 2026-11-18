@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
+
+	"github.com/nexssp/flow/compiler"
 )
 
 func TestBundle_WiresLibrary(t *testing.T) {
@@ -14,6 +16,9 @@ func TestBundle_WiresLibrary(t *testing.T) {
 	ktest.RequireEqual(t, b.Libraries[0].Name, ID)
 	ktest.RequireCondition(t, b.Fixtures != nil, "Fixtures is nil")
 	ktest.RequireCondition(t, b.SelfTest == nil, "duplicate inline SelfTest remains")
+	args := b.ArgSchemas["http.request"]
+	ktest.RequireEqual(t, len(args), 1)
+	ktest.RequireEqual(t, args[0], compiler.ArgFieldSpec{Name: "bearer", Kind: compiler.ArgSecret})
 }
 
 func TestLibrary_ActionNames(t *testing.T) {

@@ -9,6 +9,8 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xtest/ktest"
+
+	"github.com/nexssp/flow/compiler/secret"
 )
 
 // TestErrorFromStatus covers the status→kind mapping in isolation.
@@ -131,4 +133,32 @@ func TestHTTPRequestResponseBodyLimit(t *testing.T) {
 			ktest.RequireEqual(t, body, tc.body)
 		})
 	}
+}
+
+func TestHTTPRequestBearerRequiresSecret(t *testing.T) {
+	t.Parallel()
+	const token = "bearer-canary-value"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer "+token {
+			t.Errorf("Authorization = %q, want the typed bearer token", got)
+		}
+		_, _ = w.Write([]byte(`{"echo":"` + token + `"}`))
+	}))
+	defer server.Close()
+
+	raw, err := action.InvokeAny(t.Context(), HTTPRequest, map[string]any{
+		"url": server.URL, "bearer": secret.New(token),
+	})
+	ktest.RequireNoError(t, err)
+	result, ok := raw.(HTTPResult)
+	ktest.RequireCondition(t, ok, "result type = %T, want HTTPResult", raw)
+	body, ok := result.Body.(map[string]any)
+	ktest.RequireCondition(t, ok, "body type = %T, want map[string]any", result.Body)
+	ktest.RequireEqual(t, body["echo"], secret.Redacted)
+
+	_, err = action.InvokeAny(t.Context(), HTTPRequest, map[string]any{
+		"url": server.URL, "bearer": token,
+	})
+	ktest.RequireErrorKind(t, err, xerr.KindBadRequest)
+	ktest.RequireStringNotContains(t, err.Error(), token)
 }

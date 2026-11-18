@@ -18,6 +18,7 @@ import (
 	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xfile"
 
+	"github.com/nexssp/flow/compiler/secret"
 	"github.com/nexssp/flow/internal/constinput"
 	"github.com/nexssp/flow/internal/maputil"
 )
@@ -955,6 +956,32 @@ func wrapWithInjections(inner action.AnyAction, a *Atom) action.AnyAction {
 	return wrapWithPayloadBuilder(inner, a, buildPayload)
 }
 
+func wrapWithSecretGuard(inner action.AnyAction, a *Atom) action.AnyAction {
+	pos := a.Pos
+	return action.New(a.Name, func(ctx context.Context, in any) (any, error) {
+		if err := validateSecretDelivery(a, in); err != nil {
+			if pos.File != "" {
+				return nil, SourceError(pos, "%w", err)
+			}
+			return nil, err
+		}
+		var wireSecrets []string
+		if a.SecretInputNormalizer {
+			_, wireSecrets = secret.SanitizeBoundary(in, a.SecretRequestType)
+		}
+		result, err := action.InvokeAny(ctx, inner, in)
+		if err != nil {
+			err = secret.SanitizeErrorWithSecretValues(err, wireSecrets...)
+			err = secret.SanitizeError(err, in)
+			if _, ok := PositionOf(err); pos.File != "" && !ok {
+				return nil, SourceError(pos, "%w", err)
+			}
+			return nil, err
+		}
+		return result, nil
+	}).Build()
+}
+
 func wrapWithDirectInput(inner action.AnyAction, a *Atom) action.AnyAction {
 	pos := a.Pos
 	return action.New(a.Name, func(ctx context.Context, in any) (any, error) {
@@ -966,8 +993,15 @@ func wrapWithDirectInput(inner action.AnyAction, a *Atom) action.AnyAction {
 			}
 			return nil, err
 		}
+		if validationErr := validateSecretDelivery(a, value); validationErr != nil {
+			if pos.File != "" {
+				return nil, SourceError(pos, "%w", validationErr)
+			}
+			return nil, validationErr
+		}
 		result, err := action.InvokeAny(ctx, inner, constinput.Direct{Value: value})
 		if err != nil {
+			err = secret.SanitizeError(err, value)
 			if _, ok := PositionOf(err); pos.File != "" && !ok {
 				return nil, SourceError(pos, "%w", err)
 			}
@@ -995,12 +1029,19 @@ func wrapWithPayloadBuilder(
 			}
 			return nil, err
 		}
+		if validationErr := validateSecretDelivery(a, payload); validationErr != nil {
+			if pos.File != "" {
+				return nil, SourceError(pos, "%w", validationErr)
+			}
+			return nil, validationErr
+		}
 		var actionInput any = payload
 		if a.Name == runtimeConstAction && a.HasArgumentObject && !a.LegacyArgumentBlock {
 			actionInput = constinput.Direct{Value: payload}
 		}
 		res, err := action.InvokeAny(ctx, inner, actionInput)
 		if err != nil {
+			err = secret.SanitizeError(err, payload)
 			// Attach pos to the error when not already tagged with that file.
 			if _, ok := PositionOf(err); pos.File != "" && !ok {
 				return nil, SourceError(pos, "%w", err)
@@ -1009,6 +1050,103 @@ func wrapWithPayloadBuilder(
 		}
 		return res, nil
 	}).Build()
+}
+
+//nolint:gocyclo // Enforces exact Secret typing at every runtime action boundary.
+func validateSecretDelivery(atom *Atom, payload any) error {
+	if direct, ok := payload.(constinput.Direct); ok {
+		payload = direct.Value
+	}
+	if atom == nil {
+		if secret.Contains(payload) {
+			return xerr.Validation("secret value has no declared receiving parameter")
+		}
+		return nil
+	}
+	if atom.SecretBoundary {
+		if atom.SecretInputNormalizer {
+			return nil
+		}
+		if atom.SecretRequestType != nil && secret.FitsValue(payload, atom.SecretRequestType) || atom.SecretRequestType == nil && !secret.Contains(payload) {
+			return nil
+		}
+		return xerr.Validation(atom.Name + ": secret payload does not match its declared secret-typed request")
+	}
+	entries, isObject := secretPayloadEntries(payload)
+	if !isObject {
+		if secret.Contains(payload) {
+			return xerr.Validation(atom.Name + ": secret values require a named secret-typed parameter")
+		}
+		return nil
+	}
+	kinds := make(map[string]ArgKind, len(atom.ArgSchema))
+	for _, field := range atom.ArgSchema {
+		kinds[field.Name] = field.Kind
+	}
+	for _, field := range atom.ArgSchema {
+		if field.Kind == ArgSecret {
+			if value, present := entries[field.Name]; present && !isExactSecretValue(value) {
+				return xerr.Validation(fmt.Sprintf("%s.%s: parameter requires a typed secret value", atom.Name, field.Name))
+			}
+		}
+	}
+	for key, value := range entries {
+		if !secret.Contains(value) {
+			continue
+		}
+		if kinds[key] != ArgSecret || !isExactSecretValue(value) {
+			return xerr.Validation(fmt.Sprintf("%s.%s: secret value requires an explicitly secret-typed parameter", atom.Name, key))
+		}
+	}
+	return nil
+}
+
+func isExactSecretValue(value any) bool {
+	return reflect.TypeOf(value) == reflect.TypeFor[secret.Value]()
+}
+
+func secretPayloadEntries(payload any) (map[string]any, bool) {
+	if direct, ok := payload.(constinput.Direct); ok {
+		payload = direct.Value
+	}
+	value := reflect.ValueOf(payload)
+	for value.IsValid() && (value.Kind() == reflect.Interface || value.Kind() == reflect.Pointer) {
+		if value.IsNil() {
+			return map[string]any{}, true
+		}
+		value = value.Elem()
+	}
+	if !value.IsValid() {
+		return map[string]any{}, true
+	}
+	entries := make(map[string]any)
+	//nolint:exhaustive // Payload entries are supported only for maps and structs.
+	switch value.Kind() {
+	case reflect.Map:
+		if value.Type().Key().Kind() != reflect.String {
+			return nil, false
+		}
+		entriesIter := value.MapRange()
+		for entriesIter.Next() {
+			entries[entriesIter.Key().String()] = entriesIter.Value().Interface()
+		}
+		return entries, true
+	case reflect.Struct:
+		for index := range value.NumField() {
+			field := value.Type().Field(index)
+			if field.PkgPath != "" || field.Tag.Get("json") == "-" {
+				continue
+			}
+			name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+			if name == "" {
+				name = field.Name
+			}
+			entries[name] = value.Field(index).Interface()
+		}
+		return entries, true
+	default:
+		return nil, false
+	}
 }
 
 func wrapWithSourcePosition(inner action.AnyAction, a *Atom) action.AnyAction {
@@ -1144,8 +1282,12 @@ func buildPayload(ctx context.Context, in any, a *Atom) (map[string]any, error) 
 	}
 
 	merged := make(map[string]any, len(m)+len(a.Params)+len(a.Args)+4)
-	maps.Copy(merged, m)
-	if m == nil && in != nil {
+	for key, value := range m {
+		if !secret.Contains(value) {
+			merged[key] = value
+		}
+	}
+	if m == nil && in != nil && !secret.Contains(in) {
 		merged["__root__"] = in
 	}
 	for k, v := range a.Params {
@@ -1630,6 +1772,20 @@ func runAtomAdvisers(a *Atom, act action.AnyAction, bCtx *BuildContext, advisers
 }
 
 func finalizeAtomAction(a *Atom, bCtx *BuildContext, act action.AnyAction) (action.AnyAction, error) {
+	if bCtx != nil && bCtx.Resolver != nil {
+		if contract, ok := contractForExpr(bCtx.Resolver, a); ok {
+			a.SecretBoundary = a.SecretBoundary || contract.SecretBoundary
+			if secret.TypeContains(contract.Input.Type) {
+				a.SecretRequestType = contract.Input.Type
+			}
+			if secret.TypeContains(contract.Output.Type) {
+				a.SecretResponseType = contract.Output.Type
+			}
+			if contract.SecretBoundary {
+				a.SecretInputNormalizer = contract.SecretInputNormalizer
+			}
+		}
+	}
 	injected := hasInjections(a) || a.NamedPipelineArgs
 	if injected {
 		inner := act
@@ -1646,6 +1802,9 @@ func finalizeAtomAction(a *Atom, bCtx *BuildContext, act action.AnyAction) (acti
 				Node: inner, Relation: IntrospectionKindWraps, Role: IntrospectionKindAction,
 			})
 		}
+	}
+	if !injected {
+		act = wrapWithSecretGuard(act, a)
 	}
 	if bCtx.Modifiers == nil || len(a.Modifiers) == 0 {
 		if !injected {

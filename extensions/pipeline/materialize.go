@@ -12,6 +12,7 @@ import (
 	"github.com/nexssp/kernel/xerr"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler/secret"
 	schemaext "github.com/nexssp/flow/extensions/schema"
 )
 
@@ -107,6 +108,7 @@ func materializePipelines(req compiler.MaterializeReq, definitions []pipelineDef
 	return nil
 }
 
+//nolint:gocyclo // Resolves request/response contracts, mounts the action, and registers Secret boundaries.
 func materializePipeline(req compiler.MaterializeReq, definition *pipelineDefinition, pending map[string]struct{}) (retry bool, err error) {
 	canonicalName := pipelineActionName(definition.name)
 	modifiers := resolvePipelineModifierValues(req.Meta, definition.modifiers, definition.quoted)
@@ -173,6 +175,24 @@ func materializePipeline(req compiler.MaterializeReq, definition *pipelineDefini
 	})
 	if err != nil {
 		return false, fmt.Errorf("mount sub-pipeline %q: %w", definition.name, err)
+	}
+	contract := compiler.ActionContract(canonicalName, program)
+	if secretInput := pipelineSecretDescriptor(requestSchema); secretInput.Type != nil {
+		contract.Input = secretInput
+	}
+	if secretOutput := pipelineSecretDescriptor(responseSchema); secretOutput.Type != nil {
+		contract.Output = secretOutput
+	}
+	contract.SecretBoundary = secret.TypeContains(contract.Input.Type)
+	contract.SecretInputNormalizer = contract.SecretBoundary && requestSchema != nil
+	if secret.TypeContains(contract.Input.Type) || secret.TypeContains(contract.Output.Type) {
+		registrar, ok := req.Resolver.(compiler.ContractRegistrar)
+		if !ok {
+			return false, fmt.Errorf("@pipeline %q: resolver cannot enforce a secret-typed boundary", definition.name)
+		}
+		if err := registrar.RegisterContract(canonicalName, contract); err != nil {
+			return false, fmt.Errorf("@pipeline %q: register secret-typed contract: %w", definition.name, err)
+		}
 	}
 	return false, nil
 }

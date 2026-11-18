@@ -147,6 +147,35 @@ are applied before validation, so a defaulted field can satisfy
 field's type and validation rules. Malformed defaults are rejected when the
 `@schema` declaration is compiled.
 
+## Secret fields
+
+Use the dedicated `secret` field type for credentials and other sensitive
+strings. At a request boundary, Flow wraps the incoming wire string in an
+opaque Secret value; it is not an ordinary Flow string and cannot be used in
+concatenation, formatting, conversions, or other expressions. A secret can be
+passed through unchanged only to an action parameter explicitly declared as
+`secret`. For example, `http.request` declares its `bearer` parameter that way:
+
+```nflow
+@schema ApiRequest {
+  APIKey secret `json:"api_key" validate:"required"`
+}
+
+@pipeline call_api
+  :request-schema=ApiRequest
+  http.request @{ url: "https://api.example/v1/items", bearer: .api_key }
+@end
+```
+
+Secret fields must be scalar, cannot have source or programmatic defaults, and
+support only `validate:"required"`. Pipeline request schemas preserve their
+nominal Secret type for checking; a plain string cannot be substituted at an
+action boundary. Secret-bearing fields are not implicitly copied into later
+action arguments, and runtime guards reject Secret values sent to untyped
+parameters. Flow redacts typed Secret values in JSON, execution traces, and
+event sinks; the existing key-based redactor remains a fallback for untyped
+payloads.
+
 ## Nested schemas
 
 Declare a schema before using its name as a field type. Flow applies its tags

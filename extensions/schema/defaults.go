@@ -2,6 +2,7 @@ package schema
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"reflect"
@@ -52,6 +53,9 @@ func fieldDefaultValue(field Field) (value any, hasDefault bool, err error) {
 	if !ok {
 		return nil, false, nil
 	}
+	if field.Kind == KindSecret {
+		return nil, true, errors.New("secret fields cannot declare a default")
+	}
 	value, err = parseDefaultValue(field, raw)
 	if err != nil {
 		return nil, true, err
@@ -62,6 +66,9 @@ func fieldDefaultValue(field Field) (value any, hasDefault bool, err error) {
 func validateSchemaDefaults(fields []Field) error {
 	for i := range fields {
 		field := fields[i]
+		if field.Kind == KindSecret && (field.HasTypedDefault || field.Tags["default"] != "") {
+			return fmt.Errorf("field %q: secret fields cannot declare a default", field.Name)
+		}
 		raw, ok := field.Tags["default"]
 		if !ok {
 			continue
@@ -101,6 +108,8 @@ func parseDefaultValue(field Field, raw string) (any, error) {
 	switch field.Kind {
 	case KindString:
 		return raw, nil
+	case KindSecret:
+		return nil, errors.New("secret fields cannot declare a default")
 	case KindInt:
 		return parseIntegerDefault(typeName, raw)
 	case KindFloat:

@@ -13,6 +13,7 @@ import (
 	"github.com/nexssp/kernel/xfile"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler/secret"
 	"github.com/nexssp/flow/internal/terminal"
 )
 
@@ -42,6 +43,9 @@ type Config struct {
 	// program before execution. Callers that only want to see the
 	// result set this to nil.
 	Hooks []action.AnyHook
+
+	secretContracts *secretContractRegistry
+	secretScrubber  *secret.Scrubber
 
 	// EventSink, when non-nil, is wrapped by observe.Hook and appended
 	// to Hooks. Both paths end up on the execution-local resolver's
@@ -143,6 +147,15 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 	}
 
 	observer := NewObserver(stdout, opts.Verbosity)
+	if cfg.secretContracts == nil {
+		cfg.secretContracts = newSecretContractRegistry()
+	}
+	if cfg.secretScrubber == nil {
+		cfg.secretScrubber = secret.NewScrubber()
+	}
+	defer cfg.secretScrubber.Clear()
+	observer.secretContracts = cfg.secretContracts
+	observer.secretScrubber = cfg.secretScrubber
 	cfg.Hooks = append(cfg.Hooks, observer.Hook())
 
 	ex, err := Execute(ctx, cfg, src, name, payload)

@@ -108,6 +108,9 @@ func parseAndValidateSchemaFields(entries []compiler.BlockEntry, body []string, 
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := validateSecretFieldDeclarations(raw); err != nil {
+		return nil, nil, wrapSchemaResolutionError(pos, name, err)
+	}
 	if err := resolveEnumFieldTypes(raw, VisibleEnumsFromMeta(meta)); err != nil {
 		return nil, nil, wrapSchemaResolutionError(pos, name, err)
 	}
@@ -118,6 +121,28 @@ func parseAndValidateSchemaFields(entries []compiler.BlockEntry, body []string, 
 		return nil, nil, wrapSchemaResolutionError(pos, name, err)
 	}
 	return raw, embedReferences, nil
+}
+
+func validateSecretFieldDeclarations(fields []Field) error {
+	for index := range fields {
+		field := fields[index]
+		if field.Kind != KindSecret {
+			continue
+		}
+		if field.Pointer || field.Slice || field.Map {
+			return fmt.Errorf("field %q: secret must be a scalar field", field.Name)
+		}
+		if _, hasDefault := field.Tags["default"]; hasDefault {
+			return fmt.Errorf("field %q: secret fields cannot declare a default", field.Name)
+		}
+		if rule := field.Tags["validate"]; rule != "" && rule != "required" {
+			return fmt.Errorf("field %q: secret fields support only validate:\"required\"", field.Name)
+		}
+		if field.Tags["enum"] != "" || field.EnumType != "" {
+			return fmt.Errorf("field %q: secret fields cannot declare enum values", field.Name)
+		}
+	}
+	return nil
 }
 
 func wrapSchemaResolutionError(pos compiler.Position, name string, err error) error {

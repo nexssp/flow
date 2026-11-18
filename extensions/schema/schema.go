@@ -13,6 +13,7 @@ import (
 	"github.com/nexssp/validation"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler/secret"
 )
 
 const (
@@ -32,6 +33,7 @@ const (
 	KindDuration
 	KindAny
 	KindStruct
+	KindSecret
 )
 
 type Field struct {
@@ -155,6 +157,9 @@ func ApplyDefaultsAndValidate(ctx context.Context, schema Schema, payload any) (
 		return nil, err
 	}
 	if err := validateNestedFields(ctx, schema, m, true); err != nil {
+		return nil, err
+	}
+	if err := normalizeSecretFields(schema, m); err != nil {
 		return nil, err
 	}
 	if err := validateValues(ctx, schema, m); err != nil {
@@ -285,6 +290,13 @@ func validateValues(ctx context.Context, schema Schema, m map[string]any) error 
 			details = append(details, detail)
 			continue
 		}
+		if field.Kind == KindSecret {
+			secretValue, isSecret := value.(secret.Value)
+			if required && (!isSecret || secret.IsEmpty(secretValue)) {
+				details = append(details, xerr.ValidationDetail{Field: field.JSONName, Validation: "required", Value: "is required"})
+			}
+			continue
+		}
 
 		if rule == "" {
 			continue
@@ -320,6 +332,29 @@ func validateValues(ctx context.Context, schema Schema, m map[string]any) error 
 			Message:           b.String(),
 			ValidationDetails: details,
 		}
+	}
+	return nil
+}
+
+func normalizeSecretFields(schema Schema, values map[string]any) error {
+	for index := range schema.Fields {
+		field := &schema.Fields[index]
+		if field.Kind != KindSecret {
+			continue
+		}
+		value, present := values[field.JSONName]
+		if !present {
+			continue
+		}
+		if typed, ok := value.(secret.Value); ok {
+			values[field.JSONName] = typed
+			continue
+		}
+		text, ok := value.(string)
+		if !ok {
+			return xerr.Validation(fmt.Sprintf("schema %s field %q must be a secret string", schema.Name, field.JSONName))
+		}
+		values[field.JSONName] = secret.New(text)
 	}
 	return nil
 }
@@ -402,6 +437,7 @@ func ValidateScalarValue(typeName string, value any) error {
 	return nil
 }
 
+//nolint:gocyclo // The validator reports a distinct typed diagnostic for each supported schema kind.
 func checkFieldKind(field Field, value any) (xerr.ValidationDetail, bool) {
 	if field.Pointer && value == nil {
 		return xerr.ValidationDetail{}, false
@@ -457,6 +493,12 @@ func checkFieldKind(field Field, value any) (xerr.ValidationDetail, bool) {
 			detail.Value = fmt.Sprintf("must be a duration (got %s)", friendlyType(value))
 			return detail, true
 		}
+	case KindSecret:
+		if _, ok := value.(secret.Value); !ok {
+			detail.Validation = "secret"
+			detail.Value = fmt.Sprintf("must be a secret value (got %s)", friendlyType(value))
+			return detail, true
+		}
 	case KindStruct:
 		if _, ok := value.(map[string]any); !ok {
 			detail.Validation = typeObject
@@ -486,6 +528,8 @@ func friendlyType(v any) string {
 		return "boolean"
 	case time.Duration:
 		return typeDuration
+	case secret.Value:
+		return "secret"
 	case int, int8, int16, int32, int64,
 		uint, uint8, uint16, uint32, uint64,
 		float32, float64:
@@ -525,6 +569,10 @@ func ToJSONSchema(s Schema) map[string]any {
 			prop["description"] = desc
 		} else if desc := f.Tags["description"]; desc != "" {
 			prop["description"] = desc
+		}
+		if f.Kind == KindSecret {
+			prop["writeOnly"] = true
+			prop["format"] = "password"
 		}
 
 		if defaultValue, hasDefault, err := fieldDefaultValue(f); hasDefault && err == nil {
@@ -573,6 +621,8 @@ func jsonSchemaKind(kind Kind) map[string]any {
 	prop := map[string]any{}
 	switch kind {
 	case KindString:
+		prop["type"] = typeString
+	case KindSecret:
 		prop["type"] = typeString
 	case KindInt, KindFloat:
 		prop["type"] = typeNumber

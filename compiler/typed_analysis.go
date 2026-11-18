@@ -1,11 +1,15 @@
 package compiler
 
 import (
+	"fmt"
 	"maps"
 	"reflect"
 	"slices"
+	"strconv"
 
 	"github.com/nexssp/kernel/xerr"
+
+	"github.com/nexssp/flow/compiler/secret"
 )
 
 // TypeAnalysisContext carries the type information available at a point in a
@@ -21,9 +25,11 @@ type TypeAnalysisContext struct {
 	Bindings           map[string]TypeDescriptor
 	PipelineBindings   map[string]struct{}
 	SymbolNamespaces   map[string]SymbolNamespace
+	ArgSchemas         map[string][]ArgFieldSpec
 	CheckExpression    TypedSourceExpressionChecker
 	ExpressionCompiler ExpressionCompiler
 	projectionInput    bool
+	typedValueCache    map[*Value]typedValueResult
 }
 
 // TypedExpressionAnalyzer is an optional static-analysis contract for AST
@@ -72,6 +78,7 @@ func AnalyzeTypedExpression(ctx TypeAnalysisContext, expr Expr) (TypeDescriptor,
 	return analyzeTypedNode(ctx, expr)
 }
 
+//nolint:gocyclo // This is the central typed dispatcher; explicit branches preserve boundary checks.
 func analyzeTypedNode(ctx TypeAnalysisContext, node Expr) (TypeDescriptor, error) {
 	if node == nil {
 		return TypeDescriptor{}, nil
@@ -84,16 +91,67 @@ func analyzeTypedNode(ctx TypeAnalysisContext, node Expr) (TypeDescriptor, error
 		return analyzer.AnalyzeTypes(ctx)
 	}
 	if contract, ok := contractForExpr(ctx.Resolver, node); ok {
+		atom, isAtom := node.(*Atom)
+		secretContract := contract.SecretBoundary || secret.TypeContains(contract.Input.Type)
+		if isAtom && atom != nil {
+			ctx.typedValueCache = make(map[*Value]typedValueResult)
+			atom.SecretBoundary = atom.SecretBoundary || secretContract
+			if secret.TypeContains(contract.Input.Type) {
+				atom.SecretRequestType = contract.Input.Type
+			}
+			if secret.TypeContains(contract.Output.Type) {
+				atom.SecretResponseType = contract.Output.Type
+			}
+			if contract.SecretBoundary {
+				atom.SecretInputNormalizer = contract.SecretInputNormalizer
+			}
+		}
+		input := ctx.Input
 		var err error
-		if ctx.projectionInput {
-			err = requireProjectionShapeCompatible(ctx.Input, contract.Input, contract.Name)
-		} else {
-			err = requireCompatible(ctx.Input, contract.Input, "pipeline value", contract.Name)
+		namedPipelineArgs := isAtom && atom != nil &&
+			(atom.NamedPipelineArgs || secretContract && atom.HasArgumentObject)
+		switch {
+		case secretContract && namedPipelineArgs:
+			input, err = analyzeTypedNamedPayload(ctx, atom)
+		case secretContract && isAtom && atom != nil && atom.DirectInput != nil:
+			input, err = analyzeTypedValue(ctx, atom.Pos, atom.DirectInput)
+		default:
+			if isAtom && atom != nil && hasInjections(atom) && descriptorContainsSecret(input) {
+				if input.ContainsSecret && !secret.TypeContains(input.Type) {
+					err = secretBoundaryError(atom.Pos, contract.Name)
+				} else {
+					input.Type = secret.WithoutSecrets(input.Type)
+					input.ContainsSecret = false
+				}
+			} else if descriptorContainsSecret(input) && !secretContract {
+				position := Position{}
+				if isAtom && atom != nil {
+					position = atom.Pos
+				}
+				err = secretBoundaryError(position, contract.Name)
+			}
+		}
+		runtimeSecretInput := contract.SecretInputNormalizer && input.RuntimeInput && input.Type == nil &&
+			!descriptorContainsSecret(input) && secret.TypeContains(contract.Input.Type)
+		if err == nil && !runtimeSecretInput {
+			if ctx.projectionInput {
+				err = requireProjectionShapeCompatible(input, contract.Input, contract.Name)
+			} else {
+				err = requireCompatible(input, contract.Input, "pipeline value", contract.Name)
+			}
+		}
+		if err == nil && !runtimeSecretInput && secretContract && secret.TypeContains(contract.Input.Type) &&
+			!secret.FitsType(input.Type, contract.Input.Type) {
+			position := Position{}
+			if isAtom && atom != nil && !namedPipelineArgs {
+				position = atom.Pos
+			}
+			return TypeDescriptor{}, secretBoundaryError(position, contract.Name)
 		}
 		if err != nil {
 			return TypeDescriptor{}, err
 		}
-		if atom, ok := node.(*Atom); ok {
+		if isAtom && atom != nil {
 			if err := analyzeTypedAtomValues(ctx, atom); err != nil {
 				return TypeDescriptor{}, err
 			}
@@ -296,12 +354,134 @@ func analyzeTypedAssert(ctx TypeAnalysisContext, assertion *AssertExpr) (TypeDes
 	return ctx.Input, nil
 }
 
+//nolint:gocyclo // Validates all direct, named, parameter-map, and spread paths for Secret flow.
 func analyzeTypedAtomValues(ctx TypeAnalysisContext, atom *Atom) error {
-	if ctx.CheckExpression == nil || atom == nil {
+	if atom == nil {
 		return nil
 	}
-	if err := analyzeTypedValueExpressions(ctx, atom.Pos, atom.DirectInput); err != nil {
-		return err
+	if ctx.typedValueCache == nil {
+		ctx.typedValueCache = make(map[*Value]typedValueResult)
+	}
+	for _, field := range ctx.ArgSchemas[atom.Name] {
+		if field.Kind == ArgSecret {
+			atom.SecretArgBoundary = true
+			break
+		}
+	}
+	if atom.DirectInput != nil {
+		descriptor, err := analyzeTypedValue(ctx, atom.Pos, atom.DirectInput)
+		if err != nil {
+			return err
+		}
+		if descriptorContainsSecret(descriptor) {
+			if !atom.SecretBoundary || !secret.FitsType(descriptor.Type, atom.SecretRequestType) {
+				return secretBoundaryError(atom.Pos, atom.Name)
+			}
+		}
+	}
+	if atom.NamedPipelineArgs || atom.SecretBoundary && atom.HasArgumentObject {
+		descriptor, err := analyzeTypedNamedPayload(ctx, atom)
+		if err != nil {
+			return err
+		}
+		if descriptorContainsSecret(descriptor) &&
+			(!atom.SecretBoundary || !secret.FitsType(descriptor.Type, atom.SecretRequestType)) {
+			return secretBoundaryError(atom.Pos, atom.Name)
+		}
+		return nil
+	}
+	kinds := make(map[string]ArgKind, len(ctx.ArgSchemas[atom.Name]))
+	for _, field := range ctx.ArgSchemas[atom.Name] {
+		kinds[field.Name] = field.Kind
+	}
+	keys := make([]string, 0, len(atom.Args))
+	for key := range atom.Args {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	for _, key := range keys {
+		descriptor, err := analyzeTypedValue(ctx, atom.Pos, atom.Args[key])
+		if err != nil {
+			return err
+		}
+		kind := kinds[key]
+		if kind == ArgSecret {
+			if !secret.IsSecretType(descriptor.Type) {
+				return SourceError(atom.Pos, "%s.%s: secret parameter requires a statically typed secret value", atom.Name, key)
+			}
+			continue
+		}
+		if descriptorContainsSecret(descriptor) {
+			return secretBoundaryError(atom.Pos, atom.Name+"."+key)
+		}
+	}
+	paramKeys := make([]string, 0, len(atom.ParamValues))
+	for key := range atom.ParamValues {
+		paramKeys = append(paramKeys, key)
+	}
+	slices.Sort(paramKeys)
+	for _, key := range paramKeys {
+		value := atom.ParamValues[key]
+		valueType := reflect.TypeOf(value)
+		kind := kinds[key]
+		if secret.TypeContains(valueType) {
+			if kind != ArgSecret || !secret.IsSecretType(valueType) {
+				return secretBoundaryError(atom.Pos, atom.Name+"."+key)
+			}
+		} else if kind == ArgSecret {
+			return SourceError(atom.Pos, "%s.%s: secret parameter requires a typed secret value", atom.Name, key)
+		}
+	}
+	for _, spread := range atom.ArgSpreads {
+		descriptor, err := analyzeTypedValue(ctx, atom.Pos, spread)
+		if err != nil {
+			return err
+		}
+		if descriptorContainsSecret(descriptor) {
+			return SourceError(atom.Pos, "%s: secret values cannot be supplied through argument-map spreads", atom.Name)
+		}
+		for _, kind := range kinds {
+			if kind == ArgSecret {
+				return SourceError(atom.Pos, "%s: secret parameters must be passed directly, not through a spread", atom.Name)
+			}
+		}
+	}
+	return nil
+}
+
+func analyzeTypedNamedPayload(ctx TypeAnalysisContext, atom *Atom) (TypeDescriptor, error) {
+	if len(atom.ArgSpreads) > 0 {
+		return TypeDescriptor{}, SourceError(atom.Pos, "%s: argument-map spreads are not allowed for a secret-typed pipeline request", atom.Name)
+	}
+	fields := make([]reflect.StructField, 0, len(atom.Params)+len(atom.ParamValues)+len(atom.Args))
+	containsSecret := false
+	addField := func(name string, value TypeDescriptor) {
+		fieldType := value.Type
+		if fieldType == nil {
+			fieldType = reflect.TypeFor[any]()
+		}
+		fields = append(fields, reflect.StructField{
+			Name: fmt.Sprintf("Field%d", len(fields)),
+			Type: fieldType,
+			Tag:  reflect.StructTag("json:" + strconv.Quote(name)),
+		})
+		containsSecret = containsSecret || descriptorContainsSecret(value)
+	}
+	paramKeys := make([]string, 0, len(atom.Params))
+	for key := range atom.Params {
+		paramKeys = append(paramKeys, key)
+	}
+	slices.Sort(paramKeys)
+	for _, key := range paramKeys {
+		addField(key, TypeDescriptor{Type: reflect.TypeFor[string]()})
+	}
+	valueKeys := make([]string, 0, len(atom.ParamValues))
+	for key := range atom.ParamValues {
+		valueKeys = append(valueKeys, key)
+	}
+	slices.Sort(valueKeys)
+	for _, key := range valueKeys {
+		addField(key, TypeDescriptor{Type: reflect.TypeOf(atom.ParamValues[key])})
 	}
 	argKeys := make([]string, 0, len(atom.Args))
 	for key := range atom.Args {
@@ -309,41 +489,148 @@ func analyzeTypedAtomValues(ctx TypeAnalysisContext, atom *Atom) error {
 	}
 	slices.Sort(argKeys)
 	for _, key := range argKeys {
-		if err := analyzeTypedValueExpressions(ctx, atom.Pos, atom.Args[key]); err != nil {
-			return err
+		value, err := analyzeTypedValue(ctx, atom.Pos, atom.Args[key])
+		if err != nil {
+			return TypeDescriptor{}, err
 		}
+		addField(key, value)
 	}
-	for _, spread := range atom.ArgSpreads {
-		if err := analyzeTypedValueExpressions(ctx, atom.Pos, spread); err != nil {
-			return err
-		}
-	}
-	return nil
+	return TypeDescriptor{Type: reflect.StructOf(fields), ContainsSecret: containsSecret}, nil
 }
 
-func analyzeTypedValueExpressions(ctx TypeAnalysisContext, pos Position, value *Value) error {
+type typedValueResult struct {
+	descriptor TypeDescriptor
+	err        error
+}
+
+func analyzeTypedValue(ctx TypeAnalysisContext, pos Position, value *Value) (TypeDescriptor, error) {
 	if value == nil {
-		return nil
+		return TypeDescriptor{}, nil
 	}
+	if ctx.typedValueCache == nil {
+		ctx.typedValueCache = make(map[*Value]typedValueResult)
+	}
+	if result, ok := ctx.typedValueCache[value]; ok {
+		return result.descriptor, result.err
+	}
+	descriptor, err := analyzeTypedValueUncached(ctx, pos, value)
+	ctx.typedValueCache[value] = typedValueResult{descriptor: descriptor, err: err}
+	return descriptor, err
+}
+
+//nolint:gocyclo // Handles each DSL value form with fail-closed Secret typing rules.
+func analyzeTypedValueUncached(ctx TypeAnalysisContext, pos Position, value *Value) (TypeDescriptor, error) {
+	if value == nil {
+		return TypeDescriptor{}, nil
+	}
+	var descriptor TypeDescriptor
 	switch value.Kind {
 	case ValueExpression:
-		_, err := ctx.CheckExpression(value.Expression, ctx, pos)
-		return err
+		if ctx.CheckExpression == nil {
+			if contextContainsSecret(ctx) {
+				return TypeDescriptor{}, SourceError(pos, "secret flow cannot be verified without a typed expression checker")
+			}
+			return TypeDescriptor{}, nil
+		}
+		var err error
+		descriptor, err = ctx.CheckExpression(value.Expression, ctx, pos)
+		if err != nil {
+			return TypeDescriptor{}, err
+		}
+	case ValueRef:
+		if value.Ref == "" {
+			return ctx.Input, nil
+		}
+		if ctx.CheckExpression == nil {
+			if contextContainsSecret(ctx) {
+				return TypeDescriptor{}, SourceError(pos, "secret flow cannot be verified without a typed expression checker")
+			}
+			return TypeDescriptor{}, nil
+		}
+		var err error
+		descriptor, err = ctx.CheckExpression(value.Ref, ctx, pos)
+		if err != nil {
+			return TypeDescriptor{}, err
+		}
 	case ValueMap:
-		for _, entry := range value.Map {
-			if err := analyzeTypedValueExpressions(ctx, pos, entry.Value); err != nil {
-				return err
+		fields := make([]reflect.StructField, 0, len(value.Map))
+		containsSecret := false
+		for index, entry := range value.Map {
+			child, err := analyzeTypedValue(ctx, pos, entry.Value)
+			if err != nil {
+				return TypeDescriptor{}, err
 			}
+			fieldType := child.Type
+			if fieldType == nil {
+				fieldType = reflect.TypeFor[any]()
+			}
+			fields = append(fields, reflect.StructField{
+				Name: fmt.Sprintf("Field%d", index), Type: fieldType,
+				Tag: reflect.StructTag("json:" + strconv.Quote(entry.Key)),
+			})
+			containsSecret = containsSecret || descriptorContainsSecret(child)
 		}
+		descriptor = TypeDescriptor{Type: reflect.StructOf(fields), ContainsSecret: containsSecret}
 	case ValueSlice:
-		for _, item := range value.Slice {
-			if err := analyzeTypedValueExpressions(ctx, pos, item); err != nil {
-				return err
+		elementType := reflect.TypeFor[any]()
+		containsSecret := false
+		if len(value.Slice) > 0 {
+			first, err := analyzeTypedValue(ctx, pos, value.Slice[0])
+			if err != nil {
+				return TypeDescriptor{}, err
+			}
+			if first.Type != nil {
+				elementType = first.Type
+			}
+			containsSecret = descriptorContainsSecret(first)
+			for _, item := range value.Slice[1:] {
+				current, err := analyzeTypedValue(ctx, pos, item)
+				if err != nil {
+					return TypeDescriptor{}, err
+				}
+				containsSecret = containsSecret || descriptorContainsSecret(current)
+				if current.Type == nil || current.Type != elementType {
+					elementType = reflect.TypeFor[any]()
+				}
 			}
 		}
-	case ValueString, ValueBare, ValueNumber, ValueBool, ValueNull, ValueRef, ValueTyped:
+		descriptor = TypeDescriptor{Type: reflect.SliceOf(elementType), ContainsSecret: containsSecret}
+	case ValueTyped:
+		descriptor.Type = reflect.TypeOf(value.Typed)
+	case ValueString, ValueBare:
+		descriptor.Type = reflect.TypeFor[string]()
+	case ValueNumber:
+		descriptor.Type = reflect.TypeFor[float64]()
+	case ValueBool:
+		descriptor.Type = reflect.TypeFor[bool]()
+	case ValueNull:
+		return TypeDescriptor{}, nil
 	}
-	return nil
+	descriptor.ContainsSecret = descriptor.ContainsSecret || secret.TypeContains(descriptor.Type)
+	return descriptor, nil
+}
+
+func descriptorContainsSecret(descriptor TypeDescriptor) bool {
+	return descriptor.ContainsSecret || secret.TypeContains(descriptor.Type)
+}
+
+func contextContainsSecret(ctx TypeAnalysisContext) bool {
+	if descriptorContainsSecret(ctx.Input) {
+		return true
+	}
+	if ctx.OriginalInput != nil && descriptorContainsSecret(*ctx.OriginalInput) {
+		return true
+	}
+	for _, descriptor := range ctx.Bindings {
+		if descriptorContainsSecret(descriptor) {
+			return true
+		}
+	}
+	return false
+}
+
+func secretBoundaryError(pos Position, consumer string) error {
+	return SourceError(pos, "%s: secret values may only be delivered to a secret-typed action parameter or pipeline request", consumer)
 }
 
 func analyzeTypedUnknownChildren(ctx TypeAnalysisContext, node Expr) (TypeDescriptor, error) {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/compiler/contracts"
+	"github.com/nexssp/flow/compiler/secret"
 )
 
 type Execution struct {
@@ -52,6 +53,9 @@ var defaultRunAction = compiler.RunAction()
 
 func withExecutionContext(ctx context.Context, cfg Config, resolver compiler.CapabilityResolver, meta map[string]any) context.Context {
 	cfg.Resolver = resolver
+	if cfg.secretScrubber != nil {
+		ctx = secretScrubberContextKey.With(ctx, cfg.secretScrubber)
+	}
 	ctx = contracts.WithCompiler(ctx, compilerAdapter{cfg: cfg, inheritedMeta: meta, compileContext: ctx})
 	ctx = contracts.WithActionResolver(ctx, resolver)
 	return contracts.WithFileResolver(ctx, cfg.FileResolver)
@@ -98,6 +102,10 @@ func ExecutePrepared(
 	if prepared == nil {
 		return Execution{}, errPreparedSourceRequired
 	}
+	if cfg.secretScrubber == nil {
+		cfg.secretScrubber = secret.NewScrubber()
+	}
+	defer cfg.secretScrubber.Clear()
 	ctx, executionID, identityErr := ensureExecutionIdentity(ctx, cfg)
 	if identityErr != nil {
 		return Execution{}, newDiagnosticError(identityErr, "setup")
@@ -160,6 +168,8 @@ func ExecutePrepared(
 		},
 	)
 	output, suppressOutput := unwrapOutput(output)
+	output = cfg.secretScrubber.Sanitize(output)
+	runErr = cfg.secretScrubber.SanitizeError(runErr)
 	runDuration := time.Since(runStart)
 	if cfg.MeasureAllocs {
 		readMemStats(&runStats)
@@ -185,22 +195,28 @@ func ExecutePrepared(
 
 func compilePrepared(ctx context.Context, cfg Config, prepared *compiler.PreparedSource) (Compilation, error) {
 	cfg.CompileOpts = compileOptsWithRunnerPolicies(cfg)
-	if cfg.EventSink != nil {
-		cfg.Hooks = append(append([]action.AnyHook(nil), cfg.Hooks...), observe.Hook(cfg.EventSink))
+	if cfg.secretContracts == nil {
+		cfg.secretContracts = newSecretContractRegistry()
 	}
-	return compileSource(ctx, cfg, prepared)
+	cfg.Hooks = append(append([]action.AnyHook(nil), cfg.Hooks...), observe.Hook(secretCaptureSink{}))
+	if cfg.EventSink != nil {
+		cfg.Hooks = append(append([]action.AnyHook(nil), cfg.Hooks...), observe.Hook(secretSanitizingSink{
+			next: cfg.EventSink, secretContracts: cfg.secretContracts, secretScrubber: cfg.secretScrubber,
+		}))
+	}
+	return compileSource(ctx, cfg, prepared, true)
 }
 
-func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedSource) (Compilation, error) {
+func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedSource, runtimeEntryInput bool) (Compilation, error) {
 	meta := prepared.Metadata()
 	ctx = compiler.WithLocalSymbols(ctx, compiler.SymbolsFromMeta(meta))
-	resolver, err := newExecutionResolver(cfg.Resolver, cfg.Hooks)
+	resolver, err := newExecutionResolverWithSecretContracts(cfg.Resolver, cfg.Hooks, cfg.secretContracts, cfg.secretScrubber)
 	if err != nil {
 		return Compilation{}, err
 	}
 
 	for _, imported := range compiler.SourceImports(meta) {
-		child, childErr := compileSource(ctx, cfg, imported.Source)
+		child, childErr := compileSource(ctx, cfg, imported.Source, false)
 		if childErr != nil {
 			return Compilation{}, compiler.SourceError(imported.Position, "@include %s: %w", imported.Namespace, childErr)
 		}
@@ -303,7 +319,8 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 	)
 
 	compiledRes, err := compileAct.Do(ctx, compiler.CompileReq{
-		Prepared: prepared,
+		Prepared:          prepared,
+		TypeAnalysisInput: compiler.TypeDescriptor{RuntimeInput: runtimeEntryInput},
 	})
 	if err != nil {
 		return Compilation{Meta: meta, Resolver: resolver}, err
@@ -319,6 +336,10 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 }
 
 func Execute(ctx context.Context, cfg Config, src, name string, payload map[string]any) (Execution, error) {
+	if cfg.secretScrubber == nil {
+		cfg.secretScrubber = secret.NewScrubber()
+	}
+	defer cfg.secretScrubber.Clear()
 	ctx, executionID, identityErr := ensureExecutionIdentity(ctx, cfg)
 	if identityErr != nil {
 		return Execution{}, newDiagnosticError(identityErr, "setup")
@@ -353,6 +374,10 @@ func Execute(ctx context.Context, cfg Config, src, name string, payload map[stri
 // retained state are reused intentionally, so this is warm repeated execution,
 // not a process-cold-start benchmark. Each call gets its own execution identity.
 func ExecuteCompiled(ctx context.Context, cfg Config, compiled Compilation, src, name string, payload map[string]any) (Execution, error) {
+	if cfg.secretScrubber == nil {
+		cfg.secretScrubber = secret.NewScrubber()
+	}
+	defer cfg.secretScrubber.Clear()
 	ctx, executionID, identityErr := ensureExecutionIdentity(ctx, cfg)
 	if identityErr != nil {
 		return Execution{}, newDiagnosticError(identityErr, "setup")
@@ -418,6 +443,8 @@ func executeCompiled(
 		},
 	)
 	output, suppressOutput := unwrapOutput(output)
+	output = cfg.secretScrubber.Sanitize(output)
+	err = cfg.secretScrubber.SanitizeError(err)
 	runDuration := time.Since(runStart)
 
 	if cfg.MeasureAllocs {

@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/nexssp/kernel/action"
 )
@@ -41,6 +42,12 @@ type Atom struct {
 	ModifierSources         []ModifierSource // parallel to Modifiers; same length
 	DirectInput             *Value           // literal or reference written as a pipeline value
 	Args                    map[string]*Value
+	ArgSchema               []ArgFieldSpec // copied capability argument types used by runtime guards
+	SecretBoundary          bool
+	SecretArgBoundary       bool
+	SecretRequestType       reflect.Type
+	SecretResponseType      reflect.Type
+	SecretInputNormalizer   bool
 	ArgSpreads              []*Value   // runtime maps spread into structured arguments
 	HasArgumentObject       bool       // true when the atom used parenthesized or legacy map arguments
 	LegacyArgumentBlock     bool       // true only for the deprecated @{...} argument spelling

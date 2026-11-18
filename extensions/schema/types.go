@@ -43,6 +43,8 @@ func classifyScalar(t string) Kind {
 		return KindFloat
 	case "bool":
 		return KindBool
+	case "secret":
+		return KindSecret
 	case "duration", "time.Duration":
 		return KindDuration
 	case "any", "interface{}":
@@ -56,7 +58,7 @@ func classifyScalar(t string) Kind {
 // schema fields.
 func IsScalarTypeName(name string) bool {
 	switch classifyScalar(strings.TrimSpace(name)) {
-	case KindString, KindInt, KindFloat, KindBool, KindDuration, KindAny:
+	case KindString, KindInt, KindFloat, KindBool, KindDuration, KindAny, KindSecret:
 		return true
 	case KindStruct:
 		return false

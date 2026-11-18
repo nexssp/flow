@@ -8,6 +8,7 @@ import (
 	"github.com/nexssp/kernel/action"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler/secret"
 )
 
 func mountSourceModule(cfg Config, parent compiler.CapabilityResolver, imported compiler.SourceImport, child Compilation) error {
@@ -31,19 +32,46 @@ func mountSourceModule(cfg Config, parent compiler.CapabilityResolver, imported 
 	if !ok {
 		return compiler.SourceError(imported.Position, "@include: parent source resolver is unavailable")
 	}
+	type importedContract struct {
+		name     string
+		contract compiler.CapabilityContract
+	}
+	var contracts []importedContract
 	// Exports already contain compiled actions with their hooks. Do not attach
 	// those hooks again at each namespace boundary of a nested import.
 	root.mu.Lock()
-	defer root.mu.Unlock()
 	for i := range libraries {
 		lib := &libraries[i]
 		lib.Name = fmt.Sprintf("%s AS %s (%s)", lib.Name, imported.Namespace, imported.Position)
 		qualified := compiler.QualifySourceLibrary(*lib, imported.Namespace, bind)
+		for actionIndex, sourceAction := range lib.Actions {
+			if sourceAction == nil || sourceAction.Describe() == nil || actionIndex >= len(qualified.Actions) {
+				continue
+			}
+			contract, found := local.Contract(sourceAction.Describe().Name)
+			if !found || !contract.SecretBoundary && !secret.TypeContains(contract.Input.Type) && !secret.TypeContains(contract.Output.Type) {
+				continue
+			}
+			contractName := qualified.Actions[actionIndex].Describe().Name
+			contract.Name = contractName
+			contracts = append(contracts, importedContract{name: contractName, contract: contract})
+		}
 		if err := root.mountLocked(qualified, "", nil); err != nil {
+			root.mu.Unlock()
 			return compiler.SourceError(imported.Position, "@include: %w", err)
 		}
 	}
 	root.invalidateAllSnapshotsLocked()
+	root.mu.Unlock()
+	registrar, ok := parent.(compiler.ContractRegistrar)
+	if len(contracts) > 0 && !ok {
+		return compiler.SourceError(imported.Position, "@include: parent source resolver cannot preserve Secret-typed pipeline contracts")
+	}
+	for _, contract := range contracts {
+		if err := registrar.RegisterContract(contract.name, contract.contract); err != nil {
+			return compiler.SourceError(imported.Position, "@include: register Secret-typed contract for %q: %w", contract.name, err)
+		}
+	}
 	return nil
 }
 

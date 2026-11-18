@@ -15,6 +15,7 @@ import (
 	"github.com/expr-lang/expr/vm"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler/secret"
 )
 
 var (
@@ -95,6 +96,13 @@ func analyzeProjectionTypes(
 			reflect.New(expressionFunctionType).Interface(),
 		))
 	}
+	if parsed, parseErr := parser.Parse(source); parseErr == nil {
+		visitor := secretExpressionVisitor{staticTypes: staticTypes}
+		ast.Walk(&parsed.Node, &visitor)
+		if visitor.usesSecret {
+			return compiler.TypeDescriptor{}, compiler.SourceError(pos, "projection: secret values cannot be converted, combined, sliced, or formatted")
+		}
+	}
 
 	program, err := compiler.CompileExpression(source, options...)
 	if err != nil {
@@ -110,6 +118,40 @@ func analyzeProjectionTypes(
 		return compiler.TypeDescriptor{}, compiler.SourceError(pos, "projection: %v", err)
 	}
 	return compiler.TypeDescriptor{Type: projectionOutputTypeWithStaticTypes(program.Node(), staticTypes)}, nil
+}
+
+type secretExpressionVisitor struct {
+	staticTypes map[string]reflect.Type
+	usesSecret  bool
+}
+
+//nolint:gocritic // ast.Visitor requires a *ast.Node parameter.
+func (visitor *secretExpressionVisitor) Visit(node *ast.Node) {
+	if visitor.usesSecret || node == nil || *node == nil {
+		return
+	}
+	isSecret := func(expression ast.Node) bool {
+		valueType, known, err := projectionASTNodeType(expression, visitor.staticTypes)
+		return err == nil && known && secret.TypeContains(valueType)
+	}
+	switch current := (*node).(type) {
+	case *ast.BinaryNode:
+		visitor.usesSecret = isSecret(current.Left) || isSecret(current.Right)
+	case *ast.UnaryNode:
+		visitor.usesSecret = isSecret(current.Node)
+	case *ast.CallNode:
+		if member, ok := current.Callee.(*ast.MemberNode); ok && member.Method && isSecret(member.Node) {
+			visitor.usesSecret = true
+			return
+		}
+		visitor.usesSecret = slices.ContainsFunc(current.Arguments, isSecret)
+	case *ast.BuiltinNode:
+		visitor.usesSecret = slices.ContainsFunc(current.Arguments, isSecret)
+	case *ast.SliceNode:
+		visitor.usesSecret = isSecret(current.Node)
+	case *ast.MemberNode:
+		visitor.usesSecret = current.Method && isSecret(current.Node)
+	}
 }
 
 func rewriteProjectionLetsForTypeAnalysis(source string) string {
@@ -164,6 +206,13 @@ func replaceProjectionReferences(source, name, replacement string) string {
 func CheckTypedSourceExpression(source string, ctx compiler.TypeAnalysisContext, pos compiler.Position) (compiler.TypeDescriptor, error) {
 	source = compiler.PreprocessDots(source)
 	env, staticTypes := typedProjectionEnvironment(ctx, projectionExpressionProxyDepth(source))
+	if parsed, parseErr := parser.Parse(source); parseErr == nil {
+		visitor := secretExpressionVisitor{staticTypes: staticTypes}
+		ast.Walk(&parsed.Node, &visitor)
+		if visitor.usesSecret {
+			return compiler.TypeDescriptor{}, compiler.SourceError(pos, "projection: secret values cannot be converted, combined, sliced, or formatted")
+		}
+	}
 	program, err := compileTypedExpression(source, env, staticTypes, ctx.ExpressionCompiler, pos)
 	if errors.Is(err, errProjectionTypeUnknown) {
 		return compiler.TypeDescriptor{}, nil

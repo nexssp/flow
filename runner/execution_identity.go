@@ -12,6 +12,7 @@ import (
 	"github.com/nexssp/kernel/xerr"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler/secret"
 )
 
 var (
@@ -84,6 +85,14 @@ func runnerAtomAdvisor(journal action.Journal, idempotencyStore action.Idempoten
 					retainedSources = append(retainedSources, atom.ModifierSources[i])
 				}
 			}
+		}
+		secretBearing := atom.SecretBoundary || atom.SecretArgBoundary ||
+			secret.TypeContains(atom.SecretRequestType) || secret.TypeContains(atom.SecretResponseType)
+		if secretBearing && journal != nil {
+			return compiler.SourceError(atom.Pos, "%s: secret-bearing actions cannot be durably journaled", atom.Name)
+		}
+		if secretBearing && hasIdempotent {
+			return compiler.SourceError(atom.Pos, "%s: secret-bearing actions cannot use idempotency persistence", atom.Name)
 		}
 
 		if journal == nil && !hasIdempotent {

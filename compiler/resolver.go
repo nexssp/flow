@@ -23,6 +23,7 @@ type DynamicResolver struct {
 	operators map[string]action.NamedOperator
 	owners    map[string]resolverOwner
 	mounts    map[string]string
+	contracts map[string]CapabilityContract
 }
 
 func NewDynamicResolver(baseLibs ...action.Library) (*DynamicResolver, error) {
@@ -32,6 +33,7 @@ func NewDynamicResolver(baseLibs ...action.Library) (*DynamicResolver, error) {
 		operators: make(map[string]action.NamedOperator),
 		owners:    make(map[string]resolverOwner),
 		mounts:    make(map[string]string),
+		contracts: make(map[string]CapabilityContract),
 	}
 	for i := range baseLibs {
 		if err := r.Mount(baseLibs[i]); err != nil {

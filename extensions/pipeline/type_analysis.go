@@ -7,6 +7,7 @@ import (
 	"time"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler/secret"
 	schemaext "github.com/nexssp/flow/extensions/schema"
 )
 
@@ -24,9 +25,34 @@ func pipelineAnalysisInput(contract *schemaBoundaryContract) compiler.TypeDescri
 		return compiler.TypeDescriptor{Type: reflect.SliceOf(itemType)}
 	}
 	if contract.schema == nil {
-		return compiler.TypeDescriptor{}
+		return pipelineSecretDescriptor(contract)
 	}
 	return compiler.TypeDescriptor{Type: schemaAnalysisType(*contract.schema, make(map[string]bool))}
+}
+
+func pipelineSecretDescriptor(contract *schemaBoundaryContract) compiler.TypeDescriptor {
+	if contract == nil {
+		return compiler.TypeDescriptor{}
+	}
+	var payloadType reflect.Type
+	switch {
+	case contract.array:
+		var itemType reflect.Type
+		if contract.schema != nil {
+			itemType = schemaAnalysisType(*contract.schema, make(map[string]bool))
+		} else {
+			itemType = schemaNamedAnalysisType(contract.itemType)
+		}
+		payloadType = reflect.SliceOf(itemType)
+	case contract.schema != nil:
+		payloadType = schemaAnalysisType(*contract.schema, make(map[string]bool))
+	case contract.itemType != "":
+		payloadType = schemaNamedAnalysisType(contract.itemType)
+	}
+	if !secret.TypeContains(payloadType) {
+		return compiler.TypeDescriptor{}
+	}
+	return compiler.TypeDescriptor{Type: payloadType, ContainsSecret: true}
 }
 
 func schemaAnalysisType(schema schemaext.Schema, visiting map[string]bool) reflect.Type {
@@ -138,6 +164,8 @@ func schemaNamedAnalysisType(typeName string) reflect.Type {
 		return reflect.TypeFor[float64]()
 	case "duration", "time.Duration":
 		return reflect.TypeFor[time.Duration]()
+	case "secret":
+		return reflect.TypeFor[secret.Value]()
 	case "any", "interface{}":
 		return reflect.TypeFor[any]()
 	default:

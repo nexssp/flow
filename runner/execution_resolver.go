@@ -3,12 +3,13 @@ package runner
 import (
 	"errors"
 	"fmt"
-	"slices"
+	"reflect"
 	"sync"
 
 	"github.com/nexssp/kernel/action"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/compiler/secret"
 )
 
 type executionResolver struct {
@@ -22,6 +23,8 @@ type executionResolver struct {
 	mountedOperators map[string]action.NamedOperator
 	owners           map[string]executionOwner
 	mounts           map[string]string
+	contracts        map[string]compiler.CapabilityContract
+	secretContracts  *secretContractRegistry
 
 	actionsSnapshot   []action.AnyAction
 	streamsSnapshot   []action.AnyStreamAction
@@ -49,19 +52,29 @@ func (r *executionResolver) baseOwner(name string) (executionOwner, bool) {
 }
 
 func newExecutionResolver(base compiler.CapabilityResolver, hooks []action.AnyHook) (compiler.CapabilityResolver, error) {
+	return newExecutionResolverWithSecretContracts(base, hooks, nil, nil)
+}
+
+func newExecutionResolverWithSecretContracts(base compiler.CapabilityResolver, hooks []action.AnyHook, secretContracts *secretContractRegistry, scrubber *secret.Scrubber) (compiler.CapabilityResolver, error) {
 	if base == nil {
 		return nil, errors.New("executionResolver: base resolver is nil")
+	}
+	safeHooks := make([]action.AnyHook, len(hooks))
+	for index, hook := range hooks {
+		safeHooks[index] = secretSanitizingHook(hook, secretContracts, scrubber)
 	}
 	// Materializers mount declarations into the resolver, so each execution
 	// needs an overlay even when no hooks are configured.
 	r := &executionResolver{
 		base:             base,
-		hooks:            slices.Clone(hooks),
+		hooks:            safeHooks,
 		mountedActions:   make(map[string]action.AnyAction),
 		mountedStreams:   make(map[string]action.AnyStreamAction),
 		mountedOperators: make(map[string]action.NamedOperator),
 		owners:           make(map[string]executionOwner),
 		mounts:           make(map[string]string),
+		contracts:        make(map[string]compiler.CapabilityContract),
+		secretContracts:  secretContracts,
 	}
 	if lister, ok := base.(interface{ Actions() []action.AnyAction }); ok {
 		for _, act := range lister.Actions() {
@@ -86,6 +99,48 @@ func newExecutionResolver(base compiler.CapabilityResolver, hooks []action.AnyHo
 	}
 	return r, nil
 }
+
+func (r *executionResolver) Contract(name string) (compiler.CapabilityContract, bool) {
+	r.mu.Lock()
+	if contract, ok := r.contracts[name]; ok {
+		r.mu.Unlock()
+		return contract, true
+	}
+	act, actionFound := r.actionLocked(name)
+	base := r.base
+	r.mu.Unlock()
+	if provider, ok := base.(compiler.ContractProvider); ok {
+		if contract, found := provider.Contract(name); found {
+			return contract, true
+		}
+	}
+	if actionFound {
+		return compiler.ActionContract(name, act), true
+	}
+	return compiler.CapabilityContract{}, false
+}
+
+func (r *executionResolver) RegisterContract(name string, contract compiler.CapabilityContract) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.actionLocked(name); !ok {
+		return fmt.Errorf("executionResolver: cannot register a contract for unknown action %q", name)
+	}
+	contract.Name = name
+	if previous, exists := r.contracts[name]; exists && !reflect.DeepEqual(previous, contract) {
+		return fmt.Errorf("executionResolver: action %q already has a conflicting contract", name)
+	}
+	r.contracts[name] = contract
+	if r.secretContracts != nil {
+		r.secretContracts.register(name, contract.Input.Type, contract.Output.Type)
+	}
+	return nil
+}
+
+var (
+	_ compiler.ContractProvider  = (*executionResolver)(nil)
+	_ compiler.ContractRegistrar = (*executionResolver)(nil)
+)
 
 func (r *executionResolver) Action(name string) (action.AnyAction, bool) {
 	r.mu.Lock()

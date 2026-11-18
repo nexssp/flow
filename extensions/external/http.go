@@ -12,6 +12,8 @@ import (
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
+
+	"github.com/nexssp/flow/compiler/secret"
 )
 
 // HTTPResult carries the status and the decoded body. JSON responses
@@ -55,22 +57,44 @@ var HTTPRequest = action.New("http.request", func(ctx context.Context, in map[st
 			req.Header.Set(k, fmt.Sprint(v))
 		}
 	}
+	var bearer secret.Value
+	var hasBearer bool
+	if rawBearer, present := in["bearer"]; present && rawBearer != nil {
+		var ok bool
+		bearer, ok = rawBearer.(secret.Value)
+		if !ok {
+			return HTTPResult{}, xerr.BadRequest("http.request: 'bearer' parameter must be a secret")
+		}
+		hasBearer = true
+		if secretErr := secret.WithValue(bearer, func(value []byte) error {
+			req.Header.Set("Authorization", "Bearer "+string(value))
+			return nil
+		}); secretErr != nil {
+			return HTTPResult{}, xerr.Internal("http.request: invalid bearer secret", secret.SanitizeError(secretErr, bearer))
+		}
+	}
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return HTTPResult{}, xerr.Unavailable(fmt.Sprintf("http.request: %s %s failed", method, reqURL), err)
+		return HTTPResult{}, xerr.Unavailable(
+			fmt.Sprintf("http.request: %s %s failed", method, reqURL),
+			secret.SanitizeError(err, in),
+		)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, httpResponseMaxBytes+1))
 	if err != nil {
-		return HTTPResult{}, xerr.Internal("http.request: read body", err)
+		return HTTPResult{}, xerr.Internal("http.request: read body", secret.SanitizeError(err, in))
 	}
 	if len(raw) > httpResponseMaxBytes {
 		return HTTPResult{}, xerr.Validation(fmt.Sprintf("http.request: response body exceeds %d-byte limit", httpResponseMaxBytes))
 	}
 
 	result := HTTPResult{Status: resp.StatusCode, Body: decodeBody(raw)}
+	if hasBearer {
+		result.Body = secret.SanitizeWithSources(result.Body, bearer)
+	}
 
 	if resp.StatusCode >= 400 {
 		return result, errorFromStatus(resp.StatusCode, method, reqURL)

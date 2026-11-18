@@ -10,21 +10,31 @@ import (
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
+
+	"github.com/nexssp/flow/compiler/secret"
 )
 
 type TypeDescriptor struct {
-	Type   reflect.Type
-	Stream bool
+	Type           reflect.Type
+	Stream         bool
+	ContainsSecret bool
+	RuntimeInput   bool
 }
 
 type CapabilityContract struct {
-	Name   string
-	Input  TypeDescriptor
-	Output TypeDescriptor
+	Name                  string
+	Input                 TypeDescriptor
+	Output                TypeDescriptor
+	SecretBoundary        bool
+	SecretInputNormalizer bool
 }
 
 type ContractProvider interface {
 	Contract(name string) (CapabilityContract, bool)
+}
+
+type ContractRegistrar interface {
+	RegisterContract(name string, contract CapabilityContract) error
 }
 
 // Analyze runs polymorphic contract validation on the AST. It is a
@@ -61,6 +71,22 @@ func AnalyzeWithTypedExpressionCheckerAndInput(
 	input TypeDescriptor,
 	symbolNamespaces ...map[string]SymbolNamespace,
 ) error {
+	return AnalyzeWithTypedExpressionCheckerAndInputAndArgSchemas(
+		resolver, expr, checker, expressionCompiler, input, nil, symbolNamespaces...,
+	)
+}
+
+// AnalyzeWithTypedExpressionCheckerAndInputAndArgSchemas also supplies each
+// action's declared parameter kinds to secret-flow analysis.
+func AnalyzeWithTypedExpressionCheckerAndInputAndArgSchemas(
+	resolver CapabilityResolver,
+	expr Expr,
+	checker TypedSourceExpressionChecker,
+	expressionCompiler ExpressionCompiler,
+	input TypeDescriptor,
+	argSchemas map[string][]ArgFieldSpec,
+	symbolNamespaces ...map[string]SymbolNamespace,
+) error {
 	if resolver == nil {
 		return xerr.Internal("analyze: capability resolver is nil")
 	}
@@ -82,6 +108,7 @@ func AnalyzeWithTypedExpressionCheckerAndInput(
 		SymbolNamespaces:   localSymbols,
 		CheckExpression:    checker,
 		ExpressionCompiler: expressionCompiler,
+		ArgSchemas:         argSchemas,
 	}, expr)
 }
 
@@ -89,6 +116,11 @@ func contractForExpr(resolver CapabilityResolver, expr Expr) (CapabilityContract
 	atom, ok := expr.(*Atom)
 	if !ok || atom == nil {
 		return CapabilityContract{}, false
+	}
+	if provider, ok := resolver.(ContractProvider); ok {
+		if contract, found := provider.Contract(atom.Name); found {
+			return contract, true
+		}
 	}
 	if act, found := resolver.Action(atom.Name); found {
 		return actionContract(atom.Name, act), true
@@ -119,6 +151,10 @@ func actionContract(name string, act action.AnyAction) CapabilityContract {
 	return contract
 }
 
+func ActionContract(name string, act action.AnyAction) CapabilityContract {
+	return actionContract(name, act)
+}
+
 func payloadType(payload any) reflect.Type {
 	if payload == nil {
 		return nil
@@ -129,13 +165,32 @@ func payloadType(payload any) reflect.Type {
 // requireCompatible validates one pipeline edge. It rejects type-dependent
 // conversions before probing the structural JSON fallback used by action.Coerce.
 func requireCompatible(produced, consumed TypeDescriptor, producer, consumer string) error {
-	if produced.Type == nil || consumed.Type == nil {
-		return nil
-	}
+	hasSecret := produced.ContainsSecret || secret.TypeContains(produced.Type)
 	if produced.Stream != consumed.Stream {
 		return xerr.Validation(
 			"contract mismatch " + producer + " -> " + consumer +
 				": stream and unary payloads are incompatible")
+	}
+	if hasSecret {
+		if produced.Type == nil || consumed.Type == nil || produced.ContainsSecret && !secret.TypeContains(produced.Type) || !secret.FitsType(produced.Type, consumed.Type) {
+			return xerr.Validation(
+				"contract mismatch " + producer + " -> " + consumer +
+					": payload containing a secret requires a matching secret-typed contract")
+		}
+		producedWire, consumedWire := secret.WireType(produced.Type), secret.WireType(consumed.Type)
+		if producedWire == nil || consumedWire == nil {
+			return xerr.Validation("contract mismatch " + producer + " -> " + consumer + ": cannot validate secret-bearing JSON shape")
+		}
+		if err := valueDependentCoercion(producedWire, consumedWire); err != nil {
+			return xerr.Validation("contract mismatch " + producer + " -> " + consumer + ": " + err.Error())
+		}
+		if err := coerceCheck(producedWire, consumedWire); err != nil {
+			return xerr.Validation("contract mismatch " + producer + " -> " + consumer + ": " + err.Error())
+		}
+		return nil
+	}
+	if produced.Type == nil || consumed.Type == nil {
+		return nil
 	}
 	if produced.Type.AssignableTo(consumed.Type) {
 		return nil
@@ -161,6 +216,9 @@ func requireCompatible(produced, consumed TypeDescriptor, producer, consumer str
 }
 
 func requireProjectionShapeCompatible(produced, consumed TypeDescriptor, consumer string) error {
+	if produced.ContainsSecret || secret.TypeContains(produced.Type) {
+		return requireCompatible(produced, consumed, "pipeline value", consumer)
+	}
 	if produced.Stream != consumed.Stream {
 		return requireCompatible(produced, consumed, "pipeline value", consumer)
 	}
@@ -838,11 +896,21 @@ func coerceCheck(producerType, consumerType reflect.Type) error {
 var _ ContractProvider = (*DynamicResolver)(nil)
 
 func (r *DynamicResolver) Contract(name string) (CapabilityContract, bool) {
+	r.mu.RLock()
+	contract, found := r.contracts[name]
+	r.mu.RUnlock()
+	if found {
+		return contract, true
+	}
 	if act, ok := r.Action(name); ok {
 		return actionContract(name, act), true
 	}
-	if _, ok := r.Stream(name); ok {
-		return contractForExpr(r, &Atom{Name: name})
+	if stream, ok := r.Stream(name); ok {
+		return CapabilityContract{
+			Name:   name,
+			Input:  TypeDescriptor{Type: payloadType(stream.ReqPayload())},
+			Output: TypeDescriptor{Type: payloadType(stream.ResPayload()), Stream: true},
+		}, true
 	}
 	if op, ok := r.Operator(name); ok {
 		return CapabilityContract{
@@ -852,4 +920,18 @@ func (r *DynamicResolver) Contract(name string) (CapabilityContract, bool) {
 		}, true
 	}
 	return CapabilityContract{}, false
+}
+
+func (r *DynamicResolver) RegisterContract(name string, contract CapabilityContract) error {
+	contract.Name = name
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.actions[name]; !ok {
+		return xerr.Validation(fmt.Sprintf("cannot register a type contract for unmounted action %q", name))
+	}
+	if current, ok := r.contracts[name]; ok && !reflect.DeepEqual(current, contract) {
+		return xerr.Validation(fmt.Sprintf("conflicting type contract for action %q", name))
+	}
+	r.contracts[name] = contract
+	return nil
 }

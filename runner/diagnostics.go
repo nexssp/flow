@@ -339,9 +339,14 @@ func FormatErrorDetail(err error, source, name string, useColor bool) string {
 	builder.WriteString(formatDiagnosticHeadline(diagnostic))
 	if diagnostic.Position.File != "" {
 		fmt.Fprintf(&builder, "\n  at %s", diagnostic.Position.String())
-		if text, ok := diagnosticSource(diagnostic.Position, source, name); ok {
-			if snippet := renderDiagnosticSnippet(diagnostic.Position, text, useColor); snippet != "" {
-				builder.WriteString(snippet)
+		// A Secret-related compile error can point at a literal that the
+		// author intended to be sensitive. Keep the location, but do not echo
+		// the source line into diagnostics.
+		if !strings.Contains(strings.ToLower(diagnostic.Message), "secret") {
+			if text, ok := diagnosticSource(diagnostic.Position, source, name); ok {
+				if snippet := renderDiagnosticSnippet(diagnostic.Position, text, useColor); snippet != "" {
+					builder.WriteString(snippet)
+				}
 			}
 		}
 	}

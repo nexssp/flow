@@ -33,6 +33,9 @@ func Bundle(_ map[string]string) compiler.Bundle {
 		ID:        ID,
 		Libraries: []action.Library{Library()},
 		Fixtures:  fixturesFS,
+		ArgSchemas: map[string][]compiler.ArgFieldSpec{
+			"http.request": {{Name: "bearer", Kind: compiler.ArgSecret}},
+		},
 	}
 }
 

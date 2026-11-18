@@ -7,6 +7,8 @@ import (
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
+
+	"github.com/nexssp/flow/compiler/secret"
 )
 
 // ArgKind describes the compiler-level type of one capability argument.
@@ -28,6 +30,8 @@ const (
 	ArgCapabilityRef
 	// ArgCapabilityRefList is a list of ArgCapabilityRef.
 	ArgCapabilityRefList
+	// ArgSecret accepts only a value produced by a typed secret field.
+	ArgSecret
 )
 
 // ArgFieldSpec declares the compiler-level kind of one argument of a
@@ -50,6 +54,7 @@ func argSchemaAdvisor(resolver CapabilityResolver, schemas map[string][]ArgField
 		if !ok {
 			return nil
 		}
+		atom.ArgSchema = append([]ArgFieldSpec(nil), schema...)
 		return resolveArgSchema(resolver, atom, schema)
 	}
 }
@@ -80,11 +85,24 @@ func validateMissingArgField(atom *Atom, field ArgFieldSpec) error {
 	return missingCapabilityFieldError(atom, field)
 }
 
+//nolint:gocyclo // Resolves each declared argument kind while preserving precise source diagnostics.
 func resolvePresentArgField(resolver CapabilityResolver, atom *Atom, field ArgFieldSpec, value *Value) error {
 	switch field.Kind {
 	case ArgAny:
 		// Untyped fields have no compile-time validation.
 		return nil
+	case ArgSecret:
+		if value != nil && (value.Kind == ValueRef || value.Kind == ValueExpression) {
+			return nil
+		}
+		if value != nil && value.Kind == ValueTyped && secret.IsValue(value.Typed) {
+			return nil
+		}
+		got := "missing value"
+		if value != nil {
+			got = kindName(value.Kind)
+		}
+		return SourceError(atom.Pos, "%s.%s: expected secret, got %s", atom.Name, field.Name, got)
 	case ArgString, ArgInt, ArgBool:
 		if !primitiveArgValueMatches(field.Kind, value) {
 			got := "missing value"
@@ -159,7 +177,7 @@ func primitiveArgValueMatches(kind ArgKind, value *Value) bool {
 				reflect.Pointer, reflect.Slice, reflect.String, reflect.Struct, reflect.UnsafePointer:
 				return false
 			}
-		case ArgAny, ArgCapabilityRef, ArgCapabilityRefList:
+		case ArgAny, ArgCapabilityRef, ArgCapabilityRefList, ArgSecret:
 			return false
 		}
 		return false
@@ -172,7 +190,7 @@ func primitiveArgValueMatches(kind ArgKind, value *Value) bool {
 		return value.Kind == ValueNumber && isIntegerNumber(value.Num)
 	case ArgBool:
 		return value.Kind == ValueBool
-	case ArgAny, ArgCapabilityRef, ArgCapabilityRefList:
+	case ArgAny, ArgCapabilityRef, ArgCapabilityRefList, ArgSecret:
 		return false
 	}
 	return false
@@ -192,6 +210,8 @@ func expectedArgKind(kind ArgKind) string {
 		return "integer"
 	case ArgBool:
 		return "bool"
+	case ArgSecret:
+		return "secret"
 	case ArgAny, ArgCapabilityRef, ArgCapabilityRefList:
 		return "value"
 	}
