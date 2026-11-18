@@ -56,9 +56,9 @@ dynamic non-list inputs fail at runtime, while statically known scalar inputs
 fail during compilation.
 
 ```nflow
-const @{ value: [1, 2, 3] }
+[1, 2, 3]
 -> each :concurrency=2 {
-  const @{ value: (. * 2) }
+  { doubled: . * 2 } -> pick(field: "doubled")
 }
 ```
 
@@ -89,9 +89,9 @@ A pipeline that fans out and gathers:
 
 ```nflow
 (
-  const @{ value: "left" }
+  "left"
   &
-  const @{ value: "right" }
+  "right"
 )
 ```
 
@@ -104,8 +104,8 @@ action-name-derived keys:
 
 ```nflow
 parallel {
-  profile: const @{ value: "profile-ready" },
-  metrics: const @{ value: "metrics-ready" },
+  profile: "profile-ready",
+  metrics: "metrics-ready",
 }
 ```
 
@@ -118,7 +118,7 @@ partial result map.
 Fallback:
 
 ```nflow
-fail @{ kind: "Unavailable", message: "boom" } || const @{ value: "recovered" }
+fail(kind: "Unavailable", message: "boom") || "recovered"
 ```
 
 `fail` raises; `||` catches and runs the right arm.
@@ -128,8 +128,8 @@ successful result is acceptable:
 
 ```nflow
 race {
-  service.primary @{ region: "east" },
-  service.replica @{ region: "west" },
+  service.primary(region: "east"),
+  service.replica(region: "west"),
 }
 ```
 
@@ -162,7 +162,7 @@ canonical actions at parse time and cannot be overridden by any bundle.
 Both forms are valid; prefer the keyword.
 
 ```nflow
-{ user_id: 42 } -> pick @{ field: "user_id" } -> wrap @{ key: "data" }
+{ user_id: 42 } -> pick(field: "user_id") -> wrap(key: "data")
 ```
 
 **Keywords are grammar, not aliases.** The canonical action name
@@ -173,43 +173,45 @@ Both forms are valid; prefer the keyword.
 The control-flow keyword `if` is also reserved when the standard `syntax`
 bundle is loaded, but it does not name or compile to a single action.
 
-`const` accepts a direct string, number, boolean, or `null` scalar after the
-keyword:
+New flows can start directly with typed values and use named arguments in
+parentheses:
 
 ```nflow
-const "hello"
-const 42
-const true
-const null
+"hello"
+42
+true
+null
+[1, "2", true]
+@config.retries
+request.action(id: .id, payload: .)
 ```
 
-`@{ ... }` remains a named argument object. It also accepts a bare field name
-as a same-name input reference, such as `name` for `.name`. For `const`, fields
-other than the reserved top-level `value` or `val` field form an object result;
-the existing `value`/`val` wrapper remains supported for compatibility, is
-still the form for array results, and keeps its historical literal-string
-auto-parsing behavior.
+Quoted text remains text (`"42"` is a string), while unquoted numeric,
+boolean, and `null` literals retain their declared types. Config, CLI, and
+positional references remain strings unless a deliberate typed conversion is
+used at a known field boundary.
 
-For an object result, its fields can usually be written directly, without the
-extra `value` wrapper:
+Legacy `const @{ ... }` and `action @{ ... }` argument blocks remain accepted
+during migration; `nflow lint` reports source-located warnings and fix hints.
+The same warning applies to `const(value=...)` and `const(val=...)`: those
+key=value forms still unwrap a scalar, with `value` taking precedence if both
+keys are present, and legacy strings may be auto-parsed. `coerce` affects that
+wrapper only when it reaches the runtime as a typed boolean `true` for a
+preserved CLI/config/arg string; literal `coerce=true` in key=value syntax is
+text, not a boolean. Without `value` or `val`, `coerce` remains an object field
+and does not trigger this warning. In the new `const(value: ...)` spelling,
+`value`, `val`, and `coerce` are ordinary object keys. Check the old output type
+before replacing a wrapper, and do not mechanically turn `coerce: true` into a
+generic cast.
+
+An object can be written directly as a projection:
 
 ```nflow
-const @{ name: "Julia", active: true }
+{ name: "Julia", active: true }
 ```
 
-Direct-object mode emits only the fields listed here; it does not pass through
-unspecified input fields. Bare names copy the same-named value from the current
-input, so `const @{ order_id, quantity, unit_price_minor: 1299 }` builds an
-object from two input fields and one literal. A top-level `value` (or `val`) is
-treated as the unwrap field; use `value: { ... }` when the object itself needs
-a top-level `value` or `val` field. Raw CLI and configuration references such
-as `@flag.count`, `@arg.1`, and `@config.count` remain strings by default, even
-when they look like numbers, booleans, `null`, or JSON. To request conversion
-for a referenced value, add `coerce: true`:
-
-```nflow
-const @{ value: @flag.count, coerce: true }
-```
+As before, a projection emits only listed fields; bare names copy same-named
+fields from the current input.
 
 ---
 
@@ -262,17 +264,17 @@ Use `@include` for other `.nflow` modules; `.py` programs are run with
 
 ---
 
-## 3. Arguments: `@{ ... }`
+## 3. Action arguments: `(key: value)`
 
-`@{ }` binds named values to an action. The values are parsed as data,
-not as a mini-language:
+Use parenthesized named arguments for new flows. Calls may put the argument list
+before or after modifiers:
 
 ```nflow
-{ user: { id: 42, name: "Maksymilian" } }
--> wrap @{ key: "payload", note: "wrapped", count: 3, active: true }
+request.action :timeout=3s (id: .id)
+wrap(key: "payload", note: "wrapped", count: 3, active: true)
 ```
 
-Inside `@{ }`:
+Argument values are parsed as typed data, not as a mini-language:
 
 | Form | Meaning |
 |---|---|
@@ -284,30 +286,39 @@ Inside `@{ }`:
 | `key: { a: 1 }` | Nested object |
 | `key: .path.to.field` | Reference to the current input |
 | `key: .` | The whole input |
-| `name` (entry/key position) | Same-name reference to `.name` |
+| `name` (argument-key position) | Same-name reference to `.name` |
 | `key: input.name` or `key: person.name` | Literal string; value-position names do not look up `input` or an `as` binding |
 | `key: (input.count + 1)` | Explicit expr-lang expression evaluated against the current input, original `input`, and visible `as` bindings |
 | `key: pricing.echo(input.name)` | Qualified `@func` expression; it can read `input` and visible `as` bindings |
 | `... .defaults` | Spread the referenced object into the argument map |
 | `key: noop` | A capability reference (see §4) |
 
-Path references and the bare-entry shorthand read from the current pipeline
-state — the value flowing into this atom. The shorthand is not the same as a
-bare identifier or dotted name used as a value. Parenthesized `(expr)` values
-are an explicit opt-in to expr-lang evaluation; they can use the current atom
-input (`.`), original request (`input`), and visible `as` bindings. Values not
-parenthesized retain their existing data semantics. Qualified `@func` calls
-remain available for named pure calculations.
+The same-name shorthand and path references read the current pipeline state—the
+value flowing into this action. A bare identifier or dotted name used as a
+value remains a literal string. Parenthesized `(expr)` values explicitly opt
+into expr-lang evaluation; they can use the current atom input (`.`), original
+request (`input`), and visible `as` bindings. Qualified `@func` calls remain
+available for named pure calculations. Schemas reject incompatible literal
+types at compile time; dynamic references and expressions are checked by the
+receiving action at runtime where required.
 
-Argument-map spreads are available at the top level of `@{ ... }`; they are
-useful for shared defaults. If two spreads, or a spread and an explicit field,
-provide the same key, execution fails with a collision error rather than
-silently choosing one value. A spread value must resolve to an object. Inside
-an argument map, `#` and `//` start line comments; quoted strings keep those
-characters as data. Inside `(expr)`, expr-lang `//` and `/* ... */` comments
-are ignored while finding the closing parenthesis. A standalone Flow `#`
-comment at the expression's outer level is also removed; `#` inside a nested
-expr-lang expression remains expression syntax.
+Argument spreads are useful for shared defaults. If two spreads, or a spread
+and an explicit field, provide the same key, execution fails with a collision
+error rather than silently choosing one value. A spread must resolve to an
+object. Inside action arguments, `#` and `//` start line comments; quoted
+strings keep those characters as data. Inside `(expr)`, expr-lang `//` and
+`/* ... */` comments are ignored when finding the closing parenthesis.
+
+**Compatibility only:** the older `action @{ key: value }` spelling remains
+accepted during migration, but `nflow lint` reports a source-located warning
+and fix hint. Use `action(key: value)` in new flows. The old `const @{ value: X
+}` wrapper produced `X`; replace it with `X` directly. In the new
+`const(value: X)` form, `value` is an ordinary object key, as are `val` and
+`coerce`. Do not mechanically turn legacy `coerce: true` into a cast; choose an
+explicit conversion only when the receiving field requires one. The separate
+`action(key=value, ...)` spelling remains accepted for compatibility; ordinary
+non-const actions using it do not warn. For `const`, the `value`/`val` keys
+still invoke the old scalar wrapper and are warned as described above.
 
 ---
 
@@ -317,7 +328,7 @@ Some arguments name another capability. Write the name as a bare
 identifier; the compiler resolves it:
 
 ```nflow
-distribute.map @{ action: noop, items: [1, 2, 3] }
+distribute.map(action: noop, items: [1, 2, 3])
 ```
 
 `noop` here is a **capability reference**, not a string. It is
@@ -326,21 +337,21 @@ to the handler as the canonical name. Quoting it — `action: "noop"` —
 is a compile error:
 
 ```
-distribute.map @{ action: "noop" }
+distribute.map(action: "noop")
   error: use a bare capability reference, not a string literal ("noop")
 ```
 
 Bare identifiers in **undeclared** argument fields stay as plain
-strings. `const @{ value: noop }` produces the string `"noop"`, not a
-capability. The compiler only treats an argument as a capability
-reference when the owning bundle declares it as one.
+strings. `const(value: noop)` produces an object whose `value` is the string
+`"noop"`, not a capability. The compiler only treats an argument as a
+capability reference when the owning bundle declares it as one.
 
 Canonical names (`runtime.noop`) are also accepted in capability
 positions.
 
 Capability-reference arguments are compile-time-only and must be supplied
-in the action's `@{ ... }` block; pipeline input cannot fill a missing
-binding. See [extensions.md §7](extensions.md#7-argument-schemas) for the
+in the action's parenthesized named arguments; pipeline input cannot fill a
+missing binding. See [extensions.md §7](extensions.md#7-argument-schemas) for the
 `ArgSchemas` contract and its optional-field behavior.
 
 ---
@@ -359,8 +370,9 @@ A bare projection entry such as `name` copies `.name` into the output key `name`
 Use `key: value` when the output key differs or the value needs an expression;
 the two forms can be mixed in one projection. Both projections and action
 argument maps accept a same-name shorthand, but their evaluation models differ:
-projections are expr-lang expressions, while `@{ ... }` shorthand means a
-reference to the current pipeline input.
+projections are expr-lang expressions, while action-argument shorthand means a
+reference to the current pipeline input. Legacy `@{ ... }` argument blocks use
+that same shorthand only for compatibility.
 
 Projections can spread the whole input with `...`:
 
@@ -393,7 +405,7 @@ introduce statements, `return`, I/O, or workflow actions:
 ```
 
 `@func` calls work in projections, match/loop/assertion/error conditions, and
-expression-valued entries in `@{ ... }` argument maps. Functions are
+parenthesized action-argument values. Functions are
 source-local and may call other visible functions, but recursion and side
 effects are not supported. `@pipeline` remains the construct for reusing a
 sequence or composition of actions. Import a function module with `@include`;
@@ -406,7 +418,8 @@ and the practical examples in [`extensions/func/nflows/`](../extensions/func/nfl
 invoice status, and support priority.
 
 `{ ... }` is data. `noop` inside a projection is a variable lookup, not
-a capability. Use `@{ }` for capability references.
+a capability. Use a bare registered capability name in its declared named
+argument, for example `action: noop`; `@{ ... }` is compatibility syntax only.
 
 Flow controls can also be values in projection fields. Each nested control is
 an analyzed/built Flow AST child and receives the same incoming projection root;
@@ -425,8 +438,8 @@ Flow control—the control receives the projection root.
   branches: parallel {
     first: { peak: .peak, keep: .keep },
     second: race {
-      fail @{ kind: "Unavailable", message: "try next" },
-      const @{ value: { peak: .peak, keep: .keep } }
+      fail(kind: "Unavailable", message: "try next"),
+      { peak: .peak, keep: .keep }
     }
   },
   category: match(.peak) {
@@ -437,8 +450,8 @@ Flow control—the control receives the projection root.
 ```
 
 This example demonstrates nested controls and subject-relative relational match
-arms; it does not imply that arbitrary `@{ ... }` argument blocks support
-expression interpolation.
+arms. Action arguments remain data values; use an explicitly parenthesized
+expression when a field needs an expr-lang calculation.
 
 ---
 
@@ -474,7 +487,7 @@ For symbol declaration syntax, include behavior, namespace precedence, and suppo
 
 ```nflow
 @pipeline fetch_user
-  http.request @{ url: "https://api.example/users/1" }
+  http.request(url: "https://api.example/users/1")
   -> { id: .body.id, name: .body.name }
 @end
 
@@ -493,7 +506,7 @@ Named pipeline arguments can be provided at the call site. The argument values a
 @end
 
 { search_text: "Flow", trace: "caller metadata" }
--> pipeline.lookup @{ request: ., region: "eu" }
+-> pipeline.lookup(request: ., region: "eu")
 ```
 
 The pipeline's `:request-schema` validates that constructed object. Generic action calls retain their existing merge behavior, and the object-to-pipeline form `{ ... } -> pipeline.NAME` remains supported; executable examples are in [`extensions/pipeline/nflows/`](../extensions/pipeline/nflows/).
@@ -503,7 +516,7 @@ Header modifiers may be written on the declaration line or on continuation lines
 @pipeline fetch_user
   :tag="api"
   :profile=reliable
-  http.request @{ url: "https://api.example/users/1" }
+  http.request(url: "https://api.example/users/1")
 @end
 ```
 Every `@pipeline NAME` mounts as `pipeline.NAME`. Use that name to call
@@ -527,8 +540,8 @@ stay on the wrapper — see §10 for the full rule.
 
 ```nflow
 @scope :timeout=5s :retry=3 {
-  http.request @{ url: "https://api.example/one" }
-  http.request @{ url: "https://api.example/two" }
+  http.request(url: "https://api.example/one")
+  http.request(url: "https://api.example/two")
 }
 ```
 
@@ -538,10 +551,10 @@ Nested scopes override on a per-name basis:
 
 ```nflow
 @scope :timeout=2s :retry=4 {
-  http.request @{ url: "https://fast.example" }
+  http.request(url: "https://fast.example")
 
   @scope :timeout=30s {
-    http.request @{ url: "https://slow.example" }
+    http.request(url: "https://slow.example")
   }
 }
 ```
@@ -553,7 +566,7 @@ An atom-local modifier always wins:
 
 ```nflow
 @scope :timeout=5s {
-  http.request:timeout=1s @{ url: "..." }
+  http.request:timeout=1s (url: "...")
 }
 ```
 
@@ -577,11 +590,11 @@ A profile is a named, reusable `@scope`. Declare once, use anywhere. Its modifie
 @profile fast     :timeout=500ms :retry=0
 
 @pipeline call_api :profile=reliable
-  http.request @{ url: "https://api.example" }
+  http.request(url: "https://api.example")
 @end
 
 @pipeline probe :profile=fast
-  http.request @{ url: "https://health.example" }
+  http.request(url: "https://health.example")
 @end
 ```
 
@@ -652,7 +665,7 @@ after macro expansion.
 
 ```nflow
 @macro user_card(name) {
-  const @{ value: { name: $name } } -> wrap @{ key: "card" }
+  { name: $name } -> wrap(key: "card")
 }
 
 @user_card("Maksymilian")
@@ -661,7 +674,7 @@ after macro expansion.
 Expands to:
 
 ```nflow
-const @{ value: { name: "Maksymilian" } } -> wrap @{ key: "card" }
+{ name: "Maksymilian" } -> wrap(key: "card")
 ```
 
 ### Patterns
@@ -670,7 +683,7 @@ const @{ value: { name: "Maksymilian" } } -> wrap @{ key: "card" }
 
 ```nflow
 @macro hello() {
-  const @{ value: "hello" }
+  "hello"
 }
 @hello()
 ```
@@ -679,12 +692,12 @@ const @{ value: { name: "Maksymilian" } } -> wrap @{ key: "card" }
 
 ```nflow
 @macro labeled(name, amount) {
-  const @{ value: { label: $name, amount: $amount } }
+  { label: $name, amount: $amount }
 }
 @labeled("total", 42)
 ```
 
-Macros can also splice complete argument-map entries before map parsing. This
+Macros can also splice complete named-argument entries before parsing. This
 is useful when a setting name and its config key share a parameter:
 
 ```nflow
@@ -692,10 +705,10 @@ is useful when a setting name and its config key share a parameter:
   $field: @config.stats_$field
 }
 
-runtime.const @{
+runtime.const(
   @stats_config(tree_only),
   @stats_config(full_tree)
-}
+)
 ```
 
 The entries expand to `tree_only: @config.stats_tree_only` and
@@ -705,7 +718,7 @@ The entries expand to `tree_only: @config.stats_tree_only` and
 
 ```nflow
 @macro fetch_and_extract(url) {
-  http.request @{ url: $url } -> { id: .body.id, name: .body.name }
+  http.request(url: $url) -> { id: .body.id, name: .body.name }
 }
 @fetch_and_extract("https://api.example/users/1")
 ```
@@ -722,7 +735,7 @@ The entries expand to `tree_only: @config.stats_tree_only` and
 **Inside a `@pipeline`:**
 
 ```nflow
-@macro constant_answer() { const @{ value: 42 } }
+@macro constant_answer() { 42 }
 @pipeline compute
   @constant_answer()
 @end
@@ -838,7 +851,7 @@ listed by `nflow list`.
 ## 14. Inspecting a flow before running it
 
 ```sh
-nflow lint    flow.nflow          # static check, exits 1 on any issue
+nflow lint    flow.nflow          # static check; exits 1 on errors, 0 on warnings-only or clean
 nflow explain flow.nflow          # effective policies per atom
 nflow info    flow.nflow          # pipeline shape
 ```

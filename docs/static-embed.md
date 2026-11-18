@@ -1,6 +1,6 @@
 # Static file embeds
 
-The `extensions/embed` bundle handles compile-time `@embed name "path"` declarations and runtime file resolution. The asset is read during preprocessing from the bundle's declared `fs.FS` or rooted directory, then emitted as a typed `github.com/nexssp/kernel/xfile.Ref` under the file-local `embed` symbol namespace. Use `embed.name` as a typed value inside an `@{ ... }` argument block; it is not a string parameter or an expression-language variable.
+The `extensions/embed` bundle handles compile-time `@embed name "path"` declarations and runtime file resolution. The asset is read during preprocessing from the bundle's declared `fs.FS` or rooted directory, then emitted as a typed `github.com/nexssp/kernel/xfile.Ref` under the file-local `embed` symbol namespace. Use `embed.name` as a typed value in a parenthesized action call; it is not a string parameter or an expression-language variable.
 
 ```go
 bundle, resolver := embed.BundleWithFileResolver(assetsFS, "flow.static", 8<<20)
@@ -10,7 +10,7 @@ _ = resolver // bundle registers it; runner.BuildConfig composes it automaticall
 ```nflow
 @embed logo "assets/logo.svg"
 
-files.stage @{ file: embed.logo }
+files.stage(file: embed.logo)
 ```
 
 A reference carries a provider, an opaque ID, SHA-256 version/digest, and expected byte size. The ID is a deterministic opaque hash derived from the validated relative asset path and digest; the path itself is not placed in the reference. At runtime, `embed.Resolver` looks the ID up in its typed `map[xfile.ID]assetReference`, revalidates the stored relative path, reopens the file within the declared `fs.FS`, enforces the configured byte limit, and verifies the version, size, and digest before returning bytes. It does not retain asset bytes. References are untrusted selection/integrity data and are never used as filesystem paths or authorization credentials.

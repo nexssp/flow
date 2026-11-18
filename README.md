@@ -63,7 +63,7 @@ The example projects a nested value into a new shape and prints:
 
 ## Recommended syntax
 
-Write new flows with the current composable syntax: pipeline operators such as `->`, projections such as `{ id, name: .customer.name }`, and structured action arguments such as `@{ order_id: .order_id }`. The older `action(key=value, ...)` form is kept only for compatibility with existing flows; do not use it as the pattern for new code. See the [syntax walkthrough](docs/language.md) and [language reference](docs/language-reference.md).
+Write new flows with the current composable syntax: pipeline operators such as `->`, projections such as `{ id, name: .customer.name }`, and named action calls such as `orders.get(order_id: .order_id)`. The older `action(key=value, ...)` form is kept only for compatibility with existing flows; do not use it as the pattern for new code. See the [syntax walkthrough](docs/language.md) and [language reference](docs/language-reference.md).
 
 ## Examples
 

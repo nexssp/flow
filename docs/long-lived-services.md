@@ -6,12 +6,12 @@
 
 ```nflow
 @pipeline backend_services
-  supervisor.serve @{
+  supervisor.serve(
     services: [
       { id: "http", action: "thttp.listen", payload: .http_config },
       { id: "worker", action: "tworker.listen", depends_on: ["http"], enabled: .worker_enabled, payload: .worker_config }
     ]
-  }
+  )
 @end
 ```
 

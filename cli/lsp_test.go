@@ -19,6 +19,19 @@ import (
 	"github.com/nexssp/flow/compiler"
 )
 
+func TestFlowArgsSnippetUsesParenthesizedNamedArguments(t *testing.T) {
+	for _, snippet := range flowSnippets {
+		if snippet.label != "flow-args" {
+			continue
+		}
+		if got, want := snippet.insertText, "action.node(field: ${1:.input})"; got != want {
+			t.Fatalf("flow-args insertion = %q, want %q", got, want)
+		}
+		return
+	}
+	t.Fatal("flow-args snippet not found")
+}
+
 func TestLanguageServerPublishesCompilerDiagnosticsAndAcceptsVersionDirective(t *testing.T) {
 	inv, err := newNativeInvocation(nil, nil)
 	if err != nil {

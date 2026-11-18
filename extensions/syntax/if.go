@@ -89,7 +89,8 @@ func parseIfCondition(p *compiler.Parser) (string, compiler.Position, error) {
 			}
 		case compiler.TokIdent, compiler.TokString, compiler.TokNumber, compiler.TokArrow,
 			compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr, compiler.TokLBrace,
-			compiler.TokRBrace, compiler.TokColon, compiler.TokEquals, compiler.TokComma,
+			compiler.TokRBrace, compiler.TokLBracket, compiler.TokRBracket, compiler.TokColon,
+			compiler.TokEquals, compiler.TokComma,
 			compiler.TokQuestion, compiler.TokHash, compiler.TokTilde, compiler.TokAtBrace,
 			compiler.TokAtPrompt:
 			// Expression operators and operands are validated after extracting the raw condition.

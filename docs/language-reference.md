@@ -23,19 +23,26 @@ See the [lexer](../compiler/lexer.go#L337-L352) and
 
 ## Actions, arguments, and data
 
-An action atom is normally a canonical action name, optionally followed by modifiers and a structured argument block:
+An action call uses a canonical action name, optional modifiers, and named arguments in parentheses:
 
 ```nflow
-orders.fetch :timeout=3s @{ order_id: .order_id }
+orders.fetch :timeout=3s (order_id: .order_id)
 ```
 
-`@{ ... }` is a data-value block by default: it accepts strings, numbers, booleans, arrays, nested objects, the current input (`.`), and paths into it (`.order_id`, `.customer.id`). A value explicitly wrapped in parentheses, such as `count: (.count + 1)`, opts into expr-lang evaluation; the expression can read the current atom input (`.`), original request (`input`), and visible pipeline `as` bindings. This opt-in does not reinterpret existing unparenthesized bare identifiers or dotted names, quoted strings, or whole-value `.` references. A bare field such as `name` is shorthand for a same-name input reference (`name: .name`), including inside nested objects. A path entry such as `.customer.id,` derives the key from its final segment, producing the equivalent of `id: .customer.id`; duplicate derived or explicit keys are errors. A top-level `... .defaults` entry spreads a referenced object into the action arguments at runtime; the spread must resolve to an object, and duplicate keys across spreads or explicit fields fail with a collision error. `#` and `//` start line comments inside the block, except inside quoted strings. An argument may also contain a bare capability reference only when the action's declared argument schema identifies that field as a capability; the compiler resolves that reference against the active registry. `ArgString`, `ArgInt`, and `ArgBool` schemas reject incompatible literal values at compile time (`ArgInt` also rejects fractional numbers). Dynamic input references and expressions cannot be proven statically and remain the receiving action's responsibility at runtime. If a runtime spread is present, required-field checks that depend on its unknown keys are deferred to the receiving capability. Unknown action names, invalid registered modifiers, and unresolved declared capabilities are compile-time errors. For the introductory syntax walkthrough, see [`docs/language.md`](language.md); see also the [argument schema/compiler tests](../compiler/arg_schema.go).
+Named arguments use the same typed data values and schema checks as the former `@{ ... }` block. Values include strings, numbers, booleans, arrays, nested objects, the current input (`.`), and paths such as `.order_id` or `.customer.id`. Parenthesized expressions like `count: (.count + 1)` explicitly opt into expr-lang evaluation; they can read the current atom input (`.`), original request (`input`), and visible pipeline `as` bindings. A bare field such as `name` remains shorthand for a same-name input reference (`name: .name`). Duplicate argument names are errors. A top-level `... .defaults` entry spreads an object into the call; the spread must resolve to an object, and duplicate keys fail with a collision error. `ArgString`, `ArgInt`, and `ArgBool` schemas reject incompatible literal values at compile time (`ArgInt` also rejects fractional numbers). Dynamic references and expressions remain the receiving action's responsibility at runtime. Unknown action names, invalid modifiers, and unresolved declared capabilities are compile-time errors. For the introductory syntax walkthrough, see [`docs/language.md`](language.md); see also the [argument schema/compiler tests](../compiler/arg_schema.go).
 
 `null` is also a structured data value. In an ordinary unparenthesized value field, a bare identifier or dotted name such as `input.name`, `person`, or `person.name` remains a literal string; it does not look up the original input or a pipeline `as` binding. Declared capability references and known symbols follow their separate data-position rules. This differs from a bare entry such as `name`, which references the same-named field on the current atom input. A qualified `@func` call remains available for named pure helpers; parenthesized `(expr)` values provide the general explicit expression form. See the `@func` section below.
 
 Quoted string values in `@{ ... }` preserve backslash sequences as data: the tested `\n`, `\q`, `\xGG`, and `\uZZZZ` remain verbatim and are neither decoded nor validated as escapes. `@assert` strings are parsed by expr-lang separately; the fixtures verify that `\n` is accepted there and that the three malformed examples are rejected. This clarification does not change other quoted forms or modifier parsing. See [`string_escape_data.nflow`](../extensions/syntax/nflows/string_escape_data.nflow) and the [`q`](../extensions/syntax/nflows/invalid_expr_escape_q.nflow), [`hex`](../extensions/syntax/nflows/invalid_expr_escape_hex.nflow), and [`Unicode`](../extensions/syntax/nflows/invalid_expr_escape_unicode.nflow) expected-error fixtures.
 
-The older `action(key=value, ...)` parameter spelling is still parsed for compatibility with existing flows; do not use it in new code. Prefer `@{ ... }` for structured input and the projection and pipeline forms shown here. Macro invocations may occupy an argument-map entry position; their bodies are expanded before the ordinary map parser reads the entries. Action argument details are assembled in [`compiler/parser.go`](../compiler/parser.go#L339-L500), [`compiler/at_brace.go`](../compiler/at_brace.go), and [`compiler/ast_build.go`](../compiler/ast_build.go).
+The older `action(key=value, ...)` and `action @{ ... }` spellings remain accepted for existing flows; use `action(key: value)` in new code. The old argument block is compatibility-only, not a second preferred form. Ordinary non-`const` `key=value` calls remain warning-free. The const-specific `const(value=...)` and `const(val=...)` forms also retain legacy scalar unwrapping; use a direct typed value for scalars or `const(field: value)` for objects.
+
+During the migration release, `nflow lint` reports a source-located warning and
+fix hint for legacy action blocks and const magic-key forms. Ordinary compilation
+continues to accept them during this period. Action argument details are
+assembled in [`compiler/parser.go`](../compiler/parser.go),
+[`compiler/at_brace.go`](../compiler/at_brace.go), and
+[`compiler/ast_build.go`](../compiler/ast_build.go).
 
 Flow also has ten reserved keyword actions that map to canonical capabilities and cannot be shadowed by a bundle:
 
@@ -54,31 +61,32 @@ Flow also has ten reserved keyword actions that map to canonical capabilities an
 
 `const` here is a runtime action; it is distinct from the compile-time `@const` directive. The keyword map is in [`compiler/reserved.go`](../compiler/reserved.go) and the action fixtures are under [`extensions/runtime/nflows/`](../extensions/runtime/nflows/).
 
-`const` accepts a direct scalar after the keyword, for example `const "hello"`,
-`const 42`, `const true`, or `const null`. Its `@{ ... }` form is still a named
-argument object: fields such as `count: 3` produce an object, while the existing
-`value:` and `val:` fields unwrap their contents for compatibility and remain
-the way to return an array directly. Raw text from `@flag.*`, `@arg.N`, and
-`@config.*` references remains a string instead of being guessed as a number,
-boolean, `null`, or JSON; add `coerce: true` alongside `value:` to opt into
-parsing a referenced value. Existing literal strings written directly in the
-legacy `value:` wrapper keep their historical auto-parsing behavior. In object
-mode, `coerce` is an ordinary output field; it only opts into parsing when used
-with a top-level `value` or `val`.
+Literals and compile-time references can start a pipeline directly. Quoted text
+stays a string, and numeric, boolean, `null`, array, and object forms keep their
+written types. For example, `"42"` is text, `42` is an integer, and
+`[1, 2, 3]` is an array. `@config.*`, `@flag.*`, and `@arg.N` references yield
+text; they are never guessed to be numbers, booleans, `null`, or JSON. Convert
+only where the receiving schema and intended data type are known. Legacy
+`const @{...}` blocks and `const(value=...)` / `const(val=...)` still invoke the
+old scalar unwrapping behavior and receive source-located `nflow lint` warnings;
+if both keys appear, `value` wins. Legacy strings can be auto-parsed. The
+`coerce` flag only changes a preserved CLI/config/arg string when it reaches the
+runtime as a boolean `true`; literal `coerce=true` in key=value syntax is text,
+not a boolean. In new colon syntax, `value`, `val`, and `coerce` are ordinary
+object fields, not magic keys.
 
-### Migration: CLI and config references no longer auto-coerce
+### Migration: make conversions explicit
 
-Before this change, `const @{ value: @config.retries }` with `retries: 3`
-produced the integer `3`. It now produces the string `"3"`. The same change
-applies to `@flag.*` and `@arg.N` references. To restore the previous conversion,
-add `coerce: true` alongside the named value:
+In the typed syntax, `@config.retries`, `@flag.*`, and `@arg.N` produce strings,
+even when their contents look numeric. Do not carry `coerce: true` forward as a
+generic cast: its legacy behavior also parses booleans, `null`, JSON objects and
+arrays, and leaves unrecognized strings untouched. Check the old output type
+before replacing a `value`/`val` wrapper, and choose an explicit conversion
+only when the receiving field is known to require that type.
 
-```nflow
-const @{ value: @config.retries, coerce: true }
-```
-
-Direct scalar references such as `const @config.retries` are new and always
-produce text.
+The previous `const @config.retries` form is no longer needed; write
+`@config.retries` as the pipeline value. It remains text, making the source
+type visible rather than inferred from the reference's contents.
 
 Atoms can also carry extension-consumed annotations: `#target1,target2`, `~excluded1,excluded2`, and `@prompt` add target, exclusion, or prompt data to the action request when the action supports it. `@config` on an atom is a special configuration-injection marker for configurable stream sources/operators; it is not the same as the `@config` directive. These annotations have no universal effect independent of the consuming action; see the parser's [`Atom` fields](../compiler/ast.go#L35-L49) and builder [argument assembly](../compiler/ast_build.go#L840-L875).
 
@@ -97,7 +105,7 @@ A projection transforms the current value into a new object. Inside it, `.field`
 
 `...input.state` (with no space after `...`) instead spreads that path from the original pipeline input, even after earlier pipeline steps have changed the current projection value. The roots are distinct: `... input.state` is rejected, and `... .state` keeps its existing current-value meaning. Explicit fields after either spread override matching copied fields. See the runnable [input-rooted spread fixture](../extensions/projection/nflows/input_path_spread.nflow) and the existing [current-value spread fixture](../extensions/projection/nflows/path_shorthand_spread.nflow).
 
-In projection object-entry position, a bare field name is shorthand for the same key copied from the current input: `{ name }` is equivalent to `{ name: .name }`. A path entry such as `.current.attempt.attempt_id,` derives the final key `attempt_id` and copies that nested path. Shorthand entries can be mixed with explicit `key: value` entries; duplicate output keys within the object are rejected. Structured action arguments also accept path entries, for example `@{ .user.id }` is equivalent to `@{ id: .user.id }`; duplicate keys are rejected there too. Both forms read from the current pipeline input, but projections are expression objects while action arguments use the literal/reference map syntax described above.
+In projection object-entry position, a bare field name is shorthand for the same key copied from the current input: `{ name }` is equivalent to `{ name: .name }`. A path entry such as `.current.attempt.attempt_id,` derives the final key `attempt_id` and copies that nested path. Shorthand entries can be mixed with explicit `key: value` entries; duplicate output keys within the object are rejected. Parenthesized action arguments also accept path entries: `action(.user.id)` is equivalent to `action(id: .user.id)`; duplicate keys are rejected there too. Both forms read from the current pipeline input, but projections are expression objects while action arguments use the literal/reference map syntax described above.
 
 The extension self-test runs fixtures for [shorthand-only](../extensions/projection/nflows/shorthand.nflow), [explicit-only](../extensions/projection/nflows/explicit_projection.nflow), [mixed member expressions](../extensions/projection/nflows/mixed_shorthand.nflow), and [shorthand with spread](../extensions/projection/nflows/shorthand_spread.nflow).
 
@@ -118,7 +126,7 @@ The standard projection bundle validates statically known projection bodies duri
 { shipping_minor: commerce.shippingFeeMinor(.subtotal_minor, .destination_zone) }
 ```
 
-Supported parameter and result types are `int`, `int64`, `float64`, `string`, and `bool`; an `int` parameter accepts integral numeric input. Calls use a qualified name, may refer forward to other visible functions, and are checked for argument count and type. Duplicate names, invalid bodies/results, unknown body variables, and recursive cycles fail compilation. The body is not Go code, cannot perform I/O or invoke actions, and disables the nondeterministic `now()` builtin. Functions are available in projections, match/loop/assertion/error conditions, and expression-valued `@{...}` entries. A function remains local to its source module; importing that module with `@include "fees.nflow" AS pricing` exposes a declaration named `commerce.shippingFeeMinor` as `pricing.commerce.shippingFeeMinor`. Nested include aliases compose in the same way. Functions package calculations only—they do not define request/response fields or defaults, which remain the job of schemas and pipelines. See the [practical `@func` example catalog](../extensions/func/nflows/README.md), including the [reusable shipping fixture](../extensions/func/nflows/reusable_shipping_fee.nflow).
+Supported parameter and result types are `int`, `int64`, `float64`, `string`, and `bool`; an `int` parameter accepts integral numeric input. Calls use a qualified name, may refer forward to other visible functions, and are checked for argument count and type. Duplicate names, invalid bodies/results, unknown body variables, and recursive cycles fail compilation. The body is not Go code, cannot perform I/O or invoke actions, and disables the nondeterministic `now()` builtin. Functions are available in projections, match/loop/assertion/error conditions, and parenthesized action-argument values. A function remains local to its source module; importing that module with `@include "fees.nflow" AS pricing` exposes a declaration named `commerce.shippingFeeMinor` as `pricing.commerce.shippingFeeMinor`. Nested include aliases compose in the same way. Functions package calculations only—they do not define request/response fields or defaults, which remain the job of schemas and pipelines. See the [practical `@func` example catalog](../extensions/func/nflows/README.md), including the [reusable shipping fixture](../extensions/func/nflows/reusable_shipping_fee.nflow).
 
 `@symbols NAME { ... }` declares a file-local namespace of string values. In expression positions, refer to them as `NAME.member`; in data positions, an unquoted known symbol resolves to its declared string. Local namespaces shadow same-named global namespaces; current input values take precedence on collisions in expression environments. An included module's public namespace is addressed through its import qualifier, for example `billing.queues.review`; its unqualified declarations remain local to that module. See [`docs/symbols.md`](symbols.md) and [`extensions/symbols/`](../extensions/symbols/).
 
@@ -155,15 +163,15 @@ request -> ai.decide as decision
 
 The alias names the immediately preceding step's output; it does not wrap or rewrite the value passed by `->`. A binding is immutable, must be one identifier, and is visible only to later expressions in that pipeline invocation. Duplicate names in one pipeline fail during compilation. The initial request remains available as `input`, while the usual map shorthand, `__root__`, and `__state__` keep their existing meanings. A binding is not added to the pipeline result: return it explicitly in a projection if callers need it. Declared pipelines receive fresh scopes, so their names do not leak to callers. Loop iterations get fresh body-local scopes; they can read earlier outer bindings, but body bindings do not escape the loop. A later `? on_error` handler can read aliases from successful earlier steps; a step that fails does not create its own binding. See the runnable built-in-action example [`named_bindings.nflow`](../extensions/syntax/nflows/named_bindings.nflow) and the [decision-router adaptation](examples/named-bindings-from-decision-router.md).
 
-For a named pipeline, `pipeline.NAME @{ field: value, ... }` passes the named fields as that pipeline's complete input object. Argument values such as `.search_text` and `.` are evaluated at runtime against the incoming state; request-schema defaults and validation then apply to the resulting object. This differs from `@{...}` on a generic action, which continues to merge its fields into the incoming object. The existing `{ ... } -> pipeline.NAME` form is unchanged. See the executable [`named_args_runtime_refs.nflow`](../extensions/pipeline/nflows/named_args_runtime_refs.nflow) and [`named_args_legacy_compat.nflow`](../extensions/pipeline/nflows/named_args_legacy_compat.nflow) fixtures.
+For a named pipeline, `pipeline.NAME(field: value, ...)` passes its named fields as the complete request object. Argument values such as `.search_text` and `.` are evaluated at runtime against the incoming state; request-schema defaults and validation then apply to the resulting object. This differs from a generic action call such as `action(field: value)`, which merges its fields into the incoming object. The existing `{ ... } -> pipeline.NAME` form is unchanged. The legacy `pipeline.NAME @{...}` spelling remains compatibility-only and receives a lint warning. See the executable [`named_args_runtime_refs.nflow`](../extensions/pipeline/nflows/named_args_runtime_refs.nflow) and [`named_args_legacy_compat.nflow`](../extensions/pipeline/nflows/named_args_legacy_compat.nflow) fixtures.
 
 `match` chooses the first matching arm. It accepts predicate arms against the current input, or a subject expression with literal/pattern arms; subject-relative relational arms (`>`, `>=`, `<`, `<=`) compare the evaluated subject with the arm expression. `_` is the default arm:
 
 ```nflow
 match {
-  .danger && .level > 3 -> const @{ value: "critical" },
-  .danger               -> const @{ value: "warning" },
-  _                     -> const @{ value: "nominal" }
+  .danger && .level > 3 -> "critical",
+  .danger               -> "warning",
+  _                     -> "nominal"
 }
 ```
 
@@ -229,7 +237,7 @@ For a required source bundle, the qualifier before `:` is its local `@require` a
 @pipeline fetch_user
   :profile=reliable
   :tag="api"
-  http.request @{ url: "https://api.example/users/1" }
+  http.request(url: "https://api.example/users/1")
 @end
 ```
 
@@ -283,7 +291,7 @@ A separate runtime strict mode is also available: `@config:strict=true` or `:str
 
 An atom can carry modifiers as `action:flag` or `action:key=value`; multiple modifiers may be written together: `service.call:timeout=5s:retry=3`. They can decorate atoms, parenthesized expressions, projections, or supported keyword expressions. Each modifier name/value is interpreted by the active modifier table and extension advisors. Unknown names, invalid value types, and invalid registered values are compile-time errors; runtime effects belong to the Kernel action builder or extension.
 
-Flags and valued modifiers may be mixed on one line, for example `const :rate_limit=50 :idempotent :dedup :coalesce @{ value: "ok" }`. A colon immediately followed by a modifier name starts the next modifier whether or not that name has `=value`; it is not part of the preceding value. Quoted strings preserve spaces, commas and colons, for example `:desc="Maks: ingest, Julia: verify"`. The existing ternary convention is unchanged: a separator colon followed by whitespace belongs to `condition ? yes : no`, not to a modifier. This is a boundary fix, not a new atomic-scalar-only grammar; existing comma-valued modifiers remain supported. See [`compiler/parser_modifier_boundary_test.go`](../compiler/parser_modifier_boundary_test.go).
+Flags and valued modifiers may be mixed on one line, for example `const :rate_limit=50 :idempotent :dedup :coalesce (status: "ok")`; `status` is an ordinary object field in this typed call. A colon immediately followed by a modifier name starts the next modifier whether or not that name has `=value`; it is not part of the preceding value. Quoted strings preserve spaces, commas and colons, for example `:desc="Maks: ingest, Julia: verify"`. The existing ternary convention is unchanged: a separator colon followed by whitespace belongs to `condition ? yes : no`, not to a modifier. This is a boundary fix, not a new atomic-scalar-only grammar; existing comma-valued modifiers remain supported. See [`compiler/parser_modifier_boundary_test.go`](../compiler/parser_modifier_boundary_test.go).
 
 The stock CLI includes these principal groups:
 

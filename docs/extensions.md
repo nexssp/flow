@@ -357,10 +357,10 @@ func Bundle(_ map[string]string) compiler.Bundle {
 With that declaration:
 
 ```nflow
-distribute.map @{ action: noop, items: [1, 2] }     # valid
-distribute.map @{ action: noop, items: [1] } # valid
-distribute.map @{ action: "noop", items: [1] }       # compile error
-distribute.map @{ action: missing, items: [1] }      # compile error
+distribute.map(action: noop, items: [1, 2])     # valid
+distribute.map(action: noop, items: [1])        # valid
+distribute.map(action: "noop", items: [1])      # compile error
+distribute.map(action: missing, items: [1])     # compile error
 ```
 
 An `ArgCapabilityRefList` field accepts a list of bare identifiers:
@@ -370,7 +370,7 @@ An `ArgCapabilityRefList` field accepts a list of bare identifiers:
 ```
 
 ```nflow
-dispatch.run @{ members: [noop, const], payload: .data }
+dispatch.run(members: [noop, const], payload: .data)
 ```
 
 A field **not** declared in `ArgSchemas` is a plain string. A bare
@@ -378,9 +378,9 @@ identifier in an undeclared field stays a string; the compiler does not
 guess.
 
 Capability references are compile-time bindings. They must appear in the
-action's `@{ ... }` block; a value in the pipeline input cannot satisfy a
-required capability field. For example, `dispatch.run` requires its
-`members` field in `@{}` and reports the source file and line if it is
+action's parenthesized named arguments; a value in the pipeline input cannot
+satisfy a required capability field. For example, `dispatch.run` requires its
+`members` argument and reports the source file and line if it is
 missing. `runtime.call.name` is optional because that action deliberately
 resolves a name supplied in its runtime input.
 

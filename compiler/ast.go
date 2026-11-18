@@ -33,18 +33,20 @@ func (l *LiteralExpr) Build(_ context.Context, bCtx *BuildContext) (action.AnyAc
 
 // Atom is a single runtime action call.
 type Atom struct {
-	Name              string
-	Params            map[string]string
-	ParamValues       map[string]any // native symbol values; takes precedence over Params
-	Modifiers         []string
-	ModifierValues    []ModifierValue  // parallel to Modifiers for quoted or native values
-	ModifierSources   []ModifierSource // parallel to Modifiers; same length
-	DirectInput       *Value           // scalar written directly after the const keyword
-	Args              map[string]*Value
-	ArgSpreads        []*Value // runtime maps spread into @{...} arguments
-	HasArgumentObject bool     // true when the atom used @{...}, including an empty object
-	// NamedPipelineArgs marks `pipeline.NAME @{...}` as a complete request object.
-	// The pipeline extension sets this; values are resolved against state at runtime.
+	Name                    string
+	Params                  map[string]string
+	ParamValues             map[string]any // native symbol values; takes precedence over Params
+	Modifiers               []string
+	ModifierValues          []ModifierValue  // parallel to Modifiers for quoted or native values
+	ModifierSources         []ModifierSource // parallel to Modifiers; same length
+	DirectInput             *Value           // literal or reference written as a pipeline value
+	Args                    map[string]*Value
+	ArgSpreads              []*Value   // runtime maps spread into structured arguments
+	HasArgumentObject       bool       // true when the atom used parenthesized or legacy map arguments
+	LegacyArgumentBlock     bool       // true only for the deprecated @{...} argument spelling
+	LegacyArgumentPositions []Position // source positions of deprecated @{...} blocks
+	// NamedPipelineArgs marks a named pipeline argument object as the complete
+	// request. The pipeline extension sets this; values resolve against state at runtime.
 	NamedPipelineArgs bool
 	Prompt            string
 	Targets           []string

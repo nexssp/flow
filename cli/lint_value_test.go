@@ -69,7 +69,7 @@ func TestLintCompileReportsMacroSyntaxError(t *testing.T) {
 }
 
 func TestLintRejectsSinglePipeSequentialOperator(t *testing.T) {
-	issues := lintOne(t, `runtime.const @{ value: "legacy" } | runtime.noop`)
+	issues := lintOne(t, `"legacy" | runtime.noop`)
 	ktest.RequireLen(t, issues, 1)
 	ktest.RequireEqual(t, issues[0].Kind, lintIssueCompile)
 	ktest.RequireStringContains(t, issues[0].Message, `unexpected token "|"`)
@@ -77,7 +77,7 @@ func TestLintRejectsSinglePipeSequentialOperator(t *testing.T) {
 
 func TestLintPreservesArrowParallelFallbackAndExpressionPipe(t *testing.T) {
 	for _, src := range []string{
-		`runtime.const @{ value: "canonical" } -> runtime.noop`,
+		`runtime.const(value: "canonical") -> runtime.noop`,
 		`(runtime.noop & runtime.noop)`,
 		`runtime.noop || runtime.noop`,
 		`{ items: [{ line: 1, severity: "low" }, { line: 2, severity: "high" }] } -> { top: items | filter(#.severity == "high") | sortBy(#.line, "desc") | take(1) }`,

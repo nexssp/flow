@@ -20,7 +20,7 @@ var Const = action.New("runtime.const", func(_ context.Context, in any) (any, er
 		if value, ok := v.Value.(string); ok {
 			return value, nil
 		}
-		return coerceLiteral(v.Value), nil
+		return removeConstStringMarkers(coerceLiteral(v.Value)), nil
 	case string, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, bool:
 		return coerceLiteral(v), nil
 	}
@@ -67,6 +67,27 @@ func constValue(raw any, coerceRequested bool) any {
 		return coerceLiteral(string(value))
 	}
 	return coerceLiteral(raw)
+}
+
+func removeConstStringMarkers(value any) any {
+	switch v := value.(type) {
+	case constinput.String:
+		return string(v)
+	case map[string]any:
+		clean := make(map[string]any, len(v))
+		for key, item := range v {
+			clean[key] = removeConstStringMarkers(item)
+		}
+		return clean
+	case []any:
+		clean := make([]any, len(v))
+		for i, item := range v {
+			clean[i] = removeConstStringMarkers(item)
+		}
+		return clean
+	default:
+		return value
+	}
 }
 
 func coerceLiteral(raw any) any {

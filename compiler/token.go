@@ -20,6 +20,8 @@ const (
 	TokRParen
 	TokLBrace
 	TokRBrace
+	TokLBracket
+	TokRBracket
 	TokColon
 	TokEquals
 	TokComma
@@ -31,7 +33,7 @@ const (
 	TokInvalid
 )
 
-var tokenNames = [21]string{
+var tokenNames = [23]string{
 	TokEOF:       "eof",
 	TokIdent:     "ident",
 	TokString:    stringKindName,
@@ -44,6 +46,8 @@ var tokenNames = [21]string{
 	TokRParen:    ")",
 	TokLBrace:    "{",
 	TokRBrace:    "}",
+	TokLBracket:  "[",
+	TokRBracket:  "]",
 	TokColon:     ":",
 	TokEquals:    "=",
 	TokComma:     ",",

@@ -165,9 +165,9 @@ func sourceTokens(source string, base int) []SourceToken {
 				projectionBraces = projectionBraces[:last]
 			}
 		case TokEOF, TokIdent, TokString, TokNumber, TokInvalid, TokArrow, TokPipe,
-			TokAmpersand, TokOrOr, TokLParen, TokRParen, TokColon, TokEquals,
+			TokAmpersand, TokOrOr, TokLParen, TokRParen, TokLBracket, TokRBracket, TokColon, TokEquals,
 			TokComma, TokQuestion, TokHash, TokTilde, TokAtBrace, TokAtPrompt:
-			// These tokens do not affect projection-depth tracking.
+			// These tokens do not affect projection-brace tracking.
 		}
 		if token.Type == TokAtBrace && token.Lit != "" {
 			tokens = append(tokens, sourceTokens(token.Lit, span.Start+2)...)

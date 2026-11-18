@@ -203,7 +203,7 @@ func TestRunLintExplicitFileKeepsSingleFileSuccessOutput(t *testing.T) {
 
 func TestRunLintRejectsSinglePipeSequentialOperator(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy-pipe.nflow")
-	if err := os.WriteFile(path, []byte(`runtime.const @{ value: "legacy" } | runtime.noop`+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`"legacy" | runtime.noop`+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	stdout, stderr, code := captureLintOutput(t, func() int {

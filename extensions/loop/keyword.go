@@ -63,9 +63,11 @@ scan:
 			}
 		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
 			compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr,
-			compiler.TokLBrace, compiler.TokRBrace, compiler.TokColon, compiler.TokEquals,
+			compiler.TokLBrace, compiler.TokRBrace, compiler.TokLBracket, compiler.TokRBracket,
+			compiler.TokColon, compiler.TokEquals,
 			compiler.TokComma, compiler.TokQuestion, compiler.TokHash, compiler.TokTilde,
 			compiler.TokAtBrace, compiler.TokAtPrompt:
+			// The condition scanner tracks parentheses; other tokens stay in the raw condition.
 		}
 		p.Advance()
 	}

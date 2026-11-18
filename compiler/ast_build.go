@@ -946,7 +946,8 @@ func resolveConfigRefsInModifier(cfg map[string]string, cliArgs []string, raw st
 }
 
 func hasInjections(a *Atom) bool {
-	return a.DirectInput != nil || len(a.Params) > 0 || len(a.Args) > 0 || len(a.ArgSpreads) > 0 ||
+	return a.DirectInput != nil || (a.Name == runtimeConstAction && a.HasArgumentObject) ||
+		len(a.Params) > 0 || len(a.Args) > 0 || len(a.ArgSpreads) > 0 ||
 		a.Prompt != "" || len(a.Targets) > 0 || len(a.Excludes) > 0
 }
 
@@ -994,7 +995,11 @@ func wrapWithPayloadBuilder(
 			}
 			return nil, err
 		}
-		res, err := action.InvokeAny(ctx, inner, payload)
+		var actionInput any = payload
+		if a.Name == runtimeConstAction && a.HasArgumentObject && !a.LegacyArgumentBlock {
+			actionInput = constinput.Direct{Value: payload}
+		}
+		res, err := action.InvokeAny(ctx, inner, actionInput)
 		if err != nil {
 			// Attach pos to the error when not already tagged with that file.
 			if _, ok := PositionOf(err); pos.File != "" && !ok {

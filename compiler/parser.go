@@ -301,73 +301,103 @@ func (p *Parser) parsePrimaryInner() (Expr, error) {
 		return ext.Parse(p)
 	}
 
-	if p.Cur().Type == TokIdent {
-		switch p.Cur().Lit {
-		case "true":
-			pos := p.currentPos()
-			p.Next()
-			return &LiteralExpr{Val: true, Pos: pos}, nil
-		case literalFalse:
-			pos := p.currentPos()
-			p.Next()
-			return &LiteralExpr{Val: false, Pos: pos}, nil
-		case "null":
-			pos := p.currentPos()
-			p.Next()
-			return &LiteralExpr{Val: nil, Pos: pos}, nil
-		}
-		if ext, ok := p.primaries.ByKeyword(p.Cur().Lit); ok {
-			return ext.Parse(p)
-		}
-	}
-
-	if p.Cur().Type == TokLParen {
-		p.Next()
-		e, err := p.parseExpr(0)
-		if err != nil {
-			return nil, err
-		}
-		if p.Cur().Type != TokRParen {
-			if p.Cur().Type == TokInvalid {
-				return nil, p.unexpectedCharacter()
-			}
-			return nil, p.errorf(p.Cur().Line, "expected ')', got %q", p.Cur().Lit)
-		}
-		p.Next()
-		return e, nil
-	}
-
-	if p.Cur().Type == TokString {
-		if p.Cur().Unterminated {
-			return nil, p.errorf(p.Cur().Line, "unterminated string")
-		}
-		s := p.Cur().Lit
-		pos := p.currentPos()
-		p.Next()
-		return &LiteralExpr{Val: s, Pos: pos}, nil
-	}
-
-	if p.Cur().Type == TokNumber {
-		raw := p.Cur().Lit
-		pos := p.currentPos()
-		p.Next()
-		if n, err := strconv.ParseInt(raw, 10, 64); err == nil {
-			return &LiteralExpr{Val: n, Pos: pos}, nil
-		}
-		if f, err := strconv.ParseFloat(raw, 64); err == nil {
-			return &LiteralExpr{Val: f, Pos: pos}, nil
-		}
-		return &LiteralExpr{Val: raw, Pos: pos}, nil
-	}
-
-	if p.Cur().Type == TokIdent {
-		return p.parseAtom()
-	}
-
-	if p.Cur().Type == TokEOF {
+	switch p.Cur().Type {
+	case TokIdent:
+		return p.parseIdentifierPrimary()
+	case TokLParen:
+		return p.parseGroupedPrimary()
+	case TokLBracket:
+		return p.parseArrayLiteralPrimary()
+	case TokAtPrompt:
+		return p.parsePromptReferencePrimary()
+	case TokString:
+		return p.parseStringPrimary()
+	case TokNumber:
+		return p.parseNumberPrimary()
+	case TokInvalid:
+		return nil, p.unexpectedCharacter()
+	case TokEOF:
 		return nil, p.errorf(p.Cur().Line, "expected expression, got end of input")
+	case TokArrow, TokPipe, TokAmpersand, TokOrOr, TokRParen, TokLBrace, TokRBrace,
+		TokRBracket, TokColon, TokEquals, TokComma, TokQuestion, TokHash, TokTilde, TokAtBrace:
+		return nil, p.errorf(p.Cur().Line, "unexpected token %q", p.Cur().Lit)
 	}
 	return nil, p.errorf(p.Cur().Line, "unexpected token %q", p.Cur().Lit)
+}
+
+func (p *Parser) parseIdentifierPrimary() (Expr, error) {
+	switch p.Cur().Lit {
+	case "true":
+		pos := p.currentPos()
+		p.Next()
+		return &LiteralExpr{Val: true, Pos: pos}, nil
+	case literalFalse:
+		pos := p.currentPos()
+		p.Next()
+		return &LiteralExpr{Val: false, Pos: pos}, nil
+	case "null":
+		pos := p.currentPos()
+		p.Next()
+		return &LiteralExpr{Val: nil, Pos: pos}, nil
+	}
+	if ext, ok := p.primaries.ByKeyword(p.Cur().Lit); ok {
+		return ext.Parse(p)
+	}
+	return p.parseAtom()
+}
+
+func (p *Parser) parseGroupedPrimary() (Expr, error) {
+	p.Next()
+	expr, err := p.parseExpr(0)
+	if err != nil {
+		return nil, err
+	}
+	if p.Cur().Type != TokRParen {
+		if p.Cur().Type == TokInvalid {
+			return nil, p.unexpectedCharacter()
+		}
+		return nil, p.errorf(p.Cur().Line, "expected ')', got %q", p.Cur().Lit)
+	}
+	p.Next()
+	return expr, nil
+}
+
+func (p *Parser) parsePromptReferencePrimary() (Expr, error) {
+	reference := strings.TrimSpace(p.Cur().Lit)
+	if !strings.HasPrefix(reference, "config.") &&
+		!strings.HasPrefix(reference, "flag.") && !strings.HasPrefix(reference, "arg.") {
+		return nil, p.errorf(p.Cur().Line, "unexpected token %q", p.Cur().Lit)
+	}
+	pos := p.currentPos()
+	p.Next()
+	return &Atom{
+		Name:        runtimeConstAction,
+		DirectInput: &Value{Kind: ValueRef, Ref: reference},
+		Pos:         pos,
+	}, nil
+}
+
+func (p *Parser) parseStringPrimary() (Expr, error) {
+	if p.Cur().Unterminated {
+		return nil, p.errorf(p.Cur().Line, "unterminated string")
+	}
+	value := p.Cur().Lit
+	pos := p.currentPos()
+	p.Next()
+	return &LiteralExpr{Val: value, Pos: pos}, nil
+}
+
+func (p *Parser) parseNumberPrimary() (Expr, error) {
+	raw := p.Cur().Lit
+	pos := p.currentPos()
+	p.Next()
+	if number, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		return &LiteralExpr{Val: number, Pos: pos}, nil
+	}
+	if number, err := strconv.ParseFloat(raw, 64); err == nil {
+		return &LiteralExpr{Val: number, Pos: pos}, nil
+	}
+	return &LiteralExpr{Val: raw, Pos: pos}, nil
 }
 
 func (p *Parser) parseQualifiedTokenPrimary() (Expr, bool, error) {
@@ -432,7 +462,7 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 	a := &Atom{Name: name, Params: map[string]string{}}
 
 	if p.Cur().Type == TokLParen {
-		if err := p.parseLegacyParams(a); err != nil {
+		if err := p.parseParenthesizedArgs(a); err != nil {
 			return nil, err
 		}
 	}
@@ -461,6 +491,15 @@ func (p *Parser) parseAtomSuffix(a *Atom) (bool, error) {
 		}
 		return true, p.parseModifier(a)
 
+	case TokLParen:
+		if a.DirectInput != nil {
+			return false, p.errorf(p.Cur().Line, "const cannot combine direct scalar input with a named argument object")
+		}
+		if a.HasArgumentObject {
+			return false, p.errorf(p.Cur().Line, "action already has a named argument object")
+		}
+		return true, p.parseParenthesizedArgs(a)
+
 	case TokHash:
 		p.Next()
 		a.Targets = p.appendList(a.Targets)
@@ -488,6 +527,7 @@ func (p *Parser) parseAtomSuffix(a *Atom) (bool, error) {
 		if p.Cur().Unterminated {
 			return false, p.errorf(p.Cur().Line, "unterminated argument block; expected '}'")
 		}
+		legacyPos := p.currentPos()
 		raw, err := p.expandArgumentMap(p.Cur().Lit)
 		if err != nil {
 			return false, err
@@ -497,6 +537,8 @@ func (p *Parser) parseAtomSuffix(a *Atom) (bool, error) {
 			return false, err
 		}
 		a.HasArgumentObject = true
+		a.LegacyArgumentBlock = true
+		a.LegacyArgumentPositions = append(a.LegacyArgumentPositions, legacyPos)
 		a.ArgSpreads = append(a.ArgSpreads, spreads...)
 		if a.Args == nil {
 			a.Args = args
@@ -512,8 +554,8 @@ func (p *Parser) parseAtomSuffix(a *Atom) (bool, error) {
 		return true, nil
 
 	case TokEOF, TokIdent, TokString, TokNumber, TokInvalid, TokArrow, TokPipe,
-		TokAmpersand, TokOrOr, TokLParen, TokRParen, TokLBrace,
-		TokRBrace, TokEquals, TokComma, TokQuestion:
+		TokAmpersand, TokOrOr, TokRParen, TokLBrace,
+		TokRBrace, TokLBracket, TokRBracket, TokEquals, TokComma, TokQuestion:
 		return false, nil
 	}
 	return false, nil
@@ -557,7 +599,7 @@ func (p *Parser) parseDirectConstInput(a *Atom) (bool, error) {
 		}
 		value = &Value{Kind: ValueRef, Ref: reference}
 	case TokEOF, TokInvalid, TokArrow, TokPipe, TokAmpersand, TokOrOr,
-		TokLParen, TokRParen, TokLBrace, TokRBrace, TokColon,
+		TokLParen, TokRParen, TokLBrace, TokRBrace, TokLBracket, TokRBracket, TokColon,
 		TokEquals, TokComma, TokQuestion, TokHash, TokTilde, TokAtBrace:
 		return false, nil
 	}
@@ -741,6 +783,147 @@ func (p *Parser) parseLegacyParams(a *Atom) error {
 	return nil
 }
 
+func (p *Parser) parseArrayLiteralPrimary() (Expr, error) {
+	pos := p.currentPos()
+	start := p.Cur().Offset
+	depth := 0
+	closeIndex := -1
+	for i := p.pos; i < len(p.toks); i++ {
+		next, comment, err := p.skipBlockCommentTokens(i)
+		if err != nil {
+			return nil, err
+		}
+		if comment {
+			i = next - 1
+			continue
+		}
+		switch p.toks[i].Type {
+		case TokLBracket:
+			depth++
+		case TokRBracket:
+			depth--
+			if depth == 0 {
+				closeIndex = i
+			}
+		case TokEOF, TokIdent, TokString, TokNumber, TokArrow, TokPipe,
+			TokAmpersand, TokOrOr, TokLParen, TokRParen, TokLBrace, TokRBrace,
+			TokColon, TokEquals, TokComma, TokQuestion, TokHash, TokTilde,
+			TokAtBrace, TokAtPrompt, TokInvalid:
+			// Other token kinds do not change array-bracket nesting.
+		}
+		if closeIndex >= 0 {
+			break
+		}
+	}
+	if closeIndex < 0 {
+		return nil, SourceError(pos, "unterminated array literal; expected ']'")
+	}
+	end := p.toks[closeIndex].EndOffset
+	scanner := &braceScanner{src: p.src[start:end], base: pos}
+	value, err := scanner.readArray()
+	if err != nil {
+		return nil, err
+	}
+	scanner.skipWS()
+	if !scanner.eof() {
+		return nil, SourceError(pos, "invalid array literal")
+	}
+	p.pos = closeIndex + 1
+	return &Atom{Name: runtimeConstAction, DirectInput: value, Pos: pos}, nil
+}
+
+func (p *Parser) parseParenthesizedArgs(a *Atom) error {
+	if p.Cur().Type != TokLParen {
+		return p.errorf(p.Cur().Line, "expected '('")
+	}
+	if p.Peek(1).Type == TokRParen {
+		a.HasArgumentObject = true
+		p.pos += 2
+		return nil
+	}
+	// Keep the established key=value spelling for compatibility. The preferred
+	// colon form uses the same typed value scanner as structured argument maps.
+	if p.Peek(1).Type == TokIdent && p.Peek(2).Type == TokEquals {
+		return p.parseLegacyParams(a)
+	}
+
+	open := p.Cur()
+	depth := 0
+	closeIndex := -1
+	for i := p.pos; i < len(p.toks); i++ {
+		next, comment, err := p.skipBlockCommentTokens(i)
+		if err != nil {
+			return err
+		}
+		if comment {
+			i = next - 1
+			continue
+		}
+		switch p.toks[i].Type {
+		case TokLParen:
+			depth++
+		case TokRParen:
+			depth--
+			if depth == 0 {
+				closeIndex = i
+			}
+		case TokEOF, TokIdent, TokString, TokNumber, TokArrow, TokPipe,
+			TokAmpersand, TokOrOr, TokLBrace, TokRBrace, TokLBracket, TokRBracket,
+			TokColon, TokEquals, TokComma, TokQuestion, TokHash, TokTilde,
+			TokAtBrace, TokAtPrompt, TokInvalid:
+			// Other token kinds do not change parenthesis nesting.
+		}
+		if closeIndex >= 0 {
+			break
+		}
+	}
+	if closeIndex < 0 {
+		return p.errorf(open.Line, "expected ')'")
+	}
+	end := p.toks[closeIndex].Offset
+	raw, err := p.expandArgumentMap(p.src[open.EndOffset:end])
+	if err != nil {
+		return err
+	}
+	args, spreads, err := parseAtBrace(raw, p.currentPos())
+	if err != nil {
+		return err
+	}
+	a.Args = args
+	a.ArgSpreads = spreads
+	a.HasArgumentObject = true
+	p.pos = closeIndex + 1
+	return nil
+}
+
+func (p *Parser) skipBlockCommentTokens(index int) (next int, found bool, err error) {
+	tok := p.toks[index]
+	if tok.Type != TokIdent || tok.Offset < 0 || tok.EndOffset < tok.Offset || tok.EndOffset > len(p.src) {
+		return index, false, nil
+	}
+
+	commentOffset := strings.Index(p.src[tok.Offset:tok.EndOffset], "/*")
+	if commentOffset < 0 {
+		return index, false, nil
+	}
+	commentStart := tok.Offset + commentOffset
+	commentEnd := strings.Index(p.src[commentStart+2:], "*/")
+	if commentEnd < 0 {
+		lastNewline := strings.LastIndexByte(p.src[:commentStart], '\n')
+		pos := Position{
+			File: p.file,
+			Line: tok.Line + p.lineBase,
+			Col:  commentStart - lastNewline,
+		}
+		return index, true, SourceError(pos, "unclosed block comment in parenthesized expression")
+	}
+	endOffset := commentStart + commentEnd + 4
+	for index < len(p.toks) && p.toks[index].Offset < endOffset {
+		index++
+	}
+	return index, true, nil
+}
+
 func (p *Parser) parseModifier(a *Atom) error {
 	p.Next() // consume ':'
 	if p.Cur().Type != TokIdent {
@@ -809,7 +992,7 @@ func (p *Parser) valueTokenContinues() bool {
 	}
 
 	switch t {
-	case TokIdent, TokNumber, TokString, TokInvalid,
+	case TokIdent, TokNumber, TokString, TokInvalid, TokLBracket, TokRBracket,
 		TokAtPrompt, TokTilde, TokHash, TokComma, TokColon:
 		return true
 	case TokEOF, TokArrow, TokPipe, TokAmpersand, TokOrOr,
@@ -833,7 +1016,7 @@ func (p *Parser) writeValueToken(sb *strings.Builder) {
 		sb.WriteByte(':')
 	case TokEOF, TokIdent, TokString, TokNumber, TokInvalid, TokArrow, TokPipe,
 		TokAmpersand, TokOrOr, TokLParen, TokRParen, TokLBrace,
-		TokRBrace, TokEquals, TokComma, TokQuestion, TokAtBrace:
+		TokRBrace, TokLBracket, TokRBracket, TokEquals, TokComma, TokQuestion, TokAtBrace:
 		// Other tokens write only their literal value.
 	}
 	sb.WriteString(p.Cur().Lit)

@@ -13,7 +13,7 @@ JSON object can be exposed as a named set of constants with `@const.load`:
 @const SUPPORT_QUEUE = "support.priority"
 @const.load "settings.json" as settings
 
-runtime.const @{ value: "${SUPPORT_QUEUE}" }
+"${SUPPORT_QUEUE}"
 ```
 
 If `settings.json` contains `{"queue":"support.review"}`,
@@ -45,10 +45,11 @@ variable at execution time. A projection is an expression context:
 -> { subject: "audit." + .tenant_id, flagged: .amount > 100 }
 ```
 
-An `@{ ... }` action argument block is structured data, not an arbitrary
-expression language. For calculated values, compute them in a projection or
-condition supported by the consuming action rather than writing expressions
-such as `"prefix" + .field` inside `@{ ... }`.
+Parenthesized action calls such as `action(field: value)` carry typed values and
+references; they are not general-purpose expression contexts. For calculated
+values, compute them in a projection or use an explicitly parenthesized
+expression where the receiving action supports it, rather than writing an
+unparenthesized expression such as `"prefix" + .field` as an argument value.
 
 ## Module imports
 

@@ -1,0 +1,14 @@
+@description "Typed literal starts and parenthesized named action arguments"
+@assert: result.text == "42"
+@assert: result.count == 42
+@assert: result.values[0] == 1 && result.values[1] == "2" && result.values[2] == true
+@assert: result.wrapped.greeting.person == "Julia"
+@assert: result.ordinary.value == "42" && result.ordinary.val == 7 && result.ordinary.coerce == true
+parallel {
+  text: "42",
+  count: 42,
+  values: [1, "2", true],
+  after_modifier: runtime.noop :timeout=3s (tag: "after-modifier"),
+  wrapped: { person: "Julia" } -> wrap(key: "greeting"),
+  ordinary: const(value: "42", val: 7, coerce: true)
+}

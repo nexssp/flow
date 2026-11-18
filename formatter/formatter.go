@@ -581,9 +581,9 @@ func formatExpressionLines(line string) []string {
 	depth := 0
 	for _, token := range tokens {
 		switch token.Type {
-		case compiler.TokLParen, compiler.TokLBrace:
+		case compiler.TokLParen, compiler.TokLBrace, compiler.TokLBracket:
 			depth++
-		case compiler.TokRParen, compiler.TokRBrace:
+		case compiler.TokRParen, compiler.TokRBrace, compiler.TokRBracket:
 			if depth > 0 {
 				depth--
 			}
@@ -643,9 +643,9 @@ func formatModifierSpacing(body string) string {
 			}
 		}
 		switch current.Type {
-		case compiler.TokLParen, compiler.TokLBrace:
+		case compiler.TokLParen, compiler.TokLBrace, compiler.TokLBracket:
 			depth++
-		case compiler.TokRParen, compiler.TokRBrace:
+		case compiler.TokRParen, compiler.TokRBrace, compiler.TokRBracket:
 			if depth > 0 {
 				depth--
 			}

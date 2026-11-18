@@ -6,7 +6,7 @@ forms as `@assert` and records checks for the existing runner assertion
 machinery.
 
 ```nflow
-const @{ value: "ready" }
+"ready"
 @test: result == "ready"
 ```
 

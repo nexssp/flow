@@ -100,7 +100,7 @@ type lspSnippet struct {
 
 var flowSnippets = []lspSnippet{
 	{label: "flow-pipe", insertText: "source.node\n-> target.node", detail: "Sequential pipeline"},
-	{label: "flow-args", insertText: "action.node @{ value: ${1:.input} }", detail: "Structured action arguments"},
+	{label: "flow-args", insertText: "action.node(field: ${1:.input})", detail: "Named action arguments"},
 	{label: "flow-parallel", insertText: "parallel {\n  first: ${1:action.one},\n  second: ${2:action.two},\n}", detail: "Named parallel fan-out"},
 	{label: "flow-race", insertText: "race {\n  ${1:action.one},\n  ${2:action.two},\n}", detail: "First successful alternative"},
 	{label: "flow-match", insertText: "match {\n  ${1:.condition} -> ${2:action.one},\n  _ -> ${3:action.other}\n}", detail: "Match input against ordered arms"},

@@ -10,7 +10,7 @@ import (
 )
 
 func TestLintDispatchRejectsQuotedCapabilityReference(t *testing.T) {
-	issues := lintOne(t, `dispatch.run @{ members: ["runtime.const"], payload: { value: "x" } }`)
+	issues := lintOne(t, `dispatch.run(members: ["runtime.const"], payload: { value: "x" })`)
 	if len(issues) != 1 || issues[0].Kind != "compile" {
 		t.Fatalf("lint issues = %#v, want one compile diagnostic", issues)
 	}
@@ -20,7 +20,7 @@ func TestLintDispatchRejectsQuotedCapabilityReference(t *testing.T) {
 }
 
 func TestLintDispatchRejectsUnknownCapabilityReference(t *testing.T) {
-	issues := lintOne(t, `dispatch.run @{ members: [not.registered], payload: { value: "x" } }`)
+	issues := lintOne(t, `dispatch.run(members: [not.registered], payload: { value: "x" })`)
 	if len(issues) != 1 || issues[0].Kind != "compile" {
 		t.Fatalf("lint issues = %#v, want one compile diagnostic", issues)
 	}
@@ -81,7 +81,7 @@ func TestLintDoesNotInvokeWorkflowActions(t *testing.T) {
 		},
 	}}
 
-	issues := lintFile("test.nflow", `runtime.const @{ value: "compiled only" }`, cfg)
+	issues := lintFile("test.nflow", `runtime.const(value: "compiled only")`, cfg)
 	if len(issues) != 0 {
 		t.Fatalf("lint issues = %#v, want clean compile", issues)
 	}

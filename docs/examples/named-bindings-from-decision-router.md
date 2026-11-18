@@ -7,7 +7,7 @@ This example is adapted from the candidate preflight and decision stages in the 
 ```nflow
 @pipeline try_candidate
   noop as state
-  -> ai.cost.estimate @{
+  -> ai.cost.estimate(
     .current.attempt.attempt_id,
     .current.attempt.model,
     .current.attempt.rate_card_id,
@@ -16,7 +16,7 @@ This example is adapted from the candidate preflight and decision stages in the 
     .current.attempt.cached_prompt_tokens,
     .current.attempt.completion_tokens,
     prompt: .current.attempt
-  } as estimate
+  ) as estimate
   -> match {
     !estimate.Known -> {
       ... state,
@@ -51,7 +51,7 @@ This example is adapted from the candidate preflight and decision stages in the 
 ## Decision response
 
 ```nflow
-ai.decide @{ ... .req.decision_payload } as decision
+ai.decide(... .req.decision_payload) as decision
 -> match {
   len(decision.Answers) == 0 -> { status: status.manual_review },
   _ -> { decision_choice: decision.Answers[0].Choice }

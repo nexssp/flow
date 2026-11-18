@@ -6,10 +6,10 @@ accumulator, so it is suitable for counters, totals, and other compact
 aggregates without materializing the input stream.
 
 ```nflow
-records -> stream.fold @{
+records -> stream.fold(
   initial: { count: 0, bytes: 0 },
   expression: "{ count: acc.count + 1, bytes: acc.bytes + item.size }"
-} -> collect
+) -> collect
 ```
 
 The `expression` is compiled once when the operator is built and evaluated for

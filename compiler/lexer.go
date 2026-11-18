@@ -32,40 +32,10 @@ func (l *Lexer) nextToken() Token {
 	if tok, ok := l.scanOperator(line, c); ok {
 		return tok
 	}
+	if tok, ok := l.scanPunctuation(line, c); ok {
+		return tok
+	}
 	switch c {
-	case '&':
-		l.pos++
-		return Token{Type: TokAmpersand, Lit: "&", Line: line}
-	case '(':
-		l.pos++
-		return Token{Type: TokLParen, Lit: "(", Line: line}
-	case ')':
-		l.pos++
-		return Token{Type: TokRParen, Lit: ")", Line: line}
-	case '{':
-		l.pos++
-		return Token{Type: TokLBrace, Lit: "{", Line: line}
-	case '}':
-		l.pos++
-		return Token{Type: TokRBrace, Lit: "}", Line: line}
-	case ':':
-		l.pos++
-		return Token{Type: TokColon, Lit: ":", Line: line}
-	case '=':
-		l.pos++
-		return Token{Type: TokEquals, Lit: "=", Line: line}
-	case ',':
-		l.pos++
-		return Token{Type: TokComma, Lit: ",", Line: line}
-	case '?':
-		l.pos++
-		return Token{Type: TokQuestion, Lit: "?", Line: line}
-	case '#':
-		l.pos++
-		return Token{Type: TokHash, Lit: "#", Line: line}
-	case '~':
-		l.pos++
-		return Token{Type: TokTilde, Lit: "~", Line: line}
 	case '@':
 		if l.peek() == '{' {
 			return l.scanAtBrace()
@@ -81,6 +51,56 @@ func (l *Lexer) nextToken() Token {
 		return l.scanIdent()
 	}
 	return l.scanUnknown(line)
+}
+
+func (l *Lexer) scanPunctuation(line int, c byte) (Token, bool) {
+	var tokenType TokenType
+	var literal string
+	switch c {
+	case '&':
+		tokenType = TokAmpersand
+		literal = "&"
+	case '(':
+		tokenType = TokLParen
+		literal = "("
+	case ')':
+		tokenType = TokRParen
+		literal = ")"
+	case '{':
+		tokenType = TokLBrace
+		literal = "{"
+	case '}':
+		tokenType = TokRBrace
+		literal = "}"
+	case '[':
+		tokenType = TokLBracket
+		literal = "["
+	case ']':
+		tokenType = TokRBracket
+		literal = "]"
+	case ':':
+		tokenType = TokColon
+		literal = ":"
+	case '=':
+		tokenType = TokEquals
+		literal = "="
+	case ',':
+		tokenType = TokComma
+		literal = ","
+	case '?':
+		tokenType = TokQuestion
+		literal = "?"
+	case '#':
+		tokenType = TokHash
+		literal = "#"
+	case '~':
+		tokenType = TokTilde
+		literal = "~"
+	default:
+		return Token{}, false
+	}
+	l.pos++
+	return Token{Type: tokenType, Lit: literal, Line: line}, true
 }
 
 func (l *Lexer) scanUnknown(line int) Token {

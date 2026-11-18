@@ -51,7 +51,7 @@ To see the effective policy on each atom, run `nflow explain <file.nflow>`; `nfl
 
 The examples below model an order checkout rather than just a single failing call. They are complete, deterministic fixtures: the built-in `const`, `fail`, and `sleep` keywords stand in for pricing, inventory, payment, and provider actions so you can run the control flow without credentials or a network service. In an application, replace those adapter stubs with your mounted service actions and keep the profile and recovery boundaries.
 
-`const` is a source-level keyword for the canonical `runtime.const` action, so examples need not spell out the `runtime.` prefix. Direct-object mode emits only the fields declared in `@{ ... }`; a bare field such as `quantity` copies that value from the current input. Use `const @{ value: ... }` when the result is a scalar or array, or when an object itself needs a top-level `value` or `val` field.
+`const` is a source-level keyword for the canonical `runtime.const` action, so examples need not spell out the `runtime.` prefix. A call such as `const(quantity: .quantity)` emits only the declared object fields, with `.quantity` read from the current input. Start a flow with a direct typed value such as `"ready"` for a scalar or array; `value`, `val`, and `coerce` are ordinary object keys in the new call syntax.
 
 | Workflow | What it demonstrates | Expected outcome |
 |---|---|---|

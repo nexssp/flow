@@ -18,11 +18,15 @@ import (
 type LintIssue struct {
 	File    string `json:"file"`
 	Line    int    `json:"line,omitempty"`
+	Column  int    `json:"column,omitempty"`
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
 }
 
-const lintIssueCompile = "compile"
+const (
+	lintIssueCompile = "compile"
+	lintIssueWarning = "warning"
+)
 
 func runLint(args []string) int {
 	inv, err := newNativeInvocation(nil, nil)
@@ -238,7 +242,7 @@ func runLintInProcess(ctx context.Context, inv *invocation, args []string) int {
 	if err := writeJSON(os.Stdout, issues, true); err != nil {
 		return fatalf("encode issues: %v", err)
 	}
-	return 1
+	return lintIssuesExitCode(issues)
 }
 
 func runLintBatchInProcessWithHarnessError(paths []string, harnessErr error) int {
@@ -300,7 +304,7 @@ func runLintBatchForInvocationWithHarnessError(ctx context.Context, inv *invocat
 	if err := writeJSON(os.Stdout, issues, true); err != nil {
 		return fatalf("encode issues: %v", err)
 	}
-	return 1
+	return lintIssuesExitCode(issues)
 }
 
 func computeLineMods(cfg runner.Config, meta map[string]any) []compiler.LineLookup {
@@ -315,12 +319,28 @@ func lintFile(path, src string, cfg runner.Config) []LintIssue {
 }
 
 func lintFileWithContext(ctx context.Context, path, src string, cfg runner.Config) []LintIssue {
+	var warnings []LintIssue
+	compileOpts := append([]compiler.CompileOption(nil), cfg.CompileOpts...)
+	compileOpts = append(compileOpts, compiler.WithASTContextValidators(func(_ context.Context, ast compiler.Expr, _ map[string]any) error {
+		warnings = append(warnings, legacyArgumentWarnings(path, ast)...)
+		return nil
+	}))
+	cfg.CompileOpts = compileOpts
 	if _, err := runner.Compile(ctx, cfg, src, path); err != nil {
-		return []LintIssue{{
+		warnings = append(warnings, LintIssue{
 			File:    path,
 			Kind:    lintIssueCompile,
 			Message: err.Error(),
-		}}
+		})
 	}
-	return nil
+	return warnings
+}
+
+func lintIssuesExitCode(issues []LintIssue) int {
+	for _, issue := range issues {
+		if issue.Kind != lintIssueWarning {
+			return 1
+		}
+	}
+	return 0
 }

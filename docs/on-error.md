@@ -33,12 +33,12 @@ the short form. It is exactly equivalent to a block with a single
 `else` arm.
 
 ```
-runtime.fail @{ kind: "Internal" } ? on_error error.passthrough
+runtime.fail(kind: "Internal") ? on_error error.passthrough
 ```
 
 ```
 @on_error error.passthrough
-runtime.fail @{ kind: "Internal" }
+runtime.fail(kind: "Internal")
 ```
 
 Anything after `? on_error` up to the next operator is the target. If
@@ -64,7 +64,7 @@ without *handling*:
 
 ```
 @on_error error.reraise
-log.warn @{ message: "pipeline failed" }
+log.warn(message: "pipeline failed")
 ... the rest of the pipeline ...
 ```
 
@@ -74,7 +74,7 @@ re-raises:
 
 ```
 @pipeline observe_and_fail
-  log.warn @{ message: "pipeline failed" }
+  log.warn(message: "pipeline failed")
   -> error.reraise
 @end
 ```
@@ -146,7 +146,7 @@ expression. Both can coexist:
 
 ```
 maybe_fails ? on_error { xerr.KindTimeout -> recover.timeout }
-  || const @{ value: "last_resort" }
+  || "last_resort"
 ```
 
 Precedence: `?` binds tighter than `||`, so the guard applies to

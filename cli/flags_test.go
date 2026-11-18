@@ -45,6 +45,35 @@ func TestFlags_ExplicitlyCoercesKnownFlag(t *testing.T) {
 	ktest.RequireEqual(t, strings.TrimSpace(out), "42")
 }
 
+func TestLegacyConstKeyValueMagicParameters(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		source string
+		args   []string
+		want   string
+	}{
+		{name: "value unwraps and parses literal", source: `const(value=42)`, want: "42"},
+		{name: "val alias unwraps and parses literal", source: `const(val=42)`, want: "42"},
+		{name: "value with text coerce flag preserves flag string", source: `const(value="@flag.x", coerce=true)`, args: []string{"-x=42"}, want: `"42"`},
+		{name: "val with text coerce flag preserves flag string", source: `const(val="@flag.x", coerce=true)`, args: []string{"-x=42"}, want: `"42"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			args := append(append([]string(nil), tc.args...), "--json")
+			out, stderr, code := captureLintOutput(t, func() int {
+				return runSourceInProcess(context.Background(), tc.source, "inline", args)
+			})
+			if code != 0 {
+				t.Fatalf("run exited with %d: %s", code, stderr)
+			}
+			ktest.RequireEqual(t, code, 0)
+			ktest.RequireEqual(t, strings.TrimSpace(out), tc.want)
+		})
+	}
+}
+
 func TestPositionalArgsRemainStrings(t *testing.T) {
 	t.Parallel()
 

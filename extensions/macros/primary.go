@@ -365,9 +365,11 @@ func readArgs(p *compiler.Parser) ([]string, error) {
 			}
 		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
 			compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr,
-			compiler.TokLBrace, compiler.TokRBrace, compiler.TokColon, compiler.TokEquals,
+			compiler.TokLBrace, compiler.TokRBrace, compiler.TokLBracket, compiler.TokRBracket,
+			compiler.TokColon, compiler.TokEquals,
 			compiler.TokComma, compiler.TokQuestion, compiler.TokHash, compiler.TokTilde,
 			compiler.TokAtBrace, compiler.TokAtPrompt:
+			// The argument scanner tracks parentheses; other tokens remain in the raw argument.
 		}
 		if endOffset >= 0 {
 			break

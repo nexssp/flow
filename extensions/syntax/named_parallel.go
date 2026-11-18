@@ -67,7 +67,8 @@ func (namedParallelKeyword) Parse(p *compiler.Parser) (compiler.Expr, error) {
 			return &NamedParallelExpr{branches: branches}, nil
 		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
 			compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr,
-			compiler.TokLParen, compiler.TokRParen, compiler.TokLBrace, compiler.TokColon,
+			compiler.TokLParen, compiler.TokRParen, compiler.TokLBrace, compiler.TokLBracket,
+			compiler.TokRBracket, compiler.TokColon,
 			compiler.TokEquals, compiler.TokQuestion, compiler.TokHash, compiler.TokTilde,
 			compiler.TokAtBrace, compiler.TokAtPrompt:
 			return nil, p.Fail(p.Current().Line, "expected ',' or '}' after parallel branch %q", label)

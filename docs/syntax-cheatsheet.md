@@ -19,29 +19,31 @@ nflow run flow.nflow --assert='result.ok == true'
 
 ```nflow
 noop
-const "hello"
-const 42
-const true
-const null
-const @{ value: "hello" } # compatible named-value form
-const @{ count: 3, enabled: true, tags: ["a", "b"] }
-request.action :timeout=3s :retry=2 @{ id: .id, payload: . }
+"hello"
+42
+true
+null
+["a", "b"]
+request.action :timeout=3s :retry=2 (id: .id, payload: .)
 ```
 
-`@{ ... }` is a structured data block. Values can be literals, arrays, nested objects, `.`, and input paths such as `.user.id`. A path entry `.user.id,` derives the key `id`; bare fields such as `name` still mean `name: .name`. Duplicate keys fail.
-`const` accepts direct scalar values; `@{ ... }` remains a named object, and the
-legacy `@{ value: ... }` / `@{ val: ... }` form remains supported. Values from
-`@flag.*`, `@arg.N`, and `@config.*` stay strings unless `coerce: true` is
-included with the named value.
+Named action arguments use `action(key: value)` with typed literals, arrays,
+nested objects, `.`, and input paths such as `.user.id`. Bare fields such as
+`name` still mean `name: .name`. Duplicate keys fail. Quoted text remains a
+string; numeric, boolean, and `null` literals keep their explicit types. Values
+from `@flag.*`, `@arg.N`, and `@config.*` remain strings by default.
 
-For flows, use structured `@{ ... }` arguments, projection shorthand, and `->` for sequential pipeline composition. The older `action(key=value, ...)` form is parsed only to keep existing flows working; it is intentionally not used in these examples.
+For flows, use parenthesized named arguments, projection shorthand, and `->`
+for sequential pipeline composition. The older `action(key=value, ...)` form remains accepted. `action @{ ... }` is
+compatibility-only and warned by `nflow lint`; `const(value=...)` and
+`const(val=...)` also warn because those keys still unwrap legacy scalars.
 
-Modifiers and `@{ ... }` may be combined on the same action. Modifiers come
-before the argument block; both compact and spaced colon forms are accepted:
+Modifiers and parenthesized arguments may be combined on the same action.
+Modifiers come before the call; both compact and spaced colon forms are accepted:
 
 ```nflow
-request.action:timeout=3s:retry=2 @{ id: .id }
-request.action :timeout=3s :retry=2 @{ id: .id }
+request.action:timeout=3s:retry=2(id: .id)
+request.action :timeout=3s :retry=2 (id: .id)
 ```
 
 ## Built-in keyword actions
@@ -94,13 +96,13 @@ Bindings are pipeline-local, do not become result-map fields unless explicitly r
 
 If a projection actually uses a bare name that is both a current-input field and an `as` binding, Flow rejects the ambiguity at compile time when the input shape is known, or reports a value-free conflict before evaluating the projection when the shape is dynamic. Unused name overlaps are allowed. Use `.tool` for the current input field or `input.tool` for the original request, or rename the binding; `{ tool }` remains explicit input-field shorthand.
 
-Named parallel branches may use direct literal values. Use `const` when a
-branch needs action arguments or modifiers:
+Named parallel branches may use direct literal values. Use `const` with
+parenthesized fields when a branch needs an action request object or modifiers:
 
 ```nflow
 parallel {
   profile: "profile-ready",
-  metrics: const :tag="metrics" @{ value: "metrics-ready" },
+  metrics: const :tag="metrics" (status: "metrics-ready"),
 }
 ```
 
@@ -114,8 +116,8 @@ parallel {
 { ... .state, status: "ready" }
 { ...input.state, status: "ready" }
 { let total = .price * .quantity; ..., total: total }
-pick @{ field: "user.id" }
-wrap @{ key: "data" }
+pick(field: "user.id")
+wrap(key: "data")
 ```
 `... .state` reads from the current projection value; `...input.state` reads
 from the original pipeline request. These roots have different meanings, so
@@ -126,21 +128,19 @@ rejected. Fields after either spread override copied fields with the same key.
 
 ```nflow
 match {
-  .ok && .score > 90 -> const @{ value: "high" },
-  .ok -> const @{ value: "normal" },
-  _ -> const @{ value: "reject" },
+  .ok && .score > 90 -> "high",
+  .ok -> "normal",
+  _ -> "reject",
 }
 
 match(.score) {
-  > 90 -> const @{ value: "high" },
-  _ -> const @{ value: "normal" },
+  > 90 -> "high",
+  _ -> "normal",
 }
 
 { n: 0 } -> loop( { n: .n + 1 } ) until( .n >= 3 )
 
-const @{ value: [1, 2, 3] } -> each :concurrency=2 {
-  const @{ value: (. * 2) }
-}
+[1, 2, 3] -> each :concurrency=2 { noop }
 ```
 
 `match` chooses the first matching arm. `_` is the default. Flow bounds the compiled loop to 15 iterations. In `each`, `.` is the current list item and the block's results are returned in input order; a worker error cancels sibling work and propagates after launched actions finish.
@@ -161,7 +161,7 @@ value -> assert(. >= 0, "must be non-negative")
 Post-run assertions:
 
 ```nflow
-const @{ ok: true }
+const(ok: true)
 @assert: result.ok == true
 @assert {
   result.ok == true
@@ -173,16 +173,16 @@ const @{ ok: true }
 
 ```nflow
 @pipeline greet
-  const @{ value: "hello" }
+  "hello"
 @end
 
 greet
 
 @include "billing.nflow" AS billing
-billing.pipeline.lookup @{ account_id: "A-42" }
+billing.pipeline.lookup(account_id: "A-42")
 
 @macro label(value) {
-  wrap @{ key: "label", value: value }
+  wrap(key: "label", value: value)
 }
 ```
 
@@ -256,9 +256,9 @@ Profiles and scopes:
 @pool workers [service.a, service.b] { strategy: "round_robin" }
 pool.workers
 
-dispatch.run @{ members: [pool.workers], payload: . }
+dispatch.run(members: [pool.workers], payload: .)
 
-distribute.map @{ action: noop, items: [1, 2, 3] }
+distribute.map(action: noop, items: [1, 2, 3])
 ```
 
 Pool strategies are `round_robin`, `failover`, and `hash`; hash routing requires a key path. `distribute.map` returns a Flow result envelope and uses Kernel bounded fan-out internally.
@@ -266,9 +266,9 @@ Pool strategies are `round_robin`, `failover`, and `hash`; hash routing requires
 ## Streams and I/O
 
 ```nflow
-cov.items -> stream.map @{ expression: "item + item" } -> collect
-fs.walk @{ root: "./data" } -> fs.read
-io.stdin -> stream.take @{ count: 20 } -> collect
+cov.items -> stream.map(expression: "item + item") -> collect
+fs.walk(root: "./data") -> fs.read
+io.stdin -> stream.take(count: 20) -> collect
 ```
 
 `cov.items` is self-test-only. Use `nflow catalog --flow FILE` to confirm available stream sources and operator schemas.
@@ -301,7 +301,7 @@ approval.review
 
 ## Syntax boundaries to remember
 
-- `@{ ... }` is a data-value block, not an arbitrary expression block.
+- Legacy `@{ ... }` blocks contain structured data, not arbitrary expressions; use parenthesized calls in new flows.
 - `@const` is compile-time; `const` is a runtime keyword action.
 - `@config` is a directive; an atom-level `@config` marker is a separate configuration-injection feature.
 - `@include` imports source modules; it is not textual expansion.

@@ -104,7 +104,7 @@ assertion fails.
 Test flows may also use `@test` for post-run checks:
 
 ```nflow
-const @{ value: "ready" }
+"ready"
 @test: result == "ready"
 ```
 
@@ -174,8 +174,10 @@ Discovery skips `.git`, `.hg`, `.svn`, `vendor`, and `node_modules`,
 does not follow directory symlinks, and does not follow file symlinks
 during a walk. A direct single-file argument may name a symlink.
 
-The exit code is 0 on success and 1 on any diagnostic. Diagnostics are
-always JSON:
+Diagnostics are emitted as JSON. The exit code is 0 when the source is clean
+or has only migration warnings (`kind: "warning"`); it is 1 if any non-warning
+diagnostic is present. A warning-only run therefore prints its JSON diagnostics
+but still succeeds:
 
 ```json
 [
@@ -301,10 +303,14 @@ Runtime options:
 An action that renders its own final output can return `runner.SuppressOutput(value)`. The runner omits its additional stdout rendering while unwrapping `value` for post-run assertions and callers. Direct writes made by the action remain visible.
 
 Values supplied with CLI flags and positionals, and values loaded into
-compile-time config, are raw text. A `const` action preserves `@flag.key`,
-`@arg.N`, and `@config.key` as strings even when they look numeric, boolean,
-`null`, or like JSON. Use `const @{ value: @flag.key, coerce: true }` (or the
-matching positional/config reference) when conversion is intended.
+compile-time config, are raw text. Direct references such as `@flag.key`,
+`@arg.N`, and `@config.key` remain strings even when they look numeric,
+boolean, `null`, or like JSON. New flows should convert only at a known typed
+field boundary. Legacy `const(value=...)` and `const(val=...)` still unwrap
+their scalar field and are reported by `nflow lint`. In that key=value form,
+literal `coerce=true` is text, not a boolean; coercion of preserved raw
+references requires an actual typed boolean `true`. The legacy flag can parse
+several different types and must not be mechanically replaced with a cast.
 
 The standalone executable forwards workflow arguments; it does not handle `-h`
 or `--help` automatically, and the bare word `help` is positional. Separated

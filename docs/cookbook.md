@@ -29,19 +29,19 @@ nflow run flow.nflow --assert='result.ok == true'
 ### Produce a scalar or object
 
 ```nflow
-const :timeout=3s :retry=2 @{ value: "Julia" }
+"Julia"
 ```
 
 ```nflow
-const @{ user_id: 42, active: true }
+const(user_id: 42, active: true)
 ```
 
-Use `value` for a scalar, array, or an object that must remain under one field. Direct object mode is convenient for object results.
+Use a direct literal or reference for a scalar. `const(field: value, ...)` builds an object with typed fields; an object projection is convenient when deriving fields from the current input.
 
 ### Pipe data into actions
 
 ```nflow
-const @{ value: "Julia" } -> wrap @{ key: "greeting" }
+"Julia" -> wrap(key: "greeting")
 ```
 
 Use `->` as the only sequential pipeline operator. A single `|` is still valid inside expressions, such as array transformations.
@@ -76,8 +76,8 @@ Spread the current object—or a nested object—before overriding fields:
 ```
 
 Fields written after a spread override matching source fields. Argument-map
-path shorthand also works inside `@{ ... }`, for example
-`request.action @{ .user.id }` derives the argument key `id`.
+path shorthand also works inside parenthesized action arguments, for example
+`request.action(.user.id)` derives the argument key `id`.
 
 Local bindings are supported in projection bodies:
 
@@ -92,8 +92,8 @@ Local bindings are supported in projection bodies:
 
 ```nflow
 { user: { id: 42, name: "Julia" } }
--> pick @{ field: "user.id" }
--> wrap @{ key: "data" }
+-> pick(field: "user.id")
+-> wrap(key: "data")
 ```
 
 For a dynamic field path, keep the path in the action request. `pick` accepts a field/path string; the exact behavior is implemented by `extensions/runtime/pick.go`.
@@ -103,7 +103,7 @@ For a dynamic field path, keep the path in the action request. `pick` accepts a 
 ### Conditional expression
 
 ```nflow
-.result == "ok" ? const @{ value: "accepted" } : const @{ value: "rejected" }
+.result == "ok" ? "accepted" : "rejected"
 ```
 
 The else arm is optional:
@@ -116,8 +116,8 @@ The else arm is optional:
 
 ```nflow
 (
-  const @{ value: "profile" }
-  & const @{ value: "metrics" }
+  "profile"
+  & "metrics"
 )
 ```
 
@@ -127,20 +127,20 @@ The result is keyed by canonical action name. Repeated names receive numbered ke
 
 ```nflow
 parallel {
-  profile: const @{ value: "profile-ready" },
-  metrics: const @{ value: "metrics-ready" },
+  profile: "profile-ready",
+  metrics: "metrics-ready",
 }
 ```
 
 Labels must be unique and non-empty. A failed branch fails the parallel action; partial results are not passed to the next pipeline step.
 
-Direct literal branches are shorter. Use `const` when the branch needs action
-arguments or modifiers:
+Direct literal branches are shorter. Use `const` with parenthesized named arguments
+when a branch needs to call an action with fields or modifiers:
 
 ```nflow
 parallel {
   profile: "profile-ready",
-  metrics: const :timeout=2s @{ value: "metrics-ready" },
+  metrics: const :timeout=2s (status: "metrics-ready"),
 }
 ```
 
@@ -148,8 +148,8 @@ parallel {
 
 ```nflow
 race {
-  service.primary @{ region: "east" },
-  service.replica @{ region: "west" },
+  service.primary(region: "east"),
+  service.replica(region: "west"),
 }
 ```
 
@@ -160,8 +160,8 @@ All candidates start concurrently. The first successful result wins and cancella
 ### Fallback with `||`
 
 ```nflow
-fail @{ kind: "Unavailable", message: "primary failed" }
-|| const @{ value: "fallback" }
+fail(kind: "Unavailable", message: "primary failed")
+|| "fallback"
 ```
 
 `||` catches an error from its left branch generally. It is not a typed error matcher.
@@ -203,9 +203,9 @@ Fixtures: [`extensions/on_error/nflows/`](../extensions/on_error/nflows/).
 
 ```nflow
 match {
-  .danger && .level > 3 -> const @{ value: "critical" },
-  .danger -> const @{ value: "warning" },
-  _ -> const @{ value: "nominal" },
+  .danger && .level > 3 -> "critical",
+  .danger -> "warning",
+  _ -> "nominal",
 }
 ```
 
@@ -213,9 +213,9 @@ match {
 
 ```nflow
 match(.score) {
-  > 90 -> const @{ value: "high" },
-  >= 50 -> const @{ value: "medium" },
-  _ -> const @{ value: "low" },
+  > 90 -> "high",
+  >= 50 -> "medium",
+  _ -> "low",
 }
 ```
 
@@ -236,7 +236,7 @@ The compiled loop is bounded to 15 iterations. It is not an unbounded `while` lo
 ```nflow
 @pipeline greet
   :tag="example"
-  const @{ value: "hello" }
+  "hello"
 @end
 
 greet
@@ -250,7 +250,7 @@ A pipeline can receive a complete named request:
   { message: .name }
 @end
 
-greet @{ name: "Julia" }
+greet(name: "Julia")
 ```
 
 ### Include a local module
@@ -260,7 +260,7 @@ greet @{ name: "Julia" }
 ```nflow
 @include "billing.nflow" AS billing
 
-billing.pipeline.lookup @{ account_id: "A-42" }
+billing.pipeline.lookup(account_id: "A-42")
 ```
 
 `billing.nflow`:
@@ -277,10 +277,10 @@ billing.pipeline.lookup @{ account_id: "A-42" }
 
 ```nflow
 @macro label(value) {
-  wrap @{ key: "label", value: value }
+  wrap(key: "label", value: value)
 }
 
-const @{ value: "ready" } -> @label("status")
+"ready" -> @label("status")
 ```
 
 Macros are compile-time source substitutions. Recursive definitions and excessive expansion are rejected.
@@ -325,7 +325,7 @@ YAML loading requires the optional `config_yaml` bundle.
   complete
 }
 
-const :tag="status" @{ value: status.complete }
+const :tag="status" (value: status.complete)
 ```
 
 Symbols also accept comma-separated names on one line, whitespace-separated
@@ -402,21 +402,21 @@ Schemas validate supported scalar, slice, map, pointer, and nested struct-shaped
 ### Runtime assertion
 
 ```nflow
-const @{ value: 3 }
+3
 -> assert(. >= 2, "value must be at least two")
 ```
 
 ### Post-run assertion
 
 ```nflow
-const @{ ok: true }
+const(ok: true)
 @assert: result.ok == true
 ```
 
 Multiline form:
 
 ```nflow
-const @{ items: ["a", "b"] }
+const(items: ["a", "b"])
 @assert {
   len(result.items) == 2
   all(result.items, # != "")
@@ -487,7 +487,7 @@ An atom’s own modifier wins; nested scopes override by modifier name.
 Generic stream operators are expression-aware adapters over Kernel stream mechanics:
 
 ```nflow
-cov.items -> stream.map @{ expression: "item + item" } -> collect
+cov.items -> stream.map(expression: "item + item") -> collect
 ```
 
 `cov.items` is a self-test-only source. Replace it with a mounted source such as
@@ -499,11 +499,11 @@ Use the source/operator schemas shown by `nflow catalog --flow FILE`; stream arg
 Filesystem examples:
 
 ```nflow
-fs.walk @{ root: "./data" }
+fs.walk(root: "./data")
 -> fs.read
--> fs.filter @{ expression: ".size > 0" }
--> fs.sort @{ by: "name" }
--> out.file @{ path: "./out/results.jsonl" }
+-> fs.filter(expression: ".size > 0")
+-> fs.sort(by: "name")
+-> out.file(path: "./out/results.jsonl")
 ```
 
 Filesystem, stdout, clipboard, and rendering actions remain domain capabilities. They use the host’s configured resolver and filesystem policy.
@@ -514,7 +514,7 @@ Filesystem, stdout, clipboard, and rendering actions remain domain capabilities.
 
 ```nflow
 @pool coverage [noop]
-dispatch.run @{ members: [pool.coverage], payload: { value: "ready" } }
+dispatch.run(members: [pool.coverage], payload: { value: "ready" })
 ```
 
 The members must resolve as action capabilities in the active registry.
@@ -532,7 +532,7 @@ Other strategies are `failover` and `hash`; hash routing requires a key path. Po
 ### Map one action over items
 
 ```nflow
-distribute.map @{ action: noop, items: [1, 2, 3] }
+distribute.map(action: noop, items: [1, 2, 3])
 ```
 
 The action field is a capability reference, not a string. Additional fields
@@ -546,7 +546,7 @@ such as concurrency and failure policy are host/action-schema dependent; use
 The standard bundle includes external action adapters, but the host still controls availability and permissions:
 
 ```nflow
-external.exec @{ command: "printf ready" }
+external.exec(command: "printf ready")
 ```
 
 HTTP, WASM, language runners, NATS, configuration backends, and other integrations may require additional registration or `@require`. Inspect the live catalog rather than assuming a repository directory is mounted.
@@ -555,7 +555,7 @@ Optional embedded files require the `embed` bundle and an explicit host filesyst
 
 ```nflow
 @embed prompt "prompts/system.txt"
-const @{ value: embed.prompt }
+const(value: embed.prompt)
 ```
 
 ## 13. Approval, hooks, and event metadata

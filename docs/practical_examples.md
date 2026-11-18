@@ -1,5 +1,11 @@
 # Nexss Flow practical examples
 
+> **Compatibility-only archive:** Snippets in this guide that use legacy `@{...}`
+> argument blocks or `const @{ value: ... }` scalar wrappers are retained for
+> migration reference, not as recommended syntax for new flows. Use direct typed
+> values and `action(key: value)` calls as shown in the [language guide](language.md)
+> and [cookbook](cookbook.md).
+
 ## 1. Literal values and core actions
 
 ### Return a scalar
