@@ -20,8 +20,9 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 65
     permissions:
+      actions: read
       contents: write
     env:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
@@ -46,12 +47,82 @@ jobs:
           path: source
           fetch-depth: 0
           persist-credentials: false
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Verify tagged source and resolve exact commit
+        id: tag
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_sha="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+          [[ "$(git rev-parse HEAD)" == "$tag_sha" ]] || {
+            echo "::error::Checked-out source does not match ${RELEASE_TAG} at ${tag_sha}."
+            exit 1
+          }
+          printf 'tag_sha=%s\n' "$tag_sha" >> "$GITHUB_OUTPUT"
+          echo "Verified ${RELEASE_TAG} at ${tag_sha}."
+      - name: Wait for successful main CI on the exact tagged commit
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG_SHA: ${{ steps.tag.outputs.tag_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          started_at=$(date +%s)
+          deadline=$((SECONDS + 3600))
+
+          while (( SECONDS < deadline )); do
+            if ! runs=$(gh api "repos/${REPOSITORY}/actions/workflows/ci.yml/runs?branch=main&head_sha=${TAG_SHA}&per_page=100"); then
+              echo "::error::Could not query main CI for ${TAG_SHA}; refusing to publish the release."
+              exit 1
+            fi
+
+            successful_run=$(jq -r --arg sha "$TAG_SHA" '
+              [.workflow_runs[]
+               | select(.head_sha == $sha and .head_branch == "main" and .event == "push"
+                        and .status == "completed" and .conclusion == "success")]
+              | sort_by(.run_number, .run_attempt)
+              | reverse
+              | .[0].id // empty' <<< "$runs")
+            if [[ -n "$successful_run" ]]; then
+              echo "Found successful main CI run ${successful_run} for ${TAG_SHA}."
+              echo "- Reused successful main CI run ${successful_run} for ${TAG_SHA}; tag release checks will not rerun." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+
+            active_count=$(jq --arg sha "$TAG_SHA" '[.workflow_runs[]
+              | select(.head_sha == $sha and .head_branch == "main" and .event == "push"
+                       and .status != "completed")] | length' <<< "$runs")
+            if (( active_count > 0 )); then
+              echo "Waiting for main CI on ${TAG_SHA} to complete..."
+            else
+              failed_run=$(jq -r --arg sha "$TAG_SHA" '
+                [.workflow_runs[]
+                 | select(.head_sha == $sha and .head_branch == "main" and .event == "push"
+                          and .status == "completed" and .conclusion != "success")]
+                | sort_by(.run_number, .run_attempt)
+                | last
+                | if . == null then empty else "\(.id)\t\(.conclusion)" end' <<< "$runs")
+              if [[ -n "$failed_run" ]]; then
+                IFS=$'\t' read -r failed_id failed_conclusion <<< "$failed_run"
+                echo "::error::Main CI for ${TAG_SHA} failed (run ${failed_id}, conclusion ${failed_conclusion}); refusing to publish."
+                exit 1
+              fi
+              echo "No main push CI run for ${TAG_SHA} is visible yet; waiting..."
+            fi
+            sleep 30
+          done
+
+          elapsed=$(( $(date +%s) - started_at ))
+          echo "::error::Timed out after ${elapsed}s waiting for successful main CI on ${TAG_SHA}."
+          exit 1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: source/go.mod
           cache-dependency-path: source/go.sum
-      - name: Test tagged source, including integration tests
+      - name: Test manually dispatched tag
+        if: github.event_name == 'workflow_dispatch'
         working-directory: source
         run: |
           go test ./...
