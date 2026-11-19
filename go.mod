@@ -5,7 +5,7 @@ go 1.27.4
 require (
 	github.com/expr-lang/expr v1.17.8
 	github.com/mattn/go-isatty v0.0.24
-	github.com/nexssp/kernel v0.39.1
+	github.com/nexssp/kernel v0.40.3
 	github.com/nexssp/validation v0.5.0
 	github.com/tetratelabs/wazero v1.12.0
 	golang.org/x/mod v0.43.0

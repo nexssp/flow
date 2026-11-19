@@ -130,6 +130,7 @@ func analyzeWithInitialBindings(
 		ArgSchemas:         argSchemas,
 	}, expr)
 }
+
 func contractForExpr(resolver CapabilityResolver, expr Expr) (CapabilityContract, bool) {
 	atom, ok := expr.(*Atom)
 	if !ok || atom == nil {

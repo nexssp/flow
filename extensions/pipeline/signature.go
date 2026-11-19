@@ -88,7 +88,7 @@ func parsePipelineSignature(req compiler.DirectiveReq, line string, nameEnd int)
 	return signature, signatureEnd, nil
 }
 
-func parsePipelineInput(req compiler.DirectiveReq, raw string, column int) (string, schemaSelection, bool, error) {
+func parsePipelineInput(req compiler.DirectiveReq, raw string, column int) (parameterName string, selection schemaSelection, hasInput bool, err error) {
 	parameterText := strings.TrimSpace(raw)
 	if parameterText == "" {
 		return "", schemaSelection{}, false, nil
@@ -97,11 +97,11 @@ func parsePipelineInput(req compiler.DirectiveReq, raw string, column int) (stri
 	if parameterColon < 0 || strings.Contains(parameterText, ",") || strings.Count(parameterText, ":") != 1 {
 		return "", schemaSelection{}, false, pipelineSignatureError(req, column, "signature accepts one named parameter in the form name: Schema")
 	}
-	parameterName := strings.TrimSpace(parameterText[:parameterColon])
-	if err := compiler.ValidateExpressionBindingName(parameterName); err != nil {
-		return "", schemaSelection{}, false, pipelineSignatureError(req, column, "invalid input parameter name: "+err.Error())
+	parameterName = strings.TrimSpace(parameterText[:parameterColon])
+	if validationErr := compiler.ValidateExpressionBindingName(parameterName); validationErr != nil {
+		return "", schemaSelection{}, false, pipelineSignatureError(req, column, "invalid input parameter name: "+validationErr.Error())
 	}
-	selection, err := parseSignatureSelection(parameterText[parameterColon+1:], "request-schema")
+	selection, err = parseSignatureSelection(parameterText[parameterColon+1:], "request-schema")
 	if err != nil {
 		return "", schemaSelection{}, false, pipelineSignatureError(req, column+parameterColon+1, "invalid input type: "+err.Error())
 	}

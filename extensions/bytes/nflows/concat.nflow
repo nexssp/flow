@@ -1,0 +1,14 @@
+@description "Concatenate zero byte chunks to an empty string"
+@assert: result.content == ""
+
+@schema ByteConcatResult {
+    Content string `json:"content"`
+}
+
+@pipeline concat_empty(): ByteConcatResult
+    []
+      -> bytes.concat
+      -> { content: . }
+@end
+
+pipeline.concat_empty
