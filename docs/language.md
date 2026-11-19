@@ -397,14 +397,18 @@ Projections run through `expr-lang`, so array functions like `filter`,
 For a calculation reused across Flow expressions, declare a small pure
 expression function. The signature uses Go-style parameter and result types.
 Keep a short expression on one line after `=` or use braces for a readable
-multiline expression body. Braces group one expr-lang expression; they do not
-introduce statements, `return`, I/O, or workflow actions:
+expr-lang body with ordered, semicolon-separated `let` bindings and a final
+result expression. Bindings are local and may refer to parameters or earlier
+bindings; the final expression supplies the result. This is not Go syntax and
+does not allow `return`, I/O, or workflow actions:
 
 ```nflow
-@func pricing.taxMinor(subtotalMinor int, ratePercent int) int {
-  subtotalMinor * ratePercent / 100
+@func pricing.totalMinor(subtotal_minor int, discount_minor int, tax_rate_percent int) int {
+  let taxable_minor = subtotal_minor - discount_minor;
+  let tax_minor = taxable_minor * tax_rate_percent / 100;
+  taxable_minor + tax_minor
 }
-{ subtotal_minor: .subtotal_minor, tax_minor: pricing.taxMinor(.subtotal_minor, 8) }
+{ total_minor: pricing.totalMinor(1250, 50, 10) }
 ```
 
 `@func` calls work in projections, match/loop/assertion/error conditions, and

@@ -23,14 +23,18 @@ type FunctionDeclaration struct {
 	Position   compiler.Position
 }
 
-// Directive parses pure, single-expression function declarations. Its
-// signature follows Go's name-then-type convention; braced bodies are
-// expression syntax, not Go statement blocks.
+// Directive parses pure, typed function declarations. Its signature follows
+// Go's name-then-type convention; braced bodies may use ordered expr-lang let
+// bindings followed by a final expression that supplies the result.
 var Directive = compiler.Directive{
 	Name: "func",
-	Example: `@func commerce.shippingFeeMinor(subtotalMinor int, destinationZone string) int {
-	  subtotalMinor >= 5000 && destinationZone == "domestic" ? 0 : 599
-	}`,
+	Example: `@func commerce.totalMinor(subtotal_minor int, discount_minor int, tax_rate_percent int) int {
+	  let taxable_minor = subtotal_minor - discount_minor;
+	  let tax_minor = taxable_minor * tax_rate_percent / 100;
+	  taxable_minor + tax_minor
+	}
+
+{ total_minor: commerce.totalMinor(1250, 50, 10) }`,
 	Handler:     handleDirective,
 	OpaqueBlock: true,
 }

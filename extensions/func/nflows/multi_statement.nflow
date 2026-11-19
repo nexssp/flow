@@ -1,0 +1,16 @@
+@description "Calculate a total using local bindings inside a pure function"
+@func pricing.totalMinor(subtotal_minor int, discount_minor int, tax_rate_percent int) int {
+  let taxable_minor = subtotal_minor - discount_minor;
+  let tax_minor = taxable_minor * tax_rate_percent / 100;
+  taxable_minor + tax_minor
+}
+{
+  total_minor: pricing.totalMinor(
+    .subtotal_minor ?? 1250,
+    .discount_minor ?? 50,
+    .tax_rate_percent ?? 10
+  )
+}
+@assert {
+  result.total_minor == 1320
+}

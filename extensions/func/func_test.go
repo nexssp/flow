@@ -84,6 +84,11 @@ func TestFuncPracticalExamples(t *testing.T) {
 			input: map[string]any{"impact": 5, "production_down": true},
 			want:  map[string]any{"priority": "P1", "response_minutes": 15},
 		},
+		{
+			name:  "multi_statement.nflow",
+			input: map[string]any{"subtotal_minor": 1250, "discount_minor": 50, "tax_rate_percent": 10},
+			want:  map[string]any{"total_minor": 1320},
+		},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {

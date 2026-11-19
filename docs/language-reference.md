@@ -120,18 +120,18 @@ Payload field names do not need to avoid expression builtins: `.count > 4`, `.ty
 
 The standard projection bundle validates statically known projection bodies during compilation, so `nflow lint` can reject malformed expressions before actions run. Loop, assertion, match and error-handler conditions also compile their expressions before execution. If a failed expression actually resolves a bare name such as `count` to a builtin value, its diagnostic suggests `.count` for payload access. This is a hint on an existing compile failure, not a blanket ban on builtin names or function values. Dynamic payload types, missing fields and projection bodies supplied dynamically to an action still require runtime checks; compilation cannot prove all data-dependent behavior.
 
-`@func` declares a pure, file-local helper for Flow expressions. Its signature follows Go's name-then-type style. The compact `= expression` form remains supported; for longer calculations, a braced body can span lines but must still contain exactly one expr-lang expression:
+`@func` declares a pure, file-local helper for Flow expressions. Its signature follows Go's name-then-type style. The compact `= expression` form remains supported. A braced body may contain ordered, semicolon-separated expr-lang `let` bindings followed by a final expression. Bindings are local to the function and may use parameters or earlier bindings; the final expression supplies the function result and is checked against its declared type:
 
 ```nflow
-@func commerce.shippingFeeMinor(subtotalMinor int, destinationZone string) int {
-  destinationZone == "domestic" && subtotalMinor >= 5000
-    ? 0
-    : (destinationZone == "domestic" ? 599 : 1299)
+@func pricing.totalMinor(subtotal_minor int, discount_minor int, tax_rate_percent int) int {
+  let taxable_minor = subtotal_minor - discount_minor;
+  let tax_minor = taxable_minor * tax_rate_percent / 100;
+  taxable_minor + tax_minor
 }
-{ shipping_minor: commerce.shippingFeeMinor(.subtotal_minor, .destination_zone) }
+{ total_minor: pricing.totalMinor(1250, 50, 10) }
 ```
 
-Supported parameter and result types are `int`, `int64`, `float64`, `string`, and `bool`; an `int` parameter accepts integral numeric input. Calls use a qualified name, may refer forward to other visible functions, and are checked for argument count and type. Duplicate names, invalid bodies/results, unknown body variables, and recursive cycles fail compilation. The body is not Go code, cannot perform I/O or invoke actions, and disables the nondeterministic `now()` builtin. Functions are available in projections, match/loop/assertion/error conditions, and parenthesized action-argument values. A function remains local to its source module; importing that module with `@include "fees.nflow" AS pricing` exposes a declaration named `commerce.shippingFeeMinor` as `pricing.commerce.shippingFeeMinor`. Nested include aliases compose in the same way. Functions package calculations only—they do not define request/response fields or defaults, which remain the job of schemas and pipelines. See the [practical `@func` example catalog](../extensions/func/nflows/README.md), including the [reusable shipping fixture](../extensions/func/nflows/reusable_shipping_fee.nflow).
+Supported parameter and result types are `int`, `int64`, `float64`, `string`, and `bool`; an `int` parameter accepts integral numeric input. Calls use a qualified name, may refer forward to other visible functions, and are checked for argument count and type. Duplicate names, invalid bodies/results, unknown body variables, and recursive cycles fail compilation. Bodies are expr-lang, not Go: only pure calculations are allowed; they cannot perform I/O or invoke actions, and the nondeterministic `now()` builtin is disabled. Functions are available in projections, match/loop/assertion/error conditions, and parenthesized action-argument values. A function remains local to its source module; importing that module with `@include "fees.nflow" AS pricing` exposes a declaration named `commerce.shippingFeeMinor` as `pricing.commerce.shippingFeeMinor`. Nested include aliases compose in the same way. Functions package calculations only—they do not define request/response fields or defaults, which remain the job of schemas and pipelines. See the [practical `@func` example catalog](../extensions/func/nflows/README.md), including the [reusable shipping fixture](../extensions/func/nflows/reusable_shipping_fee.nflow).
 
 `@symbols NAME { ... }` declares a file-local namespace of string values. In expression positions, refer to them as `NAME.member`; in data positions, an unquoted known symbol resolves to its declared string. Local namespaces shadow same-named global namespaces; current input values take precedence on collisions in expression environments. An included module's public namespace is addressed through its import qualifier, for example `billing.queues.review`; its unqualified declarations remain local to that module. See [`docs/symbols.md`](symbols.md) and [`extensions/symbols/`](../extensions/symbols/).
 
