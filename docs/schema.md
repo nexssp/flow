@@ -30,19 +30,25 @@ if one is present, even when its value is empty.
 New declarations can put those contracts in the pipeline signature:
 
 ```nflow
-@pipeline create_order(req: !CreateRequest): !CreateResponse
-  orders.create
+@pipeline create_order(order_req: !CreateRequest): !CreateResponse
+  orders.create(name: (order_req.name))
 @end
 ```
 
-The input parameter is named `req`; omit the input type with `()` when only an
+The request parameter may use any valid, non-reserved identifier. In the body,
+that name is an immutable lexical binding to the validated request value,
+including defaults; use it in expression positions such as
+`(order_req.name)`. `input` remains the original invocation payload, and `.`
+remains the current pipeline value. Omit the input type with `()` when only an
 output contract is declared, as in `@pipeline status(): StatusResponse`. An
 input-only signature can omit the result type, and the existing `@pipeline
 NAME` form remains valid when no signature contract is needed. Types name a
 declared schema (or an array selector such as `[]CreateRequest`). Prefix a type
 with `!` to keep the existing strictness behavior: only that boundary rejects
-unknown fields. The signature does not change how Flow steps are connected;
-`->` remains the dataflow operator.
+unknown fields. The request name does not change the single-object pipeline
+call or how Flow steps are connected; `->` remains the dataflow operator. A
+body-level `as` binding in the same pipeline scope cannot reuse the request
+parameter name.
 
 During migration, `:request-schema=...` and `:response-schema=...` remain
 supported. A signature and a legacy modifier may declare the same boundary

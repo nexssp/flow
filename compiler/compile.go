@@ -20,6 +20,8 @@ type CompileReq struct {
 	Prepared           *PreparedSource
 	// TypeAnalysisInput seeds static analysis for sources compiled by a materializer.
 	TypeAnalysisInput TypeDescriptor
+	// TypeAnalysisBindings seeds immutable lexical bindings for materialized sources.
+	TypeAnalysisBindings map[string]TypeDescriptor
 }
 
 // PreparedSource is the result of preprocessing one source. Its fields are
@@ -274,13 +276,14 @@ func runCompile(
 	if refErr := validateConfigRefs(ast, effectiveCfg.config, effectiveCfg.cliArgs); refErr != nil {
 		return CompileRes{}, refErr
 	}
-	if analyzeErr := AnalyzeWithTypedExpressionCheckerAndInputAndArgSchemas(
+	if analyzeErr := analyzeWithInitialBindings(
 		resolver,
 		ast,
 		effectiveCfg.typedExpressionChecker,
 		effectiveCfg.expressionCompiler,
 		req.TypeAnalysisInput,
 		effectiveCfg.argSchemas,
+		req.TypeAnalysisBindings,
 		SymbolsFromMeta(prepared.meta),
 	); analyzeErr != nil {
 		return CompileRes{}, analyzeErr

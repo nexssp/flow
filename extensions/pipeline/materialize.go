@@ -135,7 +135,14 @@ func materializePipeline(req compiler.MaterializeReq, definition *pipelineDefini
 			compileValues = append(compileValues, modifier)
 		}
 	}
-	program, err := compilePipelineProgram(req, definition, canonicalName, compileValues, compileMods, pipelineAnalysisInput(requestSchema))
+	analysisInput := pipelineAnalysisInput(requestSchema)
+	var analysisBindings map[string]compiler.TypeDescriptor
+	if definition.signature.inputName != "" {
+		analysisBindings = map[string]compiler.TypeDescriptor{
+			definition.signature.inputName: analysisInput,
+		}
+	}
+	program, err := compilePipelineProgram(req, definition, canonicalName, compileValues, compileMods, analysisInput, analysisBindings)
 	if err != nil {
 		return pipelineCompileFailure(definition, compileValues, pending, err)
 	}
@@ -154,6 +161,9 @@ func materializePipeline(req compiler.MaterializeReq, definition *pipelineDefini
 	// Dynamic preserves the compiled action's modifiers, statuses, tags, and
 	// route bindings while giving it its canonical pipeline name.
 	var act action.AnyAction = action.Dynamic(program).Name(canonicalName).Build()
+	if definition.signature.inputName != "" {
+		act = withPipelineInputBinding(act, definition.signature.inputName)
+	}
 	if requestSelection.name != "" || responseSelection.name != "" {
 		act = wrapWithSchemaBoundary(act, requestSelection, requestSchema, responseSelection, responseSchema, schemaext.VisibleSchemasFromMeta(req.Meta))
 	}
@@ -257,7 +267,21 @@ func mergeSignatureSelection(pipelineName, boundary string, legacy, signature sc
 	return schemaSelection{}, fmt.Errorf("@pipeline %q: conflicting %s contract declarations: signature %q and legacy modifier %q", pipelineName, boundary, signature.value(), legacy.value())
 }
 
-func compilePipelineProgram(req compiler.MaterializeReq, definition *pipelineDefinition, canonicalName string, compileValues []compiler.ModifierValue, compileMods []string, analysisInput compiler.TypeDescriptor) (action.AnyAction, error) {
+func withPipelineInputBinding(inner action.AnyAction, name string) action.AnyAction {
+	return action.Dynamic(inner).UseFirst(func(next action.Fn[any, any]) action.Fn[any, any] {
+		return func(ctx context.Context, request any) (any, error) {
+			if err := compiler.BindExpressionValue(ctx, name, request); err != nil {
+				return nil, xerr.Validation(err.Error())
+			}
+			return next(ctx, request)
+		}
+	}).Build()
+}
+
+func compilePipelineProgram(req compiler.MaterializeReq, definition *pipelineDefinition, canonicalName string, compileValues []compiler.ModifierValue, compileMods []string, analysisInput compiler.TypeDescriptor, analysisBindings map[string]compiler.TypeDescriptor) (action.AnyAction, error) {
+	if req.CompileWithAnalysisBindings != nil {
+		return req.CompileWithAnalysisBindings(canonicalName, definition.source, compileValues, analysisInput, analysisBindings)
+	}
 	if req.CompileWithAnalysisInput != nil {
 		return req.CompileWithAnalysisInput(canonicalName, definition.source, compileValues, analysisInput)
 	}

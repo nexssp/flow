@@ -30,7 +30,9 @@ type MaterializeReq struct {
 	// CompileWithAnalysisInput compiles a body with an initial static input type.
 	// Materializers use it when a declaration provides a typed input contract.
 	CompileWithAnalysisInput func(name, source string, modifiers []ModifierValue, input TypeDescriptor) (action.AnyAction, error)
-	Alias                    string
+	// CompileWithAnalysisBindings also seeds immutable lexical bindings for that body.
+	CompileWithAnalysisBindings func(name, source string, modifiers []ModifierValue, input TypeDescriptor, bindings map[string]TypeDescriptor) (action.AnyAction, error)
+	Alias                       string
 	// Introspection enables retaining child-action relationships on materialized actions.
 	Introspection bool
 }

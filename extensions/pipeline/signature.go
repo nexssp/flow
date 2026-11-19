@@ -11,8 +11,9 @@ import (
 const pipelineSignaturesMetaKey = "pipeline_signatures"
 
 type pipelineSignature struct {
-	input  *schemaSelection
-	output *schemaSelection
+	inputName string
+	input     *schemaSelection
+	output    *schemaSelection
 }
 
 // parsePipelineDeclarationHeader extracts the optional signature and delegates
@@ -63,15 +64,15 @@ func pipelineSignatureNameEnd(line string) (int, bool) {
 func parsePipelineSignature(req compiler.DirectiveReq, line string, nameEnd int) (pipelineSignature, int, error) {
 	closeOffset := strings.IndexByte(line[nameEnd+1:], ')')
 	if closeOffset < 0 {
-		return pipelineSignature{}, 0, pipelineSignatureError(req, nameEnd, "unterminated pipeline signature; expected ')' after req parameter")
+		return pipelineSignature{}, 0, pipelineSignatureError(req, nameEnd, "unterminated pipeline signature; expected ')' after request parameter")
 	}
 	closeParen := nameEnd + 1 + closeOffset
-	input, hasInput, err := parsePipelineInput(req, line[nameEnd+1:closeParen], nameEnd+1)
+	inputName, input, hasInput, err := parsePipelineInput(req, line[nameEnd+1:closeParen], nameEnd+1)
 	if err != nil {
 		return pipelineSignature{}, 0, err
 	}
 
-	signature := pipelineSignature{}
+	signature := pipelineSignature{inputName: inputName}
 	if hasInput {
 		signature.input = &input
 	}
@@ -87,23 +88,24 @@ func parsePipelineSignature(req compiler.DirectiveReq, line string, nameEnd int)
 	return signature, signatureEnd, nil
 }
 
-func parsePipelineInput(req compiler.DirectiveReq, raw string, column int) (schemaSelection, bool, error) {
+func parsePipelineInput(req compiler.DirectiveReq, raw string, column int) (string, schemaSelection, bool, error) {
 	parameterText := strings.TrimSpace(raw)
 	if parameterText == "" {
-		return schemaSelection{}, false, nil
+		return "", schemaSelection{}, false, nil
 	}
 	parameterColon := strings.IndexByte(parameterText, ':')
 	if parameterColon < 0 || strings.Contains(parameterText, ",") || strings.Count(parameterText, ":") != 1 {
-		return schemaSelection{}, false, pipelineSignatureError(req, column, "signature accepts one named parameter in the form req: Schema")
+		return "", schemaSelection{}, false, pipelineSignatureError(req, column, "signature accepts one named parameter in the form name: Schema")
 	}
-	if strings.TrimSpace(parameterText[:parameterColon]) != "req" {
-		return schemaSelection{}, false, pipelineSignatureError(req, column, "the pipeline input parameter must be named req")
+	parameterName := strings.TrimSpace(parameterText[:parameterColon])
+	if err := compiler.ValidateExpressionBindingName(parameterName); err != nil {
+		return "", schemaSelection{}, false, pipelineSignatureError(req, column, "invalid input parameter name: "+err.Error())
 	}
 	selection, err := parseSignatureSelection(parameterText[parameterColon+1:], "request-schema")
 	if err != nil {
-		return schemaSelection{}, false, pipelineSignatureError(req, column+parameterColon+1, "invalid req type: "+err.Error())
+		return "", schemaSelection{}, false, pipelineSignatureError(req, column+parameterColon+1, "invalid input type: "+err.Error())
 	}
-	return selection, true, nil
+	return parameterName, selection, true, nil
 }
 
 func parsePipelineOutput(req compiler.DirectiveReq, line string, start int) (*schemaSelection, int, error) {

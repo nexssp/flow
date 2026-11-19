@@ -87,6 +87,21 @@ func AnalyzeWithTypedExpressionCheckerAndInputAndArgSchemas(
 	argSchemas map[string][]ArgFieldSpec,
 	symbolNamespaces ...map[string]SymbolNamespace,
 ) error {
+	return analyzeWithInitialBindings(
+		resolver, expr, checker, expressionCompiler, input, argSchemas, nil, symbolNamespaces...,
+	)
+}
+
+func analyzeWithInitialBindings(
+	resolver CapabilityResolver,
+	expr Expr,
+	checker TypedSourceExpressionChecker,
+	expressionCompiler ExpressionCompiler,
+	input TypeDescriptor,
+	argSchemas map[string][]ArgFieldSpec,
+	initialBindings map[string]TypeDescriptor,
+	symbolNamespaces ...map[string]SymbolNamespace,
+) error {
 	if resolver == nil {
 		return xerr.Internal("analyze: capability resolver is nil")
 	}
@@ -94,6 +109,9 @@ func AnalyzeWithTypedExpressionCheckerAndInputAndArgSchemas(
 		return nil
 	}
 	if err := expr.Analyze(resolver); err != nil {
+		return err
+	}
+	if err := validateInitialBindingCollisions(expr, initialBindings); err != nil {
 		return err
 	}
 	var localSymbols map[string]SymbolNamespace
@@ -105,13 +123,13 @@ func AnalyzeWithTypedExpressionCheckerAndInputAndArgSchemas(
 		Resolver:           resolver,
 		Input:              input,
 		OriginalInput:      &originalInput,
+		Bindings:           cloneTypeBindings(initialBindings),
 		SymbolNamespaces:   localSymbols,
 		CheckExpression:    checker,
 		ExpressionCompiler: expressionCompiler,
 		ArgSchemas:         argSchemas,
 	}, expr)
 }
-
 func contractForExpr(resolver CapabilityResolver, expr Expr) (CapabilityContract, bool) {
 	atom, ok := expr.(*Atom)
 	if !ok || atom == nil {

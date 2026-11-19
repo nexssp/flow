@@ -230,7 +230,7 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 	}
 	topContribs := prepared.Contributions()
 
-	compileSubValuesWithInput := func(subName, subSource string, modifiers []compiler.ModifierValue, analysisInput compiler.TypeDescriptor) (action.AnyAction, error) {
+	compileSubValuesWithInputAndBindings := func(subName, subSource string, modifiers []compiler.ModifierValue, analysisInput compiler.TypeDescriptor, analysisBindings map[string]compiler.TypeDescriptor) (action.AnyAction, error) {
 		wrapperMods, bodyMods := SplitPipelineModifierValues(cfg.Modifiers, modifiers)
 
 		subOpts := append([]compiler.CompileOption(nil), cfg.CompileOpts...)
@@ -254,11 +254,12 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 			resolver, cfg.Directives, cfg.Modifiers,
 			cfg.Operators, cfg.Primaries, subOpts...,
 		).Do(ctx, compiler.CompileReq{
-			Source:             subSource,
-			Name:               subName,
-			InheritedPrimaries: topContribs.Primaries,
-			InheritedMeta:      meta,
-			TypeAnalysisInput:  analysisInput,
+			Source:               subSource,
+			Name:                 subName,
+			InheritedPrimaries:   topContribs.Primaries,
+			InheritedMeta:        meta,
+			TypeAnalysisInput:    analysisInput,
+			TypeAnalysisBindings: analysisBindings,
 		})
 		if subErr != nil {
 			return nil, subErr
@@ -283,6 +284,9 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 		}
 		return program, nil
 	}
+	compileSubValuesWithInput := func(subName, subSource string, modifiers []compiler.ModifierValue, analysisInput compiler.TypeDescriptor) (action.AnyAction, error) {
+		return compileSubValuesWithInputAndBindings(subName, subSource, modifiers, analysisInput, nil)
+	}
 	compileSubValues := func(subName, subSource string, modifiers []compiler.ModifierValue) (action.AnyAction, error) {
 		return compileSubValuesWithInput(subName, subSource, modifiers, compiler.TypeDescriptor{})
 	}
@@ -299,13 +303,14 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 			continue
 		}
 		if matErr := m(compiler.MaterializeReq{
-			Ctx:                      ctx,
-			Meta:                     meta,
-			Resolver:                 resolver,
-			Compile:                  compileSub,
-			CompileValues:            compileSubValues,
-			CompileWithAnalysisInput: compileSubValuesWithInput,
-			Introspection:            prepared.ActionIntrospectionEnabled(),
+			Ctx:                         ctx,
+			Meta:                        meta,
+			Resolver:                    resolver,
+			Compile:                     compileSub,
+			CompileValues:               compileSubValues,
+			CompileWithAnalysisInput:    compileSubValuesWithInput,
+			CompileWithAnalysisBindings: compileSubValuesWithInputAndBindings,
+			Introspection:               prepared.ActionIntrospectionEnabled(),
 		}); matErr != nil {
 			return Compilation{Meta: meta, Resolver: resolver}, fmt.Errorf("materialize: %w", matErr)
 		}

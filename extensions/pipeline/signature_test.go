@@ -12,14 +12,16 @@ func TestParsePipelineDeclarationHeaderSignatures(t *testing.T) {
 		name          string
 		header        string
 		wantSignature bool
+		wantInputName string
 		wantInput     string
 		wantOutput    string
 		wantModifiers []string
 	}{
 		{
 			name:          "typed input and output with a legacy modifier",
-			header:        `@pipeline create_order(req: !CreateRequest): !CreateResponse :timeout=5s`,
+			header:        `@pipeline create_order(order_req: !CreateRequest): !CreateResponse :timeout=5s`,
 			wantSignature: true,
+			wantInputName: "order_req",
 			wantInput:     "!CreateRequest",
 			wantOutput:    "!CreateResponse",
 			wantModifiers: []string{"timeout=5s"},
@@ -28,6 +30,7 @@ func TestParsePipelineDeclarationHeaderSignatures(t *testing.T) {
 			name:          "input only",
 			header:        `@pipeline lookup(req: LookupRequest)`,
 			wantSignature: true,
+			wantInputName: "req",
 			wantInput:     "LookupRequest",
 		},
 		{
@@ -71,6 +74,9 @@ func TestParsePipelineDeclarationHeaderSignatures(t *testing.T) {
 					t.Fatalf("modifiers = %#v, want %#v", header.Modifiers, tc.wantModifiers)
 				}
 			}
+			if signature.inputName != tc.wantInputName {
+				t.Fatalf("input name = %q, want %q", signature.inputName, tc.wantInputName)
+			}
 			if got := selectionValue(signature.input); got != tc.wantInput {
 				t.Fatalf("input selection = %q, want %q", got, tc.wantInput)
 			}
@@ -89,9 +95,10 @@ func TestParsePipelineDeclarationHeaderRejectsInvalidSignatures(t *testing.T) {
 		header string
 		want   string
 	}{
-		{header: `@pipeline lookup(input: Request)`, want: "must be named req"},
+		{header: `@pipeline lookup(input: Request)`, want: "reserved"},
+		{header: `@pipeline lookup(bad-name: Request)`, want: "invalid input parameter name"},
 		{header: `@pipeline lookup(req: Request, req: Other)`, want: "one named parameter"},
-		{header: `@pipeline lookup(req: bad-name)`, want: "invalid req type"},
+		{header: `@pipeline lookup(req: bad-name)`, want: "invalid input type"},
 		{header: `@pipeline response(): !`, want: "invalid output type"},
 		{header: `@pipeline lookup(req: Request`, want: "unterminated pipeline signature"},
 	} {

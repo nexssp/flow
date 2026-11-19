@@ -1,10 +1,10 @@
-@description "spec: typed pipeline input-only signature validates the request and preserves the result"
+@description "spec: a named typed request binding works without an output contract"
 @schema LookupRequest {
   Name string `json:"name" validate:"required"`
 }
-@pipeline lookup(req: LookupRequest)
-  noop
+@pipeline lookup(lookup_req: LookupRequest)
+  const(name: (lookup_req.name ?? "Lin"))
 @end
-const(name: (input.name ?? "Lin"))
+const(name: "Lin")
   -> pipeline.lookup
 @assert: result.name == "Lin"

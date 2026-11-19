@@ -652,6 +652,30 @@ func analyzeTypedUnknownChildren(ctx TypeAnalysisContext, node Expr) (TypeDescri
 	return TypeDescriptor{}, nil
 }
 
+func validateInitialBindingCollisions(root Expr, bindings map[string]TypeDescriptor) error {
+	if root == nil || len(bindings) == 0 {
+		return nil
+	}
+	switch current := root.(type) {
+	case *DecoratedExpr:
+		return validateInitialBindingCollisions(current.Inner, bindings)
+	case *BindingExpr:
+		if _, exists := bindings[current.Name]; exists {
+			return SourceError(current.Pos, "duplicate pipeline binding %q", current.Name)
+		}
+	case *PipeExpr:
+		for _, step := range flattenPipe(current) {
+			_, binding := unwrapBinding(step)
+			if binding != nil {
+				if _, exists := bindings[binding.Name]; exists {
+					return SourceError(binding.Pos, "duplicate pipeline binding %q", binding.Name)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func cloneTypeBindings(bindings map[string]TypeDescriptor) map[string]TypeDescriptor {
 	if len(bindings) == 0 {
 		return make(map[string]TypeDescriptor)
