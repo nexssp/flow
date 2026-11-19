@@ -13,8 +13,163 @@ permissions:
   contents: read
 
 jobs:
+  module-tidy:
+    name: Go module tidy check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify go.mod and go.sum are tidy
+        run: |
+          go mod tidy
+          if [ -n "$(git status --porcelain -- go.mod go.sum)" ]; then
+            echo "::error::go.mod or go.sum is not tidy. Run 'go mod tidy' locally and commit the result."
+            git status --porcelain -- go.mod go.sum
+            git diff -- go.mod go.sum
+            exit 1
+          fi
+
+  build:
+    name: Build all Go packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build all packages
+        run: go build ./...
+
+  nflow-self-test:
+    name: NFlow extension conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run self-test
+        run: go run ./cmd/nflow self test
+
+  nflow-specs:
+    name: Integrated NFlow specifications
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run integrated specifications
+        run: go run ./cmd/nflow test ./spec
+
+  nflow-spec-lint:
+    name: NFlow specification lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Lint NFlow specifications
+        run: go run ./cmd/nflow lint ./spec
+
+  lint:
+    name: Go lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: v2.15.0
+          verify: false
+          args: ./...
+
+  race-core:
+    name: Go race tests · core packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run race-enabled core tests
+        run: go test -race -short -count=1 ./builder ./cli/... ./internal/... ./runner
+
+  race-runtime:
+    name: Go race tests · runtime packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run race-enabled runtime tests
+        run: go test -race -short -count=1 ./cmd/... ./compiler ./extensions/... ./formatter ./native
+
   harness-builder:
-    name: harness builder tests
+    name: Builder harness integration tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -42,7 +197,7 @@ jobs:
           retention-days: 7
 
   harness-cli:
-    name: harness CLI tests
+    name: CLI harness integration tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -71,118 +226,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  module-tidy:
-    name: module tidy
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Verify go.mod and go.sum are tidy
-        run: |
-          go mod tidy
-          if [ -n "$(git status --porcelain -- go.mod go.sum)" ]; then
-            echo "::error::go.mod or go.sum is not tidy. Run 'go mod tidy' locally and commit the result."
-            git status --porcelain -- go.mod go.sum
-            git diff -- go.mod go.sum
-            exit 1
-          fi
-
-  acceptance:
-    name: acceptance
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Build all packages
-        run: go build ./...
-
-      - name: Run self-test
-        run: go run ./cmd/nflow self test
-
-      - name: Run integrated specifications
-        run: go run ./cmd/nflow test ./spec
-
-      - name: Lint NFlow specifications
-        run: go run ./cmd/nflow lint ./spec
-
-  lint:
-    name: golangci-lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v9.3.0
-        with:
-          version: v2.15.0
-          verify: false
-          args: ./...
-
-  race-core:
-    name: race core packages
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Run race-enabled core tests
-        run: go test -race -short -count=1 ./builder ./cli/... ./internal/... ./runner
-
-  race-runtime:
-    name: race runtime packages
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Run race-enabled runtime tests
-        run: go test -race -short -count=1 ./cmd/... ./compiler ./extensions/... ./formatter ./native
-
   vulnerability:
-    name: vulnerability scan
+    name: Vulnerability scan
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -203,7 +248,7 @@ jobs:
         run: govulncheck -show=version ./...
 
   benchmark:
-    name: benchmark smoke
+    name: Benchmark smoke
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -223,39 +268,62 @@ jobs:
           -bench='^(BenchmarkResilienceWorkflow|BenchmarkExpressionValueViewTypedProjectionOutput|BenchmarkExprEvaluatorTypedProjectionOutput)$'
           -benchmem ./...
 
+  # This is the stable branch-protection gate; keep its identity unchanged.
   verify:
     name: build · lint · test
     if: ${{ always() }}
     needs:
       - module-tidy
-      - acceptance
+      - build
+      - nflow-self-test
+      - nflow-specs
+      - nflow-spec-lint
       - lint
       - race-core
       - race-runtime
-      - vulnerability
-      - benchmark
       - harness-builder
       - harness-cli
+      - vulnerability
+      - benchmark
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
-      - name: Require all verification jobs to pass
+      - name: Report every failed required check
+        env:
+          MODULE_TIDY_RESULT: ${{ needs.module-tidy.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          NFLOW_SELF_TEST_RESULT: ${{ needs.nflow-self-test.result }}
+          NFLOW_SPECS_RESULT: ${{ needs.nflow-specs.result }}
+          NFLOW_SPEC_LINT_RESULT: ${{ needs.nflow-spec-lint.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+          RACE_CORE_RESULT: ${{ needs.race-core.result }}
+          RACE_RUNTIME_RESULT: ${{ needs.race-runtime.result }}
+          HARNESS_BUILDER_RESULT: ${{ needs.harness-builder.result }}
+          HARNESS_CLI_RESULT: ${{ needs.harness-cli.result }}
+          VULNERABILITY_RESULT: ${{ needs.vulnerability.result }}
+          BENCHMARK_RESULT: ${{ needs.benchmark.result }}
         run: |
-          results=(
-            "${{ needs.module-tidy.result }}"
-            "${{ needs.acceptance.result }}"
-            "${{ needs.lint.result }}"
-            "${{ needs.race-core.result }}"
-            "${{ needs.race-runtime.result }}"
-            "${{ needs.vulnerability.result }}"
-            "${{ needs.benchmark.result }}"
-            "${{ needs.harness-builder.result }}"
-            "${{ needs.harness-cli.result }}"
-          )
-          for result in "${results[@]}"; do
-            if [ "$result" != "success" ]; then
-              echo "::error::A required CI job finished with result: $result"
-              exit 1
+          set -Eeuo pipefail
+          failed=0
+          check_result() {
+            local check_id="$1"
+            local result="$2"
+            if [[ "$result" != "success" ]]; then
+              printf '::error::Required check %s result: %s\n' "$check_id" "${result:-unknown}"
+              failed=1
             fi
-          done
+          }
+          check_result module-tidy "$MODULE_TIDY_RESULT"
+          check_result build "$BUILD_RESULT"
+          check_result nflow-self-test "$NFLOW_SELF_TEST_RESULT"
+          check_result nflow-specs "$NFLOW_SPECS_RESULT"
+          check_result nflow-spec-lint "$NFLOW_SPEC_LINT_RESULT"
+          check_result lint "$LINT_RESULT"
+          check_result race-core "$RACE_CORE_RESULT"
+          check_result race-runtime "$RACE_RUNTIME_RESULT"
+          check_result harness-builder "$HARNESS_BUILDER_RESULT"
+          check_result harness-cli "$HARNESS_CLI_RESULT"
+          check_result vulnerability "$VULNERABILITY_RESULT"
+          check_result benchmark "$BENCHMARK_RESULT"
+          exit "$failed"
