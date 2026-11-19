@@ -168,6 +168,39 @@ func TestStreamTransformRejectsInvalidResultShape(t *testing.T) {
 	}
 }
 
+func TestStreamTransformNumericSeparators(t *testing.T) {
+	t.Parallel()
+
+	valid := applyStreamOperator(
+		t,
+		buildStreamOperator(t, "stream.filter", map[string]any{"expression": "item >= 1_000"}),
+		testStream(999, 1000),
+	)
+	var values []any
+	valid(func(value any, err error) bool {
+		if err != nil {
+			t.Fatalf("valid separator expression emitted an error: %v", err)
+		}
+		values = append(values, value)
+		return true
+	})
+	assertStreamValues(t, values, []any{1000})
+
+	invalid := applyStreamOperator(
+		t,
+		buildStreamOperator(t, "stream.filter", map[string]any{"expression": "item >= 1__000"}),
+		testStream(1000),
+	)
+	var gotErr error
+	invalid(func(_ any, err error) bool {
+		gotErr = err
+		return true
+	})
+	if gotErr == nil || !strings.Contains(gotErr.Error(), "invalid numeric separator") {
+		t.Fatalf("error = %v, want invalid numeric separator", gotErr)
+	}
+}
+
 func buildStreamOperator(t *testing.T, name string, config map[string]any) action.StreamOperator {
 	t.Helper()
 	resolver, err := compiler.NewDynamicResolver(stream_ops.Bundle(nil).Libraries...)

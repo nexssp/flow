@@ -19,6 +19,9 @@ import (
 // hint. Calls, member names, strings, disabled builtins and overrides are not
 // guessed from substrings, and successful expressions are never rejected.
 func CompileExpression(source string, options ...expr.Option) (*vm.Program, error) {
+	if err := validateExpressionNumericSeparators(source); err != nil {
+		return nil, err
+	}
 	var config *conf.Config
 	opts := append(slices.Clone(options), func(c *conf.Config) { config = c })
 	program, err := expr.Compile(source, opts...)

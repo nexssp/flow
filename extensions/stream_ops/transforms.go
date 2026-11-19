@@ -9,6 +9,8 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/stream"
 	"github.com/nexssp/kernel/xerr"
+
+	"github.com/nexssp/flow/compiler"
 )
 
 // ExpressionConfig configures a stream transform using an expression over item.
@@ -96,7 +98,7 @@ func compileTransform(operation, source string) (*vm.Program, error) {
 	if source == "" {
 		return nil, xerr.Validation(operation + ": expression is required")
 	}
-	program, err := expr.Compile(source, expr.AllowUndefinedVariables())
+	program, err := compiler.CompileExpression(source, expr.AllowUndefinedVariables())
 	if err != nil {
 		return nil, xerr.Validation(operation + ": invalid expression: " + err.Error())
 	}

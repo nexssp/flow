@@ -109,6 +109,30 @@ func TestStreamFold_InvalidExpressionEmitsError(t *testing.T) {
 	ktest.RequireErrorContains(t, gotErr, "stream.fold: invalid expression")
 }
 
+func TestStreamFoldRejectsInvalidNumericSeparators(t *testing.T) {
+	t.Parallel()
+	resolver, err := compiler.NewDynamicResolver(stream_ops.Bundle(nil).Libraries...)
+	ktest.RequireNoError(t, err)
+	foldOperator, ok := resolver.Operator("stream.fold")
+	ktest.RequireTrue(t, ok)
+	built, err := foldOperator.Build(map[string]any{
+		"initial":    0,
+		"expression": "acc + 1__000",
+	})
+	ktest.RequireNoError(t, err)
+	upstream, err := streamSource().DoStreamAny(t.Context(), struct{}{})
+	ktest.RequireNoError(t, err)
+	folded, err := built.Apply(upstream)
+	ktest.RequireNoError(t, err)
+
+	var gotErr error
+	folded(func(_ any, err error) bool {
+		gotErr = err
+		return true
+	})
+	ktest.RequireErrorContains(t, gotErr, "invalid numeric separator")
+}
+
 func numberAsInt(t *testing.T, value any) int {
 	t.Helper()
 	switch number := value.(type) {

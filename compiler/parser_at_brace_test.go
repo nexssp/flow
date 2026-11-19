@@ -39,6 +39,24 @@ func TestParseAtBrace_ScalarValues(t *testing.T) {
 	}
 }
 
+func TestParseAtBraceNumericSeparators(t *testing.T) {
+	t.Parallel()
+	parsed, err := newTestParser(t, `wrap(count: 1_123_123, ratio: 1_234.5_6)`).Parse()
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	atom, ok := parsed.(*Atom)
+	if !ok {
+		t.Fatalf("parsed expression has type %T, want *Atom", parsed)
+	}
+	if got := atom.Args["count"]; got.Kind != ValueNumber || got.Num != 1123123 {
+		t.Fatalf("count = %+v, want 1123123", got)
+	}
+	if got := atom.Args["ratio"]; got.Kind != ValueNumber || got.Num != 1234.56 {
+		t.Fatalf("ratio = %+v, want 1234.56", got)
+	}
+}
+
 func TestParseAtBrace_NestedObjectAndSlice(t *testing.T) {
 	t.Parallel()
 	p := newTestParser(t, `wrap ( meta: { retry: 3, tags: ["a", "b"] } )`)
@@ -205,7 +223,9 @@ func TestParseConstDirectScalarInput(t *testing.T) {
 		{name: "string", src: `const "hello"`, kind: ValueString, str: "hello"},
 		{name: "numeric-looking string", src: `const "42"`, kind: ValueString, str: "42"},
 		{name: "number", src: `const 42`, kind: ValueNumber, num: 42},
+		{name: "number with separators", src: `const 1_123_123`, kind: ValueNumber, num: 1123123},
 		{name: "negative number", src: `const -7`, kind: ValueNumber, num: -7},
+		{name: "decimal with separators", src: `const -1_234.5_6`, kind: ValueNumber, num: -1234.56},
 		{name: "boolean", src: `const true`, kind: ValueBool, bool: true},
 		{name: "false", src: `const false`, kind: ValueBool},
 		{name: "null", src: `const null`, kind: ValueNull},
@@ -281,6 +301,23 @@ func TestParseConstRejectsMalformedNumber(t *testing.T) {
 	t.Parallel()
 	if _, err := newTestParser(t, `const 1.2.3`).Parse(); err == nil {
 		t.Fatal("Parse(const 1.2.3) succeeded, want invalid numeric literal error")
+	}
+}
+
+func TestParseRejectsInvalidNumericSeparators(t *testing.T) {
+	t.Parallel()
+	for _, source := range []string{
+		`1__2`,
+		`const 1_`,
+		`wrap(count: 1_.2)`,
+		`wrap(count: 1._2)`,
+	} {
+		t.Run(source, func(t *testing.T) {
+			t.Parallel()
+			if _, err := newTestParser(t, source).Parse(); err == nil || !strings.Contains(err.Error(), "invalid numeric literal") {
+				t.Fatalf("Parse(%q) error = %v, want invalid numeric literal", source, err)
+			}
+		})
 	}
 }
 

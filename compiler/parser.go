@@ -390,11 +390,15 @@ func (p *Parser) parseStringPrimary() (Expr, error) {
 func (p *Parser) parseNumberPrimary() (Expr, error) {
 	raw := p.Cur().Lit
 	pos := p.currentPos()
+	normalized, err := normalizeNumericSeparators(raw)
+	if err != nil {
+		return nil, p.errorf(p.Cur().Line, "invalid numeric literal %q", raw)
+	}
 	p.Next()
-	if number, err := strconv.ParseInt(raw, 10, 64); err == nil {
+	if number, err := strconv.ParseInt(normalized, 10, 64); err == nil {
 		return &LiteralExpr{Val: number, Pos: pos}, nil
 	}
-	if number, err := strconv.ParseFloat(raw, 64); err == nil {
+	if number, err := strconv.ParseFloat(normalized, 64); err == nil {
 		return &LiteralExpr{Val: number, Pos: pos}, nil
 	}
 	return &LiteralExpr{Val: raw, Pos: pos}, nil
@@ -599,7 +603,11 @@ func (p *Parser) parseDirectConstValue(token Token) (*Value, bool, error) {
 		}
 		return &Value{Kind: ValueString, Str: token.Lit}, true, nil
 	case TokNumber:
-		number, err := strconv.ParseFloat(token.Lit, 64)
+		normalized, err := normalizeNumericSeparators(token.Lit)
+		if err != nil {
+			return nil, false, p.errorf(token.Line, "invalid numeric literal %q", token.Lit)
+		}
+		number, err := strconv.ParseFloat(normalized, 64)
 		if err != nil {
 			return nil, false, p.errorf(token.Line, "invalid numeric literal %q", token.Lit)
 		}

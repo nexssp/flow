@@ -62,3 +62,34 @@ func TestCompileExpression_NoFalseBuiltinHints(t *testing.T) {
 		})
 	}
 }
+
+func TestCompileExpressionNumericSeparators(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name   string
+		source string
+		valid  bool
+	}{
+		{name: "integer", source: `1_123_123 == 1123123`, valid: true},
+		{name: "fraction", source: `1_234.5_6 == 1234.56`, valid: true},
+		{name: "hexadecimal", source: `0xCA_FE == 0xCAFE`, valid: true},
+		{name: "base prefix separator", source: `0x_FF == 255`, valid: true},
+		{name: "binary", source: `0b10_01 == 9`, valid: true},
+		{name: "identifier and string underscores", source: `amount_minor == "item_123"`, valid: true},
+		{name: "repeated separator", source: `1__123 == 1123`},
+		{name: "trailing separator", source: `1_ == 1`},
+		{name: "separator beside decimal point", source: `1._23 == 1.23`},
+		{name: "repeated base-prefix separator", source: `0x__FF == 255`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := compiler.CompileExpression(test.source, expr.AllowUndefinedVariables())
+			if (err == nil) != test.valid {
+				t.Fatalf("CompileExpression(%q) error = %v, want valid %t", test.source, err, test.valid)
+			}
+			if !test.valid && !strings.Contains(err.Error(), "invalid numeric separator") {
+				t.Fatalf("error = %v, want invalid numeric separator", err)
+			}
+		})
+	}
+}

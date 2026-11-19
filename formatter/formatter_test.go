@@ -138,6 +138,32 @@ func TestFormatPreservesStringsCommentsAndExpressionText(t *testing.T) {
 	}
 }
 
+func TestFormatPreservesNumericSeparators(t *testing.T) {
+	t.Parallel()
+	for _, input := range []string{"const 1_123_123\n", "const -1_234.5_6\n"} {
+		got, err := testFormatter().Format(t.Context(), input, "numbers.nflow")
+		if err != nil {
+			t.Fatalf("Format() error = %v", err)
+		}
+		if got != input {
+			t.Fatalf("Format() = %q, want numeric separators preserved in %q", got, input)
+		}
+		second, err := testFormatter().Format(t.Context(), got, "numbers.nflow")
+		if err != nil {
+			t.Fatalf("Format() rejected its own output: %v", err)
+		}
+		if second != got {
+			t.Fatalf("format is not idempotent: %q != %q", second, got)
+		}
+	}
+
+	for _, source := range []string{"const 1__2\n", "const 1_\n", "const 1._2\n"} {
+		if _, err := testFormatter().Format(t.Context(), source, "invalid-number.nflow"); err == nil {
+			t.Errorf("Format(%q) succeeded, want invalid separator error", source)
+		}
+	}
+}
+
 func TestHashCommentDetectionMatchesCompilerLexer(t *testing.T) {
 	for _, tt := range []struct {
 		text string

@@ -9,6 +9,8 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
+
+	"github.com/nexssp/flow/compiler"
 )
 
 type whereConfig struct {
@@ -37,7 +39,7 @@ func Where(cfg whereConfig) action.StreamOp[any, any] {
 	if expression == "" {
 		return streamError(xerr.Validation("data.where: expression is required"))
 	}
-	program, err := expr.Compile(expression, expr.AllowUndefinedVariables())
+	program, err := compiler.CompileExpression(expression, expr.AllowUndefinedVariables())
 	if err != nil {
 		return streamError(xerr.Validation("data.where: invalid expression: " + err.Error()))
 	}

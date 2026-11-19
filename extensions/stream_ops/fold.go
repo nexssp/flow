@@ -8,6 +8,8 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/stream"
 	"github.com/nexssp/kernel/xerr"
+
+	"github.com/nexssp/flow/compiler"
 )
 
 // FoldConfig configures stream.fold. Expression is evaluated once per input
@@ -26,7 +28,7 @@ func Fold(cfg FoldConfig) action.StreamOp[any, any] {
 		return foldError(xerr.Validation("stream.fold: expression is required"))
 	}
 
-	program, err := expr.Compile(expression, expr.AllowUndefinedVariables())
+	program, err := compiler.CompileExpression(expression, expr.AllowUndefinedVariables())
 	if err != nil {
 		return foldError(xerr.Validation("stream.fold: invalid expression: " + err.Error()))
 	}

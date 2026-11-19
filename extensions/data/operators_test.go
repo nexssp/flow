@@ -34,6 +34,13 @@ func TestWhereSupportsRowAndItemAliases(t *testing.T) {
 	ktest.RequireEqual(t, len(got), 1)
 }
 
+func TestWhereAcceptsNumericSeparators(t *testing.T) {
+	t.Parallel()
+	got, err := collect(Where(whereConfig{Expression: `age >= 1_000`})(sequence(map[string]any{"age": 1000})))
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, len(got), 1)
+}
+
 func TestWhereReportsInputAndExpressionErrors(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
@@ -44,6 +51,7 @@ func TestWhereReportsInputAndExpressionErrors(t *testing.T) {
 	}{
 		{name: "empty expression", expression: " ", input: map[string]any{}, want: "expression is required"},
 		{name: "invalid expression", expression: "age ==", input: map[string]any{}, want: "invalid expression"},
+		{name: "invalid numeric separator", expression: "age > 1__000", input: map[string]any{}, want: "invalid numeric separator"},
 		{name: "non-boolean result", expression: "age + 1", input: map[string]any{"age": 2}, want: "must return a boolean"},
 		{name: "runtime error", expression: "age > 1", input: map[string]any{"age": "old"}, want: "expression failed"},
 		{name: "non-object input", expression: "true", input: 42, want: "input row is not a JSON object"},

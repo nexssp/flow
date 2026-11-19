@@ -648,7 +648,11 @@ func (b *braceScanner) readRef() (*Value, error) {
 
 func (b *braceScanner) readNumber() (*Value, error) {
 	raw := b.readBareToken()
-	if f, err := strconv.ParseFloat(raw, 64); err == nil {
+	normalized, err := normalizeNumericSeparators(raw)
+	if err != nil {
+		return nil, b.errf("invalid numeric literal %q", raw)
+	}
+	if f, err := strconv.ParseFloat(normalized, 64); err == nil {
 		return &Value{Kind: ValueNumber, Num: f}, nil
 	}
 	return nil, b.errf("invalid numeric literal %q", raw)

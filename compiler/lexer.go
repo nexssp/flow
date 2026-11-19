@@ -378,7 +378,7 @@ func (l *Lexer) scanNumber() Token {
 	if l.src[l.pos] == '-' {
 		l.pos++
 	}
-	for l.pos < len(l.src) && (isDigit(l.src[l.pos]) || l.src[l.pos] == '.') {
+	for l.pos < len(l.src) && (isDigit(l.src[l.pos]) || l.src[l.pos] == '.' || l.src[l.pos] == '_') {
 		l.pos++
 	}
 	return Token{Type: TokNumber, Lit: l.src[start:l.pos], Line: line}
