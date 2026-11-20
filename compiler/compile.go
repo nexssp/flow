@@ -257,24 +257,8 @@ func runCompile(
 	if err != nil {
 		return CompileRes{}, err
 	}
-	for _, validate := range effectiveCfg.validators {
-		if validate == nil {
-			continue
-		}
-		if validationErr := validate(ast, prepared.meta); validationErr != nil {
-			return CompileRes{}, validationErr
-		}
-	}
-	for _, validate := range effectiveCfg.contextValidators {
-		if validate == nil {
-			continue
-		}
-		if validationErr := validate(ctx, ast, prepared.meta); validationErr != nil {
-			return CompileRes{}, validationErr
-		}
-	}
-	if refErr := validateConfigRefs(ast, effectiveCfg.config, effectiveCfg.cliArgs); refErr != nil {
-		return CompileRes{}, refErr
+	if validationErr := validateCompileAST(ctx, ast, effectiveCfg, prepared.meta); validationErr != nil {
+		return CompileRes{}, validationErr
 	}
 	if analyzeErr := analyzeWithInitialBindings(
 		resolver,
@@ -303,6 +287,29 @@ func runCompile(
 	}
 
 	return CompileRes{Program: program, Meta: prepared.meta, AST: ast, ActionGraph: graph}, nil
+}
+
+func validateCompileAST(ctx context.Context, ast Expr, cfg *compileConfig, meta map[string]any) error {
+	if err := resolveConfigRefsInExpressions(ast, cfg.config); err != nil {
+		return err
+	}
+	for _, validate := range cfg.validators {
+		if validate == nil {
+			continue
+		}
+		if err := validate(ast, meta); err != nil {
+			return err
+		}
+	}
+	for _, validate := range cfg.contextValidators {
+		if validate == nil {
+			continue
+		}
+		if err := validate(ctx, ast, meta); err != nil {
+			return err
+		}
+	}
+	return validateConfigRefs(ast, cfg.config, cfg.cliArgs)
 }
 
 func applySymbolsToCtx(ctx context.Context, meta map[string]any) context.Context {

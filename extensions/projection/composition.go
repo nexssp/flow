@@ -40,6 +40,16 @@ func (p *composedProjection) Children() []compiler.Expr {
 	return children
 }
 
+// RewriteCompileTimeExpressions updates the expression that projection analysis and building consume.
+func (p *composedProjection) RewriteCompileTimeExpressions(rewrite func(string, compiler.Position) (string, error)) error {
+	raw, err := rewrite(p.raw, p.pos)
+	if err != nil {
+		return err
+	}
+	p.raw = raw
+	return nil
+}
+
 func (p *composedProjection) Analyze(resolver compiler.CapabilityResolver) error {
 	for _, binding := range p.bindings {
 		if err := binding.node.Analyze(resolver); err != nil {
@@ -180,13 +190,11 @@ func parseProjectionBody(p *compiler.Parser, closeIndex int, pos compiler.Positi
 	}
 	raw := compiler.StripExprComments(rewritten.String())
 	if len(bindings) == 0 && functions == nil {
-		return &compiler.ProjectionExpr{
-			Raw: raw,
-			Pos: pos,
-			TypeCheck: func(ctx compiler.TypeAnalysisContext) (compiler.TypeDescriptor, error) {
-				return analyzeProjectionTypes(raw, pos, ctx, nil, nil, "")
-			},
-		}, nil
+		projection := &compiler.ProjectionExpr{Raw: raw, Pos: pos}
+		projection.TypeCheck = func(ctx compiler.TypeAnalysisContext) (compiler.TypeDescriptor, error) {
+			return analyzeProjectionTypes(projection.Raw, pos, ctx, nil, nil, "")
+		}
+		return projection, nil
 	}
 	return &composedProjection{raw: raw, bindings: bindings, functions: functions, pos: pos, ctxName: ctxName}, nil
 }

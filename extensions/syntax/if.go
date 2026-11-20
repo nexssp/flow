@@ -161,6 +161,16 @@ func (e *IfExpr) Children() []compiler.Expr {
 	return []compiler.Expr{e.Then, e.Else}
 }
 
+// RewriteCompileTimeExpressions updates the condition checked during analysis and execution.
+func (e *IfExpr) RewriteCompileTimeExpressions(rewrite func(string, compiler.Position) (string, error)) error {
+	condition, err := rewrite(e.Condition, e.conditionPosition())
+	if err != nil {
+		return err
+	}
+	e.Condition = condition
+	return nil
+}
+
 func (e *IfExpr) DescribeActionGraph() compiler.ActionGraphDescription {
 	description := compiler.ActionGraphDescription{
 		Kind:        ifKeywordName,

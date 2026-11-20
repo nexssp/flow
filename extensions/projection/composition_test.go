@@ -61,6 +61,31 @@ func TestProjectionShorthandForms(t *testing.T) {
 	ktest.RequireEqual(t, len(runner.EvaluateAssertions(execution.Output, []string{`result.name == "Ada"`})), 0)
 }
 
+func TestProjectionUsesCompileTimeConfigInExpressions(t *testing.T) {
+	t.Parallel()
+	cfg, err := runner.BuildConfig(native.Bundles())
+	ktest.RequireNoError(t, err)
+
+	simpleSource := "@config:base=\"/srv\"\n{ path: @config.base + \"/\" + .path }"
+	simple, err := runner.Execute(t.Context(), cfg, simpleSource, "config-expression.nflow", map[string]any{"path": "tmp"})
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, len(runner.EvaluateAssertions(simple.Output, []string{`result.path == "/srv/tmp"`})), 0)
+
+	composedSource := "@config:base=\"/srv\"\n@config:label=\"ok\"\n" +
+		`{ path: @config.base + "/" + .path, ready: match(@config.label) { @config.label -> "ok", _ -> "no" }, active: if (@config.label == "ok") { "yes" } else { "no" } }`
+	composed, err := runner.Execute(t.Context(), cfg, composedSource, "composed-config-expression.nflow", map[string]any{"path": "tmp"})
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, len(runner.EvaluateAssertions(composed.Output, []string{
+		`result.path == "/srv/tmp"`, `result.ready == "ok"`, `result.active == "yes"`,
+	})), 0)
+
+	_, err = runner.Compile(t.Context(), cfg,
+		"@config:base=\"/srv\"\n"+`{ path: @config.missing + "/" + .path }`,
+		"unknown-config-expression.nflow",
+	)
+	ktest.RequireErrorContains(t, err, "unknown @config.missing")
+}
+
 func TestProjectionControlValues(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

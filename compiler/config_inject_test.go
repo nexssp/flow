@@ -256,6 +256,32 @@ func TestValidateConfigRefsInUnquotedValues(t *testing.T) {
 	}
 }
 
+func TestSubstituteConfigRefsInExpression(t *testing.T) {
+	t.Parallel()
+
+	got, err := substituteConfigRefsInExpression(`@config.base + "/" + .path`, Position{}, map[string]string{
+		"base": `root/"folder`,
+	})
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, got, `"root/\"folder" + "/" + .path`)
+}
+
+func TestSubstituteConfigRefsInExpressionSkipsStringsAndComments(t *testing.T) {
+	t.Parallel()
+
+	source := `"@config.quoted" + @config.base /* @config.comment */ // @config.line`
+	got, err := substituteConfigRefsInExpression(source, Position{}, map[string]string{"base": "root"})
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, got, `"@config.quoted" + "root" /* @config.comment */ // @config.line`)
+}
+
+func TestSubstituteConfigRefsInExpressionRejectsUnknownKeyWithoutConfig(t *testing.T) {
+	t.Parallel()
+
+	_, err := substituteConfigRefsInExpression(`@config.missing + ".txt"`, Position{}, nil)
+	ktest.RequireErrorContains(t, err, "unknown @config.missing")
+}
+
 func TestValidateConfigRefsChoosesFirstMapDiagnosticDeterministically(t *testing.T) {
 	t.Parallel()
 	ast := &Atom{

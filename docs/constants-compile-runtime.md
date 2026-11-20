@@ -33,6 +33,19 @@ configuration metadata; they do not automatically become fields in the runtime
 input or expression environment. Use `${...}` only where constant substitution
 is intended, and pass runtime values through the pipeline input instead.
 
+When a config key is available to the compiler, `@config.KEY` can also appear
+inside an expression. The compiler replaces it with an escaped string literal
+before validating and compiling the expression, so it remains a compile-time
+value rather than a runtime lookup:
+
+```nflow
+@config:base="/srv/files"
+{ path: @config.base + "/" + .path }
+```
+
+An expression that names an unknown config key fails compilation. Config values
+are strings in expressions; quote or convert them as needed for the operation.
+
 ## Runtime data
 
 Runtime values are supplied by the current input, action results, or runtime

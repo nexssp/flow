@@ -36,6 +36,28 @@ func (m *Expr) Children() []compiler.Expr {
 	return children
 }
 
+// RewriteCompileTimeExpressions updates the subject and case predicates used by analysis and execution.
+func (m *Expr) RewriteCompileTimeExpressions(rewrite func(string, compiler.Position) (string, error)) error {
+	if m.Subject != "" {
+		subject, err := rewrite(m.Subject, m.Pos)
+		if err != nil {
+			return err
+		}
+		m.Subject = subject
+	}
+	for i := range m.Cases {
+		if m.Cases[i].IsDefault {
+			continue
+		}
+		condition, err := rewrite(m.Cases[i].Condition, m.Pos)
+		if err != nil {
+			return err
+		}
+		m.Cases[i].Condition = condition
+	}
+	return nil
+}
+
 func (m *Expr) DescribeActionGraph() compiler.ActionGraphDescription {
 	labels := make([]string, len(m.Cases))
 	for i, current := range m.Cases {

@@ -4,7 +4,15 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
+
+// CompileTimeExpressionRewriter lets extension-owned AST nodes expose their
+// raw expression source to compile-time reference passes.
+type CompileTimeExpressionRewriter interface {
+	RewriteCompileTimeExpressions(func(string, Position) (string, error)) error
+}
 
 // validateConfigRefs walks the AST and fails on the first @config.KEY
 // reference whose KEY was not declared via a @config directive, and the
@@ -22,6 +30,188 @@ func validateConfigRefs(ast Expr, cfg map[string]string, cliArgs []string) error
 		return err
 	}
 	return validateAllFlagAndArgRefs(ast, cliArgs)
+}
+
+// resolveConfigRefsInExpressions substitutes @config.KEY references in
+// expression source before extension validation, type analysis, or building.
+func resolveConfigRefsInExpressions(ast Expr, cfg map[string]string) error {
+	if ast == nil {
+		return nil
+	}
+	rewrite := func(source string, pos Position) (string, error) {
+		return substituteConfigRefsInExpression(source, pos, cfg)
+	}
+	var firstErr error
+	walkExpr(ast, func(node Expr) {
+		if firstErr != nil {
+			return
+		}
+		switch current := node.(type) {
+		case *Atom:
+			firstErr = resolveConfigExpressionValue(current.DirectInput, current.Pos, rewrite)
+			if firstErr != nil {
+				return
+			}
+			keys := make([]string, 0, len(current.Args))
+			for key := range current.Args {
+				keys = append(keys, key)
+			}
+			slices.Sort(keys)
+			for _, key := range keys {
+				if firstErr = resolveConfigExpressionValue(current.Args[key], current.Pos, rewrite); firstErr != nil {
+					return
+				}
+			}
+			for _, value := range current.ArgSpreads {
+				if firstErr = resolveConfigExpressionValue(value, current.Pos, rewrite); firstErr != nil {
+					return
+				}
+			}
+		case *ProjectionExpr:
+			current.Raw, firstErr = rewrite(current.Raw, current.Pos)
+		case *LoopExpr:
+			current.Until, firstErr = rewrite(current.Until, current.Pos)
+		case *AssertExpr:
+			current.Condition, firstErr = rewrite(current.Condition, current.Pos)
+		}
+		if firstErr != nil {
+			return
+		}
+		if extension, ok := node.(CompileTimeExpressionRewriter); ok {
+			firstErr = extension.RewriteCompileTimeExpressions(rewrite)
+		}
+	})
+	return firstErr
+}
+
+func resolveConfigExpressionValue(value *Value, pos Position, rewrite func(string, Position) (string, error)) error {
+	if value == nil {
+		return nil
+	}
+	switch value.Kind {
+	case ValueExpression:
+		resolved, err := rewrite(value.Expression, pos)
+		if err != nil {
+			return err
+		}
+		if resolved != value.Expression {
+			value.Expression = resolved
+			value.Program = nil
+		}
+	case ValueMap:
+		for _, entry := range value.Map {
+			if err := resolveConfigExpressionValue(entry.Value, pos, rewrite); err != nil {
+				return err
+			}
+		}
+	case ValueSlice:
+		for _, item := range value.Slice {
+			if err := resolveConfigExpressionValue(item, pos, rewrite); err != nil {
+				return err
+			}
+		}
+	case ValueString, ValueBare, ValueNumber, ValueBool, ValueNull, ValueRef, ValueTyped:
+		// Scalar values contain no expression source to rewrite.
+	}
+	return nil
+}
+
+func substituteConfigRefsInExpression(source string, pos Position, cfg map[string]string) (string, error) {
+	if !strings.Contains(source, "@config.") {
+		return source, nil
+	}
+	var out strings.Builder
+	out.Grow(len(source))
+	for i := 0; i < len(source); {
+		if source[i] == '"' || source[i] == '\'' || source[i] == '`' {
+			end := configExpressionStringEnd(source, i)
+			out.WriteString(source[i:end])
+			i = end
+			continue
+		}
+		if source[i] == '/' && i+1 < len(source) {
+			if source[i+1] == '/' {
+				end := strings.IndexByte(source[i+2:], '\n')
+				if end < 0 {
+					out.WriteString(source[i:])
+					break
+				}
+				end += i + 2
+				out.WriteString(source[i:end])
+				i = end
+				continue
+			}
+			if source[i+1] == '*' {
+				end := configExpressionBlockCommentEnd(source, i)
+				out.WriteString(source[i:end])
+				i = end
+				continue
+			}
+		}
+		if strings.HasPrefix(source[i:], "@config.") {
+			start := i + len("@config.")
+			end := configReferenceKeyEnd(source, start)
+			if end > start {
+				key := source[start:end]
+				value, ok := cfg[key]
+				if !ok {
+					return "", SourceError(pos,
+						"expression: unknown @config.%s (declared: %s)", key, declaredConfigKeys(cfg))
+				}
+				out.WriteString(strconv.Quote(value))
+				i = end
+				continue
+			}
+		}
+		out.WriteByte(source[i])
+		i++
+	}
+	return out.String(), nil
+}
+
+func configExpressionStringEnd(source string, start int) int {
+	quote := source[start]
+	for i := start + 1; i < len(source); i++ {
+		if source[i] == '\\' && quote != '`' && i+1 < len(source) {
+			i++
+			continue
+		}
+		if source[i] == quote {
+			return i + 1
+		}
+	}
+	return len(source)
+}
+
+func configExpressionBlockCommentEnd(source string, start int) int {
+	depth := 1
+	for i := start + 2; i < len(source); i++ {
+		if i+1 < len(source) && source[i:i+2] == "/*" {
+			depth++
+			i++
+			continue
+		}
+		if i+1 < len(source) && source[i:i+2] == "*/" {
+			depth--
+			i++
+			if depth == 0 {
+				return i + 1
+			}
+		}
+	}
+	return len(source)
+}
+
+func configReferenceKeyEnd(source string, start int) int {
+	for i := start; i < len(source); {
+		r, size := utf8.DecodeRuneInString(source[i:])
+		if r != '_' && r != '.' && r != '-' && !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			break
+		}
+		i += size
+		start = i
+	}
+	return start
 }
 
 func validateAllConfigRefs(ast Expr, cfg map[string]string) error {
