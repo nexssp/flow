@@ -51,7 +51,7 @@ Remote repositories must be public and Git must be installed. Private-repository
 | `language-and-ops` | Language runners, Flow process integration, source analysis, and backend generation. | [Lang](https://github.com/nexssp/lang), [OPS](https://github.com/nexssp/ops) |
 | `srcpack-and-repo` | Source-pack resolution/GitHub acquisition and repository/GitHub inspection. | [srcpack](https://github.com/nexssp/srcpack), [Repo](https://github.com/nexssp/repo) |
 
-The `terminal-cli` view does **not** imply a separate `nexssp/terminal` repository: public checks did not find one. The canonical CLI action adapter is `transport/tcli`; `flow/internal/terminal` only detects terminal capabilities. Likewise, no separate public `nexssp/restapi` repository was found; use `transport/thttp` for HTTP route/handler contracts. Flow's `cli/serve.go` is not a production HTTP server implementation.
+The `terminal-cli` view does **not** imply a separate `nexssp/terminal` repository: public checks did not find one. The canonical CLI action adapter is `transport/tcli`; `flow/internal/terminal` only detects terminal capabilities. Likewise, no separate public `nexssp/restapi` repository was found; use `transport/thttp` for HTTP route/handler contracts.
 
 ## Task recipes
 

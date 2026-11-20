@@ -45,7 +45,6 @@ import (
 	"github.com/nexssp/flow/extensions/nodes_distribute"
 	"github.com/nexssp/flow/extensions/nodes_log"
 	"github.com/nexssp/flow/extensions/nodes_supervisor"
-	"github.com/nexssp/flow/extensions/on"
 	"github.com/nexssp/flow/extensions/on_error"
 	"github.com/nexssp/flow/extensions/pipeline"
 	"github.com/nexssp/flow/extensions/pool"
@@ -104,7 +103,6 @@ func bundles(retryBundle compiler.Bundle) []compiler.Bundle {
 		include.Bundle(nil),
 		hook.Bundle(nil),
 		macros.Bundle(nil),
-		on.Bundle(nil),
 		require.Bundle(nil),
 		loop.Bundle(nil),
 		assert.Bundle(nil),

@@ -38,6 +38,20 @@ func TestCompletionIncludesTestCommand(t *testing.T) {
 	}
 }
 
+func TestCompletionOmitsStandaloneServeCommand(t *testing.T) {
+	for _, shell := range SupportedShells {
+		t.Run(shell, func(t *testing.T) {
+			var script bytes.Buffer
+			if err := Completion(shell, &script); err != nil {
+				t.Fatalf("Completion(%q): %v", shell, err)
+			}
+			if completionIncludesCommand(shell, script.String(), "serve") {
+				t.Fatalf("completion script for %q still exposes the standalone serve command", shell)
+			}
+		})
+	}
+}
+
 func completionIncludesCommand(shell, script, command string) bool {
 	for line := range strings.SplitSeq(script, "\n") {
 		line = strings.TrimSpace(line)

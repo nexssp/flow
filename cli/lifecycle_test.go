@@ -260,7 +260,6 @@ func TestCLICompileAndInspectionCommandsCloseAfterTheirHelpersReturn(t *testing.
 		{"catalog"},
 		{"list"},
 		{"show", "runtime.const"},
-		{"serve", path}, // not an @on flow, so serve validates and exits with an error
 	}
 	for _, args := range commands {
 		t.Run(strings.Join(args, "_"), func(t *testing.T) {
@@ -273,11 +272,8 @@ func TestCLICompileAndInspectionCommandsCloseAfterTheirHelpersReturn(t *testing.
 			if got := closed.Load(); got != 1 {
 				t.Fatalf("%v shutdown calls = %d, want 1 (exit code %d)", args, got, code)
 			}
-			if args[0] != "serve" && code != 0 {
+			if code != 0 {
 				t.Fatalf("%v exit code = %d, want 0", args, code)
-			}
-			if args[0] == "serve" && code == 0 {
-				t.Fatal("serve without an @on handler should fail validation")
 			}
 		})
 	}

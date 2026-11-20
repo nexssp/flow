@@ -36,7 +36,6 @@ func setupLogger() {
 const (
 	versionCommand    = "version"
 	buildCommand      = "build"
-	serveCommand      = "serve"
 	explainCommand    = "explain"
 	expandCommand     = "expand"
 	catalogCommand    = "catalog"
@@ -52,7 +51,6 @@ var commands = map[string]func(context.Context, *invocation, []string) int{
 	buildCommand: func(ctx context.Context, inv *invocation, args []string) int {
 		return builder.RunBuild(ctx, args, inv.sourceRequiresFromFile)
 	},
-	serveCommand:      runServe,
 	"lsp":             runLSP,
 	"lint":            runLintInInvocation,
 	explainCommand:    runExplain,

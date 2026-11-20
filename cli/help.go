@@ -65,14 +65,6 @@ var helpRegistry = map[string]helpText{
 			`nflow build flows/client.nflow -o client.exe`,
 		},
 	},
-	serveCommand: {
-		Summary: "Validate a .nflow file for serve mode. The listener is not implemented in this release.",
-		Usage:   "nflow serve <file.nflow> [--allow-exec]",
-		Flags:   `      --allow-exec   acknowledge that external.exec/external.wasm will run host commands`,
-		Examples: []string{
-			`nflow serve flows/api.nflow`,
-		},
-	},
 	"list": {
 		Summary: "List every atom, modifier, directive, and operator known to the compiler.",
 		Usage:   "nflow list [pattern] [--flow FILE] [--json] [--no-color]",

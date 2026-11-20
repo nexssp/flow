@@ -629,7 +629,7 @@ func toolchainSourceFiles(args []string) ([]string, error) {
 		return discoverLintFiles(targets)
 	case "lsp", versionCommand, completionCommand, toolchainCommand, "self", "init", "test", catalogCommand, "list", "show", requireCommand, "pin":
 		return nil, nil
-	case "run", buildCommand, serveCommand, "info", explainCommand, expandCommand:
+	case "run", buildCommand, "info", explainCommand, expandCommand:
 		target, _, _, err := splitArgs(rest)
 		if err != nil {
 			return nil, err
@@ -919,7 +919,7 @@ func isFileBasedRuntimeInvocation(args []string) bool {
 	switch args[0] {
 	case "run":
 		rest = args[1:]
-	case "init", buildCommand, serveCommand, "lsp", "lint", explainCommand, "fmt", expandCommand, catalogCommand, "list", "show", completionCommand, versionCommand, "--version", "-v", "help", toolchainCommand, "self", requireCommand, "pin", "info", "test":
+	case "init", buildCommand, "lsp", "lint", explainCommand, "fmt", expandCommand, catalogCommand, "list", "show", completionCommand, versionCommand, "--version", "-v", "help", toolchainCommand, "self", requireCommand, "pin", "info", "test":
 		return false
 	}
 	if hasFlag(rest, "--info") || hasFlag(rest, "-info") {

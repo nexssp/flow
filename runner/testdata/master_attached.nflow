@@ -350,18 +350,7 @@
 # @include "shared/schemas.nflow" AS shared
 
 # ───────────────────────────────────────────────────────────────────────────
-# 23. EVENT SUBSCRIPTION
-# ───────────────────────────────────────────────────────────────────────────
-# @on event — subscribes the flow to an external event source. The host
-#   provides the transport (HTTP, NATS, Kafka, etc.); the flow declares
-#   what events it cares about. This is how nflow becomes an event
-#   processor, not just a batch runner.
-
-# @on event "http::8080"
-# @on event "nats:orders.incoming"
-
-# ───────────────────────────────────────────────────────────────────────────
-# 24. THE MAIN PIPELINE — composing everything
+# 23. THE MAIN PIPELINE — composing everything
 # ───────────────────────────────────────────────────────────────────────────
 # This is the entry point. The input flows through validation, pricing,
 # routing, and enrichment — each a separate pipeline, each with its own

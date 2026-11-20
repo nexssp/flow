@@ -8,7 +8,7 @@ This folder documents Flow as a domainless orchestration language. Flow provides
 2. [Syntax reference](language-reference.md) — authoritative implementation-backed language and runtime reference.
 3. [Syntax cheatsheet](syntax-cheatsheet.md) — compact daily reference.
 4. [Cookbook](cookbook.md) — practical patterns and working recipes.
-5. [CLI](cli.md) — run, lint, format, test, inspect, build, serve, and package flows.
+5. [CLI](cli.md) — run, lint, format, test, inspect, build, and package flows.
 
 ## Core language
 

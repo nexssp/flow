@@ -6,6 +6,20 @@ import (
 	"testing"
 )
 
+func TestStandaloneServeCommandIsRemoved(t *testing.T) {
+	if _, ok := commands["serve"]; ok {
+		t.Fatal("standalone serve command is still registered")
+	}
+	var output bytes.Buffer
+	PrintTopHelp(&output)
+	if strings.Contains(output.String(), "  serve ") {
+		t.Fatalf("top-level help still advertises the standalone serve command:\n%s", output.String())
+	}
+	if PrintCommandHelp(&bytes.Buffer{}, "serve") {
+		t.Fatal("standalone serve help is still registered")
+	}
+}
+
 func TestBuildHelpMatchesSupportedOptions(t *testing.T) {
 	var output bytes.Buffer
 	if !PrintCommandHelp(&output, "build") {

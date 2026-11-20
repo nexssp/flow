@@ -588,14 +588,6 @@ File-backed resume is local to the journal process and is not a distributed lock
 
 Every named hook must exist in the active Kernel registry.
 
-### Event declaration
-
-```nflow
-@on event "nats:orders.incoming"
-```
-
-This records event metadata. The stock CLI does not automatically start a listener for every event declaration.
-
 ## 14. Practical debugging checklist
 
 1. Run `nflow catalog --flow FILE` and confirm every action, source, operator, directive, and modifier is mounted.

@@ -275,7 +275,7 @@ io.stdin -> stream.take(count: 20) -> collect
 
 `cov.items` is self-test-only. Use `nflow catalog --flow FILE` to confirm available stream sources and operator schemas.
 
-## Approval, hooks, and events
+## Approval and hooks
 
 ```nflow
 @approval review {
@@ -286,10 +286,9 @@ io.stdin -> stream.take(count: 20) -> collect
 approval.review
 
 @hook:hook.verify,observe.metrics
-@on event "nats:orders.incoming"
 ```
 
-`@on` records event metadata; the stock CLI does not automatically start a listener for every declaration. `@approval` durable resume requires a suspension-capable journal.
+`@approval` durable resume requires a suspension-capable journal.
 
 ## Optional bundles
 

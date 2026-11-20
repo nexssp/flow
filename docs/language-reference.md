@@ -233,7 +233,6 @@ Directives are preprocessed declarations, not ordinary action calls. The stock C
 | `@schema` | `@schema NAME { fields }`; declares a runtime payload schema. Field syntax and tags are shown below. |
 | `@hook` | `@hook:hook.verify,observe.metrics`; attaches registered Kernel hooks to the compiled program. Names must exist in the active Kernel registry or materialization fails. |
 | `@pool` | `@pool workers [action.a, action.b] { strategy: "failover" }`; declares a dispatcher `pool.workers`. Strategies are `round_robin` (default), `failover`, and `hash`; `hash` requires `key: ".field.path"`. |
-| `@on` | `@on event "nats:orders.incoming"`; records an event trigger declaration. This metadata does **not** mean the stock CLI currently starts a listener; see limitations below. |
 | `@approval` | `@approval review { role: reviewer, reason: confirm, expires: 1h }`; declares an approval gate. |
 | `@on_error` | `@on_error TARGET` or a block with `when condition -> target` and optional `else -> target`; routes runtime failures. It does not recover standard caller cancellation. |
 
@@ -362,12 +361,9 @@ nflow explain path/to/flow.nflow --ast
 nflow list --flow path/to/flow.nflow
 ```
 
-`nflow run FILE [JSON_PAYLOAD]` executes a Flow; command help lists verbosity, post-run assertions, info-only mode, journal/resume, and approval flags. The shipped CLI also exposes `init`, `build`, `serve`, `lint`, `explain`, `expand`, `catalog`, `list`, `show`, `completion`, `require`, `pin`, `info`, `self test`, and version/help commands. See [`docs/cli.md`](cli.md) and the command definitions in [`cli/help.go`](../cli/help.go).
+`nflow run FILE [JSON_PAYLOAD]` executes a Flow; command help lists verbosity, post-run assertions, info-only mode, journal/resume, and approval flags. The shipped CLI also exposes `init`, `build`, `lint`, `explain`, `expand`, `catalog`, `list`, `show`, `completion`, `require`, `pin`, `info`, `self test`, and version/help commands. See [`docs/cli.md`](cli.md) and the command definitions in [`cli/help.go`](../cli/help.go).
 
 ### Explicitly unsupported or limited in this checkout
-
-- `nflow serve` parses and compiles `@on event` flows, performs safety checks, and waits for shutdown, but **the listener is not implemented**. It is not a production event service. This limitation is stated by [`cli/serve.go`](../cli/serve.go#L83-L93) and CLI help [`cli/help.go`](../cli/help.go#L54-L60).
-- `@on event "protocol:target"` records trigger metadata; do not infer a running listener from that declaration. The supported trigger declaration form is tested in [`extensions/on/library_test.go`](../extensions/on/library_test.go).
 - There is no general `if/else` block or arbitrary unbounded `while` construct in this grammar. Use the implemented ternary, `match`, bounded `loop`, `||`, or error-routing forms described above.
 - The language is registry-driven: a syntax feature found in a non-default extension is not universally available. Check the active registry instead of inferring availability from a package directory or documentation example.
 - The stock schema feature does not statically type-check future request payloads, reject unknown keys, or enforce application-specific semantics that are not declared as validation tags. Keep those checks in the appropriate runtime action or business rule.

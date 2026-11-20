@@ -1,4 +1,0 @@
-@description "Edge case: parse an HTTP event listener target"
-@on event "http::8080"
-@assert: result == "listener-ready"
-const "listener-ready"

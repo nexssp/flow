@@ -68,6 +68,13 @@ func TestLintValidatesOnErrorConditionSyntax(t *testing.T) {
 	}
 }
 
+func TestLintRejectsRemovedOnDirective(t *testing.T) {
+	issues := lintOne(t, "@on event \"nats:orders.incoming\"\nruntime.noop")
+	if len(issues) != 1 || issues[0].Kind != "compile" {
+		t.Fatalf("lint issues for removed @on directive = %#v, want one compile error", issues)
+	}
+}
+
 func TestLintDoesNotInvokeWorkflowActions(t *testing.T) {
 	cfg, err := buildConfig(nil)
 	if err != nil {

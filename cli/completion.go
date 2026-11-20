@@ -43,7 +43,7 @@ _nflow() {
     local cur prev subcommands flags sub op
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    subcommands="init run test build serve lint explain expand catalog list show completion self require pin info help version env"
+    subcommands="init run test build lint explain expand catalog list show completion self require pin info help version env"
 
     if [ "$COMP_CWORD" -eq 1 ]; then
         COMPREPLY=($(compgen -W "$subcommands" -- "$cur"))
@@ -105,7 +105,7 @@ _nflow() {
             fi ;;
         pin)
             if [[ "$prev" == "--package" ]]; then COMPREPLY=(); else COMPREPLY=($(compgen -f -X '!*.nflow' -- "$cur")); fi ;;
-        run|build|serve|lint|explain|expand|list|info)
+        run|build|lint|explain|expand|list|info)
             COMPREPLY=($(compgen -f -X '!*.nflow' -- "$cur")) ;;
     esac
 }
@@ -121,7 +121,6 @@ _nflow() {
         'run:run a .nflow pipeline'
         'test:run .nflow acceptance entrypoints in a directory'
         'build:compile a .nflow into a standalone executable'
-        'serve:validate a flow for serve mode'
         'lint:check .nflow sources'
         'explain:inspect a .nflow file'
         'expand:show macro expansions'
@@ -160,7 +159,7 @@ _nflow() {
                 '--debug[keep debug symbols]' '-d[keep debug symbols]' \
                 '--no-trimpath[keep full source paths]' '--all-bundles[link all native extensions]'
             ;;
-        info|serve|lint|explain|expand)
+        info|lint|explain|expand)
             _arguments '1:flow file:_files -g "*.nflow"'
             ;;
         self)
@@ -217,7 +216,7 @@ const pwshCompletion = `# nflow PowerShell completion.
 Register-ArgumentCompleter -Native -CommandName nflow -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
 
-    $subcommands = @('init', 'run', 'test', 'build', 'serve', 'lint', 'explain', 'expand', 'catalog', 'list', 'show', 'completion', 'self', 'require', 'pin', 'info', 'help', 'version', 'env')
+    $subcommands = @('init', 'run', 'test', 'build', 'lint', 'explain', 'expand', 'catalog', 'list', 'show', 'completion', 'self', 'require', 'pin', 'info', 'help', 'version', 'env')
     $shells      = @('bash', 'zsh', 'pwsh', 'powershell')
 
     function emit([string[]]$values, [string]$kind) {
@@ -291,7 +290,7 @@ Register-ArgumentCompleter -Native -CommandName nflow -ScriptBlock {
         return
     }
 
-    if ($sub -in @('run', 'build', 'serve', 'lint', 'explain', 'expand', 'info', 'pin') -or
+    if ($sub -in @('run', 'build', 'lint', 'explain', 'expand', 'info', 'pin') -or
 		($sub -eq 'require' -and $tokens.Count -ge 3 -and $tokens[2].ToString() -in @('check', 'update', 'pin', 'reset'))) {
         $pattern = if ($wordToComplete) { "$wordToComplete*.nflow" } else { "*.nflow" }
         Get-ChildItem -Filter $pattern -File -ErrorAction SilentlyContinue | ForEach-Object {

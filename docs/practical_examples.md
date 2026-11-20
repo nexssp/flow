@@ -1079,7 +1079,7 @@ payments.commit :idempotent :dedup
 @end
 ```
 
-## 18. Hooks and event metadata
+## 18. Hooks
 
 ### Attach verification and metrics hooks
 
@@ -1087,22 +1087,6 @@ payments.commit :idempotent :dedup
 @hook:hook.verify,observe.metrics
 
 orders.create ( customer_id: .customer_id, items: .items )
-```
-
-### Declare an event trigger
-
-```exs
-@on event "nats:orders.created"
-
-orders.process
-```
-
-### Declare an event pipeline
-
-```exs
-@on event "nats:payments.authorized"
-
-payments.reconcile
 ```
 
 ## 19. Native and extension actions together
@@ -1263,13 +1247,13 @@ pipeline.release ( version: .version, environment: "production" )
 pipeline.process_batch
 ```
 
-### Event-driven reconciliation
+### Host-invoked payment reconciliation
 
 ```exs
 @require github.com/nexssp/transportnats v0.5.0
 @require github.com/nexssp/storage v0.5.0
 
-@on event "nats:payments.authorized"
+# The host invokes this flow after authorization.
 
 payments.fetch
 -> payments.reconcile
