@@ -33,6 +33,16 @@ func TestBuildActionGraph_SequenceAndParallel(t *testing.T) {
 	}
 }
 
+func TestBuildActionGraph_DirectValue(t *testing.T) {
+	graph, err := BuildActionGraph(nil, &ValueExpr{Value: &Value{Kind: ValueRef, Ref: "name"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(graph.Nodes) != 1 || graph.Nodes[0].Name != "value" {
+		t.Fatalf("graph nodes = %#v, want one direct-value action", graph.Nodes)
+	}
+}
+
 func TestBuildActionGraph_LoopHasControlCycle(t *testing.T) {
 	graph, err := BuildActionGraph(nil, &LoopExpr{Body: &Atom{Name: "step"}, Until: ".done"})
 	if err != nil {

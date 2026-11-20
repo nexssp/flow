@@ -770,6 +770,31 @@ func (p *ProjectionExpr) Build(ctx context.Context, bCtx *BuildContext) (action.
 	}).Build(ctx, bCtx)
 }
 
+func (v *ValueExpr) Build(ctx context.Context, bCtx *BuildContext) (action.AnyAction, error) {
+	if v == nil || v.Value == nil {
+		return nil, xerr.Validation("value expression is empty")
+	}
+	cfg, cliArgs := compileConfigFromCtx(ctx)
+	resolveConfigRefsInValue(cfg, cliArgs, v.Value)
+	resolveSymbolsInValue(ctx, v.Value)
+	if err := compileArgumentValue(v.Value, v.Pos, bCtx); err != nil {
+		return nil, err
+	}
+	program := action.New("value", func(runCtx context.Context, input any) (any, error) {
+		value, err := resolveValue(runCtx, v.Value, input)
+		if err != nil {
+			if _, ok := PositionOf(err); v.Pos.File != "" && !ok {
+				return nil, SourceError(v.Pos, "%w", secret.SanitizeError(err, input))
+			}
+			return nil, secret.SanitizeError(err, input)
+		}
+		// ValueExpr is a producer rather than a receiving boundary. Secret
+		// validation remains the responsibility of the action that consumes it.
+		return value, nil
+	}).Build()
+	return inspectBuiltAction(bCtx, program), nil
+}
+
 func (c *ConditionalExpr) Analyze(r CapabilityResolver) error {
 	if err := c.Cond.Analyze(r); err != nil {
 		return err
@@ -1112,6 +1137,9 @@ func isExactSecretValue(value any) bool {
 func secretPayloadEntries(payload any) (map[string]any, bool) {
 	if direct, ok := payload.(constinput.Direct); ok {
 		payload = direct.Value
+	}
+	if secret.IsValue(payload) {
+		return nil, false
 	}
 	value := reflect.ValueOf(payload)
 	for value.IsValid() && (value.Kind() == reflect.Interface || value.Kind() == reflect.Pointer) {

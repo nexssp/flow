@@ -223,6 +223,16 @@ func TestResolveConfigRefsInValueIsIdempotent(t *testing.T) {
 	ktest.RequireCondition(t, value.preserveString, "resolved config reference lost its string-preservation marker")
 }
 
+func TestResolveConfigRefsInDirectValueExpressions(t *testing.T) {
+	t.Parallel()
+	value := &Value{Kind: ValueExpression, Expression: `@config.base + "/" + .path`}
+	ast := &ValueExpr{Value: &Value{Kind: ValueSlice, Slice: []*Value{value}}}
+	if err := resolveConfigRefsInExpressions(ast, map[string]string{"base": "root"}); err != nil {
+		t.Fatalf("resolve direct value expression: %v", err)
+	}
+	ktest.RequireEqual(t, value.Expression, `"root" + "/" + .path`)
+}
+
 func TestValidateConfigRefsInUnquotedValues(t *testing.T) {
 	t.Parallel()
 
@@ -242,6 +252,18 @@ func TestValidateConfigRefsInUnquotedValues(t *testing.T) {
 		{
 			name: "unknown flag reference",
 			src:  `noop ( value: @flag.missing )`,
+			args: []string{"--known=value"},
+			want: "unknown @flag.missing",
+		},
+		{
+			name: "unknown config direct value",
+			src:  `@config.missing`,
+			cfg:  map[string]string{"known": "value"},
+			want: "unknown @config.missing",
+		},
+		{
+			name: "unknown flag direct value",
+			src:  `@flag.missing`,
 			args: []string{"--known=value"},
 			want: "unknown @flag.missing",
 		},

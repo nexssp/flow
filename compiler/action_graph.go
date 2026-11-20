@@ -96,15 +96,17 @@ func (b *actionGraphBuilder) build(expr Expr) (actionGraphSegment, error) {
 	case *ConditionalExpr:
 		return b.buildConditional(node)
 	case *ProjectionExpr:
-		return b.addAction("projection.project", node.Pos, nil), nil
+		return b.addAction("projection.project", node.Pos), nil
 	case *AssertExpr:
-		return b.addAction("assert", node.Pos, nil), nil
+		return b.addAction("assert", node.Pos), nil
 	case *LoopExpr:
 		return b.buildLoop(node)
 	case *DecoratedExpr:
 		return b.buildDecorated(node)
 	case *LiteralExpr:
-		return b.addAction(fmt.Sprintf("literal(%v)", node.Val), node.Pos, nil), nil
+		return b.addAction(fmt.Sprintf("literal(%v)", node.Val), node.Pos), nil
+	case *ValueExpr:
+		return b.addAction("value", node.Pos), nil
 	default:
 		return b.buildExtension(expr)
 	}
@@ -352,8 +354,8 @@ func (b *actionGraphBuilder) buildOpaque(expr Expr) (actionGraphSegment, error) 
 	return actionGraphSegment{entry: root, exit: root}, nil
 }
 
-func (b *actionGraphBuilder) addAction(name string, pos Position, modifiers []string) actionGraphSegment {
-	return b.addNode(IntrospectionKindAction, name, pos, modifiers)
+func (b *actionGraphBuilder) addAction(name string, pos Position) actionGraphSegment {
+	return b.addNode(IntrospectionKindAction, name, pos, nil)
 }
 
 func (b *actionGraphBuilder) addNode(kind, name string, pos Position, modifiers []string) actionGraphSegment {
@@ -425,6 +427,8 @@ func expressionPosition(expr Expr) Position {
 	case *DecoratedExpr:
 		return node.Pos
 	case *LiteralExpr:
+		return node.Pos
+	case *ValueExpr:
 		return node.Pos
 	default:
 		if positioned, ok := expr.(interface{ Position() Position }); ok {

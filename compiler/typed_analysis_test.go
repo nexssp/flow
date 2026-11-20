@@ -1,6 +1,9 @@
 package compiler
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestAnalyzeTypedAtomValues(t *testing.T) {
 	resolver, err := NewDynamicResolver()
@@ -41,4 +44,36 @@ func TestAnalyzeTypedAtomValues(t *testing.T) {
 			t.Fatalf("expression checker calls = %d, want 1", calls)
 		}
 	})
+}
+
+func TestAnalyzeTypedValueExprRecursesIntoArrayValues(t *testing.T) {
+	resolver, err := NewDynamicResolver()
+	if err != nil {
+		t.Fatalf("create resolver: %v", err)
+	}
+	calls := 0
+	ctx := TypeAnalysisContext{
+		Resolver: resolver,
+		CheckExpression: func(source string, _ TypeAnalysisContext, _ Position) (TypeDescriptor, error) {
+			calls++
+			if source != "name" {
+				t.Errorf("checked expression = %q, want %q", source, "name")
+			}
+			return TypeDescriptor{Type: reflect.TypeFor[string]()}, nil
+		},
+	}
+	expr := &ValueExpr{Value: &Value{Kind: ValueSlice, Slice: []*Value{
+		{Kind: ValueRef, Ref: "name"},
+		{Kind: ValueString, Str: "fallback"},
+	}}}
+	descriptor, err := AnalyzeTypedExpression(ctx, expr)
+	if err != nil {
+		t.Fatalf("analyze direct array: %v", err)
+	}
+	if descriptor.Type != reflect.TypeFor[[]string]() {
+		t.Fatalf("array type = %v, want []string", descriptor.Type)
+	}
+	if calls != 1 {
+		t.Fatalf("expression checker calls = %d, want 1", calls)
+	}
 }

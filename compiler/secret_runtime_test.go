@@ -29,6 +29,32 @@ func TestValidateSecretDeliveryRequiresExplicitSecretParameter(t *testing.T) {
 	}
 }
 
+func TestBuildValueExprPassesSecretsToReceiverValidation(t *testing.T) {
+	ctx := context.Background()
+	program, err := (&ValueExpr{Value: &Value{Kind: ValueRef}}).Build(ctx, &BuildContext{})
+	if err != nil {
+		t.Fatalf("build direct value: %v", err)
+	}
+	value, err := action.InvokeAny(ctx, program, secret.New("sensitive-canary"))
+	if err != nil {
+		t.Fatalf("evaluate direct value: %v", err)
+	}
+	if !secret.IsValue(value) {
+		t.Fatalf("direct value result = %T, want secret.Value", value)
+	}
+	receiver := &Atom{
+		Name:              "pipeline.secret",
+		SecretBoundary:    true,
+		SecretRequestType: reflect.TypeFor[secret.Value](),
+	}
+	if err := validateSecretDelivery(receiver, value); err != nil {
+		t.Fatalf("typed secret receiver rejected direct value: %v", err)
+	}
+	if err := validateSecretDelivery(&Atom{Name: "probe.echo"}, value); err == nil {
+		t.Fatal("untyped receiver accepted the direct secret value")
+	}
+}
+
 func TestAnalyzeTypedAtomValuesRequiresSecretTypeForArgSecret(t *testing.T) {
 	ctx := TypeAnalysisContext{
 		ArgSchemas: map[string][]ArgFieldSpec{

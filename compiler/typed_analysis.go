@@ -249,6 +249,8 @@ func analyzeTypedExpressionNode(ctx TypeAnalysisContext, node Expr) (TypeDescrip
 		if current.Val != nil {
 			return TypeDescriptor{Type: reflect.TypeOf(current.Val)}, nil
 		}
+	case *ValueExpr:
+		return analyzeTypedValue(ctx, current.Pos, current.Value)
 	case *ProjectionExpr:
 		return analyzeTypedProjection(ctx, current)
 	case *ParallelExpr:

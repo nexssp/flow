@@ -326,6 +326,12 @@ func (p *Parser) parsePrimaryInner() (Expr, error) {
 }
 
 func (p *Parser) parseIdentifierPrimary() (Expr, error) {
+	if strings.HasPrefix(p.Cur().Lit, ".") {
+		pos := p.currentPos()
+		reference := strings.TrimPrefix(p.Cur().Lit, ".")
+		p.Next()
+		return &ValueExpr{Value: &Value{Kind: ValueRef, Ref: reference}, Pos: pos}, nil
+	}
 	switch p.Cur().Lit {
 	case "true":
 		pos := p.currentPos()
@@ -370,11 +376,7 @@ func (p *Parser) parsePromptReferencePrimary() (Expr, error) {
 	}
 	pos := p.currentPos()
 	p.Next()
-	return &Atom{
-		Name:        runtimeConstAction,
-		DirectInput: &Value{Kind: ValueRef, Ref: reference},
-		Pos:         pos,
-	}, nil
+	return &ValueExpr{Value: &Value{Kind: ValueRef, Ref: reference}, Pos: pos}, nil
 }
 
 func (p *Parser) parseStringPrimary() (Expr, error) {
@@ -401,7 +403,7 @@ func (p *Parser) parseNumberPrimary() (Expr, error) {
 	if number, err := strconv.ParseFloat(normalized, 64); err == nil {
 		return &LiteralExpr{Val: number, Pos: pos}, nil
 	}
-	return &LiteralExpr{Val: raw, Pos: pos}, nil
+	return nil, SourceError(pos, "invalid numeric literal %q", raw)
 }
 
 func (p *Parser) parseQualifiedTokenPrimary() (Expr, bool, error) {
@@ -867,7 +869,7 @@ func (p *Parser) parseArrayLiteralPrimary() (Expr, error) {
 		return nil, SourceError(pos, "invalid array literal")
 	}
 	p.pos = closeIndex + 1
-	return &Atom{Name: runtimeConstAction, DirectInput: value, Pos: pos}, nil
+	return &ValueExpr{Value: value, Pos: pos}, nil
 }
 
 func (p *Parser) parseParenthesizedArgs(a *Atom) error {

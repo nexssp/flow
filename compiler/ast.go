@@ -32,6 +32,18 @@ func (l *LiteralExpr) Build(_ context.Context, bCtx *BuildContext) (action.AnyAc
 	return inspectBuiltAction(bCtx, act), nil
 }
 
+// ValueExpr evaluates a parsed value against the current pipeline input.
+// Unlike a LiteralExpr, it can contain references, collections, and typed
+// symbol values that need runtime resolution.
+type ValueExpr struct {
+	Value *Value
+	Pos   Position
+}
+
+func (*ValueExpr) Node()                            {}
+func (*ValueExpr) Children() []Expr                 { return nil }
+func (*ValueExpr) Analyze(CapabilityResolver) error { return nil }
+
 // Atom is a single runtime action call.
 type Atom struct {
 	Name                  string

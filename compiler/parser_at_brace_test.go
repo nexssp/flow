@@ -304,6 +304,13 @@ func TestParseConstRejectsMalformedNumber(t *testing.T) {
 	}
 }
 
+func TestParseDirectValueRejectsMalformedNumber(t *testing.T) {
+	t.Parallel()
+	if _, err := newTestParser(t, `1.2.3`).Parse(); err == nil || !strings.Contains(err.Error(), "invalid numeric literal") {
+		t.Fatalf("Parse(1.2.3) error = %v, want invalid numeric literal", err)
+	}
+}
+
 func TestParseRejectsInvalidNumericSeparators(t *testing.T) {
 	t.Parallel()
 	for _, source := range []string{

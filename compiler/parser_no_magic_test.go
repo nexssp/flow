@@ -80,11 +80,11 @@ func TestParseArrayLiteralIgnoresBlockCommentDelimiters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse %q: %v", source, err)
 	}
-	atom, ok := expr.(*Atom)
-	if !ok || atom.DirectInput == nil || atom.DirectInput.Kind != ValueSlice || len(atom.DirectInput.Slice) != 1 {
+	valueExpr, ok := expr.(*ValueExpr)
+	if !ok || valueExpr.Value == nil || valueExpr.Value.Kind != ValueSlice || len(valueExpr.Value.Slice) != 1 {
 		t.Fatalf("expression = %#v, want a direct one-item array", expr)
 	}
-	value := atom.DirectInput.Slice[0]
+	value := valueExpr.Value.Slice[0]
 	if value.Kind != ValueExpression || value.Expression != `input.count/* ] */ + 2` {
 		t.Fatalf("array item = %+v, want expression with its block comment preserved", value)
 	}
@@ -109,11 +109,11 @@ func TestParseTypedPipelineStarts(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parse: %v", err)
 		}
-		atom, ok := expr.(*Atom)
-		if !ok || atom.Name != runtimeConstAction || atom.DirectInput == nil || atom.DirectInput.Kind != ValueSlice {
+		valueExpr, ok := expr.(*ValueExpr)
+		if !ok || valueExpr.Value == nil || valueExpr.Value.Kind != ValueSlice {
 			t.Fatalf("expression = %#v, want a direct array value", expr)
 		}
-		values := atom.DirectInput.Slice
+		values := valueExpr.Value.Slice
 		if len(values) != 3 || values[0].Kind != ValueNumber || values[1].Kind != ValueString || values[2].Kind != ValueBool {
 			t.Fatalf("array values = %#v, want number, string, boolean", values)
 		}
@@ -124,10 +124,31 @@ func TestParseTypedPipelineStarts(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parse: %v", err)
 		}
-		atom, ok := expr.(*Atom)
-		if !ok || atom.Name != runtimeConstAction || atom.DirectInput == nil ||
-			atom.DirectInput.Kind != ValueRef || atom.DirectInput.Ref != "config.retries" {
+		valueExpr, ok := expr.(*ValueExpr)
+		if !ok || valueExpr.Value == nil || valueExpr.Value.Kind != ValueRef || valueExpr.Value.Ref != "config.retries" {
 			t.Fatalf("expression = %#v, want a direct config reference", expr)
+		}
+	})
+
+	t.Run("flag reference can start a pipeline", func(t *testing.T) {
+		expr, err := NewParser(context.Background(), NewOperatorTable(), `@flag.name`).Parse()
+		if err != nil {
+			t.Fatalf("parse: %v", err)
+		}
+		valueExpr, ok := expr.(*ValueExpr)
+		if !ok || valueExpr.Value == nil || valueExpr.Value.Kind != ValueRef || valueExpr.Value.Ref != "flag.name" {
+			t.Fatalf("expression = %#v, want a direct flag reference", expr)
+		}
+	})
+
+	t.Run("input reference can start a pipeline", func(t *testing.T) {
+		expr, err := NewParser(context.Background(), NewOperatorTable(), `.user.name`).Parse()
+		if err != nil {
+			t.Fatalf("parse: %v", err)
+		}
+		valueExpr, ok := expr.(*ValueExpr)
+		if !ok || valueExpr.Value == nil || valueExpr.Value.Kind != ValueRef || valueExpr.Value.Ref != "user.name" {
+			t.Fatalf("expression = %#v, want a direct input reference", expr)
 		}
 	})
 }

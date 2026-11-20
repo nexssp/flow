@@ -47,6 +47,8 @@ func resolveConfigRefsInExpressions(ast Expr, cfg map[string]string) error {
 			return
 		}
 		switch current := node.(type) {
+		case *ValueExpr:
+			firstErr = resolveConfigExpressionValue(current.Value, current.Pos, rewrite)
 		case *Atom:
 			firstErr = resolveConfigExpressionValue(current.DirectInput, current.Pos, rewrite)
 			if firstErr != nil {
@@ -388,6 +390,11 @@ func walkAtomValues(atom *Atom, visit func(raw, where string) error) error {
 
 func walkExprValues(expr Expr, visit func(atom *Atom, raw, where string) error) error {
 	switch node := expr.(type) {
+	case *ValueExpr:
+		atom := &Atom{Pos: node.Pos}
+		return walkValueStrings(node.Value, "value", func(raw, where string) error {
+			return visit(atom, raw, where)
+		})
 	case *Atom:
 		return walkAtomValues(node, func(raw, where string) error {
 			return visit(node, raw, where)
