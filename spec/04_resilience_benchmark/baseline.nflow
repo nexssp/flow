@@ -1,6 +1,6 @@
 @description "Benchmark baseline: a minimal local workflow without resilience modifiers"
 @pipeline benchmark
-  const ( status: "ok", scenario: "baseline" )
+  { status: "ok", scenario: "baseline" }
 @end
 @assert: result.status == "ok"
 @assert: result.scenario == "baseline"

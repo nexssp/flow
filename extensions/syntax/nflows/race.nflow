@@ -2,5 +2,5 @@
 @assert: result == "winner"
 race {
   fail ( kind: "Unavailable", message: "this candidate fails" ),
-  const "winner",
+  "winner",
 }

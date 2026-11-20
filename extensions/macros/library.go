@@ -7,8 +7,8 @@
 //
 // Typical use:
 //
-//	@macro greet(name) { const $name }
-//	@greet("World")   // expands to: const "World"
+//	@macro greet(name) { $name }
+//	@greet("World")   // expands to: "World"
 //
 // Without this bundle, @name is "unexpected token @name".
 package macros

@@ -28,7 +28,7 @@
   fail ( kind: "Unavailable", message: "pricing provider returned HTTP 503" )
 @end
 @pipeline last_known_quote
-  const (
+  {
     order_id,
     sku,
     quantity,
@@ -36,7 +36,7 @@
     unit_price_minor: 1249,
     quote_status: "stale",
     quote_source: "last-known-snapshot"
-  )
+  }
 @end
 # Only expected provider-availability failures may use stale data. Validation,
 # authorization, and unexpected failures remain failures.

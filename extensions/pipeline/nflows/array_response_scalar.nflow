@@ -1,7 +1,7 @@
 @description "spec: response-schema=[]string validates primitive items and preserves the array result"
 @pipeline words
   :response-schema=[]string
-  const(value: ["first", "second"])
+  {value: ["first", "second"]}
     -> pick(field: "value")
 @end
 pipeline.words

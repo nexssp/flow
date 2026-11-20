@@ -319,21 +319,14 @@ func lintFile(path, src string, cfg runner.Config) []LintIssue {
 }
 
 func lintFileWithContext(ctx context.Context, path, src string, cfg runner.Config) []LintIssue {
-	var warnings []LintIssue
-	compileOpts := append([]compiler.CompileOption(nil), cfg.CompileOpts...)
-	compileOpts = append(compileOpts, compiler.WithASTContextValidators(func(_ context.Context, ast compiler.Expr, _ map[string]any) error {
-		warnings = append(warnings, legacyConstParamsWarnings(path, ast)...)
-		return nil
-	}))
-	cfg.CompileOpts = compileOpts
 	if _, err := runner.Compile(ctx, cfg, src, path); err != nil {
-		warnings = append(warnings, LintIssue{
+		return []LintIssue{{
 			File:    path,
 			Kind:    lintIssueCompile,
 			Message: err.Error(),
-		})
+		}}
 	}
-	return warnings
+	return nil
 }
 
 func lintIssuesExitCode(issues []LintIssue) int {

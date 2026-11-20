@@ -1,6 +1,6 @@
 # Nexss Flow practical examples
 
-> These examples use the current syntax: direct typed values for `const` and
+> These examples use the current syntax: direct typed values and
 > parenthesized named arguments such as `action(key: value)`. See the
 > [language guide](language.md) and [cookbook](cookbook.md) for details.
 
@@ -9,19 +9,19 @@
 ### Return a scalar
 
 ```exs
-const "ready"
+"ready"
 ```
 
 ### Return an object
 
 ```exs
-const ( order_id: "ORD-1042", status: "queued" )
+{ order_id: "ORD-1042", status: "queued" }
 ```
 
 ### Return an array
 
 ```exs
-const(value: ["orders.read", "orders.write"]) -> pick(field: "value")
+["orders.read", "orders.write"]
 ```
 
 ### Pass the current value through
@@ -63,7 +63,7 @@ sleep ( duration_ms: 250 )
 ### Read an environment value
 
 ```exs
-const "PAYMENTS_REGION" -> env
+"PAYMENTS_REGION" -> env
 ```
 
 ### Generate an identifier
@@ -75,7 +75,7 @@ uuid
 ### Clean a JSON response
 
 ```exs
-const(value: .model_response) -> pick(field: "value") -> json
+.model_response -> json
 ```
 
 ### Print a diagnostic value
@@ -295,7 +295,7 @@ parallel {
 
 ```exs
 parallel {
-  profile: const :tag="profile" "profile-ready",
+  profile: noop :tag="profile" "profile-ready",
   metrics: metrics.collect :timeout=2s ( service: "orders" ),
 }
 ```
@@ -356,9 +356,9 @@ match {
 
 ```exs
 match(.score) {
-  > 90 -> const "gold",
-  >= 60 -> const "silver",
-  _ -> const "bronze",
+  > 90 -> "gold",
+  >= 60 -> "silver",
+  _ -> "bronze",
 }
 ```
 
@@ -458,7 +458,7 @@ orders.get ( order_id: .order_id )
 ### Test a flow result
 
 ```exs
-const ( status: "ready" )
+{ status: "ready" }
 @test: result.status == "ready"
 ```
 
@@ -580,7 +580,7 @@ critic.pipeline.review ( text: .text )
   wrap ( key: "audit_label", value: value )
 }
 
-const "approved" -> @audit_label("approval")
+"approved" -> @audit_label("approval")
 ```
 
 ### Use a macro for a repeated policy shape
@@ -717,7 +717,7 @@ jobs.enqueue ( queue: queues.payments )
 ```exs
 @symbols labels { pending, done: }
 
-const ( label: labels.done )
+labels.done
 ```
 
 ### Declare typed symbols
@@ -952,7 +952,7 @@ template.render (
   addr: ":8080"
 }
 @pipeline health:route="GET /health"
-  const "ok"
+  "ok"
 @end
 thttp.listen
 ```

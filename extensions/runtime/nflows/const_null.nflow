@@ -1,3 +1,0 @@
-@description "Runtime.const accepts a direct null scalar"
-@assert: result == nil
-const null

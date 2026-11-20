@@ -2,4 +2,4 @@
 @assert: result == "caught"
 runtime.fail ( kind: "Validation", message: "boom" )
   ? on_error error.reraise
-  || const "caught"
+  || "caught"

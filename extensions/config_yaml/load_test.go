@@ -10,7 +10,6 @@ import (
 
 	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/assert"
-	"github.com/nexssp/flow/extensions/config"
 	"github.com/nexssp/flow/extensions/runtime"
 	"github.com/nexssp/flow/extensions/syntax"
 	"github.com/nexssp/flow/runner"
@@ -26,14 +25,12 @@ func TestConfigLoad_YAML(t *testing.T) {
 		syntax.Bundle(nil),
 		runtime.Bundle(nil),
 		assert.Bundle(nil),
-		config.Bundle(nil),
 		Bundle(nil),
 	})
 	ktest.RequireNoError(t, err)
 
-	src := `@config.load:path="` + filepath.ToSlash(ymlPath) + `"
-	@assert: result.host == "api.example.test"
-const(host: "@config.host")`
+	src := `@assert: result.host == "api.example.test"
+config_yaml.load ( path: "` + filepath.ToSlash(ymlPath) + `" )`
 
 	ex, err := runner.Execute(context.Background(), cfg, src, "test.nflow", nil)
 	ktest.RequireNoError(t, err)

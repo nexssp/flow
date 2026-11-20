@@ -42,7 +42,7 @@ var pipe = compiler.Operator{
 		Precedence:    7,
 		Associativity: compiler.Left,
 		Description:   "Pass left output to right input",
-		Example:       `runtime.const(value=hi) -> runtime.debug`,
+		Example:       `runtime.noop(value=hi) -> runtime.debug`,
 	},
 	Handler: pipeHandler,
 }

@@ -1,4 +1,4 @@
 @description "@nflow_version lower-bound constraint satisfied by every released compiler"
 @nflow_version ">=0.0.0"
 @assert: result == "ok"
-const "ok"
+"ok"

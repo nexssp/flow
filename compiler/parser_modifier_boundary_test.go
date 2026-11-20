@@ -77,18 +77,12 @@ func TestParseModifierBoundaries(t *testing.T) {
 	}
 }
 
-func TestParseModifierValueStopsAtSpacedLiteral(t *testing.T) {
+func TestParseModifierBoundaryRejectsTrailingSpacedLiteral(t *testing.T) {
 	t.Parallel()
-	p := NewParser(context.Background(), NewOperatorTable(), `const :retry=2s "ok"`)
-	expr, err := p.Parse()
-	ktest.RequireNoError(t, err)
-	atom, ok := expr.(*Atom)
-	ktest.RequireCondition(t, ok, "parsed %T, want *Atom", expr)
-	ktest.RequireEqual(t, atom.Modifiers, []string{"retry=2s"})
-	if atom.DirectInput == nil || atom.DirectInput.Kind != ValueString {
-		t.Fatalf("direct input = %+v, want string literal", atom.DirectInput)
+	source := `sample.action :retry=2s "ok"`
+	if _, err := NewParser(context.Background(), NewOperatorTable(), source).Parse(); err == nil {
+		t.Fatalf("Parse(%q) succeeded, want unsupported trailing string syntax to be rejected", source)
 	}
-	ktest.RequireEqual(t, atom.DirectInput.Str, "ok")
 }
 
 func TestParseModifierBoundaryPreservesTernary(t *testing.T) {

@@ -4,7 +4,7 @@
 }
 @pipeline items
   :response-schema=[]Item
-  const(value: [{ name: "" }])
+  {value: [{ name: "" }]}
     -> pick(field: "value")
 @end
 pipeline.items ? on_error {

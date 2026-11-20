@@ -1,6 +1,6 @@
 @description "each returns an empty list for empty input"
 @assert: len(result) == 0
 
-const(value: [])
+{value: []}
   -> pick(field: "value")
 -> each { noop }

@@ -1,7 +1,7 @@
 @description "Ternary right associativity and colon data execute as expected"
 @assert: result == "inner-then"
-const false
-? const "outer"
-: const true
-  ? const "inner-then"
-  : const "inner-else"
+false
+? "outer"
+: true
+  ? "inner-then"
+  : "inner-else"

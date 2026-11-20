@@ -25,14 +25,14 @@ func runDirective(tb testing.TB, lines ...string) (map[string]any, compiler.Dire
 
 func TestDirective_InlineBody(t *testing.T) {
 	t.Parallel()
-	out, res, err := runDirective(t, `@macro hi() { const "hi" }`)
+	out, res, err := runDirective(t, `@macro hi() { "hi" }`)
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, res.Next, 1)
 
 	decls, _ := out[DeclarationKey].([]Declaration)
 	ktest.RequireEqual(t, len(decls), 1)
 	ktest.RequireEqual(t, decls[0].Name, "hi")
-	ktest.RequireEqual(t, decls[0].Body, `const "hi"`)
+	ktest.RequireEqual(t, decls[0].Body, `"hi"`)
 	ktest.RequireEqual(t, len(decls[0].Params), 0)
 	ktest.RequireEqual(t, decls[0].DefFile, "<test>")
 }
@@ -41,7 +41,7 @@ func TestDirective_MultiLineBody(t *testing.T) {
 	t.Parallel()
 	lines := []string{
 		`@macro echo(v) {`,
-		`  const $v`,
+		`  $v`,
 		`}`,
 	}
 	out, res, err := runDirective(t, lines...)
@@ -52,7 +52,7 @@ func TestDirective_MultiLineBody(t *testing.T) {
 	ktest.RequireEqual(t, len(decls), 1)
 	ktest.RequireEqual(t, decls[0].Name, "echo")
 	ktest.RequireEqual(t, decls[0].Params, []string{"v"})
-	ktest.RequireEqual(t, decls[0].Body, `const $v`)
+	ktest.RequireEqual(t, decls[0].Body, `$v`)
 }
 
 func TestDirective_ExactTypedParamKindSet(t *testing.T) {

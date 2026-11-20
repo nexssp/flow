@@ -6,6 +6,6 @@
   distribute.map ( action: pipeline.normalize_order, items: [1] )
 @end
 @pipeline normalize_order
-  const "normalized"
+  "normalized"
 @end
 pipeline.a_process_batch

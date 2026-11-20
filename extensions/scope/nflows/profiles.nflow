@@ -8,13 +8,13 @@
 @pipeline quick
   :profile=fast
   sleep ( duration_ms: 500 )
-  -> const "quick-succeeded"
+  -> "quick-succeeded"
 @end
 
 @pipeline leisurely
   :profile=slow
   sleep ( duration_ms: 500 )
-  -> const "leisurely-succeeded"
+  -> "leisurely-succeeded"
 @end
 
 # quick hits the 1ms profile timeout during its 500ms sleep and fails.

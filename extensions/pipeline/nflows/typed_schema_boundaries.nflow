@@ -18,6 +18,6 @@
 @end
 @pipeline typed_invalid_response
   :response-schema=TypedResponse
-  runtime.const ( status: 202, timeout: boundary_values.timeout )
+  { status: 202, timeout: boundary_values.timeout }
 @end
 pipeline.typed_boundary

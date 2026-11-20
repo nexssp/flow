@@ -2,4 +2,4 @@
 @assert: result == "recovered"
 { backend: "missing", questions: { x: { type: "label" } } }
   -> decide.run
-|| const "recovered"
+|| "recovered"

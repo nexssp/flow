@@ -36,7 +36,7 @@ func TestMaterializePipelinesResolvesForwardLocalReferences(t *testing.T) {
 	// matching a valid map iteration order that previously failed to compile.
 	err = materializePipelines(req, []pipelineDefinition{
 		{name: "local_chain", source: "pipeline.local_support"},
-		{name: "local_support", source: "runtime.const"},
+		{name: "local_support", source: "runtime.noop"},
 	})
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, compileOrder, []string{

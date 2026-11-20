@@ -85,7 +85,7 @@ func TestRunWithBundlesForRequirements_UsesInjectedBundleForInfoAndCloses(t *tes
 		closed.Add(1)
 		return nil
 	}}}
-	path := writeLifecycleFlow(t, "@require lifecycle.example\n@description \"info path\"\nconst \"ready\"\n")
+	path := writeLifecycleFlow(t, "@require lifecycle.example\n@description \"info path\"\n\"ready\"\n")
 
 	code := RunWithBundlesForRequirements(
 		[]string{"run", path, "--info"},
@@ -106,8 +106,8 @@ func TestRunEmbeddedWithBundles_InfoBranchesCloseOnSuccessAndParseError(t *testi
 		source string
 		wantOK bool
 	}{
-		{name: "success", source: "@description \"ok\"\nconst \"x\"", wantOK: true},
-		{name: "parse error", source: "@description \"broken\"\nruntime.const ( value: )"},
+		{name: "success", source: "@description \"ok\"\n\"x\"", wantOK: true},
+		{name: "parse error", source: "@description \"broken\"\nruntime.noop ( value: )"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var closed atomic.Int32
@@ -156,7 +156,7 @@ func TestRunEmbeddedWithBundleFactories_AdoptsBeforeInfoDispatch(t *testing.T) {
 	var closed atomic.Int32
 	code := RunEmbeddedWithBundleFactoriesForRequirements(
 		context.Background(),
-		"@description \"factory embedded\"\nconst 1",
+		"@description \"factory embedded\"\n1",
 		[]string{"info"},
 		nil,
 		func(adopt func(compiler.Bundle) error) error {
@@ -197,7 +197,7 @@ func TestRunEmbeddedWithBundles_CompileAndActionErrorsStillClose(t *testing.T) {
 		source string
 		run    func(context.Context) (any, error)
 	}{
-		{name: "compile", source: "runtime.const ( value: )"},
+		{name: "compile", source: "runtime.const"},
 		{name: "action", source: "lifecycle_error.run", run: func(context.Context) (any, error) {
 			return nil, errors.New("primary action failure")
 		}},
@@ -252,14 +252,14 @@ func TestRunEmbeddedWithBundles_CleanupErrorChangesOnlySuccessfulStatus(t *testi
 }
 
 func TestCLICompileAndInspectionCommandsCloseAfterTheirHelpersReturn(t *testing.T) {
-	path := writeLifecycleFlow(t, "@description \"compile path\"\nconst \"ok\"\n")
+	path := writeLifecycleFlow(t, "@description \"compile path\"\n\"ok\"\n")
 	commands := [][]string{
 		{"lint", path},
 		{"expand", path},
 		{"explain", path},
 		{"catalog"},
 		{"list"},
-		{"show", "runtime.const"},
+		{"show", "runtime.noop"},
 	}
 	for _, args := range commands {
 		t.Run(strings.Join(args, "_"), func(t *testing.T) {
@@ -313,7 +313,7 @@ func TestInvocationReusesNativeBundleInstancesForDirectivesAndConfig(t *testing.
 			t.Errorf("directiveTable: %v", err)
 			return 1
 		}
-		if _, _, err := compiler.Preprocess(ctx, directives, "@lifecycle_probe\nconst 1", "same.nflow"); err != nil {
+		if _, _, err := compiler.Preprocess(ctx, directives, "@lifecycle_probe\n1", "same.nflow"); err != nil {
 			t.Errorf("preprocess: %v", err)
 			return 1
 		}
@@ -437,9 +437,9 @@ func TestBatchLintRetainsAndClosesBundlesAfterLaterConfigFailure(t *testing.T) {
 			return nil
 		}}}
 	})
-	first := writeLifecycleFlow(t, "@require lifecycle_batch_good\nconst \"ok\"\n")
+	first := writeLifecycleFlow(t, "@require lifecycle_batch_good\n\"ok\"\n")
 	second := filepath.Join(t.TempDir(), "bad.nflow")
-	if err := os.WriteFile(second, []byte("@require lifecycle_batch_bad { bad: \"value\" }\nconst \"ok\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(second, []byte("@require lifecycle_batch_bad { bad: \"value\" }\n\"ok\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -453,7 +453,7 @@ func TestBatchLintRetainsAndClosesBundlesAfterLaterConfigFailure(t *testing.T) {
 }
 
 func TestRunPathInfoRemainsCompatible(t *testing.T) {
-	path := writeLifecycleFlow(t, "@description \"path entry\"\nconst \"ok\"\n")
+	path := writeLifecycleFlow(t, "@description \"path entry\"\n\"ok\"\n")
 	if code := RunPath(context.Background(), []string{path, "--info"}); code != 0 {
 		t.Fatalf("RunPath info exit code = %d", code)
 	}

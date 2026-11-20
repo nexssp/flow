@@ -75,7 +75,7 @@ func TestMaterializedPipelineInheritsAndReadsDataDeclarations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := "@data orders :from=\"orders.jsonl\"\n@pipeline child\n@datause orders\n-> data.select:fields=\"id\"\n-> collect\n@end\nconst {} -> pipeline.child\n"
+	source := "@data orders :from=\"orders.jsonl\"\n@pipeline child\n@datause orders\n-> data.select:fields=\"id\"\n-> collect\n@end\npipeline.child\n"
 	execution, err := Execute(context.Background(), cfg, source, filepath.Join(dir, "flow.nflow"), map[string]any{})
 	if err != nil {
 		t.Fatalf("execute child pipeline with inherited @data declaration: %v", err)

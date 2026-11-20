@@ -5,4 +5,4 @@
 }
 @assert: result.retries == "3"
 @assert: result.timeout == "10s"
-const( retries: "@config.retries", timeout: "@config.timeout" )
+{ retries: "@config.retries", timeout: "@config.timeout" }

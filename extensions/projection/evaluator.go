@@ -3,6 +3,7 @@ package projection
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -45,7 +46,8 @@ func NewExprEvaluator() Evaluator {
 			return map[string]any{}, nil
 		}
 
-		program, err := cache.compile(body)
+		visibleNames := projectionRuntimeVisibleNames(ctx)
+		program, err := cache.compile(body, visibleNames)
 		if err != nil {
 			return nil, err
 		}
@@ -68,16 +70,39 @@ type programCache struct {
 
 func newProgramCache() *programCache { return &programCache{} }
 
-func (c *programCache) compile(raw string) (*vm.Program, error) {
-	if cached, ok := c.entries.Load(raw); ok {
+func projectionRuntimeVisibleNames(ctx context.Context) map[string]struct{} {
+	names := map[string]struct{}{
+		expressionInputName: {},
+		expressionRootName:  {},
+		expressionStateName: {},
+	}
+	for _, name := range compiler.ExpressionBindingNames(ctx) {
+		names[name] = struct{}{}
+	}
+	for name := range compiler.LocalSymbolsFrom(ctx) {
+		names[name] = struct{}{}
+	}
+	for _, namespace := range compiler.Namespaces() {
+		names[namespace.Name] = struct{}{}
+	}
+	return names
+}
+
+func (c *programCache) compile(raw string, visibleNames ...map[string]struct{}) (*vm.Program, error) {
+	var names map[string]struct{}
+	if len(visibleNames) != 0 {
+		names = visibleNames[0]
+	}
+	key := projectionProgramCacheKey(raw, names)
+	if cached, ok := c.entries.Load(key); ok {
 		if program, ok := cached.(*vm.Program); ok {
 			return program, nil
 		}
 		// Cache corrupted or wrong type; fall through and recompile.
-		c.entries.Delete(raw)
+		c.entries.Delete(key)
 	}
 
-	source, err := buildProgramSource(raw)
+	source, err := buildProgramSourceWithVisibleNames(raw, names)
 	if err != nil {
 		return nil, xerr.Validation(fmt.Sprintf("projection %q: %v", strings.TrimSpace(raw), err))
 	}
@@ -89,8 +114,20 @@ func (c *programCache) compile(raw string) (*vm.Program, error) {
 		return nil, xerr.Validation(fmt.Sprintf("projection %q: %v", strings.TrimSpace(raw), err))
 	}
 
-	c.entries.Store(raw, program)
+	c.entries.Store(key, program)
 	return program, nil
+}
+
+func projectionProgramCacheKey(raw string, visibleNames map[string]struct{}) string {
+	if len(visibleNames) == 0 {
+		return raw
+	}
+	names := make([]string, 0, len(visibleNames))
+	for name := range visibleNames {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return raw + "\x00" + strings.Join(names, "\x00")
 }
 
 // buildEnv marks the input root for one-pass view normalization.

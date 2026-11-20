@@ -1,9 +1,9 @@
 @description "if branches see current input, original input, and outer aliases without leaking local bindings"
 @assert: result.selected == "inner" && result.original == "original" && result.outer_still_visible == true
 @pipeline if_scope
-  const( enabled: true ) as outer
+  { enabled: true } as outer
   -> if (.enabled && input.request == "original" && outer.enabled == true) {
-    const "inner" as outer
+    "inner" as outer
     -> { selected: ., original: input.request, branch_binding: outer }
   } else {
     fail ( message: "true condition selected the else branch" )

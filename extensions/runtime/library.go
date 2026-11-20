@@ -1,5 +1,5 @@
 // Package runtime ships the primitive actions every .nflow pipeline
-// starts from: runtime.const, runtime.noop, runtime.debug, runtime.fail,
+// starts from: runtime.noop, runtime.debug, runtime.fail,
 // runtime.pick, runtime.wrap, runtime.with, runtime.env, runtime.uuid,
 // runtime.call, runtime.dispatch_by_prefix, json.clean, runtime.sleep,
 // runtime.flatten, and runtime.is_terminal. This is a native bundle —
@@ -8,7 +8,7 @@
 // Typical use:
 //
 //	{ user_id: 42 } -> pick(field: "user_id") -> wrap(key: "data")
-//	fail(kind: "Timeout", message: "upstream") || const "fallback"
+//	fail(kind: "Timeout", message: "upstream") || "fallback"
 package runtime
 
 import (
@@ -45,7 +45,6 @@ func library() action.Library {
 	return action.Library{
 		Name: ID,
 		Actions: []action.AnyAction{
-			Const,
 			Debug,
 			Print,
 			Noop,

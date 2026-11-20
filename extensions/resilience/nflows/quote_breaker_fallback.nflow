@@ -5,4 +5,4 @@
 @description "Record a quote-provider outage behind a named local breaker and serve the cached quote"
 @assert: result == "ACME/USD 41.90 (cached)"
 fail ( kind: "Unavailable", message: "quote service returned HTTP 503" ) :circuit_breaker=quote-provider
-|| const "ACME/USD 41.90 (cached)"
+|| "ACME/USD 41.90 (cached)"

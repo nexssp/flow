@@ -1,4 +1,4 @@
 @description "Runtime.print emits and preserves a value"
 @assert: result == "shown"
-const "shown"
+"shown"
   -> print

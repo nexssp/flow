@@ -8,9 +8,9 @@
 { queue: "billing-operations" }
   -> match {
   .queue == routing.primary_queue
-    -> const "routed",
+    -> "routed",
   _
-    -> const "fallback"
+    -> "fallback"
 }
 
 @assert: result == "routed"

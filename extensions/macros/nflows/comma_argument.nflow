@@ -1,6 +1,6 @@
 @description "Macro: comma inside a quoted argument"
 @macro echo(v) {
-  const $v
+  $v
 }
 @assert: result == "a,b"
 @echo("a,b")

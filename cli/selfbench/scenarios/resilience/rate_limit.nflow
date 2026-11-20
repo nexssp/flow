@@ -2,7 +2,7 @@
 @assert: result == "ok"
 @pipeline benchmark
   :rate_limit=1000000
-  const "ok"
+  "ok"
 @end
 {}
 -> pipeline.benchmark

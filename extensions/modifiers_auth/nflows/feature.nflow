@@ -1,3 +1,3 @@
 @description "Allow a caller with a feature flag using :feature="
 @assert: result == "ok"
-const :feature=test.flag "ok"
+"ok" -> noop :feature=test.flag

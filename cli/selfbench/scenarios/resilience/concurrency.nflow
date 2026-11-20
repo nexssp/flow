@@ -1,8 +1,8 @@
-@description "Concurrency benchmark: successful local const under an uncontended bulkhead"
+@description "Concurrency benchmark: direct string value under an uncontended bulkhead"
 @assert: result == "ok"
 @pipeline benchmark
   :concurrency=4
-  const "ok"
+  "ok"
 @end
 {}
 -> pipeline.benchmark

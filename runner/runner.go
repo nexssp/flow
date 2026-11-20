@@ -31,8 +31,8 @@ type Config struct {
 	Primaries     *compiler.PrimaryExtensionTable
 	Materializers []compiler.Materializer
 	CompileOpts   []compiler.CompileOption
-	// Journal, when non-nil, makes each source-positioned capability call
-	// durable through Kernel's action.Durable middleware.
+	// Journal, when non-nil, makes the completed top-level result and each
+	// source-positioned capability call durable through Kernel's middleware.
 	Journal action.Journal
 	// IdempotencyStore replaces Kernel's default in-memory store for actions
 	// carrying :idempotent. It may be the same object as Journal when the

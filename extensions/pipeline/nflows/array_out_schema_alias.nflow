@@ -4,7 +4,7 @@
 }
 @pipeline items
   :out-schema=[]Item
-  const(value: [{ name: "Ada" }])
+  {value: [{ name: "Ada" }]}
     -> pick(field: "value")
 @end
 pipeline.items

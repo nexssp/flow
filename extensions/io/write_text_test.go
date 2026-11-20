@@ -16,6 +16,7 @@ import (
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/assert"
 	"github.com/nexssp/flow/extensions/description"
+	"github.com/nexssp/flow/extensions/projection"
 	"github.com/nexssp/flow/extensions/runtime"
 	"github.com/nexssp/flow/extensions/syntax"
 	"github.com/nexssp/flow/runner"
@@ -93,6 +94,7 @@ func TestWriteTextFixture(t *testing.T) {
 		description.Bundle(nil),
 		runtime.Bundle(nil),
 		assert.Bundle(nil),
+		projection.Bundle(nil),
 		Bundle(nil),
 	})
 	ktest.RequireNoError(t, err)

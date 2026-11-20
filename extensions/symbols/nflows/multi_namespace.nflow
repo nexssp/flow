@@ -14,12 +14,12 @@
 
 { category: "access" }
   -> match {
-	.category == "billing"
-	  -> const queue.billing,
-	.category == "access"
-	  -> const queue.access,
-	_
-	  -> const queue.general
+		.category == "billing"
+		  -> queue.billing,
+		.category == "access"
+		  -> queue.access,
+		_
+		  -> queue.general
 }
 
 @assert: result == "identity-operations"

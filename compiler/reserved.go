@@ -13,13 +13,10 @@ type KeywordMapping struct {
 	Target  string
 }
 
-const runtimeConstAction = "runtime.const"
-
 // keywordList is the canonical, ordered list of native keywords. It is
 // the source of truth; nativeKeywords is the O(1) lookup index derived
 // from it.
 var keywordList = []KeywordMapping{
-	{Keyword: "const", Target: runtimeConstAction},
 	{Keyword: "with", Target: "runtime.with"},
 	{Keyword: "pick", Target: "runtime.pick"},
 	{Keyword: "wrap", Target: "runtime.wrap"},
@@ -60,7 +57,7 @@ func TranslateKeyword(name string) (string, bool) {
 // bundle action with one of these names would be unreachable and shadow
 // grammar.
 var reservedActionNames = map[string]bool{
-	"const": true, "with": true, "pick": true, "wrap": true,
+	"with": true, "pick": true, "wrap": true,
 	"fail": true, "noop": true, "sleep": true,
 	"env": true, "uuid": true, "json": true, "parallel": true, "race": true,
 	"print": true, "debug": true, "flatten": true,

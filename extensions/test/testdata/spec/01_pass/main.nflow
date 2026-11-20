@@ -1,3 +1,3 @@
-const "ok"
+"ok"
 @test: result == "ok"
 @assert: result == "ok"

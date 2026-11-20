@@ -10,13 +10,13 @@
 { state: "APPROVED" }
   -> match {
   .state == status.approved
-    -> const "proceed",
+    -> "proceed",
   .state == status.pending
-    -> const "wait",
+    -> "wait",
   .state == status.rejected
-    -> const "halt",
+    -> "halt",
   _
-    -> const "unknown"
+    -> "unknown"
 }
 
 @assert: result == "proceed"

@@ -224,11 +224,11 @@
 # try/catch, no error-return plumbing.
 
 @pipeline notify_customer
-  # Simulate an unavailable email transport; const returns its value directly,
+  # Simulate an unavailable email transport; the direct fallback value,
   # and the fallback object deliberately preserves the order context.
   (
     runtime.fail ( kind: "Unavailable", message: "email transport unavailable" )
-    || const(
+    || {
       order_id: .order_id,
       email: .email,
       amount: .amount,
@@ -239,7 +239,7 @@
       routing: .routing,
       lookups: .lookups,
       notification: { queued: true }
-    )
+    }
   )
 @end
 
@@ -297,7 +297,7 @@
 
 @pipeline scoped_example
   @scope :retry=3 :timeout=1s {
-    const "scoped_action_ran"
+    "scoped_action_ran"
   }
 @end
 

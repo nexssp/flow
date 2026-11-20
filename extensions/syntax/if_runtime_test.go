@@ -75,7 +75,7 @@ func TestIfDynamicNonBooleanConditionReturnsValidation(t *testing.T) {
 		t.Fatalf("build self-test config: %v", err)
 	}
 	_, err = runner.Execute(t.Context(), cfg,
-		`if (input.condition) { const "yes" } else { const "no" }`,
+		`if (input.condition) { "yes" } else { "no" }`,
 		"if-dynamic-condition.nflow", map[string]any{"condition": "not bool"})
 	if err == nil {
 		t.Fatal("dynamic non-boolean condition succeeded; want validation error")
@@ -96,7 +96,7 @@ func TestIfConditionEvaluationErrorsReturnValidationAndPreserveCause(t *testing.
 		t.Fatalf("build self-test config: %v", err)
 	}
 	_, err = runner.Execute(t.Context(), cfg,
-		`if (input.value > 0) { const "yes" } else { fail ( message: "condition error became false" ) }`,
+		`if (input.value > 0) { "yes" } else { fail ( message: "condition error became false" ) }`,
 		"if-condition-error.nflow", map[string]any{"value": "not a number"})
 	if err == nil {
 		t.Fatal("condition evaluation error was treated as false")

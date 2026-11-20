@@ -10,6 +10,6 @@
   :response-schema=!DualResponse
   noop
 @end
-const(name: (input.name ?? "dual"))
+{name: (input.name ?? "dual")}
   -> pipeline.compatible
 @assert: result.name == "dual"

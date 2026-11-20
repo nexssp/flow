@@ -1,9 +1,9 @@
 @description "each propagates an item action error to fallback"
 @assert: result == "recovered"
 
-const(value: [1, 2, 3])
+{value: [1, 2, 3]}
   -> pick(field: "value")
 -> each :concurrency=2 {
   fail ( kind: "Validation", message: "sample analysis failed" )
 }
-|| const "recovered"
+|| "recovered"

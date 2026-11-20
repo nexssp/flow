@@ -2,6 +2,6 @@
 @assert: result.profile == "profile-ready"
 @assert: result.metrics == "metrics-ready"
 parallel {
-  profile: const "profile-ready",
-  metrics: const "metrics-ready",
+  profile: "profile-ready",
+  metrics: "metrics-ready",
 }

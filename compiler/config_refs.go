@@ -127,6 +127,15 @@ func substituteConfigRefsInExpression(source string, pos Position, cfg map[strin
 	for i := 0; i < len(source); {
 		if source[i] == '"' || source[i] == '\'' || source[i] == '`' {
 			end := configExpressionStringEnd(source, i)
+			if source[i] != '`' && end > i+1 {
+				if replacement, ok, err := substituteQuotedConfigReference(source[i:end], pos, cfg); err != nil {
+					return "", err
+				} else if ok {
+					out.WriteString(replacement)
+					i = end
+					continue
+				}
+			}
 			out.WriteString(source[i:end])
 			i = end
 			continue
@@ -169,6 +178,29 @@ func substituteConfigRefsInExpression(source string, pos Position, cfg map[strin
 		i++
 	}
 	return out.String(), nil
+}
+
+func substituteQuotedConfigReference(literal string, pos Position, cfg map[string]string) (replacement string, matched bool, err error) {
+	if len(literal) < 2 {
+		return "", false, nil
+	}
+	content := literal[1 : len(literal)-1]
+	const prefix = "@config."
+	if !strings.HasPrefix(content, prefix) {
+		return "", false, nil
+	}
+	keyStart := len(prefix)
+	keyEnd := configReferenceKeyEnd(content, keyStart)
+	if keyEnd != len(content) {
+		return "", false, nil
+	}
+	key := content[keyStart:keyEnd]
+	value, ok := cfg[key]
+	if !ok {
+		return "", false, SourceError(pos,
+			"expression: unknown @config.%s (declared: %s)", key, declaredConfigKeys(cfg))
+	}
+	return strconv.Quote(value), true, nil
 }
 
 func configExpressionStringEnd(source string, start int) int {

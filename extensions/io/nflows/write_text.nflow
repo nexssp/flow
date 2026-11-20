@@ -1,4 +1,4 @@
 @description "Write rendered text to stdout and pass the input through"
 @assert: result.text == "RepoPeek fixture output"
-const ( text: "RepoPeek fixture output" )
+{ text: "RepoPeek fixture output" }
   -> io.write_text

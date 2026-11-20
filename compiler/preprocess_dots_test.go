@@ -18,6 +18,7 @@ func TestPreprocessDots_UnifiedBehavior(t *testing.T) {
 	}{
 		{"leading dot", `.name`, `name`},
 		{"nested access", `.user.name`, `user.name`},
+		{"input field path", `.input.name`, `__root__.input.name`},
 		{"bare dot", `.`, `__root__`},
 		{"member access", `user.name`, `user.name`},
 		{"member after call", `fn().name`, `fn().name`},

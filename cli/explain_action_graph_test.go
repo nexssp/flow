@@ -140,8 +140,8 @@ pipeline.work`
 
 func TestExplainActionGraph_DescribesNamedParallelBranches(t *testing.T) {
 	source := `parallel {
-  profile: const "profile-secret",
-  metrics: const "metrics-secret",
+		  profile: "profile-secret",
+		  metrics: "metrics-secret",
 }`
 	graph := compileExplainGraph(t, explainConfig(t), source)
 	if graph.Nodes[0].Kind != "parallel.named" {
@@ -155,10 +155,10 @@ func TestExplainActionGraph_DescribesNamedParallelBranches(t *testing.T) {
 
 func TestExplainActionGraph_DescribesMatchWithoutConditions(t *testing.T) {
 	cfg := explainConfigWithBundles(t, match.Bundle(nil))
-	source := `const( status: "ACTIVE" )
+	source := `{ status: "ACTIVE" }
 -> match(.status) {
-  "ACTIVE" -> const "running-secret",
-  _ -> const "other-secret"
+	"ACTIVE" -> "running-secret",
+	_ -> "other-secret"
 }`
 	graph := compileExplainGraph(t, cfg, source)
 	matchNode := findGraphNodeKind(graph, "match")
@@ -174,8 +174,8 @@ func TestExplainActionGraph_DescribesMatchWithoutConditions(t *testing.T) {
 func TestExplainActionGraph_DescribesErrorRecoveryBranches(t *testing.T) {
 	cfg := explainConfigWithBundles(t, on_error.Bundle(nil))
 	source := `fail ( kind: "Unavailable", message: "db node is down" ) ? on_error {
-  xerr.KindUnavailable -> const "recovered-secret",
-  else -> const "fallback-secret"
+	  xerr.KindUnavailable -> "recovered-secret",
+	  else -> "fallback-secret"
 }`
 	graph := compileExplainGraph(t, cfg, source)
 	node := findGraphNodeKind(graph, "error_recovery")

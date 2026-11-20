@@ -1,6 +1,6 @@
 @description "Macro: parameterless expansion"
 @macro hello() {
-  const "hello"
+  "hello"
 }
 @assert: result == "hello"
 @hello()

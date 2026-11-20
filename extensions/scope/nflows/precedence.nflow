@@ -12,7 +12,7 @@
 
 @scope :timeout=1ms {
   @scope :timeout=1s {
-    const( tag: "ok" )
+    { tag: "ok" }
       -> sleep ( duration_ms: 20 )
   }
 }

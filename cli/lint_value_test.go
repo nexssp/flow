@@ -77,7 +77,7 @@ func TestLintRejectsSinglePipeSequentialOperator(t *testing.T) {
 
 func TestLintPreservesArrowParallelFallbackAndExpressionPipe(t *testing.T) {
 	for _, src := range []string{
-		`runtime.const(value: "canonical") -> runtime.noop`,
+		`"canonical" -> runtime.noop`,
 		`(runtime.noop & runtime.noop)`,
 		`runtime.noop || runtime.noop`,
 		`{ items: [{ line: 1, severity: "low" }, { line: 2, severity: "high" }] } -> { top: items | filter(#.severity == "high") | sortBy(#.line, "desc") | take(1) }`,

@@ -36,9 +36,10 @@ from `@flag.*`, `@arg.N`, and `@config.*` remain strings by default.
 For flows, use parenthesized named arguments, projection shorthand, and `->`
 for sequential pipeline composition. The older `action(key=value, ...)` form
 remains accepted. The old `action @{ ... }` spelling now fails compilation with
-a direct replacement hint; write `action(key: value)`. `const(value=...)` and
-`const(val=...)` are separate legacy key=value forms and still warn because
-those keys unwrap scalars.
+a direct replacement hint; write `action(key: value)`. The runtime `const`
+keyword and generator have been removed; use direct typed values or an object
+projection. Compile-time `@const` declarations remain available for named
+constants.
 
 Modifiers and parenthesized arguments may be combined on the same action.
 Modifiers come before the call; both compact and spaced colon forms are accepted:
@@ -52,7 +53,6 @@ request.action :timeout=3s :retry=2 (id: .id)
 
 | Keyword | Canonical action |
 |---|---|
-| `const` | `runtime.const` |
 | `with` | `runtime.with` |
 | `pick` | `runtime.pick` |
 | `wrap` | `runtime.wrap` |
@@ -98,13 +98,14 @@ Bindings are pipeline-local, do not become result-map fields unless explicitly r
 
 If a projection actually uses a bare name that is both a current-input field and an `as` binding, Flow rejects the ambiguity at compile time when the input shape is known, or reports a value-free conflict before evaluating the projection when the shape is dynamic. Unused name overlaps are allowed. Use `.tool` for the current input field or `input.tool` for the original request, or rename the binding; `{ tool }` remains explicit input-field shorthand.
 
-Named parallel branches may use direct literal values. Use `const` with
-parenthesized fields when a branch needs an action request object or modifiers:
+Named parallel branches may use direct literal values. Use an ordinary action
+call with parenthesized fields when a branch needs an action request object or
+modifiers:
 
 ```nflow
 parallel {
   profile: "profile-ready",
-  metrics: const :tag="metrics" (status: "metrics-ready"),
+  metrics: with :tag="metrics" (status: "metrics-ready"),
 }
 ```
 
@@ -163,7 +164,7 @@ value -> assert(. >= 0, "must be non-negative")
 Post-run assertions:
 
 ```nflow
-const(ok: true)
+{ ok: true }
 @assert: result.ok == true
 @assert {
   result.ok == true
@@ -303,7 +304,7 @@ approval.review
 ## Syntax boundaries to remember
 
 - `@{ ... }` action-argument blocks are rejected; replace them with parenthesized calls such as `action(key: value)`.
-- `@const` is compile-time; `const` is a runtime keyword action.
+- `@const` declares named compile-time values; direct literals, references, and projections are runtime data.
 - `@config` is a directive; an atom-level `@config` marker is a separate configuration-injection feature.
 - `@include` imports source modules; it is not textual expansion.
 - `@assert` runs after execution; `assert(...)` runs inside the pipeline.

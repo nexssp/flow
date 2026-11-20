@@ -8,4 +8,4 @@
 @description "Retry a simulated quote-service outage, then return the last saved quote"
 @assert: result == "ACME/USD 41.90 (cached)"
 fail ( kind: "Unavailable", message: "quote service returned HTTP 503" ) :retry=2
-|| const "ACME/USD 41.90 (cached)"
+|| "ACME/USD 41.90 (cached)"

@@ -594,7 +594,7 @@ func collectVersionConstraints(ctx context.Context, inv *invocation, path string
 	return constraints, nil
 }
 
-func toolchainSourceFiles(args []string) ([]string, error) {
+func toolchainSourceFiles(ctx context.Context, args []string) ([]string, error) {
 	if len(args) == 0 {
 		return nil, nil
 	}
@@ -634,7 +634,7 @@ func toolchainSourceFiles(args []string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		if target == "" || isInlineSource(target) {
+		if target == "" || isInlineSource(ctx, target) {
 			return nil, nil
 		}
 		return []string{target}, nil
@@ -644,7 +644,7 @@ func toolchainSourceFiles(args []string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		if target == "" || isInlineSource(target) {
+		if target == "" || isInlineSource(ctx, target) {
 			return nil, nil
 		}
 		return []string{target}, nil
@@ -873,7 +873,7 @@ func maybeLaunchToolchainWithIO(ctx context.Context, inv *invocation, args []str
 	if len(cleanArgs) == 0 || wantsHelp(cleanArgs) || cleanArgs[0] == "help" || cleanArgs[0] == versionCommand || os.Getenv(toolchainResolvedEnv) != "" {
 		return 0, false
 	}
-	files, err := toolchainSourceFiles(cleanArgs)
+	files, err := toolchainSourceFiles(ctx, cleanArgs)
 	if err != nil {
 		return 0, false
 	}
@@ -881,7 +881,7 @@ func maybeLaunchToolchainWithIO(ctx context.Context, inv *invocation, args []str
 	if err != nil {
 		return fatalf("%v", err), true
 	}
-	fileRun := isFileBasedRuntimeInvocation(cleanArgs)
+	fileRun := isFileBasedRuntimeInvocation(ctx, cleanArgs)
 	if !selection.launch {
 		if fileRun && slog.Default().Enabled(ctx, slog.LevelDebug) {
 			writeToolchainRuntimeNotice(stderr, selection, selection.exactVersion)
@@ -911,7 +911,7 @@ func maybeLaunchToolchainWithIO(ctx context.Context, inv *invocation, args []str
 	return runResolvedCoreProcess(ctx, binary, cleanArgs), true
 }
 
-func isFileBasedRuntimeInvocation(args []string) bool {
+func isFileBasedRuntimeInvocation(ctx context.Context, args []string) bool {
 	if len(args) == 0 {
 		return false
 	}
@@ -926,7 +926,7 @@ func isFileBasedRuntimeInvocation(args []string) bool {
 		return false
 	}
 	target, _, _, err := splitArgs(rest)
-	if err != nil || target == "" || isInlineSource(target) {
+	if err != nil || target == "" || isInlineSource(ctx, target) {
 		return false
 	}
 	info, err := os.Stat(target)

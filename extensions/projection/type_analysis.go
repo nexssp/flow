@@ -36,7 +36,8 @@ func analyzeProjectionTypes(
 	flowBindings []projectionBindingType,
 	ctxName string,
 ) (compiler.TypeDescriptor, error) {
-	source, sourceErr := buildProgramSource(raw)
+	visibleNames := projectionTypeVisibleNames(ctx, flowBindings, ctxName)
+	source, sourceErr := buildProgramSourceWithVisibleNames(raw, visibleNames)
 	if sourceErr != nil {
 		return compiler.TypeDescriptor{}, compiler.SourceError(pos, "projection: %v", sourceErr)
 	}
@@ -118,6 +119,34 @@ func analyzeProjectionTypes(
 		return compiler.TypeDescriptor{}, compiler.SourceError(pos, "projection: %v", err)
 	}
 	return compiler.TypeDescriptor{Type: projectionOutputTypeWithStaticTypes(program.Node(), staticTypes)}, nil
+}
+
+func projectionTypeVisibleNames(
+	ctx compiler.TypeAnalysisContext,
+	flowBindings []projectionBindingType,
+	ctxName string,
+) map[string]struct{} {
+	names := map[string]struct{}{
+		expressionInputName: {},
+		expressionRootName:  {},
+		expressionStateName: {},
+	}
+	for name := range ctx.Bindings {
+		names[name] = struct{}{}
+	}
+	for name := range ctx.PipelineBindings {
+		names[name] = struct{}{}
+	}
+	for name := range ctx.SymbolNamespaces {
+		names[name] = struct{}{}
+	}
+	for _, binding := range flowBindings {
+		names[binding.name] = struct{}{}
+	}
+	if ctxName != "" {
+		names[ctxName] = struct{}{}
+	}
+	return names
 }
 
 type secretExpressionVisitor struct {

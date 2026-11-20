@@ -211,7 +211,7 @@
   }
 @end
 
-const(
+{
   order: {
     id: "ORD-5600",
     customer: {
@@ -239,7 +239,7 @@ const(
     }
   },
   private_note: "PAYLOAD-MUST-NOT-RENDER"
-)
+}
 -> pipeline.normalize_order
 -> pipeline.verify_customer
 -> pipeline.enrich_catalog

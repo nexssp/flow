@@ -2,7 +2,7 @@
 @assert: result == "ok"
 @pipeline benchmark
   :coalesce
-  const "ok"
+  "ok"
 @end
 {}
 -> pipeline.benchmark

@@ -85,7 +85,9 @@ func TestEachAcceptsTypedSliceAndRejectsDynamicScalar(t *testing.T) {
 		t.Fatalf("typed-slice output = %#v, want []any{2, 4, 6}", result.Output)
 	}
 
-	_, err = runner.Execute(t.Context(), cfg, `const 42 -> each { noop }`, "dynamic_scalar.nflow", nil)
+	_, err = runner.Execute(t.Context(), cfg, source, "dynamic_scalar.nflow", map[string]any{
+		"items": 42,
+	})
 	if err == nil || xerr.KindFrom(err) != xerr.KindValidation || !strings.Contains(err.Error(), "each: input must be a list") {
 		t.Fatalf("dynamic scalar error = %v, want each list validation error", err)
 	}
@@ -96,7 +98,7 @@ func TestEachRejectsNilInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build self-test config: %v", err)
 	}
-	_, err = runner.Execute(t.Context(), cfg, `const null -> each { noop }`, "nil_input.nflow", nil)
+	_, err = runner.Execute(t.Context(), cfg, `null -> each { noop }`, "nil_input.nflow", nil)
 	if err == nil || xerr.KindFrom(err) != xerr.KindValidation || !strings.Contains(err.Error(), "each: input must be a list, got nil") {
 		t.Fatalf("nil input error = %v, want each nil-list validation error", err)
 	}

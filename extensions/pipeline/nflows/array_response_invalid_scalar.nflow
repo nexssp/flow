@@ -1,7 +1,7 @@
 @description "spec: response-schema=[]string rejects a non-string array item"
 @pipeline words
   :response-schema=[]string
-  const(value: ["first", 2])
+  {value: ["first", 2]}
     -> pick(field: "value")
 @end
 pipeline.words ? on_error {

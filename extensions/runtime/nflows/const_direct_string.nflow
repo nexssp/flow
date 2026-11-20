@@ -1,3 +1,0 @@
-@description "A direct const string keeps its declared string type"
-@assert: result == "42"
-const "42"

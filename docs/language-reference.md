@@ -35,23 +35,22 @@ Named arguments use typed data values and schema checks. Values include strings,
 
 Quoted strings in parenthesized named arguments preserve backslash sequences as data: the tested `\n`, `\q`, `\xGG`, and `\uZZZZ` remain verbatim and are neither decoded nor validated as escapes. `@assert` strings are parsed by expr-lang separately; the fixtures verify that `\n` is accepted there and that the three malformed examples are rejected. This clarification does not change other quoted forms or modifier parsing. See [`string_escape_data.nflow`](../extensions/syntax/nflows/string_escape_data.nflow) and the [`q`](../extensions/syntax/nflows/invalid_expr_escape_q.nflow), [`hex`](../extensions/syntax/nflows/invalid_expr_escape_hex.nflow), and [`Unicode`](../extensions/syntax/nflows/invalid_expr_escape_unicode.nflow) expected-error fixtures.
 
-The old `action @{ ... }` spelling is now a compile error with a direct
-replacement hint; use `action(key: value)`. The distinct
-`action(key=value, ...)` spelling remains accepted for existing flows, and
-ordinary non-`const` calls using it remain warning-free. The const-specific
-`const(value=...)` and `const(val=...)` key=value forms still unwrap scalars and
-receive a source-located `nflow lint` warning. Use a direct typed value for a
-scalar or `const(field: value)` for an object.
+The old `action @{ ... }` spelling is a compile error with a direct replacement
+hint; use `action(key: value)`. The distinct `action(key=value, ...)` spelling
+remains accepted for existing flows. Runtime `const` is no longer a keyword or
+generator: use a direct typed value for a scalar or an object projection for a
+shaped value. A `const(...)` call has no special wrapper behavior and resolves
+like any other action. Compile-time `@const` declarations remain available for
+named constants.
 
 Action argument details are assembled in [`compiler/parser.go`](../compiler/parser.go),
 [`compiler/at_brace.go`](../compiler/at_brace.go), and
 [`compiler/ast_build.go`](../compiler/ast_build.go).
 
-Flow also has ten reserved keyword actions that map to canonical capabilities and cannot be shadowed by a bundle:
+Flow has nine reserved runtime keyword actions that map to canonical capabilities and cannot be shadowed by a bundle:
 
 | Keyword | Canonical action |
 |---|---|
-| `const` | `runtime.const` |
 | `with` | `runtime.with` |
 | `pick` | `runtime.pick` |
 | `wrap` | `runtime.wrap` |
@@ -62,23 +61,17 @@ Flow also has ten reserved keyword actions that map to canonical capabilities an
 | `uuid` | `runtime.uuid` |
 | `json` | `json.clean` |
 
-`const` here is a runtime action; it is distinct from the compile-time `@const` directive. The keyword map is in [`compiler/reserved.go`](../compiler/reserved.go) and the action fixtures are under [`extensions/runtime/nflows/`](../extensions/runtime/nflows/).
+The keyword map is in [`compiler/reserved.go`](../compiler/reserved.go). Compile-time `@const` is a separate directive for named constants; it is not a runtime action.
 
 Literals and compile-time references can start a pipeline directly. Quoted text
 stays a string, and numeric, boolean, `null`, array, and object forms keep their
 written types. For example, `"42"` is text, `42` is an integer, and
 `[1, 2, 3]` is an array. `@config.*`, `@flag.*`, and `@arg.N` references yield
 text; they are never guessed to be numbers, booleans, `null`, or JSON. Convert
-only where the receiving schema and intended data type are known. The old
-`const @{...}` form is rejected; use a direct typed value for a scalar
-or parenthesized named arguments to construct an object. The separate
-`const(value=...)` / `const(val=...)` key=value forms still invoke the old scalar
-unwrapping behavior and receive source-located `nflow lint` warnings; if both
-keys appear, `value` wins. Legacy strings can be auto-parsed. The `coerce` flag
-only changes a preserved CLI/config/arg string when it reaches the runtime as a
-boolean `true`; literal `coerce=true` in key=value syntax is text, not a
-boolean. In new colon syntax, `value`, `val`, and `coerce` are ordinary object
-fields, not magic keys.
+only where the receiving schema and intended data type are known. Use direct
+typed values for scalars and an object projection for a shaped value. No
+runtime `const` keyword or special `const(value=...)` / `const(val=...)` scalar
+wrapper remains. Compile-time `@const` continues to declare named values.
 
 ### Migration: make conversions explicit
 
@@ -89,9 +82,8 @@ arrays, and leaves unrecognized strings untouched. Check the old output type
 before replacing a `value`/`val` wrapper, and choose an explicit conversion
 only when the receiving field is known to require that type.
 
-The previous `const @config.retries` form is no longer needed; write
-`@config.retries` as the pipeline value. It remains text, making the source
-type visible rather than inferred from the reference's contents.
+Write `@config.retries` directly as the pipeline value. It remains text, making
+the source type visible rather than inferred from the reference's contents.
 
 Atoms can also carry extension-consumed annotations: `#target1,target2`, `~excluded1,excluded2`, and `@prompt` add target, exclusion, or prompt data to the action request when the action supports it. `@config` on an atom is a special configuration-injection marker for configurable stream sources/operators; it is not the same as the `@config` directive. These annotations have no universal effect independent of the consuming action; see the parser's [`Atom` fields](../compiler/ast.go#L35-L49) and builder [argument assembly](../compiler/ast_build.go#L840-L875).
 
@@ -111,6 +103,8 @@ A projection transforms the current value into a new object. Inside it, `.field`
 `...input.state` (with no space after `...`) instead spreads that path from the original pipeline input, even after earlier pipeline steps have changed the current projection value. The roots are distinct: `... input.state` is rejected, and `... .state` keeps its existing current-value meaning. Explicit fields after either spread override matching copied fields. See the runnable [input-rooted spread fixture](../extensions/projection/nflows/input_path_spread.nflow) and the existing [current-value spread fixture](../extensions/projection/nflows/path_shorthand_spread.nflow).
 
 In projection object-entry position, a bare field name is shorthand for the same key copied from the current input: `{ name }` is equivalent to `{ name: .name }`. A path entry such as `.current.attempt.attempt_id,` derives the final key `attempt_id` and copies that nested path. Shorthand entries can be mixed with explicit `key: value` entries; duplicate output keys within the object are rejected. Parenthesized action arguments also accept path entries: `action(.user.id)` is equivalent to `action(id: .user.id)`; duplicate keys are rejected there too. Both forms read from the current pipeline input, but projections are expression objects while action arguments use the literal/reference map syntax described above.
+
+In a projection `key: value`, unbound bare names and dotted paths are literal strings. Visible pipeline `as` bindings, projection-local names, and known symbol namespaces resolve as expressions; `input.path` reads the original request and `__root__.path` reads the current projection input. Parenthesize `(expr)` to explicitly evaluate other expressions. This scope-aware rule is specific to projections; action-argument values retain the literal/reference behavior described earlier.
 
 The extension self-test runs fixtures for [shorthand-only](../extensions/projection/nflows/shorthand.nflow), [explicit-only](../extensions/projection/nflows/explicit_projection.nflow), [mixed member expressions](../extensions/projection/nflows/mixed_shorthand.nflow), and [shorthand with spread](../extensions/projection/nflows/shorthand_spread.nflow).
 
@@ -314,7 +308,7 @@ A separate runtime strict mode is also available: `@config:strict=true` or `:str
 
 An atom can carry modifiers as `action:flag` or `action:key=value`; multiple modifiers may be written together: `service.call:timeout=5s:retry=3`. They can decorate atoms, parenthesized expressions, projections, or supported keyword expressions. Each modifier name/value is interpreted by the active modifier table and extension advisors. Unknown names, invalid value types, and invalid registered values are compile-time errors; runtime effects belong to the Kernel action builder or extension.
 
-Flags and valued modifiers may be mixed on one line, for example `const :rate_limit=50 :idempotent :dedup :coalesce (status: "ok")`; `status` is an ordinary object field in this typed call. A colon immediately followed by a modifier name starts the next modifier whether or not that name has `=value`; it is not part of the preceding value. Quoted strings preserve spaces, commas and colons, for example `:desc="Maks: ingest, Julia: verify"`. The existing ternary convention is unchanged: a separator colon followed by whitespace belongs to `condition ? yes : no`, not to a modifier. This is a boundary fix, not a new atomic-scalar-only grammar; existing comma-valued modifiers remain supported. See [`compiler/parser_modifier_boundary_test.go`](../compiler/parser_modifier_boundary_test.go).
+Flags and valued modifiers may be mixed on one line, for example `service.call :rate_limit=50 :idempotent :dedup :coalesce (status: "ok")`; `status` is an ordinary object field in this typed call. A colon immediately followed by a modifier name starts the next modifier whether or not that name has `=value`; it is not part of the preceding value. Quoted strings preserve spaces, commas and colons, for example `:desc="Maks: ingest, Julia: verify"`. The existing ternary convention is unchanged: a separator colon followed by whitespace belongs to `condition ? yes : no`, not to a modifier. This is a boundary fix, not a new atomic-scalar-only grammar; existing comma-valued modifiers remain supported. See [`compiler/parser_modifier_boundary_test.go`](../compiler/parser_modifier_boundary_test.go).
 
 The stock CLI includes these principal groups:
 

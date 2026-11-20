@@ -8,5 +8,5 @@
   cov.typed_projection
   -> { invalid: __root__.request }
 @end
-const( request: "original request" )
+{ request: "original request" }
 -> pipeline.request_scope_rejects_original_field_on_root

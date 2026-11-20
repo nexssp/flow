@@ -10,7 +10,7 @@ func TestParserErrorIncludesFilePath(t *testing.T) {
 	t.Parallel()
 
 	_, err := NewParserWithFile(context.Background(), NewOperatorTable(), nil,
-		`const(value=x) giberish`, "flows/test.nflow").Parse()
+		`wrap(value: "x") giberish`, "flows/test.nflow").Parse()
 	if err == nil {
 		t.Fatal("expected parse error")
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/compiler/contracts"
 	"github.com/nexssp/flow/compiler/secret"
+	flowapproval "github.com/nexssp/flow/extensions/approval"
 )
 
 type Execution struct {
@@ -152,6 +153,13 @@ func ExecutePrepared(
 
 	runStart := time.Now()
 	preparedName := prepared.SourceName()
+	runProgram := func(runCtx context.Context, input any) (any, error) {
+		return action.InvokeAny(runCtx, entryAction, input)
+	}
+	if cfg.Journal != nil && len(flowapproval.DeclarationsFromMeta(compiled.Meta)) == 0 {
+		stepName := fmt.Sprintf("flow|%s|%s", preparedName, entry.Name)
+		runProgram = action.Durable[any, any](cfg.Journal, stepName)(runProgram)
+	}
 	output, suspension, runErr := runApprovalAware(
 		ctx,
 		cfg.Journal,
@@ -163,7 +171,7 @@ func ExecutePrepared(
 		prepared.Metadata(),
 		func() (any, error) {
 			return invokeWithRunScope(ctx, func(runCtx context.Context) (any, error) {
-				return action.InvokeAny(runCtx, entryAction, entry.Payload)
+				return runProgram(runCtx, entry.Payload)
 			})
 		},
 	)
@@ -427,6 +435,17 @@ func executeCompiled(
 
 	ctx = withExecutionContext(ctx, cfg, compiled.Resolver, compiled.Meta)
 	ctx = compiler.WithExpressionScope(ctx, payload)
+	runProgram := func(runCtx context.Context, input any) (any, error) {
+		runRes, runErr := defaultRunAction.Do(runCtx, compiler.RunReq{
+			Program: compiled.Program,
+			Payload: input,
+		})
+		return runRes.Output, runErr
+	}
+	if cfg.Journal != nil {
+		stepName := fmt.Sprintf("flow|%s|main", name)
+		runProgram = action.Durable[any, any](cfg.Journal, stepName)(runProgram)
+	}
 	runStart := time.Now()
 	output, suspension, err := runApprovalAware(
 		ctx,
@@ -439,11 +458,7 @@ func executeCompiled(
 		compiled.Meta,
 		func() (any, error) {
 			return invokeWithRunScope(ctx, func(runCtx context.Context) (any, error) {
-				runRes, runErr := defaultRunAction.Do(runCtx, compiler.RunReq{
-					Program: compiled.Program,
-					Payload: payload,
-				})
-				return runRes.Output, runErr
+				return runProgram(runCtx, payload)
 			})
 		},
 	)

@@ -2,10 +2,10 @@
 @assert: result == "scope-applied"
 
 @scope :timeout=50ms {
-  const(value: [1])
+  {value: [1]}
     -> pick(field: "value")
   -> each {
     sleep ( duration_ms: 500 )
   } :concurrency=1
-  || const "scope-applied"
+  || "scope-applied"
 }

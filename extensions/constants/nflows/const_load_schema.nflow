@@ -5,4 +5,4 @@
 }
 @const.load "settings.json" as settings :schema=Settings
 @assert: result == "release/2"
-const "${settings.name}/${settings.depth}"
+"${settings.name}/${settings.depth}"

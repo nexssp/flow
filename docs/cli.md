@@ -79,7 +79,7 @@ events are expected:
 
 ─── EXECUTION TRACE ──────────────────────────────────────────
   STATUS ACTION                          DURATION   ERROR
-  ✓      runtime.const                   < 1µs      -
+  ✓      runtime.noop                    < 1µs      -
   ✗      http.request                    < 1µs      capability not registered
 ──────────────────────────────────────────────────────────────
          TOTAL                           < 1µs
@@ -264,7 +264,7 @@ Asserts: 1
 ⚡ Pipeline:
   [1] http.request
   [2] { projection }
-  [3] runtime.const
+  [3] runtime.noop
 ════════════════════════════════════════════════════════════
 ```
 
@@ -305,12 +305,9 @@ An action that renders its own final output can return `runner.SuppressOutput(va
 Values supplied with CLI flags and positionals, and values loaded into
 compile-time config, are raw text. Direct references such as `@flag.key`,
 `@arg.N`, and `@config.key` remain strings even when they look numeric,
-boolean, `null`, or like JSON. New flows should convert only at a known typed
-field boundary. Legacy `const(value=...)` and `const(val=...)` still unwrap
-their scalar field and are reported by `nflow lint`. In that key=value form,
-literal `coerce=true` is text, not a boolean; coercion of preserved raw
-references requires an actual typed boolean `true`. The legacy flag can parse
-several different types and must not be mechanically replaced with a cast.
+boolean, `null`, or like JSON. Convert only at a known typed field boundary.
+The removed runtime `const` action no longer unwraps or coerces values;
+compile-time `@const` declarations remain available for named constants.
 
 The standalone executable forwards workflow arguments; it does not handle `-h`
 or `--help` automatically, and the bare word `help` is positional. Separated

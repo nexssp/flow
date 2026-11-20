@@ -1,4 +1,0 @@
-@description "const named arguments construct an object"
-@assert: result.count == 3
-@assert: result.enabled == true
-const ( count: 3, enabled: true )

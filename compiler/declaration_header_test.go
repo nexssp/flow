@@ -18,9 +18,9 @@ func TestParseDeclarationHeader(t *testing.T) {
 				next   int
 			}{
 				{"inline", " work:retry=2:idempotent :timeout=4s", []string{"retry=2", "idempotent", "timeout=4s"}, 1},
-				{"trivia", " work # header\n\n  # policy\n  :retry=2 // retries\n\n  // flags\n  :idempotent :dedup\n\n  runtime.const\n    :timeout=1s", []string{"retry=2", "idempotent", "dedup"}, 7},
+				{"trivia", " work # header\n\n  # policy\n  :retry=2 // retries\n\n  // flags\n  :idempotent :dedup\n\n  runtime.noop\n    :timeout=1s", []string{"retry=2", "idempotent", "dedup"}, 7},
 				{"quoted", " work\n  :route=\"POST /jobs/:id\" :desc='Maks: ready # // Julia'\n  :tag=`core,slow`", []string{"route=POST /jobs/:id", "desc=Maks: ready # // Julia", "tag=core,slow"}, 3},
-				{"body boundary", " work\n  runtime.const\n\n  # atom policy\n  :timeout=2s", nil, 1},
+				{"body boundary", " work\n  runtime.noop\n\n  # atom policy\n  :timeout=2s", nil, 1},
 				{"directive boundary", " work\n@profile other\n  :timeout=2s", nil, 1},
 				{"macro boundary", " work\n  @guard()\n  :timeout=2s", nil, 1},
 				{"unindented boundary", " work\n:timeout=2s", nil, 1},

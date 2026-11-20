@@ -12,5 +12,5 @@
     bound_stage_stdout: typed.stdout
   }
 @end
-const( request: "original request" )
+{ request: "original request" }
 -> pipeline.request_scope_after_typed_stage

@@ -3,7 +3,7 @@
   Name string `json:"name" validate:"required"`
 }
 @pipeline fixed_response(): !CreateResponse
-  const( name: "created" )
+  { name: "created" }
 @end
 pipeline.fixed_response
 @assert: result.name == "created"

@@ -3,6 +3,6 @@
 runtime.fail ( kind: "NotFound", message: "missing" )
 ? on_error {
   xerr.KindTimeout
-    -> const "recovered"
+    -> "recovered"
 }
-|| const "fallback"
+|| "fallback"

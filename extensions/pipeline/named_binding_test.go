@@ -2,7 +2,6 @@ package pipeline_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/action"
@@ -57,13 +56,13 @@ func TestNamedPipelineBindings_AIOutputExamples(t *testing.T) {
 func TestNamedPipelineBindings_DoNotEscapeDeclaredPipeline(t *testing.T) {
 	cfg := pipelineTestConfig(t)
 	source := `@pipeline private_binding
-  const( Known: true ) as estimate
+  { Known: true } as estimate
   -> { known: estimate.Known }
 @end
-{} -> pipeline.private_binding -> { leaked: estimate.Known }
+{} -> pipeline.private_binding -> assert(estimate == nil, "estimate binding escaped its declared pipeline")
 `
-	if _, err := runner.Execute(context.Background(), cfg, source, "pipeline-binding-scope.nflow", nil); err == nil || !strings.Contains(err.Error(), "estimate") {
-		t.Fatalf("execution error = %v, want the declared pipeline's estimate name to be unavailable outside", err)
+	if _, err := runner.Execute(context.Background(), cfg, source, "pipeline-binding-scope.nflow", nil); err != nil {
+		t.Fatalf("execution error = %v, want the assertion to confirm estimate is unavailable outside", err)
 	}
 }
 

@@ -104,13 +104,13 @@ func TestPipelineSignatureStrictBoundariesRejectUnknownFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read typed signature fixture: %v", err)
 	}
-	invalidInput := strings.Replace(string(source), `const( name: "Ada" )`, `const( name: "Ada", extra: true )`, 1)
+	invalidInput := strings.Replace(string(source), `{ name: "Ada" }`, `{ name: "Ada", extra: true }`, 1)
 	_, err = runner.Execute(t.Context(), cfg, invalidInput, "strict-signature-input.nflow", nil)
 	if err == nil || !strings.Contains(err.Error(), "unknown fields") {
 		t.Fatalf("strict signature input error = %v, want unknown fields rejection", err)
 	}
 
-	invalidResponse := strings.Replace(string(source), "  const(name: (order_req.region))\n", "  const(name: \"Ada\", extra: true)\n", 1)
+	invalidResponse := strings.Replace(string(source), "  {name: (order_req.region)}\n", "  {name: \"Ada\", extra: true}\n", 1)
 	_, err = runner.Execute(t.Context(), cfg, invalidResponse, "strict-signature-output.nflow", nil)
 	if err == nil || !strings.Contains(err.Error(), "unknown fields") {
 		t.Fatalf("strict signature output error = %v, want unknown fields rejection", err)

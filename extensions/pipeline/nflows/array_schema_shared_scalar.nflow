@@ -3,7 +3,7 @@
   :schema=[]string
   runtime.noop
 @end
-const(value: ["first", "second"])
+{value: ["first", "second"]}
   -> pick(field: "value")
 -> pipeline.words
 @assert: result[0] == "first"

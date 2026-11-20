@@ -1,13 +1,13 @@
 @description "spec: match with explicit subject value"
 
-const( status: "ACTIVE" )
+{ status: "ACTIVE" }
 -> match(.status) {
   "ACTIVE"
-    -> const "running",
+    -> "running",
   "INACTIVE"
-    -> const "stopped",
+    -> "stopped",
   _
-    -> const "unknown"
+    -> "unknown"
 }
 
 @assert: result == "running"

@@ -14,4 +14,4 @@ runtime.fail :timeout=100ms :retry=2 (
   kind: "Timeout",
   message: "upstream slow",
 )
-|| const "recovered"
+|| "recovered"

@@ -116,6 +116,122 @@ func formatParenthesizedArgumentLists(source string, lines []string, opaqueLines
 	return lines
 }
 
+// formatProjectionBlocks indents multiline map/projection literals in ordinary
+// Flow expressions. Protected lines include strings, parenthesized arguments,
+// and opaque directive bodies, which have their own formatting rules.
+func formatProjectionBlocks(source string, lines []string, protectedLines map[int]bool) []string {
+	lineStarts := sourceLineStarts(source, len(lines))
+	lexer := compiler.NewLexer(source)
+	var tokens []compiler.Token
+	for {
+		token := lexer.Next()
+		tokens = append(tokens, token)
+		if token.Type == compiler.TokEOF {
+			break
+		}
+	}
+	var opens []int
+	for index, token := range tokens {
+		switch token.Type {
+		case compiler.TokLBrace:
+			opens = append(opens, index)
+		case compiler.TokRBrace:
+			if len(opens) == 0 {
+				continue
+			}
+			openIndex := opens[len(opens)-1]
+			opens = opens[:len(opens)-1]
+			open := tokens[openIndex]
+			if token.Line <= open.Line || protectedLines[open.Line-1] {
+				continue
+			}
+			reindentProjectionBlock(source, lines, lineStarts, tokens, openIndex, index, protectedLines)
+		case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
+			compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr,
+			compiler.TokLParen, compiler.TokRParen, compiler.TokLBracket, compiler.TokRBracket,
+			compiler.TokColon, compiler.TokEquals, compiler.TokComma, compiler.TokQuestion,
+			compiler.TokHash, compiler.TokTilde, compiler.TokAtBrace, compiler.TokAtPrompt, compiler.TokInvalid:
+			// Non-brace tokens do not affect the projection brace stack.
+		}
+	}
+	return lines
+}
+
+func sourceLineStarts(source string, lineCount int) []int {
+	lineStarts := make([]int, lineCount)
+	offset := 0
+	for index := range lineStarts {
+		lineStarts[index] = offset
+		if offset >= len(source) {
+			break
+		}
+		newline := strings.IndexByte(source[offset:], '\n')
+		if newline < 0 {
+			break
+		}
+		offset += newline + 1
+	}
+	return lineStarts
+}
+
+func reindentProjectionBlock(source string, lines []string, lineStarts []int, tokens []compiler.Token, openIndex, closeIndex int, protectedLines map[int]bool) {
+	open := tokens[openIndex]
+	firstLine := open.Line - 1
+	lastLine := tokens[closeIndex].Line - 1
+	if firstLine < 0 || lastLine >= len(lines) || firstLine >= len(lineStarts) {
+		return
+	}
+	baseIndent := leadingWhitespace(source[lineStarts[firstLine]:open.Offset])
+	depth := 1
+	tokenIndex := openIndex + 1
+	for tokenIndex < closeIndex && tokens[tokenIndex].Line <= open.Line {
+		depth = adjustProjectionBraceDepth(depth, tokens[tokenIndex].Type)
+		tokenIndex++
+	}
+	for lineIndex := firstLine + 1; lineIndex <= lastLine; lineIndex++ {
+		if !protectedLines[lineIndex] {
+			trimmed := strings.TrimLeft(lines[lineIndex], " \t")
+			if strings.TrimSpace(trimmed) == "" {
+				lines[lineIndex] = ""
+			} else {
+				indentDepth := max(depth-leadingClosingBraceCount(trimmed), 0)
+				lines[lineIndex] = baseIndent + strings.Repeat(" ", indentDepth*2) + trimmed
+			}
+		}
+		lineNumber := lineIndex + 1
+		for tokenIndex < closeIndex && tokens[tokenIndex].Line <= lineNumber {
+			depth = adjustProjectionBraceDepth(depth, tokens[tokenIndex].Type)
+			tokenIndex++
+		}
+	}
+}
+
+func leadingClosingBraceCount(line string) int {
+	line = strings.TrimLeft(line, " \t")
+	count := 0
+	for strings.HasPrefix(line, "}") {
+		count++
+		line = strings.TrimLeft(line[1:], " \t")
+	}
+	return count
+}
+
+func adjustProjectionBraceDepth(depth int, token compiler.TokenType) int {
+	switch token {
+	case compiler.TokLBrace:
+		return depth + 1
+	case compiler.TokRBrace:
+		return depth - 1
+	case compiler.TokEOF, compiler.TokIdent, compiler.TokString, compiler.TokNumber,
+		compiler.TokArrow, compiler.TokPipe, compiler.TokAmpersand, compiler.TokOrOr,
+		compiler.TokLParen, compiler.TokRParen, compiler.TokLBracket, compiler.TokRBracket,
+		compiler.TokColon, compiler.TokEquals, compiler.TokComma, compiler.TokQuestion,
+		compiler.TokHash, compiler.TokTilde, compiler.TokAtBrace, compiler.TokAtPrompt, compiler.TokInvalid:
+		return depth
+	}
+	return depth
+}
+
 func reindentParenthesizedArgumentList(source string, lines []string, lineStarts []int, tokens []compiler.Token, span parenthesizedArgumentSpan, opaqueLines map[int]bool) {
 	open := tokens[span.openIndex]
 	firstLine := open.Line - 1

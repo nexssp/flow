@@ -105,7 +105,7 @@ func TestAttachedMasterShowcasePreservesPipelineData(t *testing.T) {
 func TestMasterModifierChainCompilesWithNativeBundles(t *testing.T) {
 	cfg, err := runner.BuildConfig(native.Bundles())
 	ktest.RequireNoError(t, err)
-	source := `const :rate_limit=50 :idempotent :dedup :coalesce :tag="resilience,core" :desc="Hardened ingest endpoint" "ok"`
+	source := `"ok" -> runtime.noop :rate_limit=50 :idempotent :dedup :coalesce :tag="resilience,core" :desc="Hardened ingest endpoint"`
 	_, err = runner.Compile(t.Context(), cfg, source, "modifier-chain.nflow")
 	ktest.RequireNoError(t, err)
 }
@@ -113,7 +113,7 @@ func TestMasterModifierChainCompilesWithNativeBundles(t *testing.T) {
 func TestMasterNestedProjectionCompositionExecutes(t *testing.T) {
 	cfg, err := runner.BuildConfig(native.Bundles())
 	ktest.RequireNoError(t, err)
-	source := `{ peak: 98, keep: "same" } -> { snapshot: ., branches: parallel { first: { peak: .peak, keep: .keep }, second: race { runtime.fail ( kind: "Unavailable", message: "first fails" ), const( peak: .peak, keep: .keep ) } }, category: match(.peak) { > 90 -> "HIGH", _ -> "NORMAL" } }`
+	source := `{ peak: 98, keep: "same" } -> { snapshot: ., branches: parallel { first: { peak: .peak, keep: .keep }, second: race { runtime.fail ( kind: "Unavailable", message: "first fails" ), { peak: .peak, keep: .keep } } }, category: match(.peak) { > 90 -> "HIGH", _ -> "NORMAL" } }`
 	execution, err := runner.Execute(t.Context(), cfg, source, "composition.nflow", nil)
 	ktest.RequireNoError(t, err)
 	if failures := runner.EvaluateAssertions(execution.Output, []string{

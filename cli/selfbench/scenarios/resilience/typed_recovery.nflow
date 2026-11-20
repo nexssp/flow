@@ -6,7 +6,7 @@
 fail ( kind: "Unavailable", message: "deterministic typed-recovery benchmark failure" )
 ? on_error {
   xerr.KindUnavailable
-    -> const ( status: "recovered", error_kind: "Unavailable" ),
+    -> { status: "recovered", error_kind: "Unavailable" },
   else
     -> error.reraise
 }

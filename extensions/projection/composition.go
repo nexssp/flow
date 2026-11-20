@@ -188,7 +188,11 @@ func parseProjectionBody(p *compiler.Parser, closeIndex int, pos compiler.Positi
 	if p.Cur().Type == compiler.TokRBrace && p.Cur().Offset == closeIndex {
 		p.Next()
 	}
-	raw := compiler.StripExprComments(rewritten.String())
+	raw, err := p.ExpandArgumentMap(rewritten.String())
+	if err != nil {
+		return nil, err
+	}
+	raw = stripProjectionComments(raw)
 	if len(bindings) == 0 && functions == nil {
 		projection := &compiler.ProjectionExpr{Raw: raw, Pos: pos}
 		projection.TypeCheck = func(ctx compiler.TypeAnalysisContext) (compiler.TypeDescriptor, error) {

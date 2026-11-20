@@ -29,7 +29,7 @@ func TestProjectionStaticAnalysisRejectsUsedInputBindingCollision(t *testing.T) 
 		},
 	}
 
-	raw := compiler.StripExprComments("\n  value: tool.name # comment before later source")
+	raw := compiler.StripExprComments("\n  value: (tool.name) # comment before later source")
 	_, err := analyzeProjectionTypes(raw, compiler.Position{File: "collision.nflow", Line: 10, Col: 5}, ctx, nil, nil, "")
 	if err == nil {
 		t.Fatal("static analysis accepted an ambiguous bare input/binding name")
@@ -48,7 +48,7 @@ func TestProjectionStaticAnalysisRejectsUsedInputBindingCollision(t *testing.T) 
 	if !ok {
 		t.Fatal("collision diagnostic does not carry a source position")
 	}
-	wantPosition := compiler.Position{File: "collision.nflow", Line: 11, Col: 10}
+	wantPosition := compiler.Position{File: "collision.nflow", Line: 11, Col: 11}
 	if position != wantPosition {
 		t.Fatalf("diagnostic position = %#v, want %#v", position, wantPosition)
 	}
@@ -71,6 +71,8 @@ func TestProjectionStaticAnalysisAllowsUnambiguousInputAndUnusedOverlap(t *testi
 	for _, raw := range []string{
 		`value: .tool.name`,               // Leading dot explicitly selects the current payload.
 		`tool`,                            // A bare object entry is the documented input shorthand.
+		`value: literal`,                  // An unbound value-position name is literal data.
+		`value: person.name`,              // An unbound dotted value-position name is literal data.
 		`value: "unchanged"`,              // An unused name overlap is harmless.
 		`let tool = "local"; value: tool`, // A projection local has its own scope.
 	} {
@@ -89,7 +91,7 @@ func TestProjectionRuntimeRejectsDynamicInputBindingCollisionWithoutValues(t *te
 		"tool": map[string]any{"name": "payload-secret"},
 	}
 
-	_, err := NewExprEvaluator()(ctx, Request{Raw: "value: tool.name", Input: input})
+	_, err := NewExprEvaluator()(ctx, Request{Raw: "value: (tool.name)", Input: input})
 	if xerr.KindFrom(err) != xerr.KindConflict {
 		t.Fatalf("runtime error = %v, want Conflict", err)
 	}
@@ -144,5 +146,29 @@ func TestProjectionRuntimeAllowsNoncollidingPipelineBinding(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, map[string]any{"value": "binding"}) {
 		t.Fatalf("projection output = %#v, want binding value", got)
+	}
+}
+
+func TestProjectionProgramCacheSeparatesVisibleBindingScopes(t *testing.T) {
+	evaluate := NewExprEvaluator()
+	request := Request{Raw: "value: tool.name", Input: map[string]any{"other": true}}
+	got, err := evaluate(context.Background(), request)
+	if err != nil {
+		t.Fatalf("evaluate unbound literal: %v", err)
+	}
+	if !reflect.DeepEqual(got, map[string]any{"value": "tool.name"}) {
+		t.Fatalf("unbound projection output = %#v, want literal", got)
+	}
+
+	ctx := compiler.WithExpressionScope(context.Background(), nil)
+	if err := compiler.BindExpressionValue(ctx, "tool", map[string]any{"name": "binding"}); err != nil {
+		t.Fatalf("bind pipeline value: %v", err)
+	}
+	got, err = evaluate(ctx, request)
+	if err != nil {
+		t.Fatalf("evaluate bound reference: %v", err)
+	}
+	if !reflect.DeepEqual(got, map[string]any{"value": "binding"}) {
+		t.Fatalf("bound projection output = %#v, want binding value", got)
 	}
 }

@@ -5,15 +5,15 @@
 # ── Macro declarations ──────────────────────────────────────────────
 
 @macro hi() {
-  const "hi"
+  "hi"
 }
 
 @macro echo(v) {
-  const $v
+  $v
 }
 
 @macro pair(k, v) {
-  const( key: $k, value: $v )
+  { key: $k, value: $v }
 }
 
 @macro seq(a, b) {

@@ -11,5 +11,5 @@
 ] } as source
 -> pick ( field: "samples" )
 -> each :concurrency=2 {
-  const( id: (.id), score: (.score * 2), batch: (source.batch) )
+  { id: (.id), score: (.score * 2), batch: (source.batch) }
 }

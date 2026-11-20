@@ -4,11 +4,11 @@
 @assert: result.items[0] == "one" && result.items[1] == 2 && result.items[2] == false && result.items[3] == nil
 @assert: result.nested.from == "Ada" && result.nested.whole.input.name == "Ada"
 { input: { name: "Ada" }, tags: ["root"] }
--> const(
+-> {
   text: "quoted: value",
   count: 3,
   enabled: true,
   empty: null,
   items: ["one", 2, false, null],
   nested: { from: .input.name, whole: . }
-)
+}

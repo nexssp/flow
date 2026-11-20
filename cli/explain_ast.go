@@ -115,6 +115,13 @@ func renderASTNode(w io.Writer, expr compiler.Expr, indent string, useColor bool
 			n.Val,
 		)
 
+	case *compiler.ValueExpr:
+		fmt.Fprintf(w, "%s%-12s %s\n",
+			indent,
+			cyan("Value", useColor),
+			formatASTValue(n.Value),
+		)
+
 	case *compiler.PipeExpr:
 		fmt.Fprintf(w, "%s%s\n", indent, dim("Pipe ->", useColor))
 		renderASTNode(w, n.L, indent+"  ", useColor)
@@ -342,6 +349,9 @@ func buildASTNode(expr compiler.Expr) *ASTNode {
 	case *compiler.LiteralExpr:
 		return &ASTNode{Kind: "Literal", Name: fmt.Sprintf("%v", n.Val)}
 
+	case *compiler.ValueExpr:
+		return &ASTNode{Kind: "Value", Name: formatASTValue(n.Value)}
+
 	case *compiler.PipeExpr:
 		return &ASTNode{Kind: "Pipe", L: astNodeOf(n.L), R: astNodeOf(n.R)}
 
@@ -409,6 +419,8 @@ func leafPos(e compiler.Expr) (compiler.Position, bool) {
 	case *compiler.Atom:
 		return n.Pos, true
 	case *compiler.LiteralExpr:
+		return n.Pos, true
+	case *compiler.ValueExpr:
 		return n.Pos, true
 	case *compiler.ProjectionExpr:
 		return n.Pos, true

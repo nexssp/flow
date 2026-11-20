@@ -12,5 +12,5 @@
           -> { original_request: input.request }
       })
 @end
-const( request: "original request" )
+{ request: "original request" }
 -> pipeline.request_scope_input_in_handler

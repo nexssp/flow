@@ -9,9 +9,9 @@
 { signal: "local_timeout_sentinel" }
   -> match {
   .signal == xerr.KindTimeout
-    -> const "handled_locally",
+    -> "handled_locally",
   _
-    -> const "unhandled"
+    -> "unhandled"
 }
 
 @assert: result == "handled_locally"

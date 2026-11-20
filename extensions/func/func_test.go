@@ -190,7 +190,7 @@ func TestFuncImportsComposeNamespacesAcrossNestedIncludes(t *testing.T) {
 	}
 
 	argumentSource := `@include "./shipping.nflow" AS pricing
-runtime.const ( shipping: pricing.commerce.shippingFee(.amount) )`
+{ shipping: pricing.commerce.shippingFee(.amount) }`
 	argumentExecution, err := runner.Execute(t.Context(), cfg, argumentSource, mainPath, map[string]any{"amount": 21})
 	if err != nil {
 		t.Fatalf("execute imported function in argument map: %v", err)
@@ -213,18 +213,19 @@ func TestFuncWorksInsideImportedTypedMacroExpression(t *testing.T) {
 	cfg := nativeConfig(t)
 	root := t.TempDir()
 	writeSource(t, root, "billing.nflow", `@func commerce.taxMinor(subtotal int) int = subtotal / 10
-@macro passthrough(expression: Expr) {
-  $expression
-}`)
+	@macro passthrough(expression: Expr) {
+	  { value: $expression }
+	}`)
 
 	source := `@include "./billing.nflow" AS billing
-billing.@passthrough(const(value: billing.commerce.taxMinor(120)) -> pick(field: "value"))`
+	billing.@passthrough(billing.commerce.taxMinor(120))`
 	execution, err := runner.Execute(t.Context(), cfg, source, filepath.Join(root, "main.nflow"), nil)
 	if err != nil {
 		t.Fatalf("execute imported typed macro with imported function: %v", err)
 	}
-	if execution.Output != 12 {
-		t.Fatalf("output = %#v, want 12", execution.Output)
+	result, ok := execution.Output.(map[string]any)
+	if !ok || result["value"] != 12 {
+		t.Fatalf("output = %#v, want value 12", execution.Output)
 	}
 }
 

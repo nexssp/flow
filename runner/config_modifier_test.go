@@ -37,7 +37,7 @@ func TestMaterializedPipelinesResolveConfigTimeoutsOnPrimaryActions(t *testing.T
 @pipeline memory_search :timeout=@config.memory_search_pipeline_timeout
   timeout.file
 @end
-const {} -> pipeline.chat_with_memory`
+{} -> pipeline.chat_with_memory`
 
 	_, err = runner.Compile(t.Context(), cfg, source, "memory-timeouts.nflow")
 	ktest.RequireNoError(t, err)

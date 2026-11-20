@@ -1,3 +1,3 @@
 @description "Authorize a caller with :auth"
 @assert: result == "ok"
-const :auth "ok"
+"ok" -> noop :auth

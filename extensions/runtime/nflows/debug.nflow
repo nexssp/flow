@@ -1,4 +1,4 @@
 @description "Runtime.debug leaves the pipeline value available"
 @assert: result == "visible"
-const "visible"
+"visible"
   -> runtime.debug

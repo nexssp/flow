@@ -40,6 +40,6 @@ This folder documents Flow as a domainless orchestration language. Flow provides
 
 ## Documentation rules
 
-The language reference is the authority for supported syntax. The cheatsheet and cookbook should show the shortest valid user-facing spelling: use `const`, `noop`, and other native keywords rather than canonical internal IDs such as `runtime.const`, except when explaining compilation, catalogs, traces, or action names.
+The language reference is the authority for supported syntax. The cheatsheet and cookbook should show direct typed values and the shortest valid user-facing spellings for native keywords such as `noop`, rather than canonical internal IDs, except when explaining compilation, catalogs, traces, or action names. Compile-time `@const` declarations are distinct from runtime values.
 
 A capability is not available merely because an extension exists in a source tree. Confirm the active registry with `nflow catalog --flow FILE`, or load an external bundle explicitly with `@require`.

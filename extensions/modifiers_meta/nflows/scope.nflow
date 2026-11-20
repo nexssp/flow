@@ -1,3 +1,3 @@
 @description "Compile the :scope= access modifier"
 @assert: result == "ok"
-const :scope=public "ok"
+"ok" -> noop :scope=public

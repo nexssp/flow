@@ -2,4 +2,4 @@
 @config:strict=true
 @config:silent=coverage
 @assert: result == "c"
-const "c"
+"c"

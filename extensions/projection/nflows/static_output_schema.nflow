@@ -6,9 +6,9 @@
   { value: 1, nested: { request_id: "request-42" }, items: [{ id: 7 }] } as projected
   -> assert(projected.value == 1, "projection value must be available")
   -> {
-    value: projected.value,
-    request_id: projected.nested.request_id,
-    item_id: projected.items[0].id
+    value: (projected.value),
+    request_id: (projected.nested.request_id),
+    item_id: (projected.items[0].id)
   }
 @end
 pipeline.projection_static_output_schema

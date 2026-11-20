@@ -15,7 +15,7 @@ import (
 
 func TestCollectExpansions_RecordsEveryInvocation(t *testing.T) {
 	src := `
-@macro hi() { const "hi" }
+@macro hi() { "hi" }
 @hi() -> @hi()
 `
 	exps, err := collectExpansionsWithContext(context.Background(), expandCfg(t), src, "test.nflow")
@@ -33,7 +33,7 @@ func TestCollectExpansions_NoMacros(t *testing.T) {
 
 func TestCollectExpansions_InsidePipeline(t *testing.T) {
 	src := `
-@macro hi() { const "hi" }
+@macro hi() { "hi" }
 @pipeline p
   @hi()
 @end
@@ -67,14 +67,14 @@ func TestRenderExpansions_EmitsMacroAndBody(t *testing.T) {
 		DefLine:    2,
 		InvokeLine: 5,
 		Where:      "top-level",
-		Body:       `const "hi"`,
+		Body:       `"hi"`,
 	}}
 
 	renderExpansions(&buf, exps, "test.nflow", nil)
 
 	out := buf.String()
 	ktest.RequireStringContains(t, out, "@hi")
-	ktest.RequireStringContains(t, out, `const "hi"`)
+	ktest.RequireStringContains(t, out, `"hi"`)
 	ktest.RequireStringContains(t, out, "line 2")
 	ktest.RequireStringContains(t, out, "line 5")
 	ktest.RequireStringContains(t, out, "top-level")

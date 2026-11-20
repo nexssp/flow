@@ -4,7 +4,7 @@
 }
 @pipeline items
   :response-schema=[]Item
-  const(value: [{ name: "Ada" }, { name: "Lin" }])
+  {value: [{ name: "Ada" }, { name: "Lin" }]}
     -> pick(field: "value")
 @end
 pipeline.items

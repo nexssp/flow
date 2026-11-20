@@ -4,7 +4,7 @@
 
 @pipeline work
   :profile=reliable
-  const "ok"
+  "ok"
 @end
 
 @assert: result == "ok"

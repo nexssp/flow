@@ -11,14 +11,14 @@
 @pipeline typed_go_fields
   cov.typed_projection as execution
   -> {
-    stdout: execution.stdout,
-    exit_code: execution.exit_code,
-    ok: execution.ok,
+    stdout: (execution.stdout),
+    exit_code: (execution.exit_code),
+    ok: (execution.ok),
     summary: execution.Summary(),
     root_stdout: .stdout,
-    nested: execution.nested,
-    nested_request_id: execution.nested.request_id,
-    indexed_request_id: execution.items[0].request_id,
+    nested: (execution.nested),
+    nested_request_id: (execution.nested.request_id),
+    indexed_request_id: (execution.items[0].request_id),
     root_indexed_request_id: .items[0].request_id
   }
 @end

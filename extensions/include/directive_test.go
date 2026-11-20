@@ -208,7 +208,7 @@ func TestIncludeMaterializesForwardLocalPipelineReferences(t *testing.T) {
 @end
 
 @pipeline local_support
-  const "included"
+	  "included"
 @end
 `
 	ktest.RequireNoError(t, os.WriteFile(childFile, []byte(child), 0o600))

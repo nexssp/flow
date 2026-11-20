@@ -1,4 +1,4 @@
 @require resilience
 @description "Return a healthy quote response through a named breaker"
 @assert: result == "ACME/USD 42.10"
-const :circuit_breaker=quote-selftest-healthy "ACME/USD 42.10"
+"ACME/USD 42.10" -> noop :circuit_breaker=quote-selftest-healthy

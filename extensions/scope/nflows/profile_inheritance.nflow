@@ -7,7 +7,7 @@
 @pipeline inherited_timeout
   :profile=inherited
   sleep ( duration_ms: 100 )
-  -> const "parent-policy-missing"
+  -> "parent-policy-missing"
 @end
 @assert: result == "parent-policy-inherited"
-pipeline.inherited_timeout || const "parent-policy-inherited"
+pipeline.inherited_timeout || "parent-policy-inherited"

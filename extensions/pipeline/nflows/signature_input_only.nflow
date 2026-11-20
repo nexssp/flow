@@ -3,8 +3,8 @@
   Name string `json:"name" validate:"required"`
 }
 @pipeline lookup(lookup_req: LookupRequest)
-  const(name: (lookup_req.name ?? "Lin"))
+  {name: (lookup_req.name ?? "Lin")}
 @end
-const(name: "Lin")
+{name: "Lin"}
   -> pipeline.lookup
 @assert: result.name == "Lin"

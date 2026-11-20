@@ -4,14 +4,12 @@ import (
 	"context"
 	"strings"
 	"testing"
-
-	"github.com/nexssp/flow/internal/constinput"
 )
 
 func TestBuildPayloadMergesArgumentMapSpread(t *testing.T) {
 	t.Parallel()
 	atom := &Atom{
-		Name:       "runtime.const",
+		Name:       "test.action",
 		ArgSpreads: []*Value{{Kind: ValueRef, Ref: "defaults"}},
 		Args: map[string]*Value{
 			"url": {Kind: ValueRef, Ref: "url"},
@@ -61,7 +59,7 @@ func TestBuildPayloadRejectsArgumentMapSpreadCollisions(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			_, err := buildPayload(context.Background(), tc.state, &Atom{
-				Name:       "runtime.const",
+				Name:       "test.action",
 				ArgSpreads: tc.spreads,
 				Args:       tc.args,
 			})
@@ -75,7 +73,7 @@ func TestBuildPayloadRejectsArgumentMapSpreadCollisions(t *testing.T) {
 func TestBuildPayloadRejectsNonObjectArgumentMapSpread(t *testing.T) {
 	t.Parallel()
 	_, err := buildPayload(context.Background(), map[string]any{"timeout": 5}, &Atom{
-		Name:       "runtime.const",
+		Name:       "test.action",
 		ArgSpreads: []*Value{{Kind: ValueRef, Ref: "timeout"}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "must resolve to an object") {
@@ -83,10 +81,10 @@ func TestBuildPayloadRejectsNonObjectArgumentMapSpread(t *testing.T) {
 	}
 }
 
-func TestBuildPayloadPreservesConstFlagString(t *testing.T) {
+func TestBuildPayloadPreservesCLIReferenceString(t *testing.T) {
 	t.Parallel()
 	payload, err := buildPayload(context.Background(), nil, &Atom{
-		Name: "runtime.const",
+		Name: "test.action",
 		Args: map[string]*Value{
 			"value": {Kind: ValueString, Str: "42", preserveString: true},
 		},
@@ -94,8 +92,8 @@ func TestBuildPayloadPreservesConstFlagString(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildPayload: %v", err)
 	}
-	if got, ok := payload["value"].(constinput.String); !ok || got != "42" {
-		t.Fatalf("payload value = %#v, want preserved const string \"42\"", payload["value"])
+	if got, ok := payload["value"].(string); !ok || got != "42" {
+		t.Fatalf("payload value = %#v, want preserved string \"42\"", payload["value"])
 	}
 }
 

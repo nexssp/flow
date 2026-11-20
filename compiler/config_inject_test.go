@@ -288,13 +288,20 @@ func TestSubstituteConfigRefsInExpression(t *testing.T) {
 	ktest.RequireEqual(t, got, `"root/\"folder" + "/" + .path`)
 }
 
-func TestSubstituteConfigRefsInExpressionSkipsStringsAndComments(t *testing.T) {
+func TestSubstituteConfigRefsInExpressionResolvesWholeStringValuesAndSkipsComments(t *testing.T) {
 	t.Parallel()
 
 	source := `"@config.quoted" + @config.base /* @config.comment */ // @config.line`
-	got, err := substituteConfigRefsInExpression(source, Position{}, map[string]string{"base": "root"})
+	got, err := substituteConfigRefsInExpression(source, Position{}, map[string]string{"base": "root", "quoted": "value"})
 	ktest.RequireNoError(t, err)
-	ktest.RequireEqual(t, got, `"@config.quoted" + "root" /* @config.comment */ // @config.line`)
+	ktest.RequireEqual(t, got, `"value" + "root" /* @config.comment */ // @config.line`)
+}
+
+func TestSubstituteConfigRefsInExpressionRejectsUnknownWholeStringValue(t *testing.T) {
+	t.Parallel()
+
+	_, err := substituteConfigRefsInExpression(`"@config.missing"`, Position{}, map[string]string{"known": "value"})
+	ktest.RequireErrorContains(t, err, "unknown @config.missing")
 }
 
 func TestSubstituteConfigRefsInExpressionRejectsUnknownKeyWithoutConfig(t *testing.T) {

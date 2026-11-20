@@ -1,6 +1,6 @@
 @description "Projection expressions use raw backtick boundaries"
 @assert: result.text == `prefix\` + `}`
-const( untouched: true )
+{ untouched: true }
 -> {
   text: `prefix\` + `}`
 }

@@ -8,12 +8,12 @@
 
 { severity: "high" }
   -> match {
-	.severity == "critical"
-	  -> const sla.p1,
-	.severity == "high"
-	  -> const sla.p2,
-	_
-	  -> const sla.p3
+		.severity == "critical"
+		  -> sla.p1,
+		.severity == "high"
+		  -> sla.p2,
+		_
+		  -> sla.p3
 }
 
 @assert: result == "4h"

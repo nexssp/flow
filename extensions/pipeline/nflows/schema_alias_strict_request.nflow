@@ -8,7 +8,7 @@
   runtime.noop
 @end
 @pipeline request_rejected
-  const( route: "strict-request-rejected" )
+  { route: "strict-request-rejected" }
 @end
 @on_error {
   when error.kind == xerr.KindValidation -> pipeline.request_rejected,

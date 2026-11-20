@@ -3,12 +3,12 @@
 if (false) {
   fail ( message: "false condition invoked the then branch" )
 } else if (true) {
-  const "else-if"
+  "else-if"
 } else {
   fail ( message: "else-if condition was not evaluated" )
 }
 -> if (false) {
   fail ( message: "false condition invoked the then branch" )
 } else {
-  const "else"
+  "else"
 }

@@ -14,7 +14,7 @@ func TestTranslateKeyword(t *testing.T) {
 		target string
 		ok     bool
 	}{
-		{"const", "runtime.const", true},
+		{"const", "", false},
 		{"noop", "runtime.noop", true},
 		{"json", "json.clean", true},
 		{"parallel", "", false},
@@ -30,7 +30,7 @@ func TestTranslateKeyword(t *testing.T) {
 }
 
 func TestIsReservedActionName(t *testing.T) {
-	ktest.RequireCondition(t, compiler.IsReservedActionName("const"), "const should be reserved")
+	ktest.RequireCondition(t, !compiler.IsReservedActionName("const"), "const should not be reserved")
 	ktest.RequireCondition(t, compiler.IsReservedActionName("noop"), "noop should be reserved")
 	ktest.RequireCondition(t, compiler.IsReservedActionName("parallel"), "parallel should be reserved")
 	ktest.RequireCondition(t, compiler.IsReservedActionName("race"), "race should be reserved")

@@ -10,7 +10,7 @@ import (
 func DetectRequiredBundles(expr Expr) []string {
 	seen := map[string]bool{
 		"syntax":   true, // Binary operators (->, |, &, ||)
-		"runtime":  true, // Core literals (const, noop, pick, etc.)
+		"runtime":  true, // Core runtime actions (noop, pick, etc.)
 		"pipeline": true, // Pipeline mechanics
 	}
 

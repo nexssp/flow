@@ -225,7 +225,7 @@ func isCapabilityRefKind(kind ArgKind) bool {
 func missingCapabilityFieldError(atom *Atom, field ArgFieldSpec) error {
 	example := "runtime.noop"
 	if field.Kind == ArgCapabilityRefList {
-		example = "[runtime.fail, runtime.const]"
+		example = "[runtime.fail, runtime.noop]"
 	}
 	return SourceError(atom.Pos,
 		`%s: field %q is a required capability reference and must be declared in the atom's named arguments, not supplied only through pipeline input`+

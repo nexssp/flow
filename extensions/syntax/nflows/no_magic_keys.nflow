@@ -10,5 +10,5 @@ parallel {
   values: [1, "2", true],
   after_modifier: runtime.noop :timeout=3s (tag: "after-modifier"),
   wrapped: { person: "Julia" } -> wrap(key: "greeting"),
-  ordinary: const(value: "42", val: 7, coerce: true)
+  ordinary: {value: "42", val: 7, coerce: true}
 }

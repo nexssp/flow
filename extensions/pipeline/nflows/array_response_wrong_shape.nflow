@@ -4,7 +4,7 @@
 }
 @pipeline items
   :response-schema=[]Item
-  const( name: "not-an-array" )
+  { name: "not-an-array" }
 @end
 pipeline.items ? on_error {
   xerr.KindValidation

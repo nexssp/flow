@@ -96,11 +96,36 @@ func (f *Formatter) Format(ctx context.Context, source, file string) (string, er
 	}
 	lines = formatAtBraceBlocks(source, lines)
 	lines = formatParenthesizedArgumentLists(source, lines, multilineStringLines(source, lines))
+	protectedLines := opaqueSourceLines(source, lines)
+	for index := range f.opaqueDirectiveLines(lines) {
+		protectedLines[index] = true
+	}
+	lines = formatProjectionBlocks(source, lines, protectedLines)
 	out, err := f.formatLines(lines, file, opaqueSourceLines(source, lines))
 	if err != nil {
 		return "", err
 	}
 	return canonicalSource(out), nil
+}
+
+func (f *Formatter) opaqueDirectiveLines(lines []string) map[int]bool {
+	protected := make(map[int]bool)
+	depth := 0
+	for index, line := range lines {
+		if depth > 0 {
+			protected[index] = true
+			depth += braceDelta(line)
+			if depth <= 0 {
+				depth = 0
+			}
+			continue
+		}
+		if f.isRawBlockDirective(strings.TrimSpace(line)) {
+			protected[index] = true
+			depth = max(braceDelta(line), 0)
+		}
+	}
+	return protected
 }
 
 type formatState struct {

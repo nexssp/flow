@@ -31,7 +31,7 @@ func TestNFlowVersionDirectiveSyntax(t *testing.T) {
 				{"new_then_old", "@nflow_version \">=0.38.0\"\n@flow_version \">=0.38.0\"", false},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
-					_, err := runner.Compile(t.Context(), cfg, tc.source+"\nconst \"ok\"\n", "version.nflow")
+					_, err := runner.Compile(t.Context(), cfg, tc.source+"\nruntime.noop\n", "version.nflow")
 					if tc.wantOK {
 						ktest.RequireNoError(t, err)
 					} else {

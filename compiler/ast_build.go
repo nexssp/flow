@@ -19,7 +19,6 @@ import (
 	"github.com/nexssp/kernel/xfile"
 
 	"github.com/nexssp/flow/compiler/secret"
-	"github.com/nexssp/flow/internal/constinput"
 	"github.com/nexssp/flow/internal/maputil"
 )
 
@@ -933,15 +932,6 @@ func resolveConfigRefsInAtom(ctx context.Context, a *Atom) {
 	resolveConfigRefsInValue(cfg, cliArgs, a.DirectInput)
 	for key, value := range a.Params {
 		resolved := resolveConfigString(cfg, cliArgs, value)
-		if a.Name == runtimeConstAction && (key == "value" || key == "val") &&
-			(strings.HasPrefix(value, "@config.") ||
-				strings.HasPrefix(value, "@flag.") ||
-				strings.HasPrefix(value, "@arg.")) {
-			if a.ParamValues == nil {
-				a.ParamValues = make(map[string]any)
-			}
-			a.ParamValues[key] = constinput.String(resolved)
-		}
 		a.Params[key] = resolved
 	}
 	for _, value := range a.Args {
@@ -972,7 +962,7 @@ func resolveConfigRefsInModifier(cfg map[string]string, cliArgs []string, raw st
 }
 
 func hasInjections(a *Atom) bool {
-	return a.DirectInput != nil || (a.Name == runtimeConstAction && a.HasArgumentObject) ||
+	return a.DirectInput != nil ||
 		len(a.Params) > 0 || len(a.Args) > 0 || len(a.ArgSpreads) > 0 ||
 		a.Prompt != "" || len(a.Targets) > 0 || len(a.Excludes) > 0
 }
@@ -1028,7 +1018,7 @@ func wrapWithDirectInput(inner action.AnyAction, a *Atom) action.AnyAction {
 			}
 			return nil, validationErr
 		}
-		result, err := action.InvokeAny(ctx, inner, constinput.Direct{Value: value})
+		result, err := action.InvokeAny(ctx, inner, value)
 		if err != nil {
 			err = secret.SanitizeError(err, value)
 			if _, ok := PositionOf(err); pos.File != "" && !ok {
@@ -1064,11 +1054,7 @@ func wrapWithPayloadBuilder(
 			}
 			return nil, validationErr
 		}
-		var actionInput any = payload
-		if a.Name == runtimeConstAction && a.HasArgumentObject {
-			actionInput = constinput.Direct{Value: payload}
-		}
-		res, err := action.InvokeAny(ctx, inner, actionInput)
+		res, err := action.InvokeAny(ctx, inner, payload)
 		if err != nil {
 			err = secret.SanitizeError(err, payload)
 			// Attach pos to the error when not already tagged with that file.
@@ -1081,11 +1067,7 @@ func wrapWithPayloadBuilder(
 	}).Build()
 }
 
-//nolint:gocyclo // Enforces exact Secret typing at every runtime action boundary.
 func validateSecretDelivery(atom *Atom, payload any) error {
-	if direct, ok := payload.(constinput.Direct); ok {
-		payload = direct.Value
-	}
 	if atom == nil {
 		if secret.Contains(payload) {
 			return xerr.Validation("secret value has no declared receiving parameter")
@@ -1135,9 +1117,6 @@ func isExactSecretValue(value any) bool {
 }
 
 func secretPayloadEntries(payload any) (map[string]any, bool) {
-	if direct, ok := payload.(constinput.Direct); ok {
-		payload = direct.Value
-	}
 	if secret.IsValue(payload) {
 		return nil, false
 	}
@@ -1284,35 +1263,6 @@ func resolveConfigRefsInValue(cfg map[string]string, cliArgs []string, value *Va
 
 func buildPayload(ctx context.Context, in any, a *Atom) (map[string]any, error) {
 	m, _ := in.(map[string]any)
-
-	// runtime.const is a generator: it resolves references against input m (e.g. .id),
-	// but emits ONLY its own declared parameters/arguments without echoing unrequested keys
-	if a.Name == runtimeConstAction {
-		out := make(map[string]any, len(a.Params)+len(a.Args))
-		for k, v := range a.Params {
-			out[k] = v
-		}
-		maps.Copy(out, a.ParamValues)
-		spreads, err := resolveArgumentSpreads(ctx, m, a)
-		if err != nil {
-			return nil, err
-		}
-		maps.Copy(out, spreads)
-		for k, v := range a.Args {
-			resolved, err := resolveValue(ctx, v, in)
-			if err != nil {
-				return nil, err
-			}
-			if v.preserveString {
-				if stringValue, ok := resolved.(string); ok {
-					resolved = constinput.String(stringValue)
-				}
-			}
-			out[k] = resolved
-		}
-		return out, nil
-	}
-
 	merged := make(map[string]any, len(m)+len(a.Params)+len(a.Args)+4)
 	for key, value := range m {
 		if !secret.Contains(value) {
@@ -1480,9 +1430,6 @@ func resolveValue(ctx context.Context, v *Value, state any) (any, error) {
 func resolveSymbolsInAtom(ctx context.Context, a *Atom) {
 	resolveSymbolsInValue(ctx, a.DirectInput)
 	for key, value := range a.Params {
-		if _, preserved := a.ParamValues[key].(constinput.String); preserved {
-			continue
-		}
 		if val, ok := lookupSymbolValue(ctx, value); ok {
 			if typed, ok := val.(TypedSymbolValue); ok {
 				if a.ParamValues == nil {
@@ -1671,7 +1618,7 @@ func dotFieldNeedsRoot(name string) bool {
 	// __root__ is Flow's own environment binding, not the user's field.
 	switch name {
 	case "true", literalFalse, "nil", "null", "not", "in", "or", "and", "matches", "contains",
-		"startsWith", "endsWith", "let", "if", "else", "__root__":
+		"startsWith", "endsWith", "let", "if", "else", "input", "__root__":
 		return true
 	}
 	return false

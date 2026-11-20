@@ -76,7 +76,7 @@ noop
 A pipeline that produces a scalar literal:
 
 ```nflow
-const "hello"
+"hello"
 ```
 
 A pipeline that shapes the input:
@@ -95,7 +95,7 @@ A pipeline that fans out and gathers:
 )
 ```
 
-Result: `{ "runtime.const#1": "left", "runtime.const#2": "right" }`.
+Result: `{ "literal#1": "left", "literal#2": "right" }`.
 Parallel branches key their output by the branch action's canonical name;
 repeats get `#1`, `#2`, and so on in source order.
 
@@ -143,12 +143,11 @@ delay the result. Unlike `||`, all race candidates are started concurrently.
 
 ## 2. Native keywords
 
-Ten action keyword names are part of the language itself. They compile to
+Nine action keyword names are part of the language itself. They compile to
 canonical actions at parse time and cannot be overridden by any bundle.
 
 | Keyword | Compiles to | Meaning |
 |---|---|---|
-| `const` | `runtime.const` | Produce a literal |
 | `with` | `runtime.with` | Merge fields into the input |
 | `pick` | `runtime.pick` | Select fields from the input |
 | `wrap` | `runtime.wrap` | Wrap the input under a key |
@@ -159,19 +158,9 @@ canonical actions at parse time and cannot be overridden by any bundle.
 | `uuid` | `runtime.uuid` | Generate a UUID v4 |
 | `json` | `json.clean` | Strip markdown fences and prose from a JSON body |
 
-Both forms are valid; prefer the keyword.
-
-```nflow
-{ user_id: 42 } -> pick(field: "user_id") -> wrap(key: "data")
-```
-
-**Keywords are grammar, not aliases.** The canonical action name
-(`runtime.const`) remains valid and is what you'll see in
-`nflow explain` output, but a bundle cannot register an action named
-`const` — the mount rejects it.
-
-The control-flow keyword `if` is also reserved when the standard `syntax`
-bundle is loaded, but it does not name or compile to a single action.
+Each listed keyword compiles to its canonical action. The control-flow keyword
+`if` is also reserved when the standard `syntax` bundle is loaded, but it does
+not name or compile to a single action.
 
 New flows can start directly with typed values and use named arguments in
 parentheses:
@@ -191,22 +180,15 @@ boolean, and `null` literals retain their declared types. Config, CLI, and
 positional references remain strings unless a deliberate typed conversion is
 used at a known field boundary.
 
-Old `action @{ ... }` and `const @{ ... }` argument blocks now fail compilation
-with a source-located replacement hint. Write `action(key: value)` for named
-arguments, `const X` for a scalar, or `const(key: value)` to construct an
-object. Direct values preserve their declared types: for example, `const "42"`
-returns text, not the number `42`.
+Old `action @{ ... }` argument blocks fail compilation with a source-located
+replacement hint; write `action(key: value)` for named arguments. The runtime
+`const` keyword and generator have been removed: use a direct typed value for a
+scalar or an object projection for a shaped value. For example, `"42"` returns
+text, not the number `42`. `@const` remains a separate compile-time directive
+for named constants.
 
-The separate `const(value=...)` and `const(val=...)` key=value forms remain
-accepted with lint warnings. They still unwrap a scalar, with `value` taking
-precedence if both keys are present, and legacy strings may be auto-parsed.
-`coerce` affects that wrapper only when it reaches the runtime as a typed
-boolean `true` for a preserved CLI/config/arg string; literal `coerce=true` in
-key=value syntax is text, not a boolean. Without `value` or `val`, `coerce`
-remains an object field and does not trigger this warning. In the current
-`const(value: ...)` spelling, `value`, `val`, and `coerce` are ordinary object
-keys. Check the old output type before replacing a wrapper, and do not
-mechanically turn `coerce: true` into a generic cast.
+A call spelled `const(...)` is now ordinary action syntax; it has no special
+value-wrapper or coercion behavior and must resolve like any other action.
 
 An object can be written directly as a projection:
 
@@ -314,14 +296,11 @@ strings keep those characters as data. Inside `(expr)`, expr-lang `//` and
 `/* ... */` comments are ignored when finding the closing parenthesis.
 
 **Old argument blocks are rejected:** replace `action @{ key: value }` with
-`action(key: value)`. Replace `const @{ value: X }` with `const X` for a scalar,
-or use `const(key: value)` when the output should be an object. The separate
-`action(key=value, ...)` spelling remains accepted for compatibility; ordinary
-non-const actions using it do not warn. For `const`, the distinct
-`const(value=...)` and `const(val=...)` forms still use the old scalar wrapper
-and are warned as described above. Do not mechanically turn `coerce: true`
-into a cast; choose an explicit conversion only when the receiving field
-requires one.
+`action(key: value)`. The `action(key=value, ...)` spelling remains accepted for
+compatibility. For data values, use a direct typed value or an object
+projection; compile-time `@const` declarations remain available for named
+constants. Do not mechanically turn `coerce: true` into a cast; choose an
+explicit conversion only when the receiving field requires one.
 
 ---
 
@@ -344,10 +323,9 @@ distribute.map(action: "noop")
   error: use a bare capability reference, not a string literal ("noop")
 ```
 
-Bare identifiers in **undeclared** argument fields stay as plain
-strings. `const(value: noop)` produces an object whose `value` is the string
-`"noop"`, not a capability. The compiler only treats an argument as a
-capability reference when the owning bundle declares it as one.
+Bare identifiers in **undeclared** argument fields stay as plain strings. The
+compiler only treats an argument as a capability reference when the owning
+bundle declares it as one.
 
 Canonical names (`runtime.noop`) are also accepted in capability
 positions.
@@ -370,12 +348,18 @@ A `{ ... }` at the top of a pipeline reshapes the current value:
 
 Result: `{ "name": "Maksymilian", "greeting": "Hello, Maksymilian" }`.
 A bare projection entry such as `name` copies `.name` into the output key `name`.
-Use `key: value` when the output key differs or the value needs an expression;
-the two forms can be mixed in one projection. Both projections and action
-argument maps accept a same-name shorthand, but their evaluation models differ:
-projections are expr-lang expressions, while action-argument shorthand means a
-reference to the current pipeline input. Named arguments use the same shorthand
-inside the current parenthesized call syntax, `action(name: value)`.
+In a `key: value` entry, an unbound bare identifier or dotted name is literal
+data (`label: status` produces the string `"status"`). Visible pipeline
+bindings, projection-local names, and known symbol namespaces resolve in scope;
+use `.status` for the current input or `(person.status)` for an explicit
+expression. A whole quoted value is also data and preserves backslashes as
+written. Composite expressions, function
+calls, and parenthesized `(expr)` values remain expr-lang expressions. Both
+projections and action-argument maps accept same-name shorthand, but their
+evaluation models differ: projection entries allow expr-lang expressions, while
+action-argument shorthand means a reference to the current pipeline input.
+Named arguments use the same shorthand inside the current parenthesized call
+syntax, `action(name: value)`.
 
 Projections can spread the whole input with `...`:
 
@@ -713,7 +697,7 @@ is useful when a setting name and its config key share a parameter:
   $field: @config.stats_$field
 }
 
-runtime.const(
+runtime.with(
   @stats_config(tree_only),
   @stats_config(full_tree)
 )

@@ -1,7 +1,7 @@
 @description "a new binding inside an if branch does not leak outside the branch"
-@assert: result.after == nil
-const( enabled: true ) as parent
+@assert: result.after == "branch_only"
+{ enabled: true } as parent
 -> if (.enabled) {
-  const "branch" as branch_only
+  "branch" as branch_only
 }
 -> { after: branch_only }

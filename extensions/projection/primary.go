@@ -2,6 +2,7 @@ package projection
 
 import (
 	"errors"
+	"strings"
 
 	compiler "github.com/nexssp/flow/compiler"
 )
@@ -62,6 +63,13 @@ func scanBalancedBraces(src string, openIndex int) (int, error) {
 			i, quote = advanceProjectionQuote(src, i, quote)
 			continue
 		}
+		if next, handled, err := skipBalancedBraceTrivia(src, i, parenDepth); handled {
+			if err != nil {
+				return -1, err
+			}
+			i = next
+			continue
+		}
 
 		switch c {
 		case '"', '\'', '`':
@@ -72,18 +80,6 @@ func scanBalancedBraces(src string, openIndex int) (int, error) {
 			if parenDepth > 0 {
 				parenDepth--
 			}
-		case '#':
-			if parenDepth > 0 {
-				// Iterator placeholder; not a comment.
-				i++
-				continue
-			}
-			// Depth-0 comment: `}` inside it must not close the
-			// projection, so skip to end of line.
-			for i < len(src) && src[i] != '\n' && src[i] != '\r' {
-				i++
-			}
-			continue
 		case '{':
 			depth++
 		case '}':
@@ -95,4 +91,118 @@ func scanBalancedBraces(src string, openIndex int) (int, error) {
 		i++
 	}
 	return -1, errors.New("unclosed projection")
+}
+
+func skipBalancedBraceTrivia(src string, index, parenDepth int) (next int, handled bool, err error) {
+	if index+1 < len(src) && src[index] == '/' {
+		switch src[index+1] {
+		case '/':
+			for index < len(src) && src[index] != '\n' && src[index] != '\r' {
+				index++
+			}
+			return index, true, nil
+		case '*':
+			end, ok := projectionBlockCommentEnd(src, index)
+			if !ok {
+				return -1, true, errors.New("unclosed projection")
+			}
+			return end, true, nil
+		}
+	}
+	if src[index] == '#' && (parenDepth == 0 || projectionHashLineComment(src, index)) {
+		for index < len(src) && src[index] != '\n' && src[index] != '\r' {
+			index++
+		}
+		return index, true, nil
+	}
+	return index, false, nil
+}
+
+func projectionHashLineComment(src string, index int) bool {
+	lineStart := strings.LastIndexAny(src[:index], "\r\n") + 1
+	for _, c := range src[lineStart:index] {
+		if c != ' ' && c != '\t' {
+			return false
+		}
+	}
+	return true
+}
+
+func projectionBlockCommentEnd(src string, start int) (int, bool) {
+	depth := 1
+	for i := start + 2; i < len(src); i++ {
+		if i+1 < len(src) && src[i:i+2] == "/*" {
+			depth++
+			i++
+			continue
+		}
+		if i+1 < len(src) && src[i:i+2] == "*/" {
+			depth--
+			i++
+			if depth == 0 {
+				return i + 1, true
+			}
+		}
+	}
+	return len(src), false
+}
+
+func stripProjectionComments(raw string) string {
+	out := []byte(raw)
+	var quote byte
+	parenDepth := 0
+	for i := 0; i < len(raw); {
+		c := raw[i]
+		if quote != 0 {
+			i, quote = advanceProjectionQuote(raw, i, quote)
+			continue
+		}
+		if isProjectionQuote(c) {
+			quote = c
+			i++
+			continue
+		}
+		if c == '/' && i+1 < len(raw) {
+			if raw[i+1] == '/' {
+				i = blankProjectionLineComment(out, i)
+				continue
+			}
+			if raw[i+1] == '*' {
+				end, ok := projectionBlockCommentEnd(raw, i)
+				if !ok {
+					end = len(raw)
+				}
+				for j := i; j < end; j++ {
+					if raw[j] != '\n' && raw[j] != '\r' {
+						out[j] = ' '
+					}
+				}
+				i = end
+				continue
+			}
+		}
+		if c == '#' && (parenDepth == 0 || projectionHashLineComment(raw, i)) {
+			i = blankProjectionLineComment(out, i)
+			continue
+		}
+		switch c {
+		case '(':
+			parenDepth++
+		case ')':
+			if parenDepth > 0 {
+				parenDepth--
+			}
+		}
+		i++
+	}
+	return string(out)
+}
+
+func blankProjectionLineComment(out []byte, start int) int {
+	position := start
+	for position < len(out) && out[position] != '\n' && out[position] != '\r' {
+		out[position] = ' '
+		position++
+	}
+	return position
 }

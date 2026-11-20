@@ -35,12 +35,6 @@ func TestSelftest_RepositoryFixturesMatchEmbeddedFiles(t *testing.T) {
 		"embed/nflows/template_render--welcome.tmpl":     false,
 		"embed/nflows/template_render.nflow":             false,
 	}
-	// This file demonstrates CLI scalar handling but is an example, not a
-	// fixture embedded by the runtime self-test bundle. Keep the exception
-	// exact and verify the file remains present.
-	nonEmbeddedExamples := map[string]bool{
-		"runtime/examples/nflows/const_cli_raw_text.nflow": false,
-	}
 	for _, bundle := range native.SelftestBundles() {
 		ktest.RequireCondition(t, bundle.Fixtures != nil, "bundle %q has no fixtures", bundle.ID)
 		err := fs.WalkDir(bundle.Fixtures, ".", func(p string, entry fs.DirEntry, walkErr error) error {
@@ -92,11 +86,6 @@ func TestSelftest_RepositoryFixturesMatchEmbeddedFiles(t *testing.T) {
 			hostFixtures[key] = true
 			return nil
 		}
-		if _, isExample := nonEmbeddedExamples[key]; isExample {
-			ktest.RequireCondition(t, len(data) > 0, "empty non-embedded example %s", key)
-			nonEmbeddedExamples[key] = true
-			return nil
-		}
 		got, ok := embedded[key]
 		ktest.RequireCondition(t, ok, "repository fixture %s is not embedded by a self-test bundle", key)
 		ktest.RequireCondition(t, bytes.Equal(got, data), "embedded fixture %s differs from the repository", key)
@@ -107,9 +96,6 @@ func TestSelftest_RepositoryFixturesMatchEmbeddedFiles(t *testing.T) {
 	ktest.RequireCondition(t, count > 0, "repository fixture scan found no files")
 	for key, found := range hostFixtures {
 		ktest.RequireCondition(t, found, "host-configured fixture %s is missing", key)
-	}
-	for key, found := range nonEmbeddedExamples {
-		ktest.RequireCondition(t, found, "non-embedded example %s is missing", key)
 	}
 	for key := range embedded {
 		t.Errorf("embedded fixture %s has no matching repository file", key)

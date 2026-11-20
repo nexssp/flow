@@ -39,7 +39,7 @@ func TestRunSourceInProcess_InfoWithDirectives(t *testing.T) {
 	// the tree. Before the fix, the info path parsed the raw source
 	// and reported `unexpected token "description"` on line 1.
 	src := `@description "test flow"
-const "hi"
+"hi"
 `
 	_ = captureStdout(t, func() {
 		rc := runSourceInProcess(context.Background(), src, "test.nflow", []string{"--info"})
@@ -51,7 +51,7 @@ func TestRunSourceInProcess_InfoWithMacros(t *testing.T) {
 	// Source declares a macro and uses it. Info must parse cleanly
 	// (requires the macro primary) and list the resulting atoms.
 	src := `
-@macro hi() { const "hi" }
+@macro hi() { "hi" }
 @hi()
 `
 	_ = captureStdout(t, func() {
@@ -65,7 +65,7 @@ func TestRunSourceInProcess_InfoWithPipeline(t *testing.T) {
 	// is whitespace; info must still succeed.
 	src := `
 @pipeline p
-  const "x"
+  "x"
 @end
 pipeline.p
 `
@@ -100,6 +100,43 @@ func TestSplitPositionalsAndFlagsKeepsJSONLookingString(t *testing.T) {
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, len(payload), 0)
 	ktest.RequireEqual(t, flags, []string{value, "--json"})
+}
+
+func TestIsInlineSourceDirectValuesAndFilePrecedence(t *testing.T) {
+	for _, source := range []string{`"ok"`, `42`, `true`, `[1,2]`, `.user.name`} {
+		t.Run(source, func(t *testing.T) {
+			if !isInlineSource(context.Background(), source) {
+				t.Fatalf("isInlineSource(%q) = false, want true", source)
+			}
+		})
+	}
+
+	file, err := os.OpenFile("42", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err == nil {
+		if closeErr := file.Close(); closeErr != nil {
+			t.Fatal(closeErr)
+		}
+		defer os.Remove("42")
+	} else if !os.IsExist(err) {
+		t.Fatal(err)
+	}
+	if isInlineSource(context.Background(), "42") {
+		t.Fatal("an existing file named 42 must take precedence over direct-value parsing")
+	}
+}
+
+func TestIsInlineSourceMissingConstAndNoopPaths(t *testing.T) {
+	for _, target := range []string{
+		"missing-const.nflow",
+		"missing-noop.nflow",
+		"missing-const-noop",
+	} {
+		t.Run(target, func(t *testing.T) {
+			if isInlineSource(context.Background(), target) {
+				t.Fatalf("isInlineSource(%q) = true, want missing path to remain a file target", target)
+			}
+		})
+	}
 }
 
 func TestRenderColoredJSONStartsImmediately(t *testing.T) {

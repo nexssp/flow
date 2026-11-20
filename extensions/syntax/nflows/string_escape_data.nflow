@@ -6,9 +6,9 @@
   result.unicode == "bad unicode\\uZZZZ"
   len("\n") == 1
 }
-const(
+{
   line: "line\nbreak",
   unknown: "unknown\q",
   hex: "bad hex\xGG",
   unicode: "bad unicode\uZZZZ"
-)
+}

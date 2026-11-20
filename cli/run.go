@@ -63,7 +63,7 @@ func RunWithBundleFactoriesAndNative(
 }
 
 func withHarness(ctx context.Context, inv *invocation, subcommand, flowPath string, args []string, inProcess func(context.Context, *invocation, []string) int) int {
-	if flowPath == "" || isInlineSource(flowPath) {
+	if flowPath == "" || isInlineSource(ctx, flowPath) {
 		return inProcess(ctx, inv, args)
 	}
 	reqs, err := inv.requirementsForHarness(ctx, flowPath)
@@ -212,7 +212,7 @@ func runFlowInProcess(ctx context.Context, inv *invocation, args []string) int {
 		name string
 	)
 
-	if isInlineSource(target) {
+	if isInlineSource(ctx, target) {
 		src = target
 		name = "<inline>"
 	} else {
@@ -227,16 +227,40 @@ func runFlowInProcess(ctx context.Context, inv *invocation, args []string) int {
 	return runSourceInInvocation(ctx, inv, src, name, payload, flags)
 }
 
-func isInlineSource(target string) bool {
+func isInlineSource(ctx context.Context, target string) bool {
 	if _, err := os.Stat(target); err == nil {
 		return false
 	}
-	return strings.Contains(target, "->") ||
-		strings.Contains(target, "|") ||
-		strings.Contains(target, "@") ||
-		strings.Contains(target, "{") ||
-		strings.Contains(target, "const") ||
-		strings.Contains(target, "noop")
+	source := strings.TrimSpace(target)
+	if source == "" {
+		return false
+	}
+
+	if expr, err := compiler.NewParser(ctx, compiler.NewOperatorTable(), source).Parse(); err == nil {
+		switch node := expr.(type) {
+		case *compiler.LiteralExpr, *compiler.ValueExpr:
+			return true
+		case *compiler.Atom:
+			if compiler.IsReservedActionName(node.Name) ||
+				strings.HasPrefix(node.Name, "runtime.") ||
+				strings.HasPrefix(node.Name, "pipeline.") {
+				return true
+			}
+		}
+	}
+
+	if strings.HasSuffix(strings.ToLower(source), ".nflow") || strings.ContainsAny(source, `/\`) {
+		return false
+	}
+
+	if strings.Contains(source, "->") ||
+		strings.ContainsAny(source, "|&{}[]()@?:\"'`") {
+		return true
+	}
+
+	// Missing .nflow files and path-like targets must remain file requests;
+	// never infer inline source from words embedded in their names.
+	return false
 }
 
 func RunEmbeddedWithBundles(ctx context.Context, source string, args []string, bundles []compiler.Bundle) int {

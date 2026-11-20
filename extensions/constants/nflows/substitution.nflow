@@ -1,4 +1,4 @@
 @description "Substitute a named compile-time constant"
 @const SUPPORT_QUEUE = "support.priority"
 @assert: result == "support.priority"
-const "${SUPPORT_QUEUE}"
+"${SUPPORT_QUEUE}"

@@ -62,7 +62,7 @@ func TestReadRunInput_PreserveStdin(t *testing.T) {
 	const protocol = `{"jsonrpc":"2.0","id":1,"method":"initialize"}`
 	withStdin(t, protocol)
 
-	payload, flags, err := readRunInput(map[string]any{"user": "alice"}, "runtime.const", []string{preserveStdinFlag, "--json"})
+	payload, flags, err := readRunInput(map[string]any{"user": "alice"}, "runtime.noop", []string{preserveStdinFlag, "--json"})
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, payload, map[string]any{"user": "alice"})
 	ktest.RequireEqual(t, flags, []string{"--json"})
@@ -75,7 +75,7 @@ func TestReadRunInput_PreserveStdin(t *testing.T) {
 func TestRunSource_SuppressOutput(t *testing.T) {
 	withStdin(t, "")
 	out := captureStdout(t, func() {
-		rc := runSourceInProcess(t.Context(), `const "hidden"`, "suppress-output.nflow", []string{"--suppress-output"})
+		rc := runSourceInProcess(t.Context(), `"hidden"`, "suppress-output.nflow", []string{"--suppress-output"})
 		ktest.RequireEqual(t, rc, 0)
 	})
 	ktest.RequireEqual(t, out, "")
@@ -83,7 +83,7 @@ func TestRunSource_SuppressOutput(t *testing.T) {
 
 func TestRunSource_SuppressOutputPreservesDirectStdout(t *testing.T) {
 	withStdin(t, "")
-	source := `const "runner-result" -> runtime.print ( stream: "stdout", label: "direct-stdout" )`
+	source := `"runner-result" -> runtime.print ( stream: "stdout", label: "direct-stdout" )`
 	suppressed := captureStdout(t, func() {
 		rc := runSourceInProcess(t.Context(), source, "direct-stdout.nflow", []string{"--json", "--suppress-output"})
 		ktest.RequireEqual(t, rc, 0)

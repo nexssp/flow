@@ -3,13 +3,13 @@
 @symbols labels { local: "local-pipeline" }
 @include ./catalog.nflow AS api
 @pipeline local_status :status=status.created :description=labels.local
-  const "local-status"
+  "local-status"
 @end
 @pipeline imported_status :status=api.status.created :description=api.labels.imported
-  const "imported-status"
+  "imported-status"
 @end
 @pipeline quoted_literal :description="api.labels.quoted"
-  const "quoted-literal"
+  "quoted-literal"
 @end
 parallel {
   local: pipeline.local_status,

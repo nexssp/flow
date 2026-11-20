@@ -1,6 +1,6 @@
 @description "Macro: nested invocation"
 @macro echo(v) {
-  const $v
+  $v
 }
 @macro seq(a, b) {
   $a -> $b

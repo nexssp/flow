@@ -2,7 +2,7 @@
 @pipeline legacy
   noop
 @end
-const(name: (input.name ?? "legacy"), extra: (input.extra ?? true))
+{name: (input.name ?? "legacy"), extra: (input.extra ?? true)}
   -> pipeline.legacy
 @assert: result.name == "legacy"
 @assert: result.extra == true

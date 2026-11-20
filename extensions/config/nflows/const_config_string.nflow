@@ -1,6 +1,0 @@
-@description "A numeric-looking config reference remains a string"
-@config {
-  count: 42
-}
-@assert: result == "42"
-const @config.count

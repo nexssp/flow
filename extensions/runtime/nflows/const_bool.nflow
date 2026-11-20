@@ -1,3 +1,0 @@
-@description "Runtime.const accepts a direct boolean scalar"
-@assert: result == true
-const true

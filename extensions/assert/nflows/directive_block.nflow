@@ -1,5 +1,5 @@
 @description "@assert multiline block keeps each assertion and its source line"
-const ( greeting: "hello", count: 2, tags: ["a,b", "green"] )
+{ greeting: "hello", count: 2, tags: ["a,b", "green"] }
 @assert {
   result.greeting == "hello"
   result.count > 0

@@ -9,9 +9,9 @@
   { amount: "1000" }
     -> match {
     .amount == thresholds.high_value
-      -> const "over_high_value",
+      -> "over_high_value",
     _
-      -> const "under_high_value"
+      -> "under_high_value"
   }
 @end
 

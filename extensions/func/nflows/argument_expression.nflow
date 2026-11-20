@@ -1,5 +1,5 @@
 @description "A pure function can calculate a structured action argument value"
 @func commerce.double(value int) int = value * 2
 @assert: result == 84
-const(value: commerce.double(42))
+{value: commerce.double(42)}
   -> pick(field: "value")

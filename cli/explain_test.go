@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
@@ -45,10 +47,41 @@ func explainSource(t *testing.T, src string) string {
 	return buf.String()
 }
 
-func TestExplain_AtomWithoutModifiers(t *testing.T) {
-	out := explainSource(t, `const "ok"`)
-	ktest.RequireStringContains(t, out, "runtime.const")
+func TestExplain_DirectValueWithoutModifiers(t *testing.T) {
+	out := explainSource(t, `"ok"`)
+	ktest.RequireStringContains(t, out, "literal")
 	ktest.RequireStringContains(t, out, "(no modifiers)")
+
+	valueOut := explainSource(t, `@arg.1`)
+	ktest.RequireStringContains(t, valueOut, "value")
+	ktest.RequireStringContains(t, valueOut, "(no modifiers)")
+}
+
+func TestExplainAST_ValueExprTextAndJSON(t *testing.T) {
+	cfg := explainConfig(t)
+	source := `@arg.1`
+
+	var text bytes.Buffer
+	if err := renderExplainASTWithContext(context.Background(), &text, cfg, source, "value.nflow", false); err != nil {
+		t.Fatal(err)
+	}
+	ktest.RequireStringContains(t, text.String(), "Value")
+	ktest.RequireStringContains(t, text.String(), ".arg.1")
+
+	var encoded bytes.Buffer
+	if err := renderExplainASTWithContext(context.Background(), &encoded, cfg, source, "value.nflow", true); err != nil {
+		t.Fatal(err)
+	}
+	var report ASTReport
+	if err := json.Unmarshal(encoded.Bytes(), &report); err != nil {
+		t.Fatalf("decode AST JSON: %v\n%s", err, encoded.String())
+	}
+	if report.TopLevel == nil || report.TopLevel.Kind != "Value" || report.TopLevel.Name != ".arg.1" {
+		t.Fatalf("AST JSON top-level node = %#v, want Value .arg.1", report.TopLevel)
+	}
+	if report.TopLevel.Pos == nil || report.TopLevel.Pos.File != "value.nflow" || report.TopLevel.Pos.Line != 1 || report.TopLevel.Pos.Col < 1 {
+		t.Fatalf("AST JSON value position = %#v, want value.nflow:1 with a positive column", report.TopLevel.Pos)
+	}
 }
 
 func TestExplain_AtomWithLocalModifier(t *testing.T) {

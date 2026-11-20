@@ -25,7 +25,8 @@ func TestProjectionBindingConflictRuntimeError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read fixture %q: %v", conflictFixture, err)
 	}
-	_, err = runner.Execute(t.Context(), cfg, string(conflictSource), conflictFixture, nil)
+	input := map[string]any{"tool": map[string]any{"name": "payload"}}
+	_, err = runner.Execute(t.Context(), cfg, string(conflictSource), conflictFixture, input)
 	if xerr.KindFrom(err) != xerr.KindConflict {
 		t.Fatalf("execute ambiguous fixture error = %v, want Conflict", err)
 	}

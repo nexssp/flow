@@ -141,14 +141,15 @@ Four hard rules. Each is enforced at mount time; none is a convention.
 ### 3.1 No reserved names
 
 Native keywords are grammar. A bundle cannot register an action, source,
-or operator named `const`, `noop`, `pick`, `wrap`, `fail`, `sleep`,
+or operator named `noop`, `pick`, `wrap`, `fail`, `sleep`,
 `env`, `uuid`, `json`, or `with`:
 
 ```
-library "mybundle": action "const" is a reserved language name
+library "mybundle": action "noop" is a reserved language name
 ```
 
-The reserved list is in `compiler/reserved.go` and is not extensible.
+The runtime `const` keyword has been removed, so `const` is no longer reserved.
+The remaining reserved list is in `compiler/reserved.go` and is not extensible.
 
 ### 3.2 No reserved modifiers
 
@@ -370,7 +371,7 @@ An `ArgCapabilityRefList` field accepts a list of bare identifiers:
 ```
 
 ```nflow
-dispatch.run(members: [noop, const], payload: .data)
+dispatch.run(members: [noop], payload: .data)
 ```
 
 A field **not** declared in `ArgSchemas` is a plain string. A bare

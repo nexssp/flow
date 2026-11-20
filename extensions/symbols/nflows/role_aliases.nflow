@@ -8,12 +8,12 @@
 
 { requested: "support.triage" }
   -> match {
-	.requested == roles.support_triage
-	  -> const roles.support_triage,
-	.requested == roles.billing_refund
-	  -> const roles.billing_refund,
-	_
-	  -> const roles.on_call
+		.requested == roles.support_triage
+		  -> roles.support_triage,
+		.requested == roles.billing_refund
+		  -> roles.billing_refund,
+		_
+		  -> roles.on_call
 }
 
 @assert: result == "support.triage"

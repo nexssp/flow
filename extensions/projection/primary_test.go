@@ -145,6 +145,28 @@ func TestParse_HashIteratorAndCommentCoexist(t *testing.T) {
 	ktest.RequireStringContains(t, proj.Raw, `map(upper(#))`)
 }
 
+func TestParse_CommentsInsideParenthesizedExpressionsDoNotCloseProjection(t *testing.T) {
+	src := `{
+  block: (1 /* ) ] } */ + 2),
+  slash: (1 + // ) ] }
+    2),
+  hash: (1 +
+    # ) ] } ignored
+    2)
+}`
+	expr, err := newProjectionParser(t, src).Parse()
+	ktest.RequireNoError(t, err)
+
+	proj, ok := expr.(*compiler.ProjectionExpr)
+	ktest.RequireCondition(t, ok, "got %T, want *compiler.ProjectionExpr", expr)
+	ktest.RequireStringContains(t, proj.Raw, "block: (1")
+	ktest.RequireStringContains(t, proj.Raw, "slash: (1 +")
+	ktest.RequireStringContains(t, proj.Raw, "hash: (1 +")
+	ktest.RequireStringNotContains(t, proj.Raw, "/*")
+	ktest.RequireStringNotContains(t, proj.Raw, "//")
+	ktest.RequireStringNotContains(t, proj.Raw, "# )")
+}
+
 func TestParse_CRLFLineEndingPreserved(t *testing.T) {
 	src := "{ a: 1, # comment\r\n b: 2 }"
 	expr, err := newProjectionParser(t, src).Parse()

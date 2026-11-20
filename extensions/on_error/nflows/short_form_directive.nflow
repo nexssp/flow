@@ -1,6 +1,6 @@
 @description "Short form @on_error target recovers from any error"
 @pipeline recover
-  const "recovered"
+  "recovered"
 @end
 @on_error pipeline.recover
 @assert: result == "recovered"

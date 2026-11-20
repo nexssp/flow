@@ -8,62 +8,12 @@ import (
 	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xtest/ktest"
 
-	"github.com/nexssp/flow/internal/constinput"
 	"github.com/nexssp/flow/internal/maputil"
 )
 
 func run(tb testing.TB, act action.AnyAction, in any) (any, error) {
 	tb.Helper()
 	return action.InvokeAny(tb.Context(), act, in)
-}
-
-func TestConst_Coercion(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name string
-		in   any
-		want any
-	}{
-		{"bare string", "hello", "hello"},
-		{"int", map[string]any{"value": "42"}, int64(42)},
-		{"numeric int", map[string]any{"value": float64(42)}, int64(42)},
-		{"negative int", map[string]any{"value": "-7"}, int64(-7)},
-		{"float", map[string]any{"value": "3.14"}, 3.14},
-		{"numeric float", map[string]any{"value": float64(3.14)}, 3.14},
-		{"true", map[string]any{"value": "true"}, true},
-		{"false", map[string]any{"value": "false"}, false},
-		{"null", map[string]any{"value": "null"}, nil},
-		{"json object", map[string]any{"value": `{"a":1}`}, map[string]any{"a": float64(1)}},
-		{"json array", map[string]any{"value": `[1,2]`}, []any{float64(1), float64(2)}},
-		{"non-string passthrough", map[string]any{"value": 42}, 42},
-		{"empty string", map[string]any{"value": ""}, ""},
-		{"val alias", map[string]any{"val": "x"}, "x"},
-		{"direct scalar string", constinput.Direct{Value: "42"}, "42"},
-		{"direct scalar number", constinput.Direct{Value: float64(42)}, int64(42)},
-		{"direct scalar bool", constinput.Direct{Value: true}, true},
-		{"direct scalar null", constinput.Direct{Value: nil}, nil},
-		{"preserved CLI string", map[string]any{"value": constinput.String("42")}, "42"},
-		{"preserved boolean-looking CLI string", map[string]any{"value": constinput.String("true")}, "true"},
-		{"preserved JSON-looking CLI string", map[string]any{"value": constinput.String(`{"a":1}`)}, `{"a":1}`},
-		{"explicitly coerced CLI string", map[string]any{"value": constinput.String("42"), "coerce": true}, int64(42)},
-		{"named object", map[string]any{"count": 3, "enabled": true}, map[string]any{"count": 3, "enabled": true}},
-		{"named object preserves boolean-looking string", map[string]any{"enabled": constinput.String("true")}, map[string]any{"enabled": "true"}},
-		{"named object with coerce field", map[string]any{"count": 3, "coerce": true}, map[string]any{"count": 3, "coerce": true}},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-			got, err := run(t, Const, c.in)
-			ktest.RequireNoError(t, err)
-			ktest.RequireEqual(t, got, c.want)
-		})
-	}
-}
-
-func TestConst_MissingValue(t *testing.T) {
-	t.Parallel()
-	_, err := run(t, Const, map[string]any{})
-	ktest.RequireErrorKind(t, err, xerr.KindBadRequest)
 }
 
 func TestNoop_PassThrough(t *testing.T) {

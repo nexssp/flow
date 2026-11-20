@@ -1,7 +1,6 @@
 @description "Spaced inline modifiers do not collide with ternary colon parsing"
 
 # Space before colon should parse as atom modifiers, not ternary conditional
-const :timeout=2s :retry=1 "spaced_modifier_ok"
--> noop
+"spaced_modifier_ok" -> noop :timeout=2s :retry=1
 
 @assert: result == "spaced_modifier_ok"

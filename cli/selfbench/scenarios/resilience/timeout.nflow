@@ -1,8 +1,8 @@
-@description "Timeout benchmark: successful local const under a per-attempt timeout"
+@description "Timeout benchmark: direct string value under a per-attempt timeout"
 @assert: result == "ok"
 @pipeline benchmark
   :timeout=1s
-  const "ok"
+  "ok"
 @end
 {}
 -> pipeline.benchmark

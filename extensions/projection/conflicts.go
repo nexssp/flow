@@ -40,7 +40,8 @@ func projectionUsedBindingReferences(source string, bindingNames []string) []pro
 		if _, candidate := candidates[name]; !candidate {
 			continue
 		}
-		if projectionIdentifierIsShorthand(start, next, shorthand) || projectionIdentifierIsLocal(source, name, start, next) {
+		if projectionIdentifierIsShorthand(start, next, shorthand) ||
+			projectionIdentifierIsLocal(source, name, start, next) {
 			continue
 		}
 
@@ -59,6 +60,7 @@ func projectionShorthandFieldSpans(source string) []projectionIdentifierSpan {
 	scanner := projectionShorthandScanner{
 		raw:             source,
 		lastSignificant: '{',
+		containers:      []byte{'{'},
 		bareFields:      &spans,
 	}
 	for index := 0; index < len(source); {

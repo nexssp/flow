@@ -16,20 +16,20 @@
   @on_error {
     when error.kind == xerr.KindValidation -> pipeline.inner_body_recovery
   }
-  const ( id: "task-1" )
+  { id: "task-1" }
 @end
 
 @pipeline inner_body_recovery
-  const ( route: "inner-body-catch" )
+  { route: "inner-body-catch" }
 @end
 @pipeline request_schema_recovery
-  const ( route: "request-schema", kind: "Validation" )
+  { route: "request-schema", kind: "Validation" }
 @end
 @pipeline email_field_recovery
-  const ( route: "email-field", kind: "Validation" )
+  { route: "email-field", kind: "Validation" }
 @end
 @pipeline response_schema_recovery
-  const ( route: "response-schema", kind: "Validation" )
+  { route: "response-schema", kind: "Validation" }
 @end
 
 @on_error {

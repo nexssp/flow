@@ -5,10 +5,10 @@
 }
 @pipeline strict_output
   :out-schema=!ChatTurn
-  const( role: .role, content: .content, unexpected: true )
+  { role: .role, content: .content, unexpected: true }
 @end
 @pipeline response_rejected
-  const( route: "strict-response-rejected" )
+  { route: "strict-response-rejected" }
 @end
 @on_error {
   when error.kind == xerr.KindValidation -> pipeline.response_rejected,

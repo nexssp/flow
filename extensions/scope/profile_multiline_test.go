@@ -28,7 +28,7 @@ func TestProfileMultilinePreprocess(t *testing.T) {
   :dedup
   :coalesce
 
-runtime.const
+runtime.noop
   :timeout=1s
 `
 	clean, meta, err := compiler.Preprocess(t.Context(), compiler.NewDirectiveTable(ProfileDirective), source, "profiles.nflow")
@@ -36,7 +36,7 @@ runtime.const
 	mods, err := ExpandProfile(meta, "hardened_resilience")
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, mods, []string{"timeout=2s", "retry=2", "concurrency=8", "rate_limit=100", "cache=30s", "idempotent", "dedup", "coalesce"})
-	ktest.RequireCondition(t, strings.Contains(clean, "runtime.const\n  :timeout=1s"), "body modifier was consumed: %s", clean)
+	ktest.RequireCondition(t, strings.Contains(clean, "runtime.noop\n  :timeout=1s"), "body modifier was consumed: %s", clean)
 	ktest.RequireEqual(t, strings.Count(clean, "\n"), strings.Count(source, "\n"))
 }
 

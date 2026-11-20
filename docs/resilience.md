@@ -49,9 +49,11 @@ To see the effective policy on each atom, run `nflow explain <file.nflow>`; `nfl
 
 ## Try complete workflows
 
-The examples below model an order checkout rather than just a single failing call. They are complete, deterministic fixtures: the built-in `const`, `fail`, and `sleep` keywords stand in for pricing, inventory, payment, and provider actions so you can run the control flow without credentials or a network service. In an application, replace those adapter stubs with your mounted service actions and keep the profile and recovery boundaries.
+The examples below model an order checkout rather than just a single failing call. They are complete, deterministic fixtures: direct values, `fail`, and `sleep` stand in for pricing, inventory, payment, and provider actions so you can run the control flow without credentials or a network service. In an application, replace those adapter stubs with your mounted service actions and keep the profile and recovery boundaries.
 
-`const` is a source-level keyword for the canonical `runtime.const` action, so examples need not spell out the `runtime.` prefix. A call such as `const(quantity: .quantity)` emits only the declared object fields, with `.quantity` read from the current input. Start a flow with a direct typed value such as `"ready"` for a scalar or array; `value`, `val`, and `coerce` are ordinary object keys in the new call syntax.
+The runtime `const` keyword and generator have been removed. Use direct typed
+values for scalars and arrays, and object projections for shaped values.
+Compile-time `@const` remains available for named constants.
 
 | Workflow | What it demonstrates | Expected outcome |
 |---|---|---|
@@ -106,7 +108,7 @@ As a concrete reference, one three-sample run on Linux/amd64 (Intel Xeon at 2.50
 | Precompiled runtime | Baseline | 12.7 µs | 3,408 | 43 |
 | Precompiled runtime | Resilience profile | 18.0 µs | 4,336 | 50 |
 
-Treat these as an example of the benchmark output, not a performance promise: the workload is a tiny local `const` action and does not include provider I/O or contention.
+Treat these as an example of the benchmark output, not a performance promise: the workload returns a tiny local literal value and does not include provider I/O or contention.
 
 ## Choose the right state lifetime
 

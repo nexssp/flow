@@ -7,11 +7,11 @@
 # optional; without it, unmatched errors propagate unchanged.
 
 @pipeline on_timeout
-  const "timeout-recovered"
+  "timeout-recovered"
 @end
 
 @pipeline on_missing
-  const "missing-recovered"
+  "missing-recovered"
 @end
 
 @on_error {

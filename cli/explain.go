@@ -371,6 +371,10 @@ func renderExplainNodes(w io.Writer, ast compiler.Expr, indent string, useColor 
 		switch n := node.(type) {
 		case *compiler.Atom:
 			renderExplainAtom(w, n, indent, useColor)
+		case *compiler.LiteralExpr:
+			renderExplainValue(w, "literal", indent, useColor)
+		case *compiler.ValueExpr:
+			renderExplainValue(w, "value", indent, useColor)
 		case *compiler.ProjectionExpr:
 			renderExplainProjection(w, n, indent, useColor)
 		}
@@ -397,6 +401,11 @@ func renderExplainAtom(w io.Writer, a *compiler.Atom, indent string, useColor bo
 		}
 		renderExplainModifier(w, raw, src, indent+"  ", useColor)
 	}
+}
+
+func renderExplainValue(w io.Writer, kind, indent string, useColor bool) {
+	fmt.Fprintf(w, "%s%s\n", indent, cyan(kind, useColor))
+	fmt.Fprintf(w, "%s  %s\n", indent, dim("(no modifiers)", useColor))
 }
 
 func renderExplainProjection(w io.Writer, p *compiler.ProjectionExpr, indent string, useColor bool) {
@@ -443,7 +452,7 @@ func renderExplainModifier(w io.Writer, raw string, src compiler.ModifierSource,
 // of the file, not just its atoms.
 func walkExplainNodes(node compiler.Expr, visit func(compiler.Expr)) {
 	switch n := node.(type) {
-	case *compiler.Atom:
+	case *compiler.Atom, *compiler.LiteralExpr, *compiler.ValueExpr:
 		visit(n)
 	case *compiler.ProjectionExpr:
 		visit(n)

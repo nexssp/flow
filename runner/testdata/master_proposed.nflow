@@ -72,24 +72,17 @@
 # Pipeline 2: Full Resilience Suite on an individual action
 # Demonstrates :timeout, :retry, :cache, :concurrency, :rate_limit, :idempotent, :dedup, :coalesce
 @pipeline resilient_ingest
-  const
-    :timeout=2s
-    :retry=3
-    :cache=10s
-    :concurrency=4
-    :rate_limit=50
-    :idempotent
-    :dedup
-    :coalesce
-    :tag="resilience,core"
-    :desc="Hardened ingest endpoint" ( ingest_status: "SUCCESS", storage_code: 201 )
+  { ingest_status: "SUCCESS", storage_code: 201 }
+    -> noop :timeout=2s :retry=3 :cache=10s :concurrency=4 :rate_limit=50
+      :idempotent :dedup :coalesce :tag="resilience,core"
+      :desc="Hardened ingest endpoint"
 @end
 
 # Pipeline 3: Typed Error-Kind Discrimination (? on_error)
 # Proves authorization enforcement (:auth, :role) and catch discrimination
 @pipeline auth_and_fallback
   # Intentionally trigger an authorization failure to exercise the error recovery path
-  const :auth :role="admin" "unauthorized_data"
+  "unauthorized_data" -> noop :auth :role="admin"
   ? on_error {
     xerr.KindUnauthorized -> { recovery: "intercepted_unauthorized", handled: true },
     xerr.KindForbidden    -> { recovery: "intercepted_forbidden", handled: true },
@@ -138,7 +131,7 @@
   },
   fastest_source: race {
     runtime.fail ( kind: "Unavailable", message: "primary endpoint degraded" ),
-    const "replica_b_won"
+    "replica_b_won"
   }
 }
 

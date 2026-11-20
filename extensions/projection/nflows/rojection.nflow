@@ -1,4 +1,4 @@
 @description "Projection { ... }"
 @assert: result.name == "Maksymilian"
-const( name: "Maksymilian", extra: true )
+{ name: "Maksymilian", extra: true }
   -> { name: .name }

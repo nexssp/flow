@@ -1,8 +1,8 @@
 @description "Named parallel gathers independent branches under explicit keys"
 
 parallel {
-  alpha: const 100,
-  beta:  const 200,
+  alpha: 100,
+  beta:  200,
   gamma: { x: 5 }
     -> { result: .x * 2 }
 }

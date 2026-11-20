@@ -42,8 +42,8 @@ func TestProjectionShorthandForms(t *testing.T) {
 			assert: []string{`result.name == "Ada"`, `result.email == "ada@example.test"`, `result.somethingelse == "nested"`, `result.another == "copied"`, `result.other == "explicit"`},
 		},
 		{
-			name:   "generic object argument stays explicit",
-			source: `const( name: "Ada", email: "ada@example.test" )`,
+			name:   "object literal stays explicit",
+			source: `{ name: "Ada", email: "ada@example.test" }`,
 			assert: []string{`result.name == "Ada"`, `result.email == "ada@example.test"`},
 		},
 	}
@@ -56,7 +56,7 @@ func TestProjectionShorthandForms(t *testing.T) {
 		})
 	}
 	execution, err := runner.Execute(t.Context(), cfg,
-		`{ name: "Ada" } -> const( name )`, "argument-map-shorthand.nflow", nil)
+		`{ name: "Ada" } -> { name }`, "argument-map-shorthand.nflow", nil)
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, len(runner.EvaluateAssertions(execution.Output, []string{`result.name == "Ada"`})), 0)
 }
@@ -214,7 +214,7 @@ func TestProjectionRuntimeConflictPreflightDoesNotExposeValues(t *testing.T) {
 	cfg, err := runner.BuildConfig(native.Bundles())
 	ktest.RequireNoError(t, err)
 	_, err = runner.Execute(t.Context(), cfg,
-		`noop as tool -> { result: tool.task }`,
+		`noop as tool -> { result: (tool.task) }`,
 		"projection-shadowing-runtime.nflow",
 		map[string]any{"tool": map[string]any{"task": "payload-secret"}, "task": "binding-secret"},
 	)
@@ -237,7 +237,7 @@ func TestComposedProjectionRuntimeConflictPreflightRunsBeforeEmbeddedActions(t *
 	cfg, err := runner.BuildConfig(native.Bundles())
 	ktest.RequireNoError(t, err)
 	_, err = runner.Execute(t.Context(), cfg,
-		`noop as tool -> { candidate: race { "ready" }, result: tool.task }`,
+		`noop as tool -> { candidate: race { "ready" }, result: (tool.task) }`,
 		"projection-composed-shadowing-runtime.nflow",
 		map[string]any{"tool": map[string]any{"task": "payload-secret"}, "task": "binding-secret"},
 	)
@@ -301,6 +301,9 @@ func TestProjectionLocalLetDoesNotEscapeItsProjection(t *testing.T) {
 	cfg, err := runner.BuildConfig(native.Bundles())
 	ktest.RequireNoError(t, err)
 	source := `{ user: { profile: { name: "Ada" } } } -> { let profile = .user.profile; display: profile.name } -> { escaped: profile.name }`
-	_, err = runner.Execute(t.Context(), cfg, source, "projection-let-scope.nflow", nil)
-	ktest.RequireCondition(t, err != nil, "local binding escaped into the next projection")
+	result, err := runner.Execute(t.Context(), cfg, source, "projection-let-scope.nflow", nil)
+	ktest.RequireNoError(t, err)
+	output, ok := result.Output.(map[string]any)
+	ktest.RequireCondition(t, ok, "projection output = %#v, want object", result.Output)
+	ktest.RequireEqual(t, output["escaped"], "profile.name")
 }

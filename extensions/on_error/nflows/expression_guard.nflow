@@ -5,13 +5,13 @@ fail ( kind: "Timeout", message: "temporary processing failure" ) ? on_error {
   xerr.KindTimeout
     -> match(.error.kind) {
     xerr.KindTimeout
-      -> const "deferred",
+      -> "deferred",
     default
-      -> const "unexpected kind"
+      -> "unexpected kind"
   },
   xerr.KindNotFound
-    -> const "missing",
+    -> "missing",
   else
-    -> const "failed"
+    -> "failed"
 }
   -> noop

@@ -19,7 +19,7 @@ The Transport README documents this Flow pattern:
 ```nflow
 @require github.com/nexssp/transport/tcli/nexssflow
 @pipeline hello:cli="hello:Greet someone"
-  const "Hello, Julia"
+  "Hello, Julia"
 @end
 tcli.listen
 ```

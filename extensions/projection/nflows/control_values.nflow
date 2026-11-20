@@ -14,7 +14,7 @@
   },
   winner: race {
     runtime.fail ( kind: "Unavailable", message: "primary down" ),
-    const "replica"
+    "replica"
   },
   category: match(.peak) {
     > 90

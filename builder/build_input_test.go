@@ -119,7 +119,7 @@ func TestBuild_StandaloneFlagValueForms(t *testing.T) {
 
 	workDir := t.TempDir()
 	flowPath := filepath.Join(workDir, "flags.nflow")
-	ktest.RequireNoError(t, os.WriteFile(flowPath, []byte(`const "@flag.key"`), 0o600))
+	ktest.RequireNoError(t, os.WriteFile(flowPath, []byte(`@flag.key`), 0o600))
 	binaryPath := filepath.Join(workDir, "flags-flow"+exeSuffix())
 	ktest.RequireEqual(t, runBuild([]string{flowPath, "-o", binaryPath}), 0)
 

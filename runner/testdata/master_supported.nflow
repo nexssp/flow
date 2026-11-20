@@ -41,20 +41,13 @@
 # Compiled here; invoked separately by the Go test with an explicit host store.
 @pipeline resilient_ingest
   :profile=base_resilience
-  const
-    :timeout=2s
-    :retry=3
-    :cache=10s
-    :concurrency=4
-    :rate_limit=50
-    :idempotent
-    :dedup
-    :coalesce
-    :tag="resilience,core"
-    :desc="Maks: ingest, Julia: verify" ( ingest_status: "SUCCESS", storage_code: 201 )
+  { ingest_status: "SUCCESS", storage_code: 201 }
+    -> noop :timeout=2s :retry=3 :cache=10s :concurrency=4 :rate_limit=50
+      :idempotent :dedup :coalesce :tag="resilience,core"
+      :desc="Maks: ingest, Julia: verify"
 @end
 @pipeline auth_fallback
-  const :auth :role="admin" "unauthorized_data"
+  "unauthorized_data" -> noop :auth :role="admin"
   ? on_error {
     xerr.KindUnauthorized
       -> { recovery: "intercepted_unauthorized", handled: true },
@@ -88,7 +81,7 @@ parallel {
   ticks: pipeline.sample_ticks,
   winner: race {
     runtime.fail ( kind: "Unavailable", message: "primary endpoint degraded" ),
-    const "replica_b_won"
+    "replica_b_won"
   },
   category: (
     { peak: 98 }

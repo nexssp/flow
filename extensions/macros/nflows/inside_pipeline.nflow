@@ -1,6 +1,6 @@
 @description "Macro: reusable inside a @pipeline definition"
 @macro constant_answer() {
-  const 42
+  42
 }
 @pipeline compute
   @constant_answer()

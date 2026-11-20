@@ -1,2 +1,2 @@
-const "not-ok"
+"not-ok"
 @test: result == "ok"

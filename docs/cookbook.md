@@ -33,10 +33,11 @@ nflow run flow.nflow --assert='result.ok == true'
 ```
 
 ```nflow
-const(user_id: 42, active: true)
+{ user_id: 42, active: true }
 ```
 
-Use a direct literal or reference for a scalar. `const(field: value, ...)` builds an object with typed fields; an object projection is convenient when deriving fields from the current input.
+Use a direct literal or reference for a scalar. An object projection builds a
+shaped value with typed fields and can derive fields from the current input.
 
 ### Pipe data into actions
 
@@ -121,7 +122,8 @@ The else arm is optional:
 )
 ```
 
-The result is keyed by canonical action name. Repeated names receive numbered keys such as `runtime.const#1` and `runtime.const#2`.
+Literal branches use the `literal` action name; repeated names receive numbered
+keys such as `literal#1` and `literal#2`.
 
 ### Stable labels with `parallel`
 
@@ -134,13 +136,13 @@ parallel {
 
 Labels must be unique and non-empty. A failed branch fails the parallel action; partial results are not passed to the next pipeline step.
 
-Direct literal branches are shorter. Use `const` with parenthesized named arguments
-when a branch needs to call an action with fields or modifiers:
+Direct literal branches are shorter. Use an ordinary action call with
+parenthesized named arguments when a branch needs fields or modifiers:
 
 ```nflow
 parallel {
   profile: "profile-ready",
-  metrics: const :timeout=2s (status: "metrics-ready"),
+  metrics: with :timeout=2s (status: "metrics-ready"),
 }
 ```
 
@@ -325,7 +327,7 @@ YAML loading requires the optional `config_yaml` bundle.
   complete
 }
 
-const :tag="status" (value: status.complete)
+status.complete
 ```
 
 Symbols also accept comma-separated names on one line, whitespace-separated
@@ -409,14 +411,14 @@ Schemas validate supported scalar, slice, map, pointer, and nested struct-shaped
 ### Post-run assertion
 
 ```nflow
-const(ok: true)
+{ ok: true }
 @assert: result.ok == true
 ```
 
 Multiline form:
 
 ```nflow
-const(items: ["a", "b"])
+{ items: ["a", "b"] }
 @assert {
   len(result.items) == 2
   all(result.items, # != "")
@@ -555,7 +557,7 @@ Optional embedded files require the `embed` bundle and an explicit host filesyst
 
 ```nflow
 @embed prompt "prompts/system.txt"
-const(value: embed.prompt)
+{ value: embed.prompt }
 ```
 
 ## 13. Approval, hooks, and event metadata

@@ -1,6 +1,6 @@
-@description "Race benchmark: run two local const candidates; this is not delayed hedging"
+@description "Race benchmark: run two direct-value candidates; this is not delayed hedging"
 @assert: result == "winner"
 race {
-  const "winner",
-  const "winner"
+  "winner",
+  "winner"
 }

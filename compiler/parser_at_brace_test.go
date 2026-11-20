@@ -209,28 +209,25 @@ func TestParseAtBraceRecordsObjectPresence(t *testing.T) {
 	}
 }
 
-func TestParseConstDirectScalarInput(t *testing.T) {
+func TestParseDirectScalarValues(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
 		src  string
-		kind ValueKind
-		str  string
-		num  float64
-		bool bool
+		want any
 		ref  string
 	}{
-		{name: "string", src: `const "hello"`, kind: ValueString, str: "hello"},
-		{name: "numeric-looking string", src: `const "42"`, kind: ValueString, str: "42"},
-		{name: "number", src: `const 42`, kind: ValueNumber, num: 42},
-		{name: "number with separators", src: `const 1_123_123`, kind: ValueNumber, num: 1123123},
-		{name: "negative number", src: `const -7`, kind: ValueNumber, num: -7},
-		{name: "decimal with separators", src: `const -1_234.5_6`, kind: ValueNumber, num: -1234.56},
-		{name: "boolean", src: `const true`, kind: ValueBool, bool: true},
-		{name: "false", src: `const false`, kind: ValueBool},
-		{name: "null", src: `const null`, kind: ValueNull},
-		{name: "CLI flag reference", src: `const @flag.name`, kind: ValueRef, ref: "flag.name"},
-		{name: "compile-time config reference", src: `const @config.count`, kind: ValueRef, ref: "config.count"},
+		{name: "string", src: `"hello"`, want: "hello"},
+		{name: "numeric-looking string", src: `"42"`, want: "42"},
+		{name: "number", src: `42`, want: int64(42)},
+		{name: "number with separators", src: `1_123_123`, want: int64(1123123)},
+		{name: "negative number", src: `-7`, want: int64(-7)},
+		{name: "decimal with separators", src: `-1_234.5_6`, want: float64(-1234.56)},
+		{name: "boolean", src: `true`, want: true},
+		{name: "false", src: `false`, want: false},
+		{name: "null", src: `null`, want: nil},
+		{name: "CLI flag reference", src: `@flag.name`, ref: "flag.name"},
+		{name: "compile-time config reference", src: `@config.count`, ref: "config.count"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -239,75 +236,37 @@ func TestParseConstDirectScalarInput(t *testing.T) {
 			if err != nil {
 				t.Fatalf("parse: %v", err)
 			}
-			atom, ok := expr.(*Atom)
-			if !ok {
-				t.Fatalf("parsed expression has type %T, want *Atom", expr)
+			if tc.ref != "" {
+				value, ok := expr.(*ValueExpr)
+				if !ok || value.Value == nil || value.Value.Kind != ValueRef || value.Value.Ref != tc.ref {
+					t.Fatalf("Parse(%q) = %#v, want ValueExpr reference %q", tc.src, expr, tc.ref)
+				}
+				return
 			}
-			if atom.DirectInput == nil || atom.DirectInput.Kind != tc.kind {
-				t.Fatalf("DirectInput = %+v, want kind %v", atom.DirectInput, tc.kind)
-			}
-			if atom.HasArgumentObject || len(atom.Args) != 0 {
-				t.Fatalf("direct scalar unexpectedly became named arguments: %+v", atom)
-			}
-			if atom.DirectInput.Str != tc.str || atom.DirectInput.Num != tc.num ||
-				atom.DirectInput.Bool != tc.bool || atom.DirectInput.Ref != tc.ref {
-				t.Fatalf("DirectInput = %+v, want fields string=%q number=%v bool=%t ref=%q", atom.DirectInput, tc.str, tc.num, tc.bool, tc.ref)
+			literal, ok := expr.(*LiteralExpr)
+			if !ok || literal.Val != tc.want {
+				t.Fatalf("Parse(%q) = %#v, want literal %#v", tc.src, expr, tc.want)
 			}
 		})
 	}
 }
 
-func TestParseConstNamedArgumentObjectRemainsNamed(t *testing.T) {
+func TestParseObjectProjectionDirectly(t *testing.T) {
 	t.Parallel()
-	for _, src := range []string{
-		`const(value: "hello")`,
-		`const ( count: 3, enabled: true )`,
-		`const ( )`,
-	} {
-		t.Run(src, func(t *testing.T) {
-			t.Parallel()
-			expr, err := newTestParser(t, src).Parse()
-			if err != nil {
-				t.Fatalf("parse: %v", err)
-			}
-			atom, ok := expr.(*Atom)
-			if !ok {
-				t.Fatalf("parsed expression has type %T, want *Atom", expr)
-			}
-			if atom.DirectInput != nil || !atom.HasArgumentObject {
-				t.Fatalf("named object form was changed: %+v", atom)
-			}
-		})
+	p := NewParserWithPrimaries(context.Background(), NewOperatorTable(), NewPrimaryExtensionTable(testProjectionPrimary{}), `{ count: 3, enabled: true }`)
+	expr, err := p.Parse()
+	if err != nil {
+		t.Fatalf("parse: %v", err)
 	}
-}
-
-func TestParseConstRejectsMixedDirectAndNamedInputs(t *testing.T) {
-	t.Parallel()
-	for _, src := range []string{
-		`const 42 1`,
-		`const 1 42`,
-		`const(value=1) 42`,
-	} {
-		t.Run(src, func(t *testing.T) {
-			t.Parallel()
-			if _, err := newTestParser(t, src).Parse(); err == nil {
-				t.Fatalf("Parse(%q) succeeded, want mixed-input error", src)
-			}
-		})
-	}
-}
-
-func TestParseConstRejectsMalformedNumber(t *testing.T) {
-	t.Parallel()
-	if _, err := newTestParser(t, `const 1.2.3`).Parse(); err == nil {
-		t.Fatal("Parse(const 1.2.3) succeeded, want invalid numeric literal error")
+	if _, ok := expr.(*ProjectionExpr); !ok {
+		t.Fatalf("parsed expression has type %T, want *ProjectionExpr", expr)
 	}
 }
 
 func TestParseDirectValueRejectsMalformedNumber(t *testing.T) {
 	t.Parallel()
 	if _, err := newTestParser(t, `1.2.3`).Parse(); err == nil || !strings.Contains(err.Error(), "invalid numeric literal") {
-		t.Fatalf("Parse(1.2.3) error = %v, want invalid numeric literal", err)
+		t.Fatal("Parse(1.2.3) succeeded, want invalid numeric literal error")
 	}
 }
 
@@ -315,7 +274,7 @@ func TestParseRejectsInvalidNumericSeparators(t *testing.T) {
 	t.Parallel()
 	for _, source := range []string{
 		`1__2`,
-		`const 1_`,
+		`1_`,
 		`wrap(count: 1_.2)`,
 		`wrap(count: 1._2)`,
 	} {

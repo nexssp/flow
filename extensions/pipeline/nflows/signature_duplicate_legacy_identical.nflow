@@ -7,6 +7,6 @@
   :request-schema=Request
   noop
 @end
-const(name: (input.name ?? "repeat"))
+{name: (input.name ?? "repeat")}
   -> pipeline.repeat
 @assert: result.name == "repeat"

@@ -27,7 +27,7 @@ const (
 // on the declaration order.
 var Directive = compiler.Directive{
 	Name:        "macro",
-	Example:     "@macro greet(name) {\n  const $name\n}",
+	Example:     "@macro greet(name) {\n  $name\n}",
 	Handler:     handleDirective,
 	OpaqueBlock: true,
 }
@@ -286,7 +286,7 @@ func validMacroName(name string) bool {
 
 // readBody reads the body of a `@macro ... { ... }` declaration.
 //
-// Inline form on one line:  `@macro x { const "hi" }`
+// Inline form on one line:  `@macro x { "hi" }`
 // Multi-line form:          opening brace ends the header line, body
 //
 //	spans until a line whose only content is `}`.

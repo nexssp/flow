@@ -20,7 +20,7 @@ func TestExprEvaluatorBindsFileLocalSymbols(t *testing.T) {
 	})
 
 	got, err := NewExprEvaluator()(ctx, Request{
-		Raw:   "status: ap.needs_review, queue: ap.review_queue",
+		Raw:   "status: (ap.needs_review), queue: (ap.review_queue)",
 		Input: map[string]any{},
 	})
 	if err != nil {

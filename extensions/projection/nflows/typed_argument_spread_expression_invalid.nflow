@@ -6,6 +6,6 @@
 @func commerce.echo(value string) string = value
 @pipeline typed_argument_spread_expression
   :request-schema=!TypedSpreadInput
-  runtime.const ( ... { payload: [commerce.echo(.missing)] } )
+  { ... { payload: [commerce.echo(.missing)] } }
 @end
 pipeline.typed_argument_spread_expression

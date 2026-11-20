@@ -1,15 +1,16 @@
-@description "Parentheses explicitly opt argument values into expressions while preserving bare-value semantics"
+@description "Parenthesized projection expressions preserve visible bindings and unbound bare values"
 @assert: result.arithmetic == 5 && result.conditional == "high"
 @assert: result.from_input == "Julia" && result.from_binding == "Julia"
 @assert: result.nested.double_score == 8 && result.nested.current_name == "Julia"
 @assert: result.values[0] == 6 && result.values[1] == 7 && result.values[2].name == "Julia"
-@assert: result.legacy_input == "input.name" && result.legacy_binding == "person" && result.legacy_path == "person.name"
+@assert: result.legacy_input == "Julia" && result.legacy_binding.name == "Julia" && result.legacy_path == "Julia"
+@assert: result.unbound_literal == "unbound.path"
 @assert: result.comment_block == 3 && result.comment_line == 3 && result.comment_hash == 3
 { name: "Julia", score: 4 }
 -> pipeline.argument_parenthesized_expression
 @pipeline argument_parenthesized_expression
   runtime.noop as person
-  -> const (
+  -> {
     ...{
       arithmetic: (input.score + 1),
       conditional: (input.score > 3 ? "high" : "low"),
@@ -28,7 +29,8 @@
       values: [(input.score + 2), (person.score + 3), (.)],
       legacy_input: input.name,
       legacy_binding: person,
-      legacy_path: person.name
+      legacy_path: person.name,
+      unbound_literal: unbound.path
     }
-  )
+  }
 @end

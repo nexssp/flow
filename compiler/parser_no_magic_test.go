@@ -156,7 +156,7 @@ func TestParseTypedPipelineStarts(t *testing.T) {
 func TestParseParenthesizedLegacyKeyValueStillWorks(t *testing.T) {
 	t.Parallel()
 
-	expr, err := NewParser(context.Background(), NewOperatorTable(), `runtime.const(value=hi)`).Parse()
+	expr, err := NewParser(context.Background(), NewOperatorTable(), `runtime.noop(value=hi)`).Parse()
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}

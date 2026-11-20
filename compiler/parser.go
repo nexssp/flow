@@ -297,6 +297,14 @@ func (p *Parser) parsePrimaryInner() (Expr, error) {
 		return expr, err
 	}
 
+	// CLI references are built-in values, even when an extension handles @ tokens.
+	if p.Cur().Type == TokAtPrompt {
+		reference := strings.TrimSpace(p.Cur().Lit)
+		if strings.HasPrefix(reference, "flag.") || strings.HasPrefix(reference, "arg.") {
+			return p.parsePromptReferencePrimary()
+		}
+	}
+
 	if ext, ok := p.primaries.ByToken(p.Cur().Type); ok {
 		return ext.Parse(p)
 	}
@@ -474,11 +482,6 @@ func (p *Parser) parseAtomInner() (Expr, error) {
 	}
 
 	for {
-		if consumed, err := p.parseDirectConstInput(a); err != nil {
-			return nil, err
-		} else if consumed {
-			continue
-		}
 		consumed, err := p.parseAtomSuffix(a)
 		if err != nil {
 			return nil, err
@@ -499,7 +502,7 @@ func (p *Parser) parseAtomSuffix(a *Atom) (bool, error) {
 
 	case TokLParen:
 		if a.DirectInput != nil {
-			return false, p.errorf(p.Cur().Line, "const cannot combine direct scalar input with a named argument object")
+			return false, p.errorf(p.Cur().Line, "action cannot combine direct input with a named argument object")
 		}
 		if a.HasArgumentObject {
 			return false, p.errorf(p.Cur().Line, "action already has a named argument object")
@@ -527,9 +530,6 @@ func (p *Parser) parseAtomSuffix(a *Atom) (bool, error) {
 		return true, nil
 
 	case TokAtBrace:
-		if a.Name == runtimeConstAction {
-			return false, p.errorf(p.Cur().Line, "legacy `const @{...}` arguments are not supported; use `const <value>` for a scalar or `const(key: value)` to construct an object")
-		}
 		replacement := a.Name
 		for _, mapping := range KeywordMappings() {
 			if mapping.Target == a.Name {
@@ -547,110 +547,6 @@ func (p *Parser) parseAtomSuffix(a *Atom) (bool, error) {
 	return false, nil
 }
 
-func (p *Parser) parseDirectConstInput(a *Atom) (bool, error) {
-	if a.Name != runtimeConstAction {
-		return false, nil
-	}
-	token := p.Cur()
-	if postfix, ok := p.primaries.ByPostfix(token.Type); ok && postfix.MatchesPostfix(p) {
-		return false, nil
-	}
-	if token.Type == TokLBrace || token.Type == TokLBracket {
-		return p.parseDirectConstCollectionInput(a, token)
-	}
-	value, ok, err := p.parseDirectConstValue(token)
-	if err != nil {
-		return false, err
-	}
-	if !ok {
-		return false, nil
-	}
-	if err := p.checkDirectConstInputAllowed(a, token.Line); err != nil {
-		return false, err
-	}
-	a.DirectInput = value
-	p.Next()
-	return true, nil
-}
-
-func (p *Parser) parseDirectConstCollectionInput(a *Atom, token Token) (bool, error) {
-	if err := p.checkDirectConstInputAllowed(a, token.Line); err != nil {
-		return false, err
-	}
-	scanner := &braceScanner{src: p.src[token.Offset:], base: p.currentPos()}
-	collection, err := scanner.readValue()
-	if err != nil {
-		return false, err
-	}
-	a.DirectInput = collection
-	end := token.Offset + scanner.pos
-	for p.pos < len(p.toks) && p.toks[p.pos].Offset < end {
-		p.pos++
-	}
-	return true, nil
-}
-
-func (p *Parser) checkDirectConstInputAllowed(a *Atom, line int) error {
-	if a.DirectInput != nil || a.HasArgumentObject || len(a.Params) > 0 {
-		return p.errorf(line, "const accepts a direct value or named arguments, not both")
-	}
-	return nil
-}
-
-func (p *Parser) parseDirectConstValue(token Token) (*Value, bool, error) {
-	switch token.Type {
-	case TokString:
-		if token.Unterminated {
-			return nil, false, p.errorf(token.Line, "unterminated string")
-		}
-		return &Value{Kind: ValueString, Str: token.Lit}, true, nil
-	case TokNumber:
-		normalized, err := normalizeNumericSeparators(token.Lit)
-		if err != nil {
-			return nil, false, p.errorf(token.Line, "invalid numeric literal %q", token.Lit)
-		}
-		number, err := strconv.ParseFloat(normalized, 64)
-		if err != nil {
-			return nil, false, p.errorf(token.Line, "invalid numeric literal %q", token.Lit)
-		}
-		return &Value{Kind: ValueNumber, Num: number}, true, nil
-	case TokIdent:
-		return p.parseDirectConstIdentifier(token)
-	case TokAtPrompt:
-		reference := strings.TrimSpace(token.Lit)
-		if !strings.HasPrefix(reference, "config.") &&
-			!strings.HasPrefix(reference, "flag.") &&
-			!strings.HasPrefix(reference, "arg.") {
-			return nil, false, nil
-		}
-		return &Value{Kind: ValueRef, Ref: reference}, true, nil
-	case TokEOF, TokInvalid, TokArrow, TokPipe, TokAmpersand, TokOrOr,
-		TokLParen, TokRParen, TokLBrace, TokRBrace, TokLBracket, TokRBracket,
-		TokColon, TokEquals, TokComma, TokQuestion, TokHash, TokTilde, TokAtBrace:
-		return nil, false, nil
-	}
-	return nil, false, nil
-}
-
-func (p *Parser) parseDirectConstIdentifier(token Token) (*Value, bool, error) {
-	switch token.Lit {
-	case "true":
-		return &Value{Kind: ValueBool, Bool: true}, true, nil
-	case literalFalse:
-		return &Value{Kind: ValueBool, Bool: false}, true, nil
-	case "null":
-		return &Value{Kind: ValueNull}, true, nil
-	default:
-		if reference, ok := strings.CutPrefix(token.Lit, "."); ok {
-			return &Value{Kind: ValueRef, Ref: reference}, true, nil
-		}
-		if p.pos+1 < len(p.toks) && p.toks[p.pos+1].Type == TokLParen {
-			return nil, false, nil
-		}
-		return &Value{Kind: ValueBare, Str: token.Lit}, true, nil
-	}
-}
-
 func (p *Parser) expandArgumentMap(raw string) (string, error) {
 	for _, extension := range p.primaries.All() {
 		expander, ok := extension.(ArgumentMapExpander)
@@ -664,6 +560,12 @@ func (p *Parser) expandArgumentMap(raw string) (string, error) {
 		}
 	}
 	return raw, nil
+}
+
+// ExpandArgumentMap applies registered whole-entry map expanders to source
+// content before a parser lowers its map values.
+func (p *Parser) ExpandArgumentMap(raw string) (string, error) {
+	return p.expandArgumentMap(raw)
 }
 
 func (p *Parser) parseAtom() (Expr, error) {

@@ -1,6 +1,6 @@
 @description "@pipeline compiles a reusable fragment"
 @pipeline named
-  const "named"
+  "named"
 @end
 @assert: result == "named"
 {}

@@ -5,7 +5,7 @@
 }
 
 @macro rename(from, to) {
-  const( $to: .$from )
+  { $to: .$from }
 }
 
 @assert: result.user_id == 42

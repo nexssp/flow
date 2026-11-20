@@ -8,5 +8,5 @@
 
 @nflow_version ">=0.0.0"
 
-const "ok"
+"ok"
 @assert: result == "ok"

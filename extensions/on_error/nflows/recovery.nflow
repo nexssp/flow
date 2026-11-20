@@ -3,9 +3,9 @@
 fail ( kind: "Unavailable", message: "db node is down" )
 ? on_error {
   xerr.KindUnavailable
-    -> const "recovered-from-db",
+    -> "recovered-from-db",
   else
-    -> const "unhandled-failure"
+    -> "unhandled-failure"
 }
 
 @assert: result == "recovered-from-db"

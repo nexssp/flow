@@ -3,13 +3,13 @@
 @assert: result.original == "original"
 @assert: result.tool.name == "current"
 @pipeline explicit_binding_disambiguation
-  const( name: "bound" ) as tool
-  -> const( tool: { name: "current" } )
+  { name: "bound" } as tool
+  -> { tool: { name: "current" } }
   -> {
     .tool.name,
-    original: input.tool.name,
+    original: (input.tool.name),
     tool
   }
 @end
-const( tool: { name: "original" } )
+{ tool: { name: "original" } }
   -> pipeline.explicit_binding_disambiguation

@@ -30,11 +30,11 @@
   :parent=replay_safe_write
   :timeout=2s
   :retry=2
-# The built-in const action is an offline stand-in for a pricing adapter.
-# Bare fields copy same-named input values; direct-object mode emits only these fields.
+# This object projection is an offline stand-in for a pricing adapter.
+# Bare fields copy same-named input values; only listed fields are emitted.
 @pipeline fetch_live_quote
   :profile=provider_read
-  const (
+  {
     order_id,
     sku,
     quantity,
@@ -42,14 +42,14 @@
     unit_price_minor: 1299,
     quote_status: "fresh",
     quote_source: "pricing-provider"
-  )
+  }
 @end
 # In production, pass .order_id as the stable operation key for the real
 # provider/database to enforce across restarts. The local stub reports that
 # key in its output; :idempotent itself is only process-local state.
 @pipeline reserve_inventory
   :profile=replay_safe_write
-  const (
+  {
     order_id,
     sku,
     quantity,
@@ -60,11 +60,11 @@
     reservation_id: .order_id,
     inventory_idempotency_key: .order_id,
     inventory_status: "reserved"
-  )
+  }
 @end
 @pipeline authorize_payment
   :profile=payment_authorization
-  const (
+  {
     order_id,
     sku,
     quantity,
@@ -78,7 +78,7 @@
     payment_id: .order_id,
     payment_idempotency_key: .order_id,
     payment_status: "authorized"
-  )
+  }
 @end
 @pipeline checkout
   CheckoutRequest.validate

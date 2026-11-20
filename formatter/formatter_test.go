@@ -140,7 +140,7 @@ func TestFormatPreservesStringsCommentsAndExpressionText(t *testing.T) {
 
 func TestFormatPreservesNumericSeparators(t *testing.T) {
 	t.Parallel()
-	for _, input := range []string{"const 1_123_123\n", "const -1_234.5_6\n"} {
+	for _, input := range []string{"1_123_123\n", "-1_234.5_6\n"} {
 		got, err := testFormatter().Format(t.Context(), input, "numbers.nflow")
 		if err != nil {
 			t.Fatalf("Format() error = %v", err)
@@ -157,7 +157,7 @@ func TestFormatPreservesNumericSeparators(t *testing.T) {
 		}
 	}
 
-	for _, source := range []string{"const 1__2\n", "const 1_\n", "const 1._2\n"} {
+	for _, source := range []string{"1__2\n", "1_\n", "1._2\n"} {
 		if _, err := testFormatter().Format(t.Context(), source, "invalid-number.nflow"); err == nil {
 			t.Errorf("Format(%q) succeeded, want invalid separator error", source)
 		}
@@ -190,7 +190,7 @@ func TestHashCommentDetectionMatchesCompilerLexer(t *testing.T) {
 }
 
 func TestFormatPreservesTernarySeparator(t *testing.T) {
-	input := "const(value: condition ? yes : no) -> pick(field: \"value\")\n"
+	input := "wrap(value: (condition ? yes : no)) -> pick(field: \"value\")\n"
 	got, err := testFormatter().Format(t.Context(), input, "ternary.nflow")
 	if err != nil {
 		t.Fatal(err)
@@ -280,10 +280,10 @@ func TestFormatUsesRequireDirectiveParserForInlineAndMultilineOptions(t *testing
 		source string
 	}{{
 		name:   "inline",
-		source: "@require example.com/http as http { addr: \"127.0.0.1:8080\" }\nconst true\n",
+		source: "@require example.com/http as http { addr: \"127.0.0.1:8080\" }\ntrue\n",
 	}, {
 		name:   "multiline",
-		source: "@require example.com/http as http\n{\n  addr: \"127.0.0.1:8080\",\n  timeout: \"5s\"\n}\nconst true\n",
+		source: "@require example.com/http as http\n{\n  addr: \"127.0.0.1:8080\",\n  timeout: \"5s\"\n}\ntrue\n",
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -441,7 +441,7 @@ func TestFormatPreservesOnErrorDirectiveBlock(t *testing.T) {
 func TestFormatValidatesScopeExpressionInsidePipeline(t *testing.T) {
 	input := "@pipeline scoped_example\n" +
 		"  @scope :retry=3 :timeout=1s {\n" +
-		"    const \"scoped\"\n" +
+		"    \"scoped\"\n" +
 		"  }\n" +
 		"  -> { scoped: .value }\n" +
 		"@end\n"
@@ -503,8 +503,8 @@ func TestFormatTemplateRenderArgumentBlockWithBlankLines(t *testing.T) {
 }
 
 func TestFormatReindentsNestedArgumentBraces(t *testing.T) {
-	input := "const(\nnested: {\nanswer: 42\n}\n)\n"
-	want := "const(\n  nested: {\n    answer: 42\n  }\n)\n"
+	input := "{\nnested: {\nanswer: 42\n}\n}\n"
+	want := "{\n  nested: {\n    answer: 42\n  }\n}\n"
 	got, err := testFormatter().Format(t.Context(), input, "argument-block.nflow")
 	if err != nil {
 		t.Fatal(err)
@@ -515,7 +515,7 @@ func TestFormatReindentsNestedArgumentBraces(t *testing.T) {
 }
 
 func TestFormatPreservesMultilineProjectionText(t *testing.T) {
-	input := "const `first\n  second->third:keep\nlast`\n"
+	input := "`first\n  second->third:keep\nlast`\n"
 	got, err := testFormatter().Format(t.Context(), input, "multiline.nflow")
 	if err != nil {
 		t.Fatal(err)

@@ -3,7 +3,7 @@
   :request-schema=[]int
   runtime.noop
 @end
-const(value: ["not an integer"])
+{value: ["not an integer"]}
   -> pick(field: "value")
 -> pipeline.numbers ? on_error {
   xerr.KindValidation

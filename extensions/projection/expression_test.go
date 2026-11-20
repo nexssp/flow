@@ -18,9 +18,18 @@ func TestBuildProgramSource(t *testing.T) {
 		{"explicit-only fields", `name: .name, email: "fixed"`, `{ name: name, email: "fixed" }`},
 		{"mixed fields", `name, email: .email, somethingelse: .canbehere.everything, another, other: .canbe.something`, `{ name: name, email: email, somethingelse: canbehere.everything, another: another, other: canbe.something }`},
 		{"nested object field", `profile: { name, email: .email }`, `{ profile: { name: name, email: email } }`},
-		{"identifiers in values", `name: title, ready: enabled && active`, `{ name: title, ready: enabled && active }`},
+		{"array values and nested shorthand", `items: ["one", 2, false, null, { name, enabled: true }]`, `{ items: ["one", 2, false, null, { name: name, enabled: true }] }`},
+		{"identifiers in values", `name: title, ready: enabled && active`, `{ name: "title", ready: enabled && active }`},
+		{"dotted names in values are literal", `name: person.name`, `{ name: "person.name" }`},
+		{"nested data values", `profile: { name: person.name }`, `{ profile: { name: "person.name" } }`},
+		{"data string escapes are preserved", `line: "line\nbreak"`, `{ line: "line\\nbreak" }`},
+		{"parenthesized expression stays active", `name: (person.name)`, `{ name: (person.name) }`},
+		{"composite expression stays active", `name: title + "!"`, `{ name: title + "!" }`},
+		{"array contents stay unchanged", `items: [person.name, "x"]`, `{ items: [person.name, "x"] }`},
 		{"bare dot", `state: .`, `{ state: __root__ }`},
 		{"spread with fields", `..., status: "active"`, `__spread__(__root__, { status: "active" })`},
+		{"spread with braced fields", `... { payload: [1] }`, `__spread__(__root__, { payload: [1] })`},
+		{"spread braced literal values", `...{ label: status }`, `__spread__(__root__, { label: "status" })`},
 		{"spread with shorthand", `..., name, email: .email`, `__spread__(__root__, { name: name, email: email })`},
 		{"bare spread", `...`, `__root__`},
 		{"single local binding", `let profile = .user.profile; first: profile.name, display: profile.name`, `let profile = user.profile; { first: profile.name, display: profile.name }`},
@@ -35,6 +44,14 @@ func TestBuildProgramSource(t *testing.T) {
 			ktest.RequireEqual(t, got, c.want)
 		})
 	}
+}
+
+func TestBuildProgramSourceWithVisibleNamesInsideBracedSpread(t *testing.T) {
+	t.Parallel()
+	names := map[string]struct{}{"person": {}, "input": {}, "__root__": {}}
+	got, err := buildProgramSourceWithVisibleNames(`...{ bound: person.name, original: input.name, explicit: (person.score), literal: no_binding.path }`, names)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, got, `__spread__(__root__, { bound: person.name, original: input.name, explicit: (person.score), literal: "no_binding.path" })`)
 }
 
 func TestProjectionScannersTreatBackticksAsRaw(t *testing.T) {
@@ -99,6 +116,8 @@ func TestSplitSpread(t *testing.T) {
 		{"bare spread", `...`, "__root__", "", true},
 		{"spread with fields", `..., a: 1`, "__root__", "a: 1", true},
 		{"spread no comma", `... a: 1`, "__root__", "a: 1", true},
+		{"spread with braced fields", `... { a: 1 }`, "__root__", `a: 1`, true},
+		{"spread with adjacent braced fields", `...{ a: 1 }`, "__root__", `a: 1`, true},
 		{"looks like spread but identifier", `...name`, "", `...name`, false},
 	}
 	for _, c := range cases {
