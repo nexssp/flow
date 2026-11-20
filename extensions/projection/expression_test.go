@@ -22,7 +22,7 @@ func TestBuildProgramSource(t *testing.T) {
 		{"identifiers in values", `name: title, ready: enabled && active`, `{ name: "title", ready: enabled && active }`},
 		{"dotted names in values are literal", `name: person.name`, `{ name: "person.name" }`},
 		{"nested data values", `profile: { name: person.name }`, `{ profile: { name: "person.name" } }`},
-		{"data string escapes are preserved", `line: "line\nbreak"`, `{ line: "line\\nbreak" }`},
+		{"double-quoted data string escapes are decoded", `line: "line\nbreak"`, `{ line: "line\nbreak" }`},
 		{"parenthesized expression stays active", `name: (person.name)`, `{ name: (person.name) }`},
 		{"composite expression stays active", `name: title + "!"`, `{ name: title + "!" }`},
 		{"array contents stay unchanged", `items: [person.name, "x"]`, `{ items: [person.name, "x"] }`},
@@ -42,6 +42,24 @@ func TestBuildProgramSource(t *testing.T) {
 			got, err := buildProgramSource(c.raw)
 			ktest.RequireNoError(t, err)
 			ktest.RequireEqual(t, got, c.want)
+		})
+	}
+}
+
+func TestProgramCacheRejectsMalformedDirectStringEscapes(t *testing.T) {
+	t.Parallel()
+	for _, source := range []string{
+		`line: "bad\q"`,
+		`line: "bad\xGG"`,
+		`line: "bad\uZZZZ"`,
+		`line: "\X41"`,
+		`line: "\?"`,
+	} {
+		t.Run(source, func(t *testing.T) {
+			t.Parallel()
+			if _, err := newProgramCache().compile(source); err == nil {
+				t.Fatalf("compile(%q) succeeded, want invalid escape error", source)
+			}
 		})
 	}
 }

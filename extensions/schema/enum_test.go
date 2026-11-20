@@ -154,6 +154,19 @@ func TestEnumWireValueWithDotRemainsLiteralDuringSymbolResolution(t *testing.T) 
 	ktest.RequireEqual[any](t, effective["value"], "x.y")
 }
 
+func TestEnumWireStringsUseExprGrammar(t *testing.T) {
+	t.Parallel()
+	meta, err := preprocessEnumSchemas(`@enum Escaped {
+	  unicode = "\u{41}"
+	  byte = "\xff"
+}`)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, EnumsFromMap(meta)[0].Members, []EnumMember{
+		{Name: "unicode", Value: "A"},
+		{Name: "byte", Value: "ÿ"},
+	})
+}
+
 func TestEnumRejectsInvalidWireValues(t *testing.T) {
 	t.Parallel()
 	duplicateMember := "same"
@@ -167,6 +180,8 @@ func TestEnumRejectsInvalidWireValues(t *testing.T) {
 		{"whitespace wire value", `@enum State { spaced = "two words" }`, "must not contain whitespace"},
 		{"duplicate member", strings.Join([]string{"@enum State {", " " + duplicateMember, " " + duplicateMember, "}"}, "\n"), "duplicate member"},
 		{"duplicate wire value", "@enum State {\n first = \"same\"\n second = \"same\"\n}", "duplicate wire value"},
+		{"unsupported uppercase X escape", `@enum State { value = "\X41" }`, "invalid wire string"},
+		{"unsupported question-mark escape", `@enum State { value = "\?" }`, "invalid wire string"},
 		{"unquoted override", `@enum State { active = yes }`, "expected `member = \"wire-value\"`"},
 	}
 	for _, test := range cases {

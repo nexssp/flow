@@ -60,3 +60,25 @@ func TestExprEvaluatorExposesTopLevelMapSnakeCaseAliases(t *testing.T) {
 		})
 	}
 }
+
+func TestExprEvaluatorStringEscapesDoNotDependOnParentheses(t *testing.T) {
+	t.Parallel()
+	source := `direct: "line\nbreak", expression: ("line\nbreak"), raw: ` + "`line\\nbreak`" + `, unicode: "\u{41}", unicode_expression: ("\u{41}"), byte: "\xff", byte_expression: ("\xff"), nested: { direct: "line\nbreak" }`
+	got, err := NewExprEvaluator()(context.Background(), Request{Raw: source, Input: map[string]any{}})
+	if err != nil {
+		t.Fatalf("evaluate projection: %v", err)
+	}
+	want := map[string]any{
+		"direct":             "line\nbreak",
+		"expression":         "line\nbreak",
+		"raw":                `line\nbreak`,
+		"unicode":            "A",
+		"unicode_expression": "A",
+		"byte":               "ÿ",
+		"byte_expression":    "ÿ",
+		"nested":             map[string]any{"direct": "line\nbreak"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("projection = %#v, want %#v", got, want)
+	}
+}

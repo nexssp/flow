@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 func parseAtBrace(raw string, base Position) (map[string]*Value, []*Value, error) {
@@ -609,22 +611,25 @@ func (b *braceScanner) readArray() (*Value, error) {
 
 func (b *braceScanner) readQuoted() (*Value, error) {
 	q := b.peek()
+	start := b.pos
 	b.advance()
-	var sb strings.Builder
 	for !b.eof() {
 		c := b.peek()
-		if c == '\\' && b.pos+1 < len(b.src) {
-			sb.WriteByte(c)
-			b.advance()
-			sb.WriteByte(b.peek())
-			b.advance()
+		if lexical.BackslashEscapesNext(q, c, b.pos+1 < len(b.src)) {
+			b.pos += 2
 			continue
 		}
 		if c == q {
 			b.advance()
-			return &Value{Kind: ValueString, Str: sb.String()}, nil
+			if q == '"' {
+				value, err := lexical.DecodeDoubleQuotedString(b.src[start:b.pos])
+				if err != nil {
+					return nil, b.errf("invalid string literal: %v", err)
+				}
+				return &Value{Kind: ValueString, Str: value}, nil
+			}
+			return &Value{Kind: ValueString, Str: b.src[start+1 : b.pos-1]}, nil
 		}
-		sb.WriteByte(c)
 		b.advance()
 	}
 	return nil, b.errf("unclosed quote")

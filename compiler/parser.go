@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 const maxParseDepth = 64
@@ -391,10 +393,21 @@ func (p *Parser) parseStringPrimary() (Expr, error) {
 	if p.Cur().Unterminated {
 		return nil, p.errorf(p.Cur().Line, "unterminated string")
 	}
-	value := p.Cur().Lit
+	token := p.Cur()
+	value, err := p.stringValue(token)
+	if err != nil {
+		return nil, p.errorf(token.Line, "invalid string literal: %v", err)
+	}
 	pos := p.currentPos()
 	p.Next()
 	return &LiteralExpr{Val: value, Pos: pos}, nil
+}
+
+func (p *Parser) stringValue(token Token) (string, error) {
+	if token.Type != TokString || p.src[token.Offset] != '"' {
+		return token.Lit, nil
+	}
+	return lexical.DecodeDoubleQuotedString(p.src[token.Offset:token.EndOffset])
 }
 
 func (p *Parser) parseNumberPrimary() (Expr, error) {
@@ -904,7 +917,9 @@ func (p *Parser) consumeValue() (string, error) {
 		if p.Cur().Type == TokString && p.Cur().Unterminated {
 			return "", p.errorf(p.Cur().Line, "unterminated string")
 		}
-		p.writeValueToken(&sb)
+		if err := p.writeValueToken(&sb); err != nil {
+			return "", err
+		}
 		previousEnd = token.EndOffset
 		hasPrevious = true
 		p.Next()
@@ -921,7 +936,9 @@ func (p *Parser) consumeLegacyValue() (string, error) {
 		if p.Cur().Type == TokString && p.Cur().Unterminated {
 			return "", p.errorf(p.Cur().Line, "unterminated string")
 		}
-		p.writeValueToken(&sb)
+		if err := p.writeValueToken(&sb); err != nil {
+			return "", err
+		}
 		p.Next()
 	}
 	if sb.Len() == 0 {
@@ -957,8 +974,17 @@ func (p *Parser) valueTokenContinues() bool {
 	}
 }
 
-func (p *Parser) writeValueToken(sb *strings.Builder) {
-	switch p.Cur().Type {
+func (p *Parser) writeValueToken(sb *strings.Builder) error {
+	token := p.Cur()
+	if token.Type == TokString {
+		value, err := p.stringValue(token)
+		if err != nil {
+			return p.errorf(token.Line, "invalid string literal: %v", err)
+		}
+		sb.WriteString(value)
+		return nil
+	}
+	switch token.Type {
 	case TokAtPrompt:
 		sb.WriteByte('@')
 	case TokTilde:
@@ -972,7 +998,8 @@ func (p *Parser) writeValueToken(sb *strings.Builder) {
 		TokRBrace, TokLBracket, TokRBracket, TokEquals, TokComma, TokQuestion, TokAtBrace:
 		// Other tokens write only their literal value.
 	}
-	sb.WriteString(p.Cur().Lit)
+	sb.WriteString(token.Lit)
+	return nil
 }
 
 func (p *Parser) appendList(dst []string) []string {

@@ -128,6 +128,9 @@ func rewriteProjectionDataEntry(entry string, localNames, visibleNames map[strin
 	}
 	switch kind {
 	case 's':
+		if entry[start] == '"' {
+			return entry
+		}
 		return entry[:start] + strconv.Quote(entry[start+1:end-1]) + entry[end:]
 	case 'b':
 		return entry[:start] + strconv.Quote(entry[start:end]) + entry[end:]

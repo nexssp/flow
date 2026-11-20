@@ -3,12 +3,12 @@ package schema
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/internal/identifier"
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 // EnumMember is one named member of a file-local closed enum.
@@ -175,7 +175,7 @@ func parseEnumMember(text string) (name, wireValue string, explicit bool, err er
 	if name == "" || raw == "" || raw[0] != '"' || raw[len(raw)-1] != '"' {
 		return "", "", false, fmt.Errorf("expected `member = \"wire-value\"`, got %q", text)
 	}
-	wireValue, err = strconv.Unquote(raw)
+	wireValue, err = lexical.DecodeDoubleQuotedString(raw)
 	if err != nil {
 		return "", "", false, fmt.Errorf("invalid wire string for %q: %w", name, err)
 	}

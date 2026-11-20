@@ -7,9 +7,21 @@
 }
 @symbols legacy { ready: "needs_review" }
 @symbols states { pending }
-{ status: http_status.created, base_url: http_status.base_url, timeout: http_status.timeout, legacy: legacy.ready, identity: states.pending }
+@symbols escaped {
+  line: "line\nbreak";
+  unicode: string = "\u{41}";
+  byte: "\xff";
+  raw: `line\nbreak`;
+  single: 'line\nbreak'
+}
+{ status: http_status.created, base_url: http_status.base_url, timeout: http_status.timeout, legacy: legacy.ready, identity: states.pending, escaped_line: escaped.line, escaped_unicode: escaped.unicode, escaped_byte: escaped.byte, escaped_raw: escaped.raw, escaped_single: escaped.single }
 @assert: result.status == 201
 @assert: result.base_url == "https://api.internal"
 @assert: result.timeout != nil
 @assert: result.legacy == "needs_review"
 @assert: result.identity == "pending"
+@assert: result.escaped_line == "line\nbreak"
+@assert: result.escaped_unicode == "A"
+@assert: result.escaped_byte == "ÿ"
+@assert: result.escaped_raw == "line\\nbreak"
+@assert: result.escaped_single == "line\\nbreak"

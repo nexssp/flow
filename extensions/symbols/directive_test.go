@@ -131,6 +131,26 @@ func TestDirective_ExplicitTypedSymbolsKeepNativeValuesAndLegacyStrings(t *testi
 	ktest.RequireEqual[any](t, symbols["pending"], "pending")
 }
 
+func TestDirectiveStringValuesUseExprGrammar(t *testing.T) {
+	t.Parallel()
+	out, err := runSymbols(t, []string{
+		"@symbols escaped {",
+		`  line: "line\nbreak"; unicode: string = "\u{41}"; byte: "\xff"`,
+		"}",
+	})
+	ktest.RequireNoError(t, err)
+	namespaces, _ := out["symbols"].(map[string]compiler.SymbolNamespace)
+	symbols := namespaces["escaped"].Symbols
+	ktest.RequireEqual[any](t, symbols["line"], "line\nbreak")
+	ktest.RequireEqual[any](t, symbols["byte"], "ÿ")
+	unicode, ok := symbols["unicode"].(compiler.TypedSymbolValue)
+	ktest.RequireCondition(t, ok, "unicode must retain its typed-symbol carrier")
+	ktest.RequireEqual[any](t, unicode.Value, "A")
+
+	_, err = runSymbols(t, []string{`@symbols invalid { value: "bad\q" }`})
+	ktest.RequireErrorContains(t, err, "invalid string literal")
+}
+
 func TestDirective_RejectsTypedSymbolOverflowAndInvalidDurationAtLiteral(t *testing.T) {
 	for _, test := range []struct {
 		name     string

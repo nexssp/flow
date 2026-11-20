@@ -9,13 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/nexssp/kernel/action"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 var Directive = compiler.Directive{
@@ -131,13 +131,28 @@ func addEntry(pos compiler.Position, namespace string, symbols map[string]any, e
 			}
 			value = compiler.TypedSymbolValue{Type: canonicalTypedSymbolType(typeName), Value: native}
 		} else {
-			value = compiler.TrimQuotes(rhs)
+			parsed, err := parseSymbolString(rhs)
+			if err != nil {
+				return compiler.SourceError(pos, "@symbols %s: invalid string literal for %q: %v", namespace, key, err)
+			}
+			value = parsed
 		}
 	} else {
-		value = compiler.TrimQuotes(rhs)
+		parsed, err := parseSymbolString(rhs)
+		if err != nil {
+			return compiler.SourceError(pos, "@symbols %s: invalid string literal for %q: %v", namespace, key, err)
+		}
+		value = parsed
 	}
 	symbols[key] = value
 	return nil
+}
+
+func parseSymbolString(raw string) (string, error) {
+	if len(raw) >= 2 && raw[0] == '"' && raw[len(raw)-1] == '"' {
+		return lexical.DecodeDoubleQuotedString(raw)
+	}
+	return compiler.TrimQuotes(raw), nil
 }
 
 func addSymbol(pos compiler.Position, namespace string, symbols map[string]any, key string, value any) error {
@@ -174,7 +189,7 @@ func parseTypedLiteral(typeName, raw string) (any, error) {
 		if len(raw) < 2 || raw[0] != '"' || raw[len(raw)-1] != '"' {
 			return nil, errors.New("typed string literal must be double-quoted")
 		}
-		value, err := strconv.Unquote(raw)
+		value, err := lexical.DecodeDoubleQuotedString(raw)
 		if err != nil {
 			return nil, fmt.Errorf("invalid string literal: %w", err)
 		}
