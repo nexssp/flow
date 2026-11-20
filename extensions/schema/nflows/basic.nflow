@@ -1,7 +1,8 @@
 @description "@schema declaration"
 @schema TestUser struct {
-  Name  string `json:"name"  validate:"required"`
+  Name! string `json:"name"`
   Email string `json:"email" validate:"email"`
 }
 @assert: result.name == "Maksymilian"
-{ name: "Maksymilian" } -> noop:schema=TestUser
+{ name: "Maksymilian" }
+  -> noop :schema=TestUser

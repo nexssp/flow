@@ -35,6 +35,31 @@ func TestSecretSchemaFieldMaterializesOpaqueValue(t *testing.T) {
 	}
 }
 
+func TestSecretRequiredMarkerAcceptsPresentEmptyValue(t *testing.T) {
+	field, err := parseSchemaField(`APIKey! secret ` + "`json:\"api_key\"`")
+	if err != nil {
+		t.Fatalf("parse required Secret field: %v", err)
+	}
+	schema := Schema{Name: "Request", Fields: []Field{*field}}
+	values, err := ApplyDefaultsAndValidate(context.Background(), schema, map[string]any{"api_key": ""})
+	if err != nil {
+		t.Fatalf("present empty Secret value was rejected: %v", err)
+	}
+	value, ok := values["api_key"].(secret.Value)
+	if !ok || !secret.IsEmpty(value) {
+		t.Fatalf("materialized value = %T, want present empty secret.Value", values["api_key"])
+	}
+
+	legacyField, err := parseSchemaField(`APIKey secret ` + "`json:\"api_key\" validate:\"required\"`")
+	if err != nil {
+		t.Fatalf("parse legacy required Secret field: %v", err)
+	}
+	legacySchema := Schema{Name: "Request", Fields: []Field{*legacyField}}
+	if _, err := ApplyDefaultsAndValidate(context.Background(), legacySchema, map[string]any{"api_key": ""}); err == nil {
+		t.Fatal(`legacy validate:"required" unexpectedly accepted an empty Secret value`)
+	}
+}
+
 func TestSecretSchemaRejectsStringOutsideInputBoundary(t *testing.T) {
 	schema := Schema{Name: "Request", Fields: []Field{{
 		Name: "APIKey", JSONName: "api_key", Type: "secret", Kind: KindSecret,

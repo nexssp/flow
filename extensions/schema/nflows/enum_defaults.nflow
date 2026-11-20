@@ -6,8 +6,9 @@
 }
 @schema Order {
   status OrderStatus `json:"status" default:"OrderStatus.pending"`
-  refund_status OrderStatus `json:"refund_status" validate:"required,oneof=OrderStatus.paid OrderStatus.canceled"`
+  refund_status! OrderStatus `json:"refund_status" validate:"oneof=OrderStatus.paid OrderStatus.canceled"`
 }
-{ status: OrderStatus.paid, refund_status: OrderStatus.canceled } -> Order.validate
+{ status: OrderStatus.paid, refund_status: OrderStatus.canceled }
+  -> Order.validate
 @assert: result.status == "settled"
 @assert: result.refund_status == "canceled_by_user"

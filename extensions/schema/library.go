@@ -15,7 +15,7 @@
 // Typical use:
 //
 //	@schema TestUser {
-//	  Name string `json:"name" default:"guest" validate:"required"`
+//	  Name! string `json:"name" default:"guest"`
 //	}
 //	@pipeline greet
 //	  :schema=TestUser

@@ -1,8 +1,8 @@
 @description "Schema validates numeric bounds, array element rules, and json wire names"
 
 @schema OrderBatch {
-  BatchRef string   `json:"batch_ref" validate:"required"`
-  Amounts  []int    `json:"amounts"   validate:"required,dive,gt=0"`
+  BatchRef! string  `json:"batch_ref"`
+  Amounts! []int    `json:"amounts"   validate:"min=1,max=15,dive,gt=0"`
   Limit    float64  `json:"limit"     default:"1000.50" validate:"gt=0"`
 }
 

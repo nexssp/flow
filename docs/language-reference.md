@@ -266,7 +266,7 @@ The compiler-version directive is spelled `@nflow_version` only; the previous sp
 
 ## Schema declarations and validation boundaries
 
-`@schema` is implemented and is the right construct for declarative input shape/validation. The accepted declaration forms are `@schema NAME { ... }` and `@schema NAME struct { ... }`. Fields use `Field Type` and optional Go-style backtick tags; embedded schemas must be declared earlier. An empty body is valid and represents a zero-property object, including a tool that accepts no arguments. Supported scalar categories include strings, signed/unsigned integers, floats, booleans, and `any`/`interface{}`; slices, maps, pointers and struct-shaped values are recognized by the schema parser. Field names default to a lower-cased initial letter for their JSON key; `json:"..."` overrides it. Declaration syntax, names, tag syntax, defaults, duplicate names and references to unknown schemas are checked before a run.
+`@schema` is implemented and is the right construct for declarative input shape/validation. The accepted declaration forms are `@schema NAME { ... }` and `@schema NAME struct { ... }`. Fields use `Field Type` and optional Go-style backtick tags; append `!` to a field name (`Name! string`) to require its JSON key. Embedded schemas must be declared earlier. An empty body is valid and represents a zero-property object, including a tool that accepts no arguments. Supported scalar categories include strings, signed/unsigned integers, floats, booleans, and `any`/`interface{}`; slices, maps, pointers and struct-shaped values are recognized by the schema parser. Field names default to a lower-cased initial letter for their JSON key; `json:"..."` overrides it. Declaration syntax, names, tag syntax, defaults, duplicate names and references to unknown schemas are checked before a run.
 
 An earlier `@enum` may be used as a schema field type. Enum fields automatically
 validate against the complete wire-value set and include that set in JSON Schema.
@@ -276,7 +276,7 @@ keep the existing `oneof` behavior.
 
 ```nflow
 @schema Request {
-  Name  string `json:"name" default:"standard" validate:"required"`
+  Name! string `json:"name" default:"standard"`
   Depth int    `json:"depth" default:"1" validate:"gte=1"`
 }
 
@@ -292,8 +292,9 @@ The equivalent signature form is `@pipeline create_order(order_req: !CreateReque
 
 Important schema rules:
 
-- Fields are not automatically required just because they appear in a schema. Use a `validate:"required"` rule when requiredness is intended; validator rules such as `email`, `gte=1`, `oneof=...`, and `dive,required` are delegated to the installed validator.
-- `required` uses the validator's non-zero-value semantics for scalar types, so it rejects values such as `0`, `false`, or `""`, not merely an absent key. Account for that when zero/false is a valid business value.
+- Fields are optional by default. A trailing `!` on the field name requires the key to be present, while `validate` expresses value constraints such as `email`, `gte=1`, `oneof=...`, or `dive,required`; `required` after `dive` applies to list elements, not the field key.
+- The field marker checks presence only, so a present `0`, `false`, or `""` is accepted unless another constraint rejects it. For compatibility, a root-level `validate:"required"` still uses the validator's non-zero-value semantics.
+- Empty validation-tag segments (leading, trailing, or doubled commas) are compile-time errors with a field source position; they are never silently discarded.
 - Defaults apply only when a key is absent. Explicit `null`, zero, `false`, or an empty string is not replaced; composite defaults replace the whole value rather than deep-merging.
 - Extra input keys are allowed and preserved unless that request or response boundary uses the `!` strictness marker.
 - Pipeline boundaries use separate `:request-schema=NAME` and `:response-schema=NAME` modifiers; the former pipeline-header alias `:schema=NAME` is removed. A direct `NAME.validate` action provides an explicit mid-pipeline validation step.

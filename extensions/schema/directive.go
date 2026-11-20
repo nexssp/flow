@@ -108,6 +108,9 @@ func parseAndValidateSchemaFields(entries []compiler.BlockEntry, body []string, 
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := validateSchemaValidationTags(raw); err != nil {
+		return nil, nil, err
+	}
 	if err := validateSecretFieldDeclarations(raw); err != nil {
 		return nil, nil, wrapSchemaResolutionError(pos, name, err)
 	}
@@ -117,10 +120,22 @@ func parseAndValidateSchemaFields(entries []compiler.BlockEntry, body []string, 
 	if err := resolveSchemaSymbols(raw, compiler.SymbolsFromMeta(meta)); err != nil {
 		return nil, nil, wrapSchemaResolutionError(pos, name, err)
 	}
+	if err := validateSchemaValidationTags(raw); err != nil {
+		return nil, nil, err
+	}
 	if err := validateSchemaDefaults(raw); err != nil {
 		return nil, nil, wrapSchemaResolutionError(pos, name, err)
 	}
 	return raw, embedReferences, nil
+}
+
+func validateSchemaValidationTags(fields []Field) error {
+	for index := range fields {
+		if err := validateFieldValidationTag(&fields[index]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validateSecretFieldDeclarations(fields []Field) error {
@@ -292,10 +307,14 @@ func parseSchemaField(line string) (*Field, error) {
 		return &Field{Embed: parts[0]}, nil
 	case 2:
 		name, typeText := parts[0], parts[1]
+		required := strings.HasSuffix(name, "!")
+		if required {
+			name = strings.TrimSuffix(name, "!")
+		}
 		if !identifier.IsValid(name) {
 			return nil, fmt.Errorf("invalid field name %q", name)
 		}
-		field := &Field{Name: name, Type: typeText, Tags: tags}
+		field := &Field{Name: name, Type: typeText, Required: required, Tags: tags}
 		classifyFieldType(field)
 		if jsonName, ok := tags["json"]; ok {
 			field.JSONName = strings.Split(jsonName, ",")[0]

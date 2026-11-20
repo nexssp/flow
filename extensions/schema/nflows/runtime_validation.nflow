@@ -1,8 +1,8 @@
 @description "spec: runtime schema validation strictly guards pipeline payload"
 
 @schema Order {
-  OrderID string `json:"order_id" validate:"required"`
-  Amount  int    `json:"amount"   validate:"required"`
+  OrderID! string `json:"order_id"`
+  Amount!  int    `json:"amount"`
 }
 
 { order_id: "ORD-999", amount: 250, extra_note: "safe" }

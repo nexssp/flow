@@ -13,7 +13,7 @@ func sampleSchema() Schema {
 	return Schema{
 		Name: "User",
 		Fields: []Field{
-			{Name: "Name", JSONName: "name", Kind: KindString, Tags: map[string]string{"validate": "required"}},
+			{Name: "Name", JSONName: "name", Kind: KindString, Required: true},
 			{Name: "Age", JSONName: "age", Kind: KindInt},
 			{Name: "Tags", JSONName: "tags", Kind: KindString, Slice: true},
 			{Name: "Attrs", JSONName: "attrs", Kind: KindAny, Map: true},
@@ -93,6 +93,44 @@ func TestValidate_MissingRequired(t *testing.T) {
 func TestValidate_OptionalMissing(t *testing.T) {
 	t.Parallel()
 	ktest.RequireNoError(t, Validate(t.Context(), sampleSchema(), map[string]any{"name": "Maksymilian"}))
+}
+
+func TestValidate_RequiredMarkerAcceptsPresentZeroValue(t *testing.T) {
+	t.Parallel()
+	schema := Schema{Name: "Customer", Fields: []Field{{
+		Name: "Name", JSONName: "name", Kind: KindString, Required: true,
+	}}}
+	ktest.RequireNoError(t, Validate(t.Context(), schema, map[string]any{"name": ""}))
+}
+
+func TestValidate_OptionalFieldTagsDoNotRequireMissingKeys(t *testing.T) {
+	t.Parallel()
+	schema := Schema{Name: "Options", Fields: []Field{
+		{Name: "Note", JSONName: "note", Kind: KindString, Tags: map[string]string{"validate": "min=1"}},
+		{Name: "Labels", JSONName: "labels", Kind: KindString, Slice: true, Tags: map[string]string{"validate": "min=1,max=15,dive,required"}},
+	}}
+	ktest.RequireNoError(t, Validate(t.Context(), schema, map[string]any{}))
+}
+
+func TestValidate_LegacyRootRequiredRuleStillWorks(t *testing.T) {
+	t.Parallel()
+	schema := Schema{Name: "Legacy", Fields: []Field{{
+		Name: "Name", JSONName: "name", Kind: KindString, Tags: map[string]string{"validate": "required"},
+	}}}
+	err := Validate(t.Context(), schema, map[string]any{})
+	requireValidationField(t, err, "name")
+}
+
+func TestToJSONSchemaRequiredUsesFieldMarkerNotDiveRule(t *testing.T) {
+	t.Parallel()
+	schema := Schema{Name: "Request", Fields: []Field{
+		{Name: "Name", JSONName: "name", Kind: KindString, Required: true},
+		{Name: "Note", JSONName: "note", Kind: KindString, Tags: map[string]string{"validate": "min=1"}},
+		{Name: "Labels", JSONName: "labels", Kind: KindString, Slice: true, Tags: map[string]string{"validate": "min=1,max=15,dive,required"}},
+		{Name: "Legacy", JSONName: "legacy", Kind: KindString, Tags: map[string]string{"validate": "required"}},
+	}}
+	jsonSchema := ToJSONSchema(schema)
+	ktest.RequireEqual[any](t, jsonSchema["required"], []string{"name", "legacy"})
 }
 
 func TestValidate_TypeErrors(t *testing.T) {

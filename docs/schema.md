@@ -17,6 +17,12 @@ validation rules, and optional defaults:
 {} -> pipeline.pack
 ```
 
+Place `!` immediately after a field name, as in `Name! string`, to require the
+JSON key to be present. This is separate from `validate`: a required marker
+accepts a present empty string, zero, or `false` unless an additional validation
+rule rejects that value. Validation tags remain available for constraints such
+as `email`, `min`, `oneof`, and `dive,required`.
+
 The `:request-schema=PackInput` pipeline-header modifier applies the schema at
 every request boundary, before the pipeline's first action. This works for a
 programmatic call to the compiled `pipeline.pack` action as well as for a
@@ -150,10 +156,10 @@ locally with the same name remains distinct from `memory.ChatTurn`.
 
 A `default` tag supplies a value only when its JSON field is **absent**. An
 explicit value—including `null`, `0`, or an empty slice—is preserved. Defaults
-are applied before validation, so a defaulted field can satisfy
-`validate:"required"`; all resulting values are still checked against the
-field's type and validation rules. Malformed defaults are rejected when the
-`@schema` declaration is compiled.
+are applied before presence and value checks, so a defaulted `Name!` field is
+present by the time requiredness is checked; all resulting values are still
+checked against the field's type and validation rules. Malformed defaults are
+rejected when the `@schema` declaration is compiled.
 
 ## Secret fields
 
@@ -166,7 +172,7 @@ passed through unchanged only to an action parameter explicitly declared as
 
 ```nflow
 @schema ApiRequest {
-	APIKey secret `json:"api_key" validate:"required"`
+	APIKey! secret `json:"api_key"`
 }
 
 @pipeline call_api
@@ -176,13 +182,14 @@ passed through unchanged only to an action parameter explicitly declared as
 ```
 
 Secret fields must be scalar, cannot have source or programmatic defaults, and
-support only `validate:"required"`. Pipeline request schemas preserve their
-nominal Secret type for checking; a plain string cannot be substituted at an
-action boundary. Secret-bearing fields are not implicitly copied into later
-action arguments, and runtime guards reject Secret values sent to untyped
-parameters. Flow redacts typed Secret values in JSON, execution traces, and
-event sinks; the existing key-based redactor remains a fallback for untyped
-payloads.
+do not support additional `validate` constraints. Use `APIKey!` to require the
+key; the legacy `validate:"required"` rule remains supported with its
+non-zero-value semantics. Pipeline request schemas preserve their nominal Secret
+type for checking; a plain string cannot be substituted at an action boundary.
+Secret-bearing fields are not implicitly copied into later action arguments,
+and runtime guards reject Secret values sent to untyped parameters. Flow redacts
+typed Secret values in JSON, execution traces, and event sinks; the existing
+key-based redactor remains a fallback for untyped payloads.
 
 ## Nested schemas
 
@@ -191,20 +198,21 @@ recursively to nested objects and to each element of a `[]Schema` field:
 
 ```nflow
 @schema Attempt {
-  AttemptID string `json:"attempt_id" validate:"required"`
-  ExpectedCurrency string `json:"expected_currency" default:"USD" validate:"required"`
+  AttemptID! string `json:"attempt_id"`
+  ExpectedCurrency! string `json:"expected_currency" default:"USD"`
 }
 @schema Candidate {
-  Attempt Attempt `json:"attempt" validate:"required"`
+  Attempt! Attempt `json:"attempt"`
 }
 @schema Request {
-  Candidates []Candidate `json:"candidates" validate:"required,min=1,dive,required"`
+  Candidates! []Candidate `json:"candidates" validate:"min=1,max=15,dive,required"`
 }
 ```
 
 The `expected_currency` default is added when it is absent inside a candidate's
-`attempt`, before that nested object is validated. Required tags and other
-validation rules are checked at every level, including list elements. A nested
+`attempt`, before that nested object is validated. Required markers and other
+validation rules are checked at every level; `dive,required` constrains each
+list element, while `Candidates!` requires the list key itself. A nested
 value with the wrong shape (for example, a string where a `Candidate` object is
 expected) fails validation. Map payloads such as `map[string]any` remain
 intentionally open-ended: Flow does not treat their contents as a named nested
@@ -217,7 +225,7 @@ validation:
 ```nflow
 @symbols memory { search, put, chat_turn }
 @schema MemoryRequest {
-  Operation string `json:"operation" default:"memory.search" validate:"required,oneof=memory.search memory.put memory.chat_turn"`
+  Operation! string `json:"operation" default:"memory.search" validate:"oneof=memory.search memory.put memory.chat_turn"`
 }
 ```
 
@@ -242,7 +250,7 @@ their declared wire values at runtime, and `ToJSONSchema` emits the full set:
 }
 @schema Order {
   status OrderStatus `json:"status" default:"OrderStatus.pending"`
-  refund_status OrderStatus `json:"refund_status" validate:"required,oneof=OrderStatus.paid OrderStatus.cancelled"`
+  refund_status! OrderStatus `json:"refund_status" validate:"oneof=OrderStatus.paid OrderStatus.cancelled"`
 }
 { status: OrderStatus.paid, refund_status: OrderStatus.cancelled } -> Order.validate
 ```

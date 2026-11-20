@@ -86,6 +86,22 @@ func TestDirective_WithTags(t *testing.T) {
 	ktest.RequireEqual(t, fields[1].JSONName, "email")
 }
 
+func TestDirective_RequiredMarkerIsSeparateFromValidationTags(t *testing.T) {
+	t.Parallel()
+	out, err := runDirective(t,
+		`@schema Customer {`,
+		"  Name! string `json:\"name\" validate:\"email\"`",
+		"  Note string `json:\"note\" validate:\"min=1\"`",
+		`}`,
+	)
+	ktest.RequireNoError(t, err)
+	fields := SchemasFromMap(out)[0].Fields
+	ktest.RequireCondition(t, fields[0].Required, "Name! should be required")
+	ktest.RequireEqual(t, fields[0].Tags["validate"], "email")
+	ktest.RequireCondition(t, !fields[1].Required, "Note should remain optional")
+	ktest.RequireEqual(t, fields[1].Tags["validate"], "min=1")
+}
+
 func TestDirective_DefaultTags(t *testing.T) {
 	t.Parallel()
 
@@ -486,4 +502,43 @@ func TestCompiler_PreprocessResolvesSymbolBeforeTypedDefaultParsing(t *testing.T
 	effective, err := ApplyDefaultsAndValidate(t.Context(), schemas[0], map[string]any{})
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, effective["status"], 201)
+}
+
+func TestCompiler_PreprocessParsesRequiredFieldMarker(t *testing.T) {
+	t.Parallel()
+	source := "@schema Customer {\n  Name! string `json:\"name\"`\n  Note string `json:\"note\" validate:\"min=1\"`\n}\n"
+	_, meta, err := compiler.Preprocess(
+		t.Context(), compiler.NewDirectiveTable(Directive), source, "required.nflow",
+	)
+	ktest.RequireNoError(t, err)
+	fields := SchemasFromMap(meta)[0].Fields
+	ktest.RequireCondition(t, fields[0].Required, "Name! should be required after preprocessing")
+	ktest.RequireCondition(t, !fields[1].Required, "Note should remain optional after preprocessing")
+}
+
+func TestCompiler_PreprocessRejectsEmptyValidationTagSegmentsAtFieldPosition(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		tag  string
+	}{
+		{name: "leading comma", tag: ",min=1"},
+		{name: "trailing comma", tag: "min=1,"},
+		{name: "double comma", tag: "min=1,,max=15"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			source := "@schema Batch {\n  Values! []string `json:\"values\" validate:\"" + tc.tag + "\"`\n}\n"
+			_, _, err := compiler.Preprocess(
+				t.Context(), compiler.NewDirectiveTable(Directive), source, "malformed.nflow",
+			)
+			ktest.RequireErrorContains(t, err, "validate tag has an empty rule")
+			position, ok := compiler.PositionOf(err)
+			ktest.RequireCondition(t, ok, "preprocess error has no source position: %v", err)
+			ktest.RequireEqual(t, position.File, "malformed.nflow")
+			ktest.RequireEqual(t, position.Line, 2)
+			ktest.RequireCondition(t, position.Col > 0, "source column is missing: %+v", position)
+		})
+	}
 }

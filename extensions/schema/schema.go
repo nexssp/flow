@@ -41,6 +41,7 @@ type Field struct {
 	JSONName        string
 	Type            string
 	Kind            Kind
+	Required        bool
 	ElemType        string
 	Pointer         bool
 	Slice           bool
@@ -118,14 +119,13 @@ func ByName(meta map[string]any, name string) (Schema, bool) {
 //  1. Go-kind check (checkFieldKind): the payload value's kind must
 //     match the schema field's declared type.
 //  2. Tag check (validation.Var): when the field carries a
-//     `validate:"..."` tag beyond bare "required", the value is
-//     validated against the tag expression using the same
-//     validator/v10 instance that powers validation.Struct.
+//     `validate:"..."` tag, the value is validated against the tag
+//     expression using the same validator/v10 instance that powers
+//     validation.Struct.
 //
-// The presence check for validate:"required" is handled inline, so a
-// missing field reports as "is required" without invoking the
-// validator. An empty string for a required field is also reported as
-// "is required" because validator/v10 treats empty as the zero value.
+// A trailing `!` on a field name requires the key to be present. A root-level
+// validate:"required" rule is also honored for compatibility and retains the
+// validator's non-zero-value semantics.
 //
 // ctx is threaded from the caller so context-aware custom rules
 // registered via validation.RegisterCustom see the live context, and
@@ -269,7 +269,8 @@ func validateValues(ctx context.Context, schema Schema, m map[string]any) error 
 		field := schema.Fields[i]
 		value, present := m[field.JSONName]
 		rule := field.Tags["validate"]
-		required := hasValidationTag(rule, "required")
+		required := fieldIsRequired(field)
+		legacyRequired := hasTopLevelValidationTag(rule, "required")
 
 		if !present {
 			if required {
@@ -291,8 +292,8 @@ func validateValues(ctx context.Context, schema Schema, m map[string]any) error 
 			continue
 		}
 		if field.Kind == KindSecret {
-			secretValue, isSecret := value.(secret.Value)
-			if required && (!isSecret || secret.IsEmpty(secretValue)) {
+			secretValue, _ := value.(secret.Value)
+			if legacyRequired && secret.IsEmpty(secretValue) {
 				details = append(details, xerr.ValidationDetail{Field: field.JSONName, Validation: "required", Value: "is required"})
 			}
 			continue
@@ -541,9 +542,17 @@ func friendlyType(v any) string {
 	}
 }
 
-func hasValidationTag(tag, name string) bool {
+func fieldIsRequired(field Field) bool {
+	return field.Required || hasTopLevelValidationTag(field.Tags["validate"], "required")
+}
+
+func hasTopLevelValidationTag(tag, name string) bool {
 	for part := range strings.SplitSeq(tag, ",") {
-		if strings.TrimSpace(part) == name {
+		rule := strings.TrimSpace(part)
+		if rule == "dive" {
+			return false
+		}
+		if rule == name {
 			return true
 		}
 	}
@@ -600,7 +609,7 @@ func ToJSONSchema(s Schema) map[string]any {
 			}
 		}
 
-		if hasValidationTag(f.Tags["validate"], "required") {
+		if fieldIsRequired(f) {
 			required = append(required, f.JSONName)
 		}
 

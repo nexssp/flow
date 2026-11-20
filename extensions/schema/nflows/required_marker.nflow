@@ -1,0 +1,19 @@
+@description "Schema required markers validate key presence independently of value constraints"
+
+@schema Customer {
+  Name! string `json:"name"`
+}
+
+@schema Request {
+  Customer! Customer `json:"customer"`
+  Labels! []string `json:"labels" validate:"min=1,max=15,dive,required"`
+  Note string `json:"note" validate:"min=1"`
+}
+
+@pipeline validate_request
+  :request-schema=Request
+  schema.validate ( name: "Request" )
+@end
+
+{ customer: { name: "" }, labels: ["present"] }
+  -> pipeline.validate_request

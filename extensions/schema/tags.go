@@ -3,6 +3,9 @@ package schema
 import (
 	"fmt"
 	"strconv"
+	"strings"
+
+	compiler "github.com/nexssp/flow/compiler"
 )
 
 // parseStructTags parses the tag literal between backticks:
@@ -59,6 +62,20 @@ func parseStructTags(raw string) (map[string]string, error) {
 		out[key] = value
 	}
 	return out, nil
+}
+
+func validateFieldValidationTag(field *Field) error {
+	raw, ok := field.Tags["validate"]
+	if !ok || raw == "" {
+		return nil
+	}
+	for index, rule := range strings.Split(raw, ",") {
+		if strings.TrimSpace(rule) == "" {
+			return compiler.SourceError(field.Position,
+				"field %q: validate tag has an empty rule at segment %d", field.Name, index+1)
+		}
+	}
+	return nil
 }
 
 func lowerFirst(s string) string {

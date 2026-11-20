@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -144,5 +145,79 @@ pipeline.handle
 	}
 	if got := calls.Load(); got != 1 {
 		t.Fatalf("pipeline body calls = %d, want 1", got)
+	}
+}
+
+func TestExecutePipelineRequestSchemaRequiredFieldMarker(t *testing.T) {
+	var calls atomic.Int32
+	capture := action.New("test.capture", func(_ context.Context, input any) (any, error) {
+		calls.Add(1)
+		return input, nil
+	}).Build()
+	testBundle := compiler.Bundle{
+		ID:        "schema-required-marker-test",
+		Libraries: []action.Library{{Name: "test", Actions: []action.AnyAction{capture}}},
+	}
+	cfg, err := BuildConfig([]compiler.Bundle{
+		schema.Bundle(nil),
+		pipeline.Bundle(nil),
+		runtimeext.Bundle(nil),
+		testBundle,
+	})
+	if err != nil {
+		t.Fatalf("BuildConfig: %v", err)
+	}
+
+	source := `@schema Customer {
+  Name! string ` + "`json:\"name\"`" + `
+}
+@schema Request {
+  Customer! Customer ` + "`json:\"customer\"`" + `
+  Labels! []string ` + "`json:\"labels\" validate:\"min=1,max=15,dive,required\"`" + `
+  Note string ` + "`json:\"note\" validate:\"min=1\"`" + `
+}
+@pipeline handle
+  :request-schema=Request
+  test.capture
+@end
+`
+	prepared, err := Preflight(t.Context(), cfg, source, "required-marker-boundary.nflow")
+	if err != nil {
+		t.Fatalf("Preflight: %v", err)
+	}
+
+	valid := map[string]any{
+		"customer": map[string]any{"name": ""},
+		"labels":   []string{"present"},
+	}
+	result, err := ExecutePrepared(t.Context(), cfg, prepared, EntryPoint{
+		Name: "pipeline.handle", Payload: valid,
+	})
+	if err != nil {
+		t.Fatalf("ExecutePrepared valid request: %v", err)
+	}
+	output, ok := result.Output.(map[string]any)
+	if !ok {
+		t.Fatalf("output = %T, want map[string]any", result.Output)
+	}
+	if _, exists := output["note"]; exists {
+		t.Fatal("missing optional field with validate tag was treated as required")
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("pipeline body calls = %d, want 1", got)
+	}
+
+	invalid := map[string]any{
+		"customer": map[string]any{},
+		"labels":   []string{"present"},
+	}
+	_, err = ExecutePrepared(t.Context(), cfg, prepared, EntryPoint{
+		Name: "pipeline.handle", Payload: invalid,
+	})
+	if err == nil || !strings.Contains(err.Error(), `field "name" is required`) {
+		t.Fatalf("missing nested Customer.name error = %v, want required-field failure", err)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("pipeline body ran for invalid request: calls = %d, want 1", got)
 	}
 }
