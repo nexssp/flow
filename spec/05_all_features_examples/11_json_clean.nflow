@@ -1,0 +1,4 @@
+@description "JSON keyword: clean a raw JSON object into structured Flow data"
+@assert: result == "{\"ready\":true,\"count\":3}"
+`{"ready":true,"count":3}`
+-> json

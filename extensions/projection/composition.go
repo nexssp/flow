@@ -109,16 +109,12 @@ func (p *composedProjection) Build(ctx context.Context, bCtx *compiler.BuildCont
 			children = append(children, action.IntrospectionChild{Node: child, Relation: "value", Role: "value"})
 		}
 	}
-	source, err := buildProgramSource(p.raw)
-	if err != nil {
-		return nil, compiler.SourceError(p.pos, "projection: %v", err)
-	}
-	if p.functions != nil {
-		source, _ = p.functions.rewriteCalls(source)
-	}
-	program, err := compiler.CompileExpression(source, options...)
-	if err != nil {
-		return nil, compiler.SourceError(p.pos, "projection: %v", err)
+	programs := newProgramCache()
+	rewriteFunctions := func(source string) string {
+		if p.functions != nil {
+			source, _ = p.functions.rewriteCalls(source)
+		}
+		return source
 	}
 	compiled := action.New("projection.project", func(callCtx context.Context, input any) (any, error) {
 		if contextErr := callCtx.Err(); contextErr != nil {
@@ -128,7 +124,23 @@ func (p *composedProjection) Build(ctx context.Context, bCtx *compiler.BuildCont
 			return nil, conflictErr
 		}
 		env := normalizeExpressionEnvironmentWithCache(compiler.MergeSymbolNamespaces(callCtx, buildEnv(input)), viewCache)
+		if err := rejectUnavailableProjectionBindings(p.raw, compiler.ExpressionUnavailableBindingNames(callCtx), env); err != nil {
+			return nil, xerr.Validation(err.Error())
+		}
 		env[p.ctxName] = callCtx
+		visibleNames := projectionRuntimeVisibleNames(callCtx)
+		for name := range env {
+			visibleNames[name] = struct{}{}
+		}
+		program, compileErr := programs.compileWithOptions(
+			p.raw,
+			visibleNames,
+			rewriteFunctions,
+			options...,
+		)
+		if compileErr != nil {
+			return nil, compileErr
+		}
 		out, runErr := expr.Run(program, env)
 		if runErr != nil {
 			appErr, classified := errors.AsType[*xerr.AppError](runErr)

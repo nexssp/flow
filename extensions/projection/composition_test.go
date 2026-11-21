@@ -61,6 +61,42 @@ func TestProjectionShorthandForms(t *testing.T) {
 	ktest.RequireEqual(t, len(runner.EvaluateAssertions(execution.Output, []string{`result.name == "Ada"`})), 0)
 }
 
+func TestComposedProjectionUsesVisibleReferences(t *testing.T) {
+	t.Parallel()
+	cfg, err := runner.BuildConfig(native.Bundles())
+	ktest.RequireNoError(t, err)
+	source := `@symbols labels { ready: "ready" }
+	@enum Visibility { shown = "visible" }
+	@func numbers.double(value int) int = value * 2
+	@pipeline composed_visible_references
+	  noop as original
+	  -> with(
+	    id: .id + 1,
+	  ) as edited
+  -> {
+    literal: "original.id",
+    original_id: original.id,
+    request_id: input.id,
+    edited_id: edited.id,
+    state: labels.ready,
+    visibility: Visibility.shown,
+    doubled: numbers.double(.id)
+  }
+@end
+{ id: 7 } -> pipeline.composed_visible_references`
+	execution, err := runner.Execute(t.Context(), cfg, source, "composed-visible-references.nflow", nil)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, len(runner.EvaluateAssertions(execution.Output, []string{
+		`result.literal == "original.id"`,
+		`result.original_id == 7`,
+		`result.request_id == 7`,
+		`result.edited_id == 8`,
+		`result.state == "ready"`,
+		`result.visibility == "visible"`,
+		`result.doubled == 16`,
+	})), 0)
+}
+
 func TestProjectionUsesCompileTimeConfigInExpressions(t *testing.T) {
 	t.Parallel()
 	cfg, err := runner.BuildConfig(native.Bundles())
@@ -301,9 +337,6 @@ func TestProjectionLocalLetDoesNotEscapeItsProjection(t *testing.T) {
 	cfg, err := runner.BuildConfig(native.Bundles())
 	ktest.RequireNoError(t, err)
 	source := `{ user: { profile: { name: "Ada" } } } -> { let profile = .user.profile; display: profile.name } -> { escaped: profile.name }`
-	result, err := runner.Execute(t.Context(), cfg, source, "projection-let-scope.nflow", nil)
-	ktest.RequireNoError(t, err)
-	output, ok := result.Output.(map[string]any)
-	ktest.RequireCondition(t, ok, "projection output = %#v, want object", result.Output)
-	ktest.RequireEqual(t, output["escaped"], "profile.name")
+	_, err = runner.Compile(t.Context(), cfg, source, "projection-let-scope.nflow")
+	ktest.RequireCondition(t, err != nil, "out-of-scope bare projection name compiled as a string")
 }

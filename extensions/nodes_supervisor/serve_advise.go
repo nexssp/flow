@@ -131,3 +131,36 @@ func staticString(value *compiler.Value, allowBare bool) (string, bool) {
 	}
 	return "", false
 }
+
+func preserveStaticServiceReferences(atom *compiler.Atom) {
+	if atom.Name != "supervisor.serve" {
+		return
+	}
+	services := atom.Args["services"]
+	if services == nil || services.Kind != compiler.ValueSlice {
+		return
+	}
+	for _, service := range services.Slice {
+		if service == nil || service.Kind != compiler.ValueMap {
+			continue
+		}
+		for _, field := range service.Map {
+			switch field.Key {
+			case "action":
+				preserveStaticServiceReference(field.Value)
+			case "depends_on":
+				if field.Value != nil && field.Value.Kind == compiler.ValueSlice {
+					for _, dependency := range field.Value.Slice {
+						preserveStaticServiceReference(dependency)
+					}
+				}
+			}
+		}
+	}
+}
+
+func preserveStaticServiceReference(value *compiler.Value) {
+	if value != nil && value.Kind == compiler.ValueBare {
+		value.Kind = compiler.ValueString
+	}
+}

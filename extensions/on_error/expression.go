@@ -72,12 +72,12 @@ func (g *ErrorGuardExpr) Analyze(resolver compiler.CapabilityResolver) error {
 }
 
 func (g *ErrorGuardExpr) AnalyzeTypes(ctx compiler.TypeAnalysisContext) (compiler.TypeDescriptor, error) {
-	output, err := compiler.AnalyzeTypedExpression(ctx, g.Protected)
+	output, protectedBindings, err := compiler.AnalyzeTypedExpressionWithBindings(ctx, g.Protected)
 	if err != nil {
 		return compiler.TypeDescriptor{}, err
 	}
-	handlerBindings := make(map[string]compiler.TypeDescriptor, len(ctx.Bindings)+1)
-	maps.Copy(handlerBindings, ctx.Bindings)
+	handlerBindings := make(map[string]compiler.TypeDescriptor, len(protectedBindings)+1)
+	maps.Copy(handlerBindings, protectedBindings)
 	handlerBindings["error"] = compiler.TypeDescriptor{Type: reflect.TypeFor[map[string]any]()}
 	handlerContext := compiler.TypeAnalysisContext{
 		Resolver:           ctx.Resolver,

@@ -1,0 +1,106 @@
+@description "Language basics: friendly guide to literals, references, expressions, constants, helpers, symbols, enums, and macros"
+
+@const RELEASE_LABEL = "feature-examples"
+
+@symbols labels {
+  ready: "ready"
+}
+
+@enum Visibility {
+  shown = "visible",
+  hidden
+}
+
+# Pure, typed calculation available in projections and action arguments.
+@func numbers.double(value int) int = value * 2
+
+# A macro inserts source text before the flow runs. $key and $label are macro
+# parameters, not runtime string interpolation.
+@macro with_label(key: Identifier, label: String) {
+  { ..., $key: $label }
+}
+
+# QUICK RULES
+# - "input.id" is ordinary text. Quoted strings do not look up runtime values.
+# - In a projection, `name` alone copies .name; write current_name: .name when
+#   you want a differently named output field.
+# - .profile.city is shorthand for city: .profile.city; the final path segment
+#   becomes the output key.
+# - .id reads the current value. input.id reads the original request in both
+#   projections and action arguments.
+# - In a projection, original.id reads an earlier `as original` binding; `as`
+#   adds no data field.
+# - ${RELEASE_LABEL} is different: @const substitutes the known constant at
+#   compile time. It is not general runtime string interpolation.
+# - The request below shows number, string, boolean, null, array, and object
+#   values. "7" is text; 7 is a number.
+# - The with(...) call demonstrates action arguments: .id and input.id are
+#   evaluated values, while "input.id" is literal text.
+# - Projection values can use visible bindings, helper calls, symbols, and enums
+#   directly; they do not need outer parentheses.
+@pipeline language_basics
+  noop as original
+  -> with(
+    id: .id + 1,
+    name: "Grace",
+    literal_path: "input.id",
+    copied_id: .id,
+    request_id: input.id,
+  ) as edited
+  -> {
+    literal_text: "original.id",
+    id_as_text: .id_as_text,
+    source_id: original.id,
+    request_id: input.id,
+    current_id: .id,
+    edited_id: edited.id,
+    copied_id: .copied_id,
+    literal_path: .literal_path,
+    original_name: original.name,
+    current_name: .name,
+    .profile.city,
+    active,
+    optional: .optional,
+    tags,
+    doubled: numbers.double(.id),
+    greeting: "Hello, " + .name,
+    state: labels.ready,
+    visibility: Visibility.shown,
+    release: "${RELEASE_LABEL}",
+  }
+  -> @with_label(label, "language-basics")
+  -> pick(only: [
+      "literal_text", "id_as_text", "source_id", "request_id", "current_id",
+      "edited_id", "copied_id", "literal_path", "original_name", "current_name",
+      "city", "active", "optional", "tags", "doubled", "greeting", "state",
+      "visibility", "release", "label"
+  ])
+  -> wrap(key: "payload")
+@end
+
+{
+  id: 7,
+  id_as_text: "7",
+  name: "Ada",
+  active: true,
+  optional: null,
+  tags: ["nflow", "examples"],
+  profile: { city: "Warsaw" },
+  secret: "not exposed",
+}
+  -> pipeline.language_basics
+
+# These checks make the distinctions above executable, not just descriptive.
+@assert: result.payload.literal_text == "original.id"
+@assert: result.payload.literal_path == "input.id"
+@assert: result.payload.id_as_text == "7"
+@assert: result.payload.source_id == 7 && result.payload.request_id == 7
+@assert: result.payload.current_id == 8 && result.payload.edited_id == 8
+@assert: result.payload.copied_id == 7
+@assert: result.payload.original_name == "Ada" && result.payload.current_name == "Grace"
+@assert: result.payload.city == "Warsaw" && result.payload.active == true
+@assert: result.payload.doubled == 16 && result.payload.greeting == "Hello, Grace"
+@assert: result.payload.state == "ready" && result.payload.visibility == "visible"
+@assert: result.payload.release == "feature-examples"
+@assert: result.payload.label == "language-basics"
+@assert: !("secret" in result.payload)

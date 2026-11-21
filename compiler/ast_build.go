@@ -326,6 +326,7 @@ func buildBindingAction(bCtx *BuildContext, binding *BindingExpr, inner action.A
 			}
 			output, err := next(ctx, request)
 			if err != nil {
+				MarkExpressionBindingUnavailable(ctx, binding.Name)
 				return nil, err
 			}
 			if err := BindExpressionValue(ctx, binding.Name, output); err != nil {

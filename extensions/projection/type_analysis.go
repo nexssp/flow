@@ -41,6 +41,9 @@ func analyzeProjectionTypes(
 	if sourceErr != nil {
 		return compiler.TypeDescriptor{}, compiler.SourceError(pos, "projection: %v", sourceErr)
 	}
+	if err := validateProjectionBareValuesInScope(raw, visibleNames); err != nil {
+		return compiler.TypeDescriptor{}, compiler.SourceError(pos, "projection: %v", err)
+	}
 	if err := validateStaticProjectionBindingConflict(raw, pos, ctx); err != nil {
 		return compiler.TypeDescriptor{}, err
 	}
@@ -130,6 +133,19 @@ func projectionTypeVisibleNames(
 		expressionInputName: {},
 		expressionRootName:  {},
 		expressionStateName: {},
+	}
+	if ctx.Input.Type != nil && !ctx.Input.Stream {
+		fields := expressionViewFields(ctx.Input.Type)
+		for index := range fields {
+			field := fields[index]
+			for _, aliases := range [][]string{exactExpressionFieldAliases(field), generatedExpressionFieldAliases(field)} {
+				for _, alias := range aliases {
+					if alias != expressionInputName && !projectionFieldIsBuiltin(alias) {
+						names[alias] = struct{}{}
+					}
+				}
+			}
+		}
 	}
 	for name := range ctx.Bindings {
 		names[name] = struct{}{}

@@ -8,6 +8,7 @@
 2. **[Support triage](02_support_triage/happy.nflow)** validates and classifies a duplicate-charge ticket, routes it to the billing escalation queue, and creates a reply draft without sending a customer message. The [unavailable-upstream case](02_support_triage/fallback.nflow) preserves the ticket for manual review and explicitly keeps the reply unsent.
 3. **[Payment reconciliation](03_reconciliation/main.nflow)** matches payment and bank references, reports mismatches and bank-only rows as audit exceptions, calculates totals in integer cents, rejects duplicate references and overflowing totals, and asserts that the batch variance is zero.
 4. **[Resilience benchmark](04_resilience_benchmark/)** pairs a plain local workflow with the same workflow under timeout, retry, breaker, and concurrency middleware. For immediate per-pattern CLI measurements, run `nflow self bench resilience`; its built-in scenarios also cover the other NFlow-exposed modifiers and recovery operators. The companion Go benchmark reports `ns/op` and allocations for the aggregate profile in compile-plus-run and precompiled-runtime modes.
+5. **[All-features examples](05_all_features_examples/)** is a runnable, offline tour of the standard CLI's NFlow syntax and composition surface, organized as small asserted `.nflow` scenarios with a local included module and static data fixtures. Host-dependent, optional, nondeterministic, and pausing features are called out rather than invoked.
 
 ## Structure and conventions
 

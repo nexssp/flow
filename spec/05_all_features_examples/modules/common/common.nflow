@@ -1,0 +1,10 @@
+@symbols labels {
+  source: "common-module"
+}
+@func math.double(value int) int {
+  let doubled = value * 2;
+  doubled
+}
+@pipeline annotate
+  { ..., origin: (labels.source) }
+@end

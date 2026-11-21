@@ -79,6 +79,42 @@ func AnalyzeTypedExpression(ctx TypeAnalysisContext, expr Expr) (TypeDescriptor,
 	return analyzeTypedNode(ctx, expr)
 }
 
+// AnalyzeTypedExpressionWithBindings analyzes one AST node and returns the
+// lexical bindings visible at its end. Composite expressions use this when
+// validating a handler that runs after the analyzed expression completes.
+func AnalyzeTypedExpressionWithBindings(
+	ctx TypeAnalysisContext,
+	expr Expr,
+) (TypeDescriptor, map[string]TypeDescriptor, error) {
+	if ctx.Resolver == nil {
+		return TypeDescriptor{}, nil, xerr.Internal("typed analysis: capability resolver is nil")
+	}
+	ctx = withPipelineBindingNames(ctx)
+	ctx.Bindings = cloneTypeBindings(ctx.Bindings)
+	return analyzeTypedExpressionWithBindings(ctx, expr)
+}
+
+func analyzeTypedExpressionWithBindings(
+	ctx TypeAnalysisContext,
+	expr Expr,
+) (TypeDescriptor, map[string]TypeDescriptor, error) {
+	switch current := expr.(type) {
+	case *PipeExpr:
+		return analyzeTypedPipeWithBindings(ctx, current)
+	case *BindingExpr:
+		output, bindings, err := analyzeTypedExpressionWithBindings(ctx, current.Inner)
+		if err == nil {
+			bindings[current.Name] = output
+		}
+		return output, bindings, err
+	case *DecoratedExpr:
+		return analyzeTypedExpressionWithBindings(ctx, current.Inner)
+	default:
+		output, err := analyzeTypedNode(ctx, expr)
+		return output, ctx.Bindings, err
+	}
+}
+
 //nolint:gocyclo // This is the central typed dispatcher; explicit branches preserve boundary checks.
 func analyzeTypedNode(ctx TypeAnalysisContext, node Expr) (TypeDescriptor, error) {
 	if node == nil {
@@ -202,6 +238,14 @@ func analyzeTypedPipelineNode(ctx TypeAnalysisContext, node Expr) (TypeDescripto
 }
 
 func analyzeTypedPipe(ctx TypeAnalysisContext, pipe *PipeExpr) (TypeDescriptor, bool, error) {
+	output, _, err := analyzeTypedPipeWithBindings(ctx, pipe)
+	return output, true, err
+}
+
+func analyzeTypedPipeWithBindings(
+	ctx TypeAnalysisContext,
+	pipe *PipeExpr,
+) (TypeDescriptor, map[string]TypeDescriptor, error) {
 	state := ctx.Input
 	localBindings := cloneTypeBindings(ctx.Bindings)
 	localBindingNames := clonePipelineBindingNames(ctx.PipelineBindings)
@@ -215,7 +259,7 @@ func analyzeTypedPipe(ctx TypeAnalysisContext, pipe *PipeExpr) (TypeDescriptor, 
 		stepContext.PipelineBindings = localBindingNames
 		output, err := analyzeTypedNode(stepContext, inner)
 		if err != nil {
-			return TypeDescriptor{}, true, err
+			return TypeDescriptor{}, nil, err
 		}
 		if binding != nil {
 			localBindings[binding.Name] = output
@@ -224,7 +268,7 @@ func analyzeTypedPipe(ctx TypeAnalysisContext, pipe *PipeExpr) (TypeDescriptor, 
 		state = output
 		projectionInput = isProjectionOutput(inner)
 	}
-	return state, true, nil
+	return state, localBindings, nil
 }
 
 func isProjectionOutput(node Expr) bool {

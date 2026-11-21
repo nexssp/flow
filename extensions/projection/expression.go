@@ -74,6 +74,104 @@ func rewriteProjectionDataValues(raw string, localNames, visibleNames map[string
 	return out.String()
 }
 
+func validateProjectionBareValuesInScope(raw string, visibleNames map[string]struct{}) error {
+	_, body, bindings, err := splitLeadingProjectionLets(raw)
+	if err != nil {
+		return err
+	}
+	localNames := make(map[string]struct{}, len(bindings))
+	for _, binding := range bindings {
+		localNames[binding.name] = struct{}{}
+	}
+	_, rest, hasSpread := splitSpread(body)
+	if hasSpread {
+		body = rest
+	}
+	return validateProjectionBareValues(body, localNames, visibleNames)
+}
+
+func rejectUnavailableProjectionBindings(raw string, unavailableNames []string, environment map[string]any) error {
+	if len(unavailableNames) == 0 {
+		return nil
+	}
+	unavailable := make(map[string]struct{}, len(unavailableNames))
+	for _, name := range unavailableNames {
+		if _, available := environment[name]; !available {
+			unavailable[name] = struct{}{}
+		}
+	}
+	if len(unavailable) == 0 {
+		return nil
+	}
+	_, body, bindings, err := splitLeadingProjectionLets(raw)
+	if err != nil {
+		return err
+	}
+	localNames := make(map[string]struct{}, len(bindings))
+	for _, binding := range bindings {
+		localNames[binding.name] = struct{}{}
+	}
+	for _, binding := range bindings {
+		if err := rejectUnavailableProjectionValues(binding.value, localNames, unavailable); err != nil {
+			return err
+		}
+	}
+	_, rest, hasSpread := splitSpread(body)
+	if hasSpread {
+		body = rest
+	}
+	return rejectUnavailableProjectionValues(body, localNames, unavailable)
+}
+
+func rejectUnavailableProjectionValues(raw string, localNames, unavailable map[string]struct{}) error {
+	for _, span := range splitProjectionEntrySpans(raw) {
+		entry := raw[span.start:span.end]
+		start, end, kind, ok := projectionDirectDataValue(entry, localNames, nil)
+		if !ok {
+			continue
+		}
+		switch kind {
+		case 'b':
+			name := entry[start:end]
+			root, _, _ := strings.Cut(name, ".")
+			if _, missing := unavailable[root]; missing {
+				return fmt.Errorf("pipeline binding %q is unavailable because its action failed", root)
+			}
+		case 'o':
+			if err := rejectUnavailableProjectionValues(entry[start+1:end-1], localNames, unavailable); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateProjectionBareValues(raw string, localNames, visibleNames map[string]struct{}) error {
+	for _, span := range splitProjectionEntrySpans(raw) {
+		entry := raw[span.start:span.end]
+		start, end, kind, ok := projectionDirectDataValue(entry, nil, nil)
+		if !ok {
+			continue
+		}
+		switch kind {
+		case 'b':
+			name := entry[start:end]
+			root, _, _ := strings.Cut(name, ".")
+			if _, local := localNames[root]; local {
+				continue
+			}
+			if _, visible := visibleNames[root]; !visible {
+				return fmt.Errorf("unresolved projection value %q; quote literal text or define the name", name)
+			}
+		case 'o':
+			if err := validateProjectionBareValues(entry[start+1:end-1], localNames, visibleNames); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func splitProjectionEntrySpans(raw string) []projectionEntrySpan {
 	var spans []projectionEntrySpan
 	start := 0
@@ -132,8 +230,6 @@ func rewriteProjectionDataEntry(entry string, localNames, visibleNames map[strin
 			return entry
 		}
 		return entry[:start] + strconv.Quote(entry[start+1:end-1]) + entry[end:]
-	case 'b':
-		return entry[:start] + strconv.Quote(entry[start:end]) + entry[end:]
 	case 'o':
 		nested := rewriteProjectionDataValues(entry[start+1:end-1], localNames, visibleNames)
 		return entry[:start+1] + nested + entry[end-1:]

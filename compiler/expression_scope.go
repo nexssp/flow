@@ -12,9 +12,10 @@ import (
 )
 
 type expressionScope struct {
-	parent   *expressionScope
-	input    any
-	bindings map[string]any
+	parent      *expressionScope
+	input       any
+	bindings    map[string]any
+	unavailable map[string]struct{}
 }
 
 var expressionScopeKey = xctx.NewKey[*expressionScope]("flow.expression.scope")
@@ -106,6 +107,49 @@ func BindExpressionValue(ctx context.Context, name string, value any) error {
 	}
 	scope.bindings[name] = value
 	return nil
+}
+
+// MarkExpressionBindingUnavailable records a name whose action failed before
+// producing the value that its `as` binding would expose.
+func MarkExpressionBindingUnavailable(ctx context.Context, name string) {
+	scope, ok := expressionScopeKey.From(ctx)
+	if !ok || scope == nil {
+		return
+	}
+	if scope.unavailable == nil {
+		scope.unavailable = make(map[string]struct{})
+	}
+	scope.unavailable[name] = struct{}{}
+}
+
+// ExpressionUnavailableBindingNames returns failed `as` bindings visible from
+// the current lexical scope, including its parents.
+func ExpressionUnavailableBindingNames(ctx context.Context) []string {
+	scope, _ := expressionScopeKey.From(ctx)
+	if scope == nil {
+		return nil
+	}
+	var names map[string]struct{}
+	for current := scope; current != nil; current = current.parent {
+		if len(current.unavailable) == 0 {
+			continue
+		}
+		if names == nil {
+			names = make(map[string]struct{})
+		}
+		for name := range current.unavailable {
+			names[name] = struct{}{}
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(names))
+	for name := range names {
+		result = append(result, name)
+	}
+	sort.Strings(result)
+	return result
 }
 
 // WithExpressionScopeAction resets expression bindings for one declared

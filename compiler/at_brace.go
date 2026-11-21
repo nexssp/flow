@@ -206,60 +206,258 @@ func (b *braceScanner) readValue() (*Value, error) {
 	if b.eof() {
 		return nil, b.errf("expected value")
 	}
-	c := b.peek()
-	switch {
-	case c == '{':
-		return b.readObject()
-	case c == '[':
-		return b.readArray()
-	case c == '(':
-		return b.readParenthesizedExpression()
-	case c == '"' || c == '\'' || c == '`':
-		return b.readQuoted()
-	case c == '.' || c == '@':
-		return b.readRef()
-	case c == '-' || (c >= '0' && c <= '9'):
-		return b.readNumber()
-	case c == 't' || c == 'f' || c == 'n':
-		return b.readKeyword()
-	default:
-		if isFunctionIdentifierStart(c) {
-			if value, matched, err := b.readFunctionExpression(); matched || err != nil {
-				return value, err
+	start := b.pos
+	switch b.peek() {
+	case '{':
+		value, err := b.readObject()
+		if err != nil || b.valueDelimiterAfterCurrent() {
+			return value, err
+		}
+	case '[':
+		value, err := b.readArray()
+		if err != nil || b.valueDelimiterAfterCurrent() {
+			return value, err
+		}
+	case '(':
+		value, err := b.readParenthesizedExpression()
+		if err != nil || b.valueDelimiterAfterCurrent() {
+			return value, err
+		}
+	}
+	b.pos = start
+	return b.readImplicitValue()
+}
+
+func (b *braceScanner) valueDelimiterAfterCurrent() bool {
+	position := b.pos
+	for position < len(b.src) {
+		if isFunctionWhitespace(b.src[position]) {
+			position++
+			continue
+		}
+		if position+1 < len(b.src) && b.src[position] == '/' {
+			switch b.src[position+1] {
+			case '/':
+				for position < len(b.src) && b.src[position] != '\n' {
+					position++
+				}
+				continue
+			case '*':
+				commentEnd := strings.Index(b.src[position+2:], "*/")
+				if commentEnd < 0 {
+					return false
+				}
+				position += commentEnd + 4
+				continue
 			}
 		}
-		return b.readBare()
+		if b.src[position] == '#' && b.hashStartsCommentAt(position) {
+			for position < len(b.src) && b.src[position] != '\n' {
+				position++
+			}
+			continue
+		}
+		break
+	}
+	return position == len(b.src) || b.src[position] == ',' || b.src[position] == '}' || b.src[position] == ']' || b.src[position] == ')'
+}
+
+func (b *braceScanner) readImplicitValue() (*Value, error) {
+	start := b.pos
+	end, err := b.implicitValueEnd(start)
+	if err != nil {
+		return nil, err
+	}
+	raw := strings.TrimSpace(b.src[start:end])
+	b.pos = end
+	if raw == "" {
+		return nil, b.errf("expected value")
+	}
+	if isFunctionExpressionQuote(raw[0]) {
+		b.pos = start
+		value, quoteErr := b.readQuoted()
+		if quoteErr != nil {
+			return nil, quoteErr
+		}
+		if b.pos == start+len(raw) {
+			return value, nil
+		}
+		b.pos = end
+	}
+	if value, ok, invalidNumber := parseImplicitLiteral(raw); ok {
+		return value, nil
+	} else if invalidNumber {
+		return nil, b.errf("invalid numeric literal %q", raw)
+	}
+	if (raw[0] == '.' || raw[0] == '@') && isBareReference(raw[1:]) {
+		return &Value{Kind: ValueRef, Ref: raw[1:]}, nil
+	}
+	if isBareIdentifierValue(raw) {
+		return &Value{Kind: ValueBare, Str: raw}, nil
+	}
+	return &Value{Kind: ValueExpression, Expression: raw}, nil
+}
+
+func parseImplicitLiteral(raw string) (*Value, bool, bool) {
+	switch raw {
+	case "true":
+		return &Value{Kind: ValueBool, Bool: true}, true, false
+	case "false":
+		return &Value{Kind: ValueBool, Bool: false}, true, false
+	case "null", "nil":
+		return &Value{Kind: ValueNull}, true, false
+	}
+	if raw[0] == '-' || raw[0] >= '0' && raw[0] <= '9' {
+		normalized, err := normalizeNumericSeparators(raw)
+		if err != nil && isNumericLiteralCandidate(raw) {
+			return nil, false, true
+		}
+		if err == nil {
+			if number, parseErr := strconv.ParseFloat(normalized, 64); parseErr == nil {
+				return &Value{Kind: ValueNumber, Num: number}, true, false
+			}
+		}
+	}
+	return nil, false, false
+}
+
+func (b *braceScanner) implicitValueEnd(start int) (int, error) {
+	depth := functionExpressionDepth{}
+	for position := start; position < len(b.src); position++ {
+		current := b.src[position]
+		if depth.quote != 0 {
+			position = skipFunctionExpressionQuote(b.src, position, &depth.quote)
+			continue
+		}
+		if isFunctionExpressionQuote(current) {
+			depth.quote = current
+			continue
+		}
+		next, handled, endExpression, err := b.skipImplicitValueComment(position, current, &depth)
+		if err != nil {
+			return position, err
+		}
+		if endExpression {
+			return position, nil
+		}
+		if handled {
+			position = next
+			continue
+		}
+		if depth.topLevel() && isImplicitValueDelimiter(current) {
+			return position, nil
+		}
+		consumeExpressionDelimiter(&depth, current)
+	}
+	return len(b.src), nil
+}
+
+func (b *braceScanner) skipImplicitValueComment(position int, current byte, depth *functionExpressionDepth) (next int, handled, endExpression bool, err error) {
+	if current == '/' && position+1 < len(b.src) {
+		switch b.src[position+1] {
+		case '/':
+			if depth.topLevel() {
+				return position, true, true, nil
+			}
+			next = position + 2
+			for next < len(b.src) && b.src[next] != '\n' {
+				next++
+			}
+			return next - 1, true, false, nil
+		case '*':
+			commentEnd := strings.Index(b.src[position+2:], "*/")
+			if commentEnd < 0 {
+				return position, true, false, b.errf("unclosed block comment in expression")
+			}
+			return position + commentEnd + 3, true, false, nil
+		}
+	}
+	if current == '#' && b.hashStartsCommentAt(position) {
+		if depth.topLevel() {
+			return position, true, true, nil
+		}
+		next = position + 1
+		for next < len(b.src) && b.src[next] != '\n' {
+			next++
+		}
+		return next - 1, true, false, nil
+	}
+	return position, false, false, nil
+}
+
+func isImplicitValueDelimiter(current byte) bool {
+	switch current {
+	case ',', '}', ']', ')':
+		return true
+	default:
+		return false
 	}
 }
 
-func (b *braceScanner) readFunctionExpression() (*Value, bool, error) {
-	start := b.pos
-	index := start
-	hasNamespace := false
-	for index < len(b.src) {
-		if !isFunctionIdentifierStart(b.src[index]) {
-			return nil, false, nil
+func consumeExpressionDelimiter(depth *functionExpressionDepth, current byte) {
+	switch current {
+	case '(':
+		depth.parentheses++
+	case ')':
+		if depth.parentheses > 0 {
+			depth.parentheses--
 		}
-		index++
-		for index < len(b.src) && isFunctionIdentifierContinue(b.src[index]) {
-			index++
+	case '[':
+		depth.brackets++
+	case ']':
+		if depth.brackets > 0 {
+			depth.brackets--
 		}
-		if index >= len(b.src) || b.src[index] != '.' || index+1 >= len(b.src) || !isFunctionIdentifierStart(b.src[index+1]) {
-			break
+	case '{':
+		depth.braces++
+	case '}':
+		if depth.braces > 0 {
+			depth.braces--
 		}
-		hasNamespace = true
-		index++
 	}
-	if !hasNamespace {
-		return nil, false, nil
+}
+
+func isBareReference(raw string) bool {
+	if raw == "" {
+		return true
 	}
-	for index < len(b.src) && isFunctionWhitespace(b.src[index]) {
-		index++
+	for index := range raw {
+		current := raw[index]
+		if current != '.' && current != '-' && !isFunctionIdentifierContinue(current) {
+			return false
+		}
 	}
-	if index >= len(b.src) || b.src[index] != '(' {
-		return nil, false, nil
+	return true
+}
+
+func isBareIdentifierValue(raw string) bool {
+	if raw == "" || !isFunctionIdentifierStart(raw[0]) {
+		return false
 	}
-	return b.functionExpressionValue(start, b.functionExpressionEnd(start))
+	for index := 1; index < len(raw); index++ {
+		current := raw[index]
+		if current == '.' || current == '-' || isFunctionIdentifierContinue(current) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isNumericLiteralCandidate(raw string) bool {
+	if raw == "" || (raw[0] != '-' && (raw[0] < '0' || raw[0] > '9')) {
+		return false
+	}
+	for index, current := range raw {
+		if index == 0 && (current == '-' || current == '+') {
+			continue
+		}
+		if current >= '0' && current <= '9' || current >= 'a' && current <= 'f' || current >= 'A' && current <= 'F' || strings.ContainsRune("_ .+eEpPxXbBoO", current) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 type functionExpressionDepth struct {
@@ -271,56 +469,6 @@ type functionExpressionDepth struct {
 
 func (depth *functionExpressionDepth) topLevel() bool {
 	return depth.parentheses == 0 && depth.brackets == 0 && depth.braces == 0
-}
-
-func (depth *functionExpressionDepth) consumeDelimiter(current byte) bool {
-	switch current {
-	case '(':
-		depth.parentheses++
-	case ')':
-		if depth.parentheses > 0 {
-			depth.parentheses--
-		}
-	case '[':
-		depth.brackets++
-	case ']':
-		if depth.brackets == 0 {
-			return true
-		}
-		depth.brackets--
-	case '{':
-		depth.braces++
-	case '}':
-		if depth.braces == 0 {
-			return true
-		}
-		depth.braces--
-	case ',':
-		return depth.topLevel()
-	}
-	return false
-}
-
-func (b *braceScanner) functionExpressionEnd(start int) int {
-	var depth functionExpressionDepth
-	for scan := start; scan < len(b.src); scan++ {
-		current := b.src[scan]
-		if depth.quote != 0 {
-			scan = skipFunctionExpressionQuote(b.src, scan, &depth.quote)
-			continue
-		}
-		if isFunctionExpressionQuote(current) {
-			depth.quote = current
-			continue
-		}
-		if b.functionExpressionCommentAt(scan) && depth.topLevel() {
-			break
-		}
-		if depth.consumeDelimiter(current) {
-			return scan
-		}
-	}
-	return len(b.src)
 }
 
 func skipFunctionExpressionQuote(source string, index int, quote *byte) int {
@@ -336,21 +484,6 @@ func skipFunctionExpressionQuote(source string, index int, quote *byte) int {
 
 func isFunctionExpressionQuote(value byte) bool {
 	return value == '"' || value == '\'' || value == '`'
-}
-
-func (b *braceScanner) functionExpressionCommentAt(index int) bool {
-	current := b.src[index]
-	return current == '#' && b.hashStartsCommentAt(index) ||
-		current == '/' && index+1 < len(b.src) && b.src[index+1] == '/'
-}
-
-func (b *braceScanner) functionExpressionValue(start, end int) (*Value, bool, error) {
-	expression := strings.TrimSpace(b.src[start:end])
-	b.pos = end
-	if expression == "" {
-		return nil, true, b.errf("empty function expression")
-	}
-	return &Value{Kind: ValueExpression, Expression: expression}, true, nil
 }
 
 func (b *braceScanner) readParenthesizedExpression() (*Value, error) {
@@ -488,16 +621,26 @@ func (b *braceScanner) consumeParenthesizedDelimiter(current byte, depth *functi
 }
 
 func (b *braceScanner) hashStartsCommentAt(position int) bool {
-	if position != b.pos {
-		for i := position - 1; i >= 0 && b.src[i] != '\n'; i-- {
-			if b.src[i] != ' ' && b.src[i] != '\t' && b.src[i] != '\r' {
-				return false
-			}
-		}
-	}
 	if position+1 < len(b.src) {
 		next := b.src[position+1]
-		return next == ' ' || next == '\t' || next == '\r' || next == '\n'
+		if next != ' ' && next != '\t' && next != '\r' && next != '\n' {
+			return false
+		}
+	}
+	if position == b.pos {
+		return true
+	}
+	for index := position - 1; index >= 0 && b.src[index] != '\n'; index-- {
+		previous := b.src[index]
+		if previous == ' ' || previous == '\t' || previous == '\r' {
+			continue
+		}
+		switch previous {
+		case ',', '(', '[', '{', ':', '?', '+', '-', '*', '/', '%', '&', '|', '=', '!', '<', '>':
+			return false
+		default:
+			return true
+		}
 	}
 	return true
 }
@@ -633,68 +776,4 @@ func (b *braceScanner) readQuoted() (*Value, error) {
 		b.advance()
 	}
 	return nil, b.errf("unclosed quote")
-}
-
-func (b *braceScanner) readRef() (*Value, error) {
-	b.advance() // '.' or '@'
-	start := b.pos
-	for !b.eof() {
-		c := b.peek()
-		ok := c == '_' || c == '.' || c == '-' ||
-			(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
-		if !ok {
-			break
-		}
-		b.advance()
-	}
-	ref := b.src[start:b.pos]
-	return &Value{Kind: ValueRef, Ref: ref}, nil
-}
-
-func (b *braceScanner) readNumber() (*Value, error) {
-	raw := b.readBareToken()
-	normalized, err := normalizeNumericSeparators(raw)
-	if err != nil {
-		return nil, b.errf("invalid numeric literal %q", raw)
-	}
-	if f, err := strconv.ParseFloat(normalized, 64); err == nil {
-		return &Value{Kind: ValueNumber, Num: f}, nil
-	}
-	return nil, b.errf("invalid numeric literal %q", raw)
-}
-
-func (b *braceScanner) readKeyword() (*Value, error) {
-	raw := b.readBareToken()
-	switch raw {
-	case "true":
-		return &Value{Kind: ValueBool, Bool: true}, nil
-	case literalFalse:
-		return &Value{Kind: ValueBool, Bool: false}, nil
-	case "null":
-		return &Value{Kind: ValueNull}, nil
-	}
-	return &Value{Kind: ValueBare, Str: raw}, nil
-}
-
-func (b *braceScanner) readBare() (*Value, error) {
-	raw := b.readBareToken()
-	if raw == "" {
-		return nil, b.errf("empty value")
-	}
-	return &Value{Kind: ValueBare, Str: raw}, nil
-}
-
-func (b *braceScanner) readBareToken() string {
-	start := b.pos
-	for !b.eof() {
-		c := b.peek()
-		if c == ',' || c == '}' || c == ']' {
-			break
-		}
-		if b.commentStarts() {
-			break
-		}
-		b.advance()
-	}
-	return strings.TrimSpace(b.src[start:b.pos])
 }

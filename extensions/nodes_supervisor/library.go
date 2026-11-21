@@ -35,5 +35,10 @@ func Bundle(_ map[string]string) compiler.Bundle {
 		Libraries:  []action.Library{{Name: ID, Actions: []action.AnyAction{Supervisor, Serve}}},
 		Fixtures:   fixturesFS,
 		AtomAdvise: adviseServe,
+		OnPreprocess: func(map[string]any) compiler.PreprocessContributions {
+			return compiler.PreprocessContributions{CompileOpts: []compiler.CompileOption{
+				compiler.WithAtomValueNormalizers(preserveStaticServiceReferences),
+			}}
+		},
 	}
 }

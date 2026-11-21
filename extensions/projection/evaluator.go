@@ -46,7 +46,14 @@ func NewExprEvaluator() Evaluator {
 			return map[string]any{}, nil
 		}
 
+		env := normalizeExpressionEnvironmentWithCache(compiler.MergeSymbolNamespaces(ctx, buildEnv(req.Input)), viewCache)
+		if err := rejectUnavailableProjectionBindings(body, compiler.ExpressionUnavailableBindingNames(ctx), env); err != nil {
+			return nil, xerr.Validation(err.Error())
+		}
 		visibleNames := projectionRuntimeVisibleNames(ctx)
+		for name := range env {
+			visibleNames[name] = struct{}{}
+		}
 		program, err := cache.compile(body, visibleNames)
 		if err != nil {
 			return nil, err
@@ -55,7 +62,6 @@ func NewExprEvaluator() Evaluator {
 			return nil, conflictErr
 		}
 
-		env := normalizeExpressionEnvironmentWithCache(compiler.MergeSymbolNamespaces(ctx, buildEnv(req.Input)), viewCache)
 		output, err := expr.Run(program, env)
 		if err != nil {
 			return nil, xerr.BadRequest(fmt.Sprintf("%s: %v", projectionEvaluationMessage(req.Raw), err))
@@ -93,7 +99,16 @@ func (c *programCache) compile(raw string, visibleNames ...map[string]struct{}) 
 	if len(visibleNames) != 0 {
 		names = visibleNames[0]
 	}
-	key := projectionProgramCacheKey(raw, names)
+	return c.compileWithOptions(raw, names, nil, expr.AllowUndefinedVariables(), spreadMergeOption)
+}
+
+func (c *programCache) compileWithOptions(
+	raw string,
+	visibleNames map[string]struct{},
+	sourceRewrite func(string) string,
+	options ...expr.Option,
+) (*vm.Program, error) {
+	key := projectionProgramCacheKey(raw, visibleNames)
 	if cached, ok := c.entries.Load(key); ok {
 		if program, ok := cached.(*vm.Program); ok {
 			return program, nil
@@ -102,14 +117,14 @@ func (c *programCache) compile(raw string, visibleNames ...map[string]struct{}) 
 		c.entries.Delete(key)
 	}
 
-	source, err := buildProgramSourceWithVisibleNames(raw, names)
+	source, err := buildProgramSourceWithVisibleNames(raw, visibleNames)
 	if err != nil {
 		return nil, xerr.Validation(fmt.Sprintf("projection %q: %v", strings.TrimSpace(raw), err))
 	}
-	program, err := compiler.CompileExpression(source,
-		expr.AllowUndefinedVariables(),
-		spreadMergeOption,
-	)
+	if sourceRewrite != nil {
+		source = sourceRewrite(source)
+	}
+	program, err := compiler.CompileExpression(source, options...)
 	if err != nil {
 		return nil, xerr.Validation(fmt.Sprintf("projection %q: %v", strings.TrimSpace(raw), err))
 	}

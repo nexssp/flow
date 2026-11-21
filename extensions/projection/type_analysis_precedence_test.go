@@ -134,8 +134,6 @@ func TestProjectionStaticAnalysisAllowsUnambiguousInputAndUnusedOverlap(t *testi
 	for _, raw := range []string{
 		`value: .tool.name`,               // Leading dot explicitly selects the current payload.
 		`tool`,                            // A bare object entry is the documented input shorthand.
-		`value: literal`,                  // An unbound value-position name is literal data.
-		`value: person.name`,              // An unbound dotted value-position name is literal data.
 		`value: "unchanged"`,              // An unused name overlap is harmless.
 		`let tool = "local"; value: tool`, // A projection local has its own scope.
 	} {
@@ -216,6 +214,14 @@ func TestProjectionRuntimeAllowsExplicitInputShorthandAndUnusedOverlap(t *testin
 	}
 }
 
+func TestProjectionStaticAnalysisRejectsUnknownBareValues(t *testing.T) {
+	for _, raw := range []string{`value: literal`, `value: person.name`} {
+		if _, err := analyzeProjectionTypes(raw, compiler.Position{}, compiler.TypeAnalysisContext{}, nil, nil, ""); err == nil {
+			t.Errorf("analyzeProjectionTypes(%q) succeeded, want unknown expression error", raw)
+		}
+	}
+}
+
 func TestProjectionRuntimeAllowsNoncollidingPipelineBinding(t *testing.T) {
 	ctx := compiler.WithExpressionScope(context.Background(), nil)
 	if err := compiler.BindExpressionValue(ctx, "tool", map[string]any{"name": "binding"}); err != nil {
@@ -233,19 +239,15 @@ func TestProjectionRuntimeAllowsNoncollidingPipelineBinding(t *testing.T) {
 func TestProjectionProgramCacheSeparatesVisibleBindingScopes(t *testing.T) {
 	evaluate := NewExprEvaluator()
 	request := Request{Raw: "value: tool.name", Input: map[string]any{"other": true}}
-	got, err := evaluate(context.Background(), request)
-	if err != nil {
-		t.Fatalf("evaluate unbound literal: %v", err)
-	}
-	if !reflect.DeepEqual(got, map[string]any{"value": "tool.name"}) {
-		t.Fatalf("unbound projection output = %#v, want literal", got)
+	if _, err := evaluate(context.Background(), request); err == nil {
+		t.Fatal("unbound projection value evaluated successfully, want an unknown-name error")
 	}
 
 	ctx := compiler.WithExpressionScope(context.Background(), nil)
 	if err := compiler.BindExpressionValue(ctx, "tool", map[string]any{"name": "binding"}); err != nil {
 		t.Fatalf("bind pipeline value: %v", err)
 	}
-	got, err = evaluate(ctx, request)
+	got, err := evaluate(ctx, request)
 	if err != nil {
 		t.Fatalf("evaluate bound reference: %v", err)
 	}

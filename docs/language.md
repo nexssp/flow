@@ -260,7 +260,8 @@ request.action :timeout=3s (id: .id)
 wrap(key: "payload", note: "wrapped", count: 3, active: true)
 ```
 
-Argument values are parsed as typed data, not as a mini-language:
+Argument values use typed literals and expressions. Quote text; leave runtime
+values and calculations unquoted:
 
 | Form | Meaning |
 |---|---|
@@ -273,33 +274,35 @@ Argument values are parsed as typed data, not as a mini-language:
 | `key: .path.to.field` | Reference to the current input |
 | `key: .` | The whole input |
 | `name` (argument-key position) | Same-name reference to `.name` |
-| `key: input.name` or `key: person.name` | Literal string; value-position names do not look up `input` or an `as` binding |
-| `key: (input.count + 1)` | Explicit expr-lang expression evaluated against the current input, original `input`, and visible `as` bindings |
+| `key: input.name` or `key: person.name` | Expression reading the original request or a visible `as` binding |
+| `key: .count + 1` | Expression evaluated against the current input |
+| `key: input.count + 1` | Expression evaluated against the original request; parentheses are optional |
 | `key: pricing.echo(input.name)` | Qualified `@func` expression; it can read `input` and visible `as` bindings |
 | `... .defaults` | Spread the referenced object into the argument map |
 | `key: noop` | A capability reference (see §4) |
 
 The same-name shorthand and path references read the current pipeline state—the
-value flowing into this action. A bare identifier or dotted name used as a
-value remains a literal string. Parenthesized `(expr)` values explicitly opt
-into expr-lang evaluation; they can use the current atom input (`.`), original
-request (`input`), and visible `as` bindings. Qualified `@func` calls remain
-available for named pure calculations. Schemas reject incompatible literal
-types at compile time; dynamic references and expressions are checked by the
-receiving action at runtime where required.
+value flowing into this action. In a value position, an unquoted name or path is
+evaluated as an expression; an unknown name is an error, not a string fallback.
+Expressions can use the current input (`.`), original request (`input`), and
+visible `as` bindings. Parentheses are optional grouping, not a requirement for
+evaluation. Known symbols and schema-declared capability references keep their
+special data-position meanings. Schemas reject incompatible literal types at
+compile time; dynamic references and expressions are checked by the receiving
+action at runtime where required.
 
 Argument spreads are useful for shared defaults. If two spreads, or a spread
 and an explicit field, provide the same key, execution fails with a collision
 error rather than silently choosing one value. A spread must resolve to an
 object. Inside action arguments, `#` and `//` start line comments; quoted
-strings keep those characters as data. Inside `(expr)`, expr-lang `//` and
-`/* ... */` comments are ignored when finding the closing parenthesis.
+strings keep those characters as data. Expression scanning respects quoted
+delimiters and nested calls or collections.
 
 **Old argument blocks are rejected:** replace `action @{ key: value }` with
 `action(key: value)`. The `action(key=value, ...)` spelling remains accepted for
 compatibility. For data values, use a direct typed value or an object
-projection; compile-time `@const` declarations remain available for named
-constants. Do not mechanically turn `coerce: true` into a cast; choose an
+projection; quote literal text. Compile-time `@const` declarations remain
+available for named constants. Do not mechanically turn `coerce: true` into a cast; choose an
 explicit conversion only when the receiving field requires one.
 
 ---
@@ -323,9 +326,10 @@ distribute.map(action: "noop")
   error: use a bare capability reference, not a string literal ("noop")
 ```
 
-Bare identifiers in **undeclared** argument fields stay as plain strings. The
-compiler only treats an argument as a capability reference when the owning
-bundle declares it as one.
+This static meaning applies only to argument slots declared as capability
+references by their action schema. In ordinary value slots, unquoted names and
+paths are expressions; quote text, and expect unknown unquoted names to fail
+instead of falling back to strings.
 
 Canonical names (`runtime.noop`) are also accepted in capability
 positions.
@@ -348,13 +352,12 @@ A `{ ... }` at the top of a pipeline reshapes the current value:
 
 Result: `{ "name": "Maksymilian", "greeting": "Hello, Maksymilian" }`.
 A bare projection entry such as `name` copies `.name` into the output key `name`.
-In a `key: value` entry, an unbound bare identifier or dotted name is literal
-data (`label: status` produces the string `"status"`). Visible pipeline
+In a `key: value` entry, unquoted names and dotted paths are expressions;
+unknown names fail instead of silently becoming strings. Visible pipeline
 bindings, projection-local names, and known symbol namespaces resolve in scope;
-use `.status` for the current input or `(person.status)` for an explicit
-expression. A whole quoted value is also data and preserves backslashes as
-written. Composite expressions, function
-calls, and parenthesized `(expr)` values remain expr-lang expressions. Both
+use `.status` for the current input. Write quoted text when a string is intended.
+Composite expressions, function calls, and optional parenthesized expressions
+use expr-lang. Both
 projections and action-argument maps accept same-name shorthand, but their
 evaluation models differ: projection entries allow expr-lang expressions, while
 action-argument shorthand means a reference to the current pipeline input.
@@ -396,7 +399,7 @@ does not allow `return`, I/O, or workflow actions:
 ```
 
 `@func` calls work in projections, match/loop/assertion/error conditions, and
-parenthesized action-argument values. Functions are
+action-argument expressions without extra parentheses. Functions are
 source-local and may call other visible functions, but recursion and side
 effects are not supported. `@pipeline` remains the construct for reusing a
 sequence or composition of actions. Import a function module with `@include`;
@@ -442,8 +445,8 @@ Flow control—the control receives the projection root.
 ```
 
 This example demonstrates nested controls and subject-relative relational match
-arms. Action arguments remain data values; use an explicitly parenthesized
-expression when a field needs an expr-lang calculation.
+arms. Ordinary action-argument values accept expr-lang calculations directly;
+for example, `wrap(value: .count + 1)` needs no extra expression parentheses.
 
 ---
 

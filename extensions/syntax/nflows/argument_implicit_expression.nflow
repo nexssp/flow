@@ -1,0 +1,30 @@
+@description "Unwrapped action-argument expressions evaluate runtime values"
+@assert: result.arithmetic == 5 && result.conditional == "high"
+@assert: result.from_input == "Julia" && result.from_binding == "Julia"
+@assert: result.nested.double_score == 8 && result.nested.current_name == "Julia"
+@assert: result.values[0] == 6 && result.values[1] == 7 && result.values[2].name == "Julia"
+@assert: result.greeting == "Hello, Julia" && result.length == 1
+@assert: result.legacy_input == "Julia" && result.legacy_binding.name == "Julia" && result.legacy_path == "Julia"
+@assert: result.literal == "input.name"
+{ name: "Julia", score: 4, tags: ["nflow"] }
+-> pipeline.argument_implicit_expression
+@pipeline argument_implicit_expression
+  runtime.noop as person
+  -> runtime.noop(
+    arithmetic: .score + 1,
+    conditional: input.score > 3 ? "high" : "low",
+    from_input: input.name,
+    from_binding: person.name,
+    greeting: "Hello, " + .name,
+    length: len(.tags),
+    nested: {
+      double_score: person.score * 2,
+      current_name: .name
+    },
+    values: [input.score + 2, person.score + 3, .],
+    legacy_input: input.name,
+    legacy_binding: person,
+    legacy_path: person.name,
+    literal: "input.name"
+  )
+@end

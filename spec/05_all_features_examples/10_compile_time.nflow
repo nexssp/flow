@@ -1,0 +1,19 @@
+@description "Compile-time features: version guard, config load, schema-checked constant load, and constant substitution"
+@nflow_version ">=0.0.0"
+@schema Settings {
+  Name string `json:"name" validate:"required"`
+  Count int `json:"count" default:"3" validate:"gte=1"`
+}
+@config.load:path="./fixtures/app.json" :prefix="app"
+@const.load "./fixtures/settings.json" as settings :schema=Settings
+@const RELEASE_LABEL = "compile-time-example"
+@assert: result.mode == "safe" && result.retries == "3"
+@assert: result.name == "checked-settings" && result.count == "4"
+@assert: result.release == "compile-time-example"
+{
+  mode: @config.app.mode,
+  retries: @config.app.retries,
+  name: "${settings.name}",
+  count: "${settings.count}",
+  release: "${RELEASE_LABEL}",
+}

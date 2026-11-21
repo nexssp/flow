@@ -1,0 +1,7 @@
+@description "Scopes: nested source regions preserve the flow value"
+@scope :tag="outer-example" {
+  @scope :tag="inner-example" {
+    "scope-ok"
+  }
+}
+@assert: result == "scope-ok"

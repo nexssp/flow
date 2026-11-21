@@ -2,6 +2,7 @@ package pipeline_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/action"
@@ -93,6 +94,20 @@ func TestNamedPipelineBindings_LoopScopeAndErrorRoute(t *testing.T) {
 	errorOutput := requireOutputMap(t, errorResult.Output)
 	if errorOutput["recovered"] != true {
 		t.Fatalf("error-route output = %#v, want recovered true from prior binding", errorOutput)
+	}
+}
+
+// @assert runs only after a successful execution, so this expected recovery
+// error must be checked through runner.Execute.
+func TestNamedPipelineBindings_FailedActionBindingIsUnavailableInRecovery(t *testing.T) {
+	cfg := pipelineTestConfig(t)
+	source := `runtime.fail ( kind: "Internal", message: "expected failure" ) as failed_action ? on_error ({ recovered: true, value: failed_action })`
+	execution, err := runner.Execute(t.Context(), cfg, source, "failed-action-binding.nflow", nil)
+	if err == nil {
+		t.Fatalf("execution output = %#v, want an error for the binding of an action that failed", execution.Output)
+	}
+	if !strings.Contains(err.Error(), `pipeline binding "failed_action" is unavailable`) {
+		t.Fatalf("execution error = %v, want the unavailable failed_action binding to be identified", err)
 	}
 }
 
