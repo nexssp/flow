@@ -125,7 +125,14 @@ func projectionHashLineComment(src string, index int) bool {
 			return false
 		}
 	}
-	return true
+	return !projectionHashStartsIteratorPath(src, index)
+}
+
+// Expr ignores whitespace between # and a selector, but Flow uses line-leading
+// # for comments. Only an adjacent selector disambiguates the iterator path.
+func projectionHashStartsIteratorPath(src string, index int) bool {
+	next := index + 1
+	return next < len(src) && (src[next] == '.' || src[next] == '[')
 }
 
 func projectionBlockCommentEnd(src string, start int) (int, bool) {

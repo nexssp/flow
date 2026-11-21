@@ -1,6 +1,7 @@
 package projection
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -123,6 +124,63 @@ func TestParse_HashIteratorInsideParensIsKept(t *testing.T) {
 	ktest.RequireStringContains(t, proj.Raw, `filter(#.severity == "high")`)
 	ktest.RequireStringContains(t, proj.Raw, `sortBy(#.line, "desc")`)
 	ktest.RequireStringContains(t, proj.Raw, `take(2)`)
+}
+
+func TestParse_MultilineHashMemberIteratorCompilesWithTypedProjection(t *testing.T) {
+	src := `{
+  mapped: .items | map(
+    #.found
+  )
+}`
+	expr, err := newProjectionParser(t, src).Parse()
+	ktest.RequireNoError(t, err)
+
+	proj, ok := expr.(*compiler.ProjectionExpr)
+	ktest.RequireCondition(t, ok, "got %T, want *compiler.ProjectionExpr", expr)
+	ktest.RequireStringContains(t, proj.Raw, `#.found`)
+
+	type item struct {
+		Found bool `json:"found"`
+	}
+	type input struct {
+		Items []item `json:"items"`
+	}
+	ctx := compiler.TypeAnalysisContext{
+		Input: compiler.TypeDescriptor{Type: reflect.TypeFor[input]()},
+	}
+	if _, err := analyzeProjectionTypes(proj.Raw, compiler.Position{}, ctx, nil, nil, ""); err != nil {
+		t.Fatalf("analyze multiline iterator projection: %v", err)
+	}
+}
+
+func TestParse_MultilineHashIndexIteratorIsNotComment(t *testing.T) {
+	src := `{
+  selected: .items | map(
+    #[0]
+  )
+}`
+	expr, err := newProjectionParser(t, src).Parse()
+	ktest.RequireNoError(t, err)
+
+	proj, ok := expr.(*compiler.ProjectionExpr)
+	ktest.RequireCondition(t, ok, "got %T, want *compiler.ProjectionExpr", expr)
+	ktest.RequireStringContains(t, proj.Raw, `#[0]`)
+}
+
+func TestParse_HashWhitespaceBeforeIteratorPathRemainsComment(t *testing.T) {
+	src := `{
+  value: (1 +
+    # . this remains a comment
+    # [this also remains a comment]
+    2)
+}`
+	expr, err := newProjectionParser(t, src).Parse()
+	ktest.RequireNoError(t, err)
+
+	proj, ok := expr.(*compiler.ProjectionExpr)
+	ktest.RequireCondition(t, ok, "got %T, want *compiler.ProjectionExpr", expr)
+	ktest.RequireStringNotContains(t, proj.Raw, `# . this remains a comment`)
+	ktest.RequireStringNotContains(t, proj.Raw, `# [this also remains a comment]`)
 }
 
 func TestParse_HashIteratorAndCommentCoexist(t *testing.T) {
