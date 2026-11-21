@@ -24,7 +24,7 @@ See the current [CLI guide](https://github.com/nexssp/flow/blob/main/docs/cli.md
 
 ## Respect data and validation boundaries
 
-- Parenthesized action arguments such as `action(key: value)` build typed data and references; they are not a general-purpose expression block. Wrap calculations explicitly as `(expr)` or use a projection or supported condition.
+- Action calls use parentheses around their named argument list, and ordinary argument values may be unquoted expressions, such as `action(next: .count + 1)`. Quote literal text; use grouping parentheses only when the calculation needs them. Schema-declared capability-reference slots keep their static meaning.
 - `@func` packages a pure expression-level calculation. It does not call actions, perform I/O, or replace a schema or workflow boundary.
 - Request schemas validate and apply defaults at a pipeline input boundary, before the body. A default fills an absent field, not an explicit `null`, `0`, or empty value.
 - Response schemas validate the returned value and do not apply defaults. Prefix a schema with `!` to reject unknown fields at that schema boundary; request and response strictness are independent.

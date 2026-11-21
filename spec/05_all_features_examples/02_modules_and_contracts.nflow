@@ -1,0 +1,37 @@
+@description "Modules and contracts: include namespaces, schemas, defaults, enums, and typed pipeline signatures"
+@include ./modules/common/common.nflow AS common
+@enum Stage {
+  ready = "ready",
+  queued = "queued"
+}
+@schema Request {
+  Name! string `json:"name" default:"Ada" validate:"required"`
+  Count int `json:"count" default:"3" validate:"gte=1"`
+  Stage Stage `json:"stage" default:"Stage.ready"`
+}
+@schema Summary {
+  Name string `json:"name"`
+  Count int `json:"count"`
+  Stage Stage `json:"stage"`
+  Doubled int `json:"doubled"`
+  Origin string `json:"origin"`
+}
+@pipeline summarize(request: !Request): !Summary
+  {
+    name: request.name,
+    count: request.count,
+    stage: request.stage,
+    doubled: common.math.double(request.count),
+    origin: common.labels.source,
+  }
+  -> common.pipeline.annotate
+@end
+@assert: result.defaulted.name == "Ada" && result.defaulted.count == 3
+@assert: result.defaulted.stage == "ready" && result.defaulted.doubled == 6
+@assert: result.defaulted.origin == "common-module"
+@assert: result.named.name == "Grace" && result.named.count == 4
+@assert: result.named.stage == "queued" && result.named.doubled == 8
+parallel {
+  defaulted: ({} -> pipeline.summarize),
+  named: pipeline.summarize(name: "Grace", count: 4, stage: Stage.queued),
+}

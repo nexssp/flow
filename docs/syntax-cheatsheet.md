@@ -29,9 +29,11 @@ request.action :timeout=3s :retry=2 (id: .id, payload: .)
 
 Named action arguments use `action(key: value)` with typed literals, arrays,
 nested objects, `.`, and input paths such as `.user.id`. Bare fields such as
-`name` still mean `name: .name`. Duplicate keys fail. Quoted text remains a
-string; numeric, boolean, and `null` literals keep their explicit types. Values
-from `@flag.*`, `@arg.N`, and `@config.*` remain strings by default.
+`name` still mean `name: .name`; other unquoted names and paths are expressions,
+so `title: "Hello, " + .name` needs no extra parentheses. Quote text when a
+literal string is intended; numeric, boolean, and `null` literals keep their
+explicit types. Values from `@flag.*`, `@arg.N`, and `@config.*` remain strings
+by default. Schema-declared capability-reference slots keep their static meaning.
 
 For flows, use parenthesized named arguments, projection shorthand, and `->`
 for sequential pipeline composition. The older `action(key=value, ...)` form

@@ -1,0 +1,13 @@
+@description "Stream shapes: batch, sliding windows, and take over a repeatable local source"
+@data metrics :from="./fixtures/metrics.jsonl"
+@assert: len(result.batches) == 2
+@assert: len(result.windows) == 3
+@assert: len(result.first_two) == 2
+@assert: result.batches[0][0].amount == 2
+@assert: result.windows[1][1].amount == 7
+@assert: result.first_two[1].amount == 5
+parallel {
+  batches: (data.rows(name: "metrics") -> stream.batch(size: 2) -> collect),
+  windows: (data.rows(name: "metrics") -> stream.window(size: 2, step: 1) -> collect),
+  first_two: (data.rows(name: "metrics") -> stream.take(count: 2) -> collect),
+}

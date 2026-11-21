@@ -471,19 +471,22 @@ func TestParseAtBrace_PathShorthandPreservesArgumentSpread(t *testing.T) {
 	}
 }
 
-func TestParseAtBrace_ParenthesizedExpressionsAreExplicitAndRecursive(t *testing.T) {
+func TestParseAtBrace_ImplicitExpressionsAndBareValues(t *testing.T) {
 	t.Parallel()
 	source := `wrap (
-		expression: (1 + 2),
-		condition: (.count > 1 ? true : false),
-		nested: { computed: (input.count + 1) },
-		items: [(person.count + 1), (input.count * 2)],
-		...{ value: (len([")", "(", "}"]) > 0) },
+		expression: 1 + 2,
+		condition: .count > 1 ? true : false,
+		nested: { computed: input.count + 1 },
+		items: [person.count + 1, input.count * 2],
+		...{ value: len([")", "(", "}"]) > 0 },
 		bare_input: input.name,
 		bare_binding: person,
 		bare_path: person.name,
 		quoted: "person.name",
 		current: .,
+		explicit: (input.count + 3),
+		greeting: "Hello, " + .name,
+		length: len(.tags),
 		qualified: whole_value.echo(input.name)
 	)`
 	parsed, err := newTestParser(t, source).Parse()
@@ -504,11 +507,15 @@ func TestParseAtBrace_ParenthesizedExpressionsAreExplicitAndRecursive(t *testing
 	assertExpression("expression", atom.Args["expression"], "1 + 2")
 	assertExpression("condition", atom.Args["condition"], ".count > 1 ? true : false")
 	assertExpression("nested expression", atom.Args["nested"].Map[0].Value, "input.count + 1")
-	assertExpression("slice expression", atom.Args["items"].Slice[1], "input.count * 2")
+	assertExpression("slice expression", atom.Args["items"].Slice[0], "person.count + 1")
+	assertExpression("second slice expression", atom.Args["items"].Slice[1], "input.count * 2")
 	if len(atom.ArgSpreads) != 1 || atom.ArgSpreads[0].Kind != ValueMap {
 		t.Fatalf("argument spreads = %+v, want one map spread", atom.ArgSpreads)
 	}
 	assertExpression("spread expression", atom.ArgSpreads[0].Map[0].Value, `len([")", "(", "}"]) > 0`)
+	assertExpression("explicit expression", atom.Args["explicit"], "input.count + 3")
+	assertExpression("string concatenation", atom.Args["greeting"], `"Hello, " + .name`)
+	assertExpression("unqualified function call", atom.Args["length"], "len(.tags)")
 
 	for name, want := range map[string]string{
 		"bare_input":   "input.name",

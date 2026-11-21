@@ -21,6 +21,10 @@ type ASTValidateFunc func(ast Expr, meta map[string]any) error
 // and source compile metadata. It runs during compilation, before lowering.
 type ASTContextValidateFunc func(ctx context.Context, ast Expr, meta map[string]any) error
 
+// AtomValueNormalizeFunc adjusts an atom's parsed values before bare runtime
+// values are compiled as expressions.
+type AtomValueNormalizeFunc func(atom *Atom)
+
 // OnPreprocessFunc is the compile-time hook fired between Preprocess
 // and Parse. BundleConfig wires it from Bundle.OnPreprocess.
 type OnPreprocessFunc func(meta map[string]any) PreprocessContributions
@@ -32,6 +36,7 @@ type compileConfig struct {
 	typedExpressionChecker TypedSourceExpressionChecker
 	validators             []ASTValidateFunc
 	contextValidators      []ASTContextValidateFunc
+	atomValueNormalizers   []AtomValueNormalizeFunc
 	onPreprocess           []OnPreprocessFunc
 	scopeInheritors        []ScopeInheritFunc
 	config                 map[string]string
@@ -57,6 +62,14 @@ func WithASTValidators(fns ...ASTValidateFunc) CompileOption {
 func WithASTContextValidators(fns ...ASTContextValidateFunc) CompileOption {
 	return func(c *compileConfig) {
 		c.contextValidators = append(c.contextValidators, fns...)
+	}
+}
+
+// WithAtomValueNormalizers installs extension hooks that preserve or adjust
+// values with extension-specific static meaning before expression conversion.
+func WithAtomValueNormalizers(fns ...AtomValueNormalizeFunc) CompileOption {
+	return func(c *compileConfig) {
+		c.atomValueNormalizers = append(c.atomValueNormalizers, fns...)
 	}
 }
 

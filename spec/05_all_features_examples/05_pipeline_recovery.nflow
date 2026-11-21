@@ -1,0 +1,7 @@
+@description "Pipeline recovery: route an unavailable error to a local recovery pipeline"
+@pipeline recover
+  "pipeline fallback"
+@end
+@on_error pipeline.recover
+@assert: result == "pipeline fallback"
+runtime.fail ( kind: "Unavailable", message: "simulated upstream outage" )

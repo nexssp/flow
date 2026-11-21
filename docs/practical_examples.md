@@ -202,12 +202,10 @@ payments.primary ( payment_id: .payment_id )
 .status == "ready" ? notifications.send ( channel: "email", to: .email )
 ```
 
-### Use a parenthesized expression as an action input
+### Build an action input with a projection
 
 ```exs
-(
-  { customer_id: .customer_id, total: .total }
-) -> orders.validate
+{ customer_id: .customer_id, total: .total } -> orders.validate
 ```
 
 ## 4. Projections and expressions

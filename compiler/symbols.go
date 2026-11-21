@@ -15,8 +15,8 @@ import (
 // SymbolNamespace groups compile-time symbolic values that .nflow programs
 // reference as `<namespace>.<name>`. Bundles register namespaces from init
 // so that programs in any repo use them without local declarations. Resolved
-// values bind during build; unresolved bare values remain ordinary literals in
-// data positions, while expression validity depends on the expression's env.
+// symbol values bind during build; unquoted names in ordinary data positions
+// are expressions, with validity determined by the available expression scope.
 type SymbolNamespace struct {
 	Name    string
 	Symbols map[string]any

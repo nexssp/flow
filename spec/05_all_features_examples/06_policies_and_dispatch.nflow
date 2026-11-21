@@ -1,0 +1,27 @@
+@description "Policies and dispatch: profiles, pool, local dispatch, map fan-out, runtime.call, and a verification hook"
+@profile base_policy
+  :timeout=1s
+  :retry=1
+@profile example_policy
+  :parent=base_policy
+  :tag="offline-example"
+@pipeline profiled
+  :profile=example_policy
+  "profiled"
+@end
+@pool demo_workers [noop] { strategy: "failover" }
+@hook:hook.verify
+@assert: result.profiled == "profiled"
+@assert: result.pooled.value == "pool"
+@assert: result.dispatched.value == "dispatch"
+@assert: result.fanned_out.Succeeded == 3 && result.fanned_out.Failed == 0
+@assert: result.verified.HookVerified == true
+@assert: result.dynamic == "called"
+parallel {
+  profiled: pipeline.profiled,
+  pooled: pool.demo_workers(value: "pool"),
+  dispatched: dispatch.run(members: [noop], payload: { value: "dispatch" }),
+  fanned_out: distribute.map(action: noop, items: [1, 2, 3]),
+  verified: ({ test: "local" } -> hook.probe),
+  dynamic: ({ name: "runtime.pick", payload: { field: "value", value: "called" } } -> runtime.call),
+}

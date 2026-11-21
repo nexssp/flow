@@ -1,0 +1,15 @@
+@description "Error recovery: classified expression handling, catch-any fallback, and runtime assertions"
+@assert: result.classified.status == "recovered"
+@assert: result.classified.message == "simulated outage"
+@assert: result.fallback == "last resort"
+@assert: result.checked.count == 1
+parallel {
+  classified: (runtime.fail ( kind: "Unavailable", message: "simulated outage" ) ? on_error {
+    xerr.KindUnavailable
+    -> { status: "recovered", message: .error.message },
+    else
+    -> error.reraise,
+  }),
+  fallback: (fail ( kind: "Internal", message: "handled by ||" ) || "last resort"),
+  checked: ({ count: 1 } -> assert(.count == 1, "count must be one")),
+}

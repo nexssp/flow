@@ -1,0 +1,44 @@
+@description "Control flow: branches, matching, bounded loops, ordered each, parallel gather, and race"
+@assert: result.selected == "first branch"
+@assert: result.predicate_match == "critical"
+@assert: result.subject_match == "high"
+@assert: result.ternary == "yes"
+@assert: result.each == [2, 4, 6]
+@assert: result.loop.count == 3
+@assert: result.race == "only winner"
+@assert: result.gather["literal#1"] == "left"
+@assert: result.gather["literal#2"] == "right"
+parallel {
+  selected: if (true) {
+    "first branch"
+  } else if (1 / 0 > 0) {
+    fail ( message: "a later branch must stay lazy" )
+  } else {
+    fail ( message: "the else branch must stay lazy" )
+  },
+  predicate_match: ({ level: 4, danger: true } -> match {
+    .danger && .level > 3
+    -> "critical",
+    .danger
+    -> "warning",
+    _
+    -> "nominal",
+  }),
+  subject_match: ({ peak: 93 } -> match(.peak) {
+    > 90
+    -> "high",
+    _
+    -> "normal",
+  }),
+  ternary: (true ? "yes" : "no"),
+  each: ([1, 2, 3] -> each : concurrency=2 {
+    { doubled: . * 2 }
+    -> pick(field: "doubled")
+  }),
+  loop: ({ count: 0 } -> loop({ count: .count + 1 }) until(.count >= 3)),
+  race: race {
+    fail ( kind: "Unavailable", message: "this candidate cannot win" ),
+    "only winner",
+  },
+  gather: ("left" & "right"),
+}

@@ -1,0 +1,10 @@
+@description "Streams: read a local JSONL dataset, transform it, aggregate it, and collect one result"
+@data metrics :from="./fixtures/metrics.jsonl"
+@assert: len(result) == 1
+@assert: result[0].count == 4 && result[0].total == 48
+data.rows(name: "metrics")
+-> stream.map ( expression: "item.amount * 2" )
+-> stream.filter ( expression: "item >= 10" )
+-> stream.flatMap ( expression: "[item, item]" )
+-> stream.fold ( initial: { count: 0, total: 0 }, expression: "{ count: acc.count + 1, total: acc.total + item }" )
+-> collect

@@ -58,11 +58,13 @@ variable at execution time. A projection is an expression context:
 -> { subject: "audit." + .tenant_id, flagged: .amount > 100 }
 ```
 
-Parenthesized action calls such as `action(field: value)` carry typed values and
-references; they are not general-purpose expression contexts. For calculated
-values, compute them in a projection or use an explicitly parenthesized
-expression where the receiving action supports it, rather than writing an
-unparenthesized expression such as `"prefix" + .field` as an argument value.
+Action calls use parentheses for their named argument list, and ordinary
+argument values can be expressions too. Write `action(label: "ready")` for
+literal text and `action(title: "Hello, " + .name)` or
+`action(next: .count + 1)` for calculations; no extra parentheses around the
+expression are needed. Parentheses are useful only for grouping when the
+expression needs it. Schema-declared capability-reference slots and known
+symbols retain their special data-position meanings.
 
 ## Module imports
 

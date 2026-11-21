@@ -66,6 +66,20 @@ func TestIfBranchesFixtureDoesNotEvaluateLaterArithmeticCondition(t *testing.T) 
 	}
 }
 
+func TestIfBranchBindingDoesNotEscapeIntoFollowingProjection(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := runner.BuildConfig(native.SelftestBundles())
+	if err != nil {
+		t.Fatalf("build self-test config: %v", err)
+	}
+	const source = `{ enabled: true } -> if (.enabled) { "branch" as branch_only } -> { after: branch_only }`
+	_, err = runner.Compile(t.Context(), cfg, source, "if-branch-binding-scope.nflow")
+	if err == nil || !strings.Contains(err.Error(), `unresolved projection value "branch_only"`) {
+		t.Fatalf("compile error = %v, want unresolved out-of-scope branch binding", err)
+	}
+}
+
 func TestIfStaticNonBooleanConditionIsCompileSourceError(t *testing.T) {
 	t.Parallel()
 

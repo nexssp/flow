@@ -260,6 +260,7 @@ func runCompile(
 	if validationErr := validateCompileAST(ctx, ast, effectiveCfg, prepared.meta); validationErr != nil {
 		return CompileRes{}, validationErr
 	}
+	normalizeImplicitArgumentExpressions(ctx, ast, effectiveCfg.argSchemas, effectiveCfg.atomValueNormalizers)
 	if analyzeErr := analyzeWithInitialBindings(
 		resolver,
 		ast,
