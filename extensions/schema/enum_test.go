@@ -193,6 +193,15 @@ func TestEnumRejectsInvalidWireValues(t *testing.T) {
 	}
 }
 
+func TestEnumRejectsCommaWireValueWithSourceError(t *testing.T) {
+	t.Parallel()
+	_, err := preprocessEnumSchemas("@enum State {\n  comma = \"a,b\"\n}\n@schema Request {\n  Status State `json:\"status\" validate:\"oneof=State.comma\"`\n}")
+	ktest.RequireErrorContains(t, err, "wire value must not contain a comma")
+	if got, ok := compiler.PositionOf(err); !ok || got.File != "enum-test.nflow" || got.Line != 2 {
+		t.Fatalf("error position = %v, %t; want enum member source position enum-test.nflow:2", got, ok)
+	}
+}
+
 func TestEnumDefaultsAndOneofRequireMembersOfTheExactEnum(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

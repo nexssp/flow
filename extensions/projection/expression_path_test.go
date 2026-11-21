@@ -1,6 +1,7 @@
 package projection
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -65,5 +66,29 @@ func TestBuildProgramSourceRejectsDuplicateDerivedProjectionKeys(t *testing.T) {
 		if _, err := buildProgramSource(raw); err == nil || !strings.Contains(err.Error(), `duplicate key "id"`) {
 			t.Errorf("buildProgramSource(%q) error = %v, want duplicate key", raw, err)
 		}
+	}
+}
+
+type hashPlaceholderProjectionInput struct {
+	Existing string
+}
+
+func TestValidateBareProjectionIdentifiersContinuesAfterHashInsideCall(t *testing.T) {
+	t.Parallel()
+	err := validateBareProjectionIdentifiers(
+		`trim(#) + missing_field`,
+		map[string]reflect.Type{expressionRootName: reflect.TypeFor[hashPlaceholderProjectionInput]()},
+		nil,
+	)
+	if err == nil || !strings.Contains(err.Error(), `"missing_field"`) {
+		t.Fatalf("validateBareProjectionIdentifiers() error = %v, want missing_field error", err)
+	}
+}
+
+func TestProjectionUsedBindingReferencesContinuesAfterHashInsideCall(t *testing.T) {
+	t.Parallel()
+	references := projectionUsedBindingReferences(`map(fn(#, tool.name))`, []string{"tool"})
+	if len(references) != 1 || references[0].name != "tool" {
+		t.Fatalf("projectionUsedBindingReferences() = %#v, want one tool reference", references)
 	}
 }

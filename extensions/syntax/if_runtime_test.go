@@ -46,6 +46,26 @@ func TestIfCompileErrorFixtures(t *testing.T) {
 	}
 }
 
+func TestIfBranchesFixtureDoesNotEvaluateLaterArithmeticCondition(t *testing.T) {
+	t.Parallel()
+
+	fixture, err := fs.ReadFile(syntaxext.Bundle(nil).Fixtures, "nflows/if_branches.nflow")
+	if err != nil {
+		t.Fatalf("read if branches fixture: %v", err)
+	}
+	cfg, err := runner.BuildConfig(native.SelftestBundles())
+	if err != nil {
+		t.Fatalf("build self-test config: %v", err)
+	}
+	execution, err := runner.Execute(t.Context(), cfg, string(fixture), "if_branches.nflow", nil)
+	if err != nil {
+		t.Fatalf("execute if branches fixture: %v", err)
+	}
+	if execution.Output != "first" {
+		t.Fatalf("if branches output = %#v, want %q", execution.Output, "first")
+	}
+}
+
 func TestIfStaticNonBooleanConditionIsCompileSourceError(t *testing.T) {
 	t.Parallel()
 

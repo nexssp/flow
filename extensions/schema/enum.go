@@ -155,6 +155,9 @@ func parseEnumMembers(name string, entries []compiler.BlockEntry, req compiler.D
 		if strings.IndexFunc(wireValue, unicode.IsSpace) >= 0 {
 			return nil, compiler.SourceError(entryPos, "@enum %s.%s: wire value must not contain whitespace", name, memberName)
 		}
+		if strings.ContainsRune(wireValue, ',') {
+			return nil, compiler.SourceError(entryPos, "@enum %s.%s: wire value must not contain a comma", name, memberName)
+		}
 		if wireValues[wireValue] {
 			return nil, compiler.SourceError(entryPos, "@enum %s: duplicate wire value %q", name, wireValue)
 		}

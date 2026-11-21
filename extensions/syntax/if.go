@@ -102,7 +102,7 @@ func parseIfCondition(p *compiler.Parser) (string, compiler.Position, error) {
 func isIfExpressionOperator(literal string) bool {
 	// The Flow lexer does not tokenize these expr-lang operators itself.
 	switch literal {
-	case "+", "-", "%", "<", ">", "^":
+	case "+", "-", "*", "/", "%", "<", ">", "^":
 		return true
 	default:
 		return false

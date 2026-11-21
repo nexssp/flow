@@ -21,6 +21,7 @@ func TestTypedMacroArgumentKinds(t *testing.T) {
 		{name: "String rejects bare text", kind: "String", arg: "report", wantErr: "quoted String"},
 		{name: "String rejects unterminated quote", kind: "String", arg: `"report`, wantErr: "quoted String"},
 		{name: "Integer accepts signed integer", kind: "Integer", arg: "-42", valid: true},
+		{name: "Integer accepts grouped integer", kind: "Integer", arg: "1_000", valid: true},
 		{name: "Integer rejects float", kind: "Integer", arg: "42.0", wantErr: "Integer literal"},
 		{name: "Integer rejects quoted digits", kind: "Integer", arg: `"42"`, wantErr: "Integer literal"},
 		{name: "Expr accepts Flow action expression", kind: "Expr", arg: "runtime.noop", valid: true},

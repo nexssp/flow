@@ -57,3 +57,29 @@ func TestParallelExpr_DuplicateActionNamesHaveDeterministicGatherKeys(t *testing
 		}
 	}
 }
+
+func TestParallelExpr_DirectValueBranchesPreserveLegacyConstGatherKeys(t *testing.T) {
+	ctx := context.Background()
+	resolver := mustResolver(t)
+	expr := &ParallelExpr{Branches: []Expr{
+		&ValueExpr{Value: &Value{Kind: ValueRef, Ref: "left"}},
+		&ValueExpr{Value: &Value{Kind: ValueRef, Ref: "right"}},
+	}}
+
+	program, err := Build(ctx, resolver, nil, expr)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	output, err := action.InvokeAny(ctx, program, map[string]any{"left": "first", "right": "second"})
+	if err != nil {
+		t.Fatalf("InvokeAny: %v", err)
+	}
+	got, ok := output.(map[string]any)
+	if !ok {
+		t.Fatalf("output type = %T, want map[string]any", output)
+	}
+	want := map[string]any{"const#1": "first", "const#2": "second"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("output = %#v, want %#v", got, want)
+	}
+}

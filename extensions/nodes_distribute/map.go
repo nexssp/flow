@@ -51,6 +51,15 @@ type DistributeMapRes struct {
 	Failed    int    `json:"failed"`
 }
 
+// ValidateFanoutItemCount enforces the maximum number of items accepted by a
+// bounded fan-out operation before callers allocate per-item state.
+func ValidateFanoutItemCount(count int) error {
+	if count > maxItems {
+		return xerr.BadRequest(fmt.Sprintf("fanout: %d items exceeds limit of %d", count, maxItems))
+	}
+	return nil
+}
+
 func mapTimeoutDuration(timeoutMS int64) (time.Duration, error) {
 	if timeoutMS < 0 || timeoutMS > int64(math.MaxInt64)/int64(time.Millisecond) {
 		return 0, xerr.BadRequest("distribute.map: timeout_ms is outside the supported range")
@@ -62,8 +71,8 @@ func mapTimeoutDuration(timeoutMS int64) (time.Duration, error) {
 // preserving input order. It fails on the first action error, cancels sibling
 // work, and waits for launched actions to finish before returning.
 func MapAction(ctx context.Context, target action.AnyAction, items []any, concurrency int) ([]any, error) {
-	if len(items) > maxItems {
-		return nil, xerr.BadRequest(fmt.Sprintf("fanout: %d items exceeds limit of %d", len(items), maxItems))
+	if err := ValidateFanoutItemCount(len(items)); err != nil {
+		return nil, err
 	}
 	if len(items) == 0 {
 		return []any{}, nil

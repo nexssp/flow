@@ -25,3 +25,10 @@ func TestIsHeaderComment(t *testing.T) {
 		})
 	}
 }
+
+func TestIsHashLineCommentRecognizesEndsWithIterator(t *testing.T) {
+	t.Parallel()
+	if IsHashLineComment(`# endsWith "x"`, 0) {
+		t.Fatal(`# endsWith "x" was classified as a line comment`)
+	}
+}

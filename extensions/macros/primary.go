@@ -11,6 +11,7 @@ import (
 	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/internal/exprsyntax"
 	"github.com/nexssp/flow/internal/identifier"
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 const (
@@ -270,7 +271,10 @@ func singleIntegerLiteral(source string) bool {
 	if !ok || token.Type != compiler.TokNumber {
 		return false
 	}
-	literal := token.Lit
+	literal, err := lexical.NormalizeNumericSeparators(token.Lit)
+	if err != nil {
+		return false
+	}
 	literal = strings.TrimPrefix(literal, "-")
 	if literal == "" {
 		return false

@@ -29,3 +29,13 @@ func TestExpressionBindingNamesIncludesVisibleParentAndChildBindings(t *testing.
 		t.Fatalf("ExpressionBindingNames() = %#v, want %#v", got, want)
 	}
 }
+
+func TestValidateExpressionBindingNameRejectsParserLiterals(t *testing.T) {
+	for _, name := range []string{"true", "false", "nil", "null"} {
+		t.Run(name, func(t *testing.T) {
+			if err := compiler.ValidateExpressionBindingName(name); err == nil {
+				t.Fatalf("ValidateExpressionBindingName(%q) succeeded; want reserved-name error", name)
+			}
+		})
+	}
+}

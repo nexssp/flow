@@ -233,6 +233,16 @@ func TestResolveConfigRefsInDirectValueExpressions(t *testing.T) {
 	ktest.RequireEqual(t, value.Expression, `"root" + "/" + .path`)
 }
 
+func TestResolveConfigRefsInProjectionIgnoresHashComments(t *testing.T) {
+	t.Parallel()
+
+	raw := "value: 1 # @config.inline\n# @config.missing\nquoted: \"# @config.missing\" + @config.present\nitems: .items | map(\n  # @config.nested\n  #?.name\n)\nresolved: @config.present"
+	projection := &ProjectionExpr{Raw: raw}
+	err := resolveConfigRefsInExpressions(projection, map[string]string{"present": "resolved"})
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, projection.Raw, "value: 1 # @config.inline\n# @config.missing\nquoted: \"# @config.missing\" + \"resolved\"\nitems: .items | map(\n  # @config.nested\n  #?.name\n)\nresolved: \"resolved\"")
+}
+
 func TestValidateConfigRefsInUnquotedValues(t *testing.T) {
 	t.Parallel()
 

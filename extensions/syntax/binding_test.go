@@ -50,6 +50,8 @@ func TestNamedBindingPostfix_RejectsInvalidAndReservedNames(t *testing.T) {
 		`ai.cost.estimate as request.value`,
 		`ai.cost.estimate as input`,
 		`ai.cost.estimate as __root__`,
+		`ai.cost.estimate as false`,
+		`ai.cost.estimate as nil`,
 		`ai.cost.estimate as estimate as decision`,
 	} {
 		t.Run(source, func(t *testing.T) {

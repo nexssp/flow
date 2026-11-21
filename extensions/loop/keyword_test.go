@@ -88,19 +88,23 @@ func TestEachKeyword_IdentityAndBlock(t *testing.T) {
 
 func TestEachKeyword_ConcurrencyBeforeOrAfterBlock(t *testing.T) {
 	t.Parallel()
-	for _, source := range []string{
-		`each :concurrency=4 { noop }`,
-		`each { noop } :concurrency=4`,
+	for _, tc := range []struct {
+		source string
+		want   int
+	}{
+		{source: `each :concurrency=4 { noop }`, want: 4},
+		{source: `each :concurrency=1_000 { noop }`, want: 1000},
+		{source: `each { noop } :concurrency=4`, want: 4},
 	} {
-		t.Run(source, func(t *testing.T) {
+		t.Run(tc.source, func(t *testing.T) {
 			t.Parallel()
-			expr, err := newEachTestParser(t, source).Parse()
+			expr, err := newEachTestParser(t, tc.source).Parse()
 			ktest.RequireNoError(t, err)
 			each, ok := expr.(*EachExpr)
 			if !ok {
 				t.Fatalf("got %T, want *EachExpr", expr)
 			}
-			ktest.RequireEqual(t, each.Concurrency, 4)
+			ktest.RequireEqual(t, each.Concurrency, tc.want)
 		})
 	}
 }

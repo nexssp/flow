@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/xerr"
@@ -51,5 +52,15 @@ func TestEachItemsRejectsNilAndNilPointer(t *testing.T) {
 				t.Fatalf("eachItems error kind = %s, want %s: %v", got, xerr.KindValidation, err)
 			}
 		})
+	}
+}
+
+func TestEachItemsRejectsOversizedTypedSliceBeforeConversion(t *testing.T) {
+	_, err := eachItems(make([]int, 100_001))
+	if got := xerr.KindFrom(err); got != xerr.KindBadRequest {
+		t.Fatalf("eachItems error kind = %s, want %s: %v", got, xerr.KindBadRequest, err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "100001 items exceeds limit of 100000") {
+		t.Fatalf("eachItems error = %v, want fanout item-count limit", err)
 	}
 }

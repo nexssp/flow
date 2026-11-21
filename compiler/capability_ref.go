@@ -34,7 +34,7 @@ func ParseCapabilityRef(raw string) (CapabilityRef, error) {
 	return CapabilityRef{Raw: trimmed, Canonical: canonical}, nil
 }
 
-// ParseCapabilityRefList parses `[noop, const]` into capability
+// ParseCapabilityRefList parses a bracketed list into capability
 // references. It reuses ParseList for splitting, then runs every entry
 // through ParseCapabilityRef so quoted members are rejected.
 func ParseCapabilityRefList(line string) ([]CapabilityRef, error) {

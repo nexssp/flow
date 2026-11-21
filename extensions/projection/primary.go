@@ -2,9 +2,9 @@ package projection
 
 import (
 	"errors"
-	"strings"
 
 	compiler "github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 // Extension is the compile-time parser extension. It
@@ -119,20 +119,7 @@ func skipBalancedBraceTrivia(src string, index, parenDepth int) (next int, handl
 }
 
 func projectionHashLineComment(src string, index int) bool {
-	lineStart := strings.LastIndexAny(src[:index], "\r\n") + 1
-	for _, c := range src[lineStart:index] {
-		if c != ' ' && c != '\t' {
-			return false
-		}
-	}
-	return !projectionHashStartsIteratorPath(src, index)
-}
-
-// Expr ignores whitespace between # and a selector, but Flow uses line-leading
-// # for comments. Only an adjacent selector disambiguates the iterator path.
-func projectionHashStartsIteratorPath(src string, index int) bool {
-	next := index + 1
-	return next < len(src) && (src[next] == '.' || src[next] == '[')
+	return lexical.IsHashLineComment(src, index)
 }
 
 func projectionBlockCommentEnd(src string, start int) (int, bool) {

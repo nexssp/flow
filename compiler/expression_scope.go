@@ -31,7 +31,7 @@ func ValidateExpressionBindingName(name string) error {
 		}
 	}
 	switch name {
-	case "input", "__root__", "__state__", "as", "true", "null":
+	case "input", "__root__", "__state__", "as", "true", literalFalse, "nil", "null":
 		return fmt.Errorf("pipeline binding name %q is reserved", name)
 	}
 	return nil

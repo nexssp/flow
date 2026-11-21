@@ -54,6 +54,69 @@ func TestProjectionStaticAnalysisRejectsUsedInputBindingCollision(t *testing.T) 
 	}
 }
 
+func TestProjectionStaticAnalysisRejectsUnknownBareFieldAfterHashSelector(t *testing.T) {
+	type item struct {
+		Name string `json:"name"`
+	}
+	type request struct {
+		Items []item `json:"items"`
+	}
+	ctx := compiler.TypeAnalysisContext{
+		Input: compiler.TypeDescriptor{Type: reflect.TypeFor[request]()},
+	}
+	raw := `filtered: .items | filter(
+  #?.name != missing
+)`
+	_, err := analyzeProjectionTypes(raw, compiler.Position{}, ctx, nil, nil, "")
+	if err == nil || !strings.Contains(err.Error(), `no field "missing"`) {
+		t.Fatalf("analysis error = %v, want unknown bare field missing after hash selector", err)
+	}
+}
+
+func TestProjectionStaticAnalysisFindsBareIdentifierAfterHashOperators(t *testing.T) {
+	type item struct {
+		Name string `json:"name"`
+	}
+	type request struct {
+		Items []item `json:"items"`
+	}
+	ctx := compiler.TypeAnalysisContext{
+		Input: compiler.TypeDescriptor{Type: reflect.TypeFor[request]()},
+	}
+	for _, raw := range []string{
+		"filtered: .items | map(\n  # ?? missing\n)",
+		"filtered: .items | map(\n  # ? true : missing\n)",
+	} {
+		_, err := analyzeProjectionTypes(raw, compiler.Position{}, ctx, nil, nil, "")
+		if err == nil || !strings.Contains(err.Error(), `no field "missing"`) {
+			t.Errorf("analysis error for %q = %v, want unknown bare field missing", raw, err)
+		}
+	}
+}
+
+func TestProjectionStaticAnalysisFindsBindingAfterHashSelector(t *testing.T) {
+	type item struct {
+		Name string `json:"name"`
+	}
+	type request struct {
+		Items []item `json:"items"`
+		Tool  string `json:"tool"`
+	}
+	ctx := compiler.TypeAnalysisContext{
+		Input: compiler.TypeDescriptor{Type: reflect.TypeFor[request]()},
+		Bindings: map[string]compiler.TypeDescriptor{
+			"tool": {Type: reflect.TypeFor[string]()},
+		},
+	}
+	raw := `filtered: .items | filter(
+  #?.name == tool
+)`
+	_, err := analyzeProjectionTypes(raw, compiler.Position{}, ctx, nil, nil, "")
+	if err == nil || !strings.Contains(err.Error(), `ambiguous bare identifier "tool"`) {
+		t.Fatalf("analysis error = %v, want pipeline-binding conflict for tool", err)
+	}
+}
+
 func TestProjectionStaticAnalysisAllowsUnambiguousInputAndUnusedOverlap(t *testing.T) {
 	type inputTool struct {
 		Name string `json:"name"`
@@ -104,6 +167,24 @@ func TestProjectionRuntimeRejectsDynamicInputBindingCollisionWithoutValues(t *te
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("runtime diagnostic %q does not contain %q", err, want)
 		}
+	}
+}
+
+func TestProjectionRuntimeFindsBindingAfterHashSelector(t *testing.T) {
+	ctx := compiler.WithExpressionScope(context.Background(), nil)
+	if err := compiler.BindExpressionValue(ctx, "tool", "binding"); err != nil {
+		t.Fatalf("bind pipeline value: %v", err)
+	}
+	raw := `filtered: .items | filter(
+  #?.name == tool
+)`
+	input := map[string]any{
+		"items": []map[string]any{{"name": "payload"}},
+		"tool":  "payload",
+	}
+	_, err := NewExprEvaluator()(ctx, Request{Raw: raw, Input: input})
+	if xerr.KindFrom(err) != xerr.KindConflict {
+		t.Fatalf("runtime error = %v, want Conflict for binding reference after hash selector", err)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/nodes_distribute"
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 const (
@@ -76,7 +77,11 @@ func parseEachConcurrency(p *compiler.Parser) (int, error) {
 	if p.Current().Type != compiler.TokNumber {
 		return 0, p.Fail(p.Current().Line, "each: concurrency must be an integer")
 	}
-	value, err := strconv.Atoi(p.Current().Lit)
+	normalized, err := lexical.NormalizeNumericSeparators(p.Current().Lit)
+	if err != nil {
+		return 0, p.Fail(p.Current().Line, "each: concurrency must be an integer")
+	}
+	value, err := strconv.Atoi(normalized)
 	if err != nil {
 		return 0, p.Fail(p.Current().Line, "each: concurrency must be an integer")
 	}
@@ -236,6 +241,9 @@ func eachItems(input any) ([]any, error) {
 	}
 	if value.Kind() != reflect.Slice && value.Kind() != reflect.Array {
 		return nil, xerr.Validation("each: input must be a list, got " + reflect.TypeOf(input).String())
+	}
+	if err := nodes_distribute.ValidateFanoutItemCount(value.Len()); err != nil {
+		return nil, err
 	}
 	items := make([]any, value.Len())
 	for i := range items {

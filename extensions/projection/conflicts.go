@@ -31,12 +31,22 @@ func projectionUsedBindingReferences(source string, bindingNames []string) []pro
 
 	shorthand := projectionShorthandFieldSpans(source)
 	var references []projectionBindingReference
+	parenDepth := 0
 	for index := 0; index < len(source); {
-		next, start, name, found := nextProjectionBareIdentifier(source, index)
-		index = next
+		next, start, name, found := nextProjectionBareIdentifier(source, index, parenDepth)
 		if !found {
+			switch source[index] {
+			case '(':
+				parenDepth++
+			case ')':
+				if parenDepth > 0 {
+					parenDepth--
+				}
+			}
+			index = next
 			continue
 		}
+		index = next
 		if _, candidate := candidates[name]; !candidate {
 			continue
 		}

@@ -11,6 +11,7 @@ import (
 	"github.com/expr-lang/expr/parser"
 
 	"github.com/nexssp/flow/compiler"
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 type projectionMissingFieldError struct {
@@ -287,12 +288,22 @@ func projectionStaticIndexType(valueType reflect.Type) (reflect.Type, bool, erro
 }
 
 func validateBareProjectionIdentifiers(source string, staticTypes map[string]reflect.Type, optionalIdentifiers map[string]struct{}) error {
+	parenDepth := 0
 	for index := 0; index < len(source); {
-		next, start, name, found := nextProjectionBareIdentifier(source, index)
-		index = next
+		next, start, name, found := nextProjectionBareIdentifier(source, index, parenDepth)
 		if !found {
+			switch source[index] {
+			case '(':
+				parenDepth++
+			case ')':
+				if parenDepth > 0 {
+					parenDepth--
+				}
+			}
+			index = next
 			continue
 		}
+		index = next
 		if err := validateBareProjectionIdentifier(source, start, next, name, staticTypes, optionalIdentifiers); err != nil {
 			return err
 		}
@@ -300,12 +311,18 @@ func validateBareProjectionIdentifiers(source string, staticTypes map[string]ref
 	return nil
 }
 
-func nextProjectionBareIdentifier(source string, index int) (next, identifierStart int, name string, found bool) {
+func nextProjectionBareIdentifier(source string, index, parenDepth int) (next, identifierStart int, name string, found bool) {
 	if source[index] == '#' {
-		for index < len(source) && source[index] != '\n' && source[index] != '\r' {
-			index++
+		if lexical.HashStartsIteratorExpression(source, index) {
+			return index + 1, 0, "", false
 		}
-		return index, 0, "", false
+		if parenDepth == 0 || lexical.IsHashLineComment(source, index) {
+			for index < len(source) && source[index] != '\n' && source[index] != '\r' {
+				index++
+			}
+			return index, 0, "", false
+		}
+		return index + 1, 0, "", false
 	}
 	if isProjectionQuote(source[index]) {
 		return skipProjectionQuoted(source, index), 0, "", false

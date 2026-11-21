@@ -4,7 +4,7 @@
 //
 // Typical use:
 //
-//	@pool workers [const, noop] { strategy: "failover" }
+//	@pool workers [noop] { strategy: "failover" }
 //	pool.workers(value: "x")
 package pool
 

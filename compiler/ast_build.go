@@ -639,7 +639,7 @@ func (p *ParallelExpr) Build(ctx context.Context, bCtx *BuildContext) (action.An
 		}
 		branches[i] = WithChildExpressionScopeAction(act)
 	}
-	disambiguateParallelBranchKeys(branches)
+	disambiguateParallelBranchKeys(branches, flat)
 	program := action.ParallelAny("parallel", branches...).Build()
 	if !bCtx.Introspect {
 		return program, nil
@@ -659,12 +659,17 @@ func (p *ParallelExpr) Build(ctx context.Context, bCtx *BuildContext) (action.An
 	}), nil
 }
 
-func disambiguateParallelBranchKeys(branches []action.AnyAction) {
+func disambiguateParallelBranchKeys(branches []action.AnyAction, expressions []Expr) {
 	baseKeys := make([]string, len(branches))
 	counts := make(map[string]int, len(branches))
 	for i, branch := range branches {
 		key := fmt.Sprintf("branch_%d", i)
-		if meta := branch.Describe(); meta != nil && meta.Name != "" {
+		if _, directValue := expressions[i].(*ValueExpr); directValue {
+			// `const` was the runtime generator name for these branches before
+			// direct-value expressions replaced it. Keep the result-map contract
+			// without restoring the removed runtime action.
+			key = "const"
+		} else if meta := branch.Describe(); meta != nil && meta.Name != "" {
 			key = meta.Name
 		}
 		baseKeys[i] = key

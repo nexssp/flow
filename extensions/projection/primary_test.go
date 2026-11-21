@@ -183,6 +183,65 @@ func TestParse_HashWhitespaceBeforeIteratorPathRemainsComment(t *testing.T) {
 	ktest.RequireStringNotContains(t, proj.Raw, `# [this also remains a comment]`)
 }
 
+func TestParse_MultilineOptionalAndBareHashIteratorsAreKept(t *testing.T) {
+	src := `{
+  optional: .items | map(
+    #?.field
+  ),
+	filtered: .labels | filter(
+	  # != "beta"
+	  ),
+	coalesced: .nullable | map(
+	  # ?? "fallback"
+	  ),
+	conditional: .flags | map(
+	  # ? "yes" : "no"
+	  )
+}`
+	expr, err := newProjectionParser(t, src).Parse()
+	ktest.RequireNoError(t, err)
+
+	proj, ok := expr.(*compiler.ProjectionExpr)
+	ktest.RequireCondition(t, ok, "got %T, want *compiler.ProjectionExpr", expr)
+	ktest.RequireStringContains(t, proj.Raw, `#?.field`)
+	ktest.RequireStringContains(t, proj.Raw, `# != "beta"`)
+
+	input := map[string]any{
+		"items":    []map[string]any{{"field": "alpha"}, {"field": "beta"}},
+		"labels":   []string{"alpha", "beta", "gamma"},
+		"nullable": []any{nil, "present"},
+		"flags":    []bool{true, false},
+	}
+	got, err := NewExprEvaluator()(t.Context(), Request{Raw: proj.Raw, Input: input})
+	if err != nil {
+		t.Fatalf("evaluate multiline hash iterator projection: %v", err)
+	}
+	want := map[string]any{
+		"optional":    []any{"alpha", "beta"},
+		"filtered":    []any{"alpha", "gamma"},
+		"coalesced":   []any{"fallback", "present"},
+		"conditional": []any{"yes", "no"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("projection output = %#v, want %#v", got, want)
+	}
+}
+
+func TestParse_StandaloneHashInsideParenthesesRemainsComment(t *testing.T) {
+	src := `{
+  value: (1 +
+    #
+    2)
+}`
+	expr, err := newProjectionParser(t, src).Parse()
+	ktest.RequireNoError(t, err)
+
+	proj, ok := expr.(*compiler.ProjectionExpr)
+	ktest.RequireCondition(t, ok, "got %T, want *compiler.ProjectionExpr", expr)
+	ktest.RequireStringNotContains(t, proj.Raw, `#`)
+	ktest.RequireStringContains(t, proj.Raw, `2)`)
+}
+
 func TestParse_HashIteratorAndCommentCoexist(t *testing.T) {
 	// Reproduces spec/08: a depth-0 comment on one line, an iterator
 	// inside filter() on another. The comment is stripped, the iterator

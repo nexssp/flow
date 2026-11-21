@@ -6,6 +6,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 // CompileTimeExpressionRewriter lets extension-owned AST nodes expose their
@@ -70,7 +72,7 @@ func resolveConfigRefsInExpressions(ast Expr, cfg map[string]string) error {
 				}
 			}
 		case *ProjectionExpr:
-			current.Raw, firstErr = rewrite(current.Raw, current.Pos)
+			current.Raw, firstErr = substituteConfigRefsInProjectionExpression(current.Raw, current.Pos, cfg)
 		case *LoopExpr:
 			current.Until, firstErr = rewrite(current.Until, current.Pos)
 		case *AssertExpr:
@@ -119,11 +121,20 @@ func resolveConfigExpressionValue(value *Value, pos Position, rewrite func(strin
 }
 
 func substituteConfigRefsInExpression(source string, pos Position, cfg map[string]string) (string, error) {
+	return substituteConfigRefsInExpressionWithProjectionComments(source, pos, cfg, false)
+}
+
+func substituteConfigRefsInProjectionExpression(source string, pos Position, cfg map[string]string) (string, error) {
+	return substituteConfigRefsInExpressionWithProjectionComments(source, pos, cfg, true)
+}
+
+func substituteConfigRefsInExpressionWithProjectionComments(source string, pos Position, cfg map[string]string, skipProjectionComments bool) (string, error) {
 	if !strings.Contains(source, "@config.") {
 		return source, nil
 	}
 	var out strings.Builder
 	out.Grow(len(source))
+	parenDepth := 0
 	for i := 0; i < len(source); {
 		if source[i] == '"' || source[i] == '\'' || source[i] == '`' {
 			end := configExpressionStringEnd(source, i)
@@ -140,44 +151,71 @@ func substituteConfigRefsInExpression(source string, pos Position, cfg map[strin
 			i = end
 			continue
 		}
-		if source[i] == '/' && i+1 < len(source) {
-			if source[i+1] == '/' {
-				end := strings.IndexByte(source[i+2:], '\n')
-				if end < 0 {
-					out.WriteString(source[i:])
-					break
-				}
-				end += i + 2
-				out.WriteString(source[i:end])
-				i = end
-				continue
-			}
-			if source[i+1] == '*' {
-				end := configExpressionBlockCommentEnd(source, i)
-				out.WriteString(source[i:end])
-				i = end
-				continue
-			}
+		if end, ok := configExpressionCommentEnd(source, i, parenDepth, skipProjectionComments); ok {
+			out.WriteString(source[i:end])
+			i = end
+			continue
 		}
-		if strings.HasPrefix(source[i:], "@config.") {
-			start := i + len("@config.")
-			end := configReferenceKeyEnd(source, start)
-			if end > start {
-				key := source[start:end]
-				value, ok := cfg[key]
-				if !ok {
-					return "", SourceError(pos,
-						"expression: unknown @config.%s (declared: %s)", key, declaredConfigKeys(cfg))
-				}
-				out.WriteString(strconv.Quote(value))
-				i = end
-				continue
+		if replacement, next, matched, err := resolveConfigReferenceAt(source, i, pos, cfg); err != nil {
+			return "", err
+		} else if matched {
+			out.WriteString(replacement)
+			i = next
+			continue
+		}
+		switch source[i] {
+		case '(':
+			parenDepth++
+		case ')':
+			if parenDepth > 0 {
+				parenDepth--
 			}
 		}
 		out.WriteByte(source[i])
 		i++
 	}
 	return out.String(), nil
+}
+
+func configExpressionCommentEnd(source string, start, parenDepth int, skipProjectionComments bool) (int, bool) {
+	if start+1 < len(source) && source[start] == '/' {
+		switch source[start+1] {
+		case '/':
+			end := strings.IndexByte(source[start+2:], '\n')
+			if end < 0 {
+				return len(source), true
+			}
+			return start + 2 + end, true
+		case '*':
+			return configExpressionBlockCommentEnd(source, start), true
+		}
+	}
+	if skipProjectionComments && source[start] == '#' && (parenDepth == 0 || lexical.IsHashLineComment(source, start)) {
+		end := strings.IndexAny(source[start:], "\r\n")
+		if end < 0 {
+			return len(source), true
+		}
+		return start + end, true
+	}
+	return start, false
+}
+
+func resolveConfigReferenceAt(source string, index int, pos Position, cfg map[string]string) (replacement string, next int, matched bool, err error) {
+	if !strings.HasPrefix(source[index:], "@config.") {
+		return "", index, false, nil
+	}
+	start := index + len("@config.")
+	end := configReferenceKeyEnd(source, start)
+	if end == start {
+		return "", index, false, nil
+	}
+	key := source[start:end]
+	value, ok := cfg[key]
+	if !ok {
+		return "", index, false, SourceError(pos,
+			"expression: unknown @config.%s (declared: %s)", key, declaredConfigKeys(cfg))
+	}
+	return strconv.Quote(value), end, true, nil
 }
 
 func substituteQuotedConfigReference(literal string, pos Position, cfg map[string]string) (replacement string, matched bool, err error) {
