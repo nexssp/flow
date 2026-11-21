@@ -23,10 +23,10 @@ var fixturesFS embed.FS
 
 func init() {
 	compiler.Register(ID, Bundle)
-	config.RegisterYAMLLoader(unmarshal)
 }
 
 func Bundle(_ map[string]string) compiler.Bundle {
+	config.RegisterYAMLLoader(unmarshal)
 	return compiler.Bundle{
 		ID:        ID,
 		Libraries: []action.Library{{Name: ID, Actions: []action.AnyAction{LoadAction}}},

@@ -3,6 +3,7 @@ package fs
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
@@ -79,6 +80,40 @@ func TestRead_LineRanges(t *testing.T) {
 	got, err := readFileContent(path, ranges, nil)
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, string(got), "l2\nl3\nl4\n")
+}
+
+func TestRead_LineRangesAllowLineLargerThanScannerDefault(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "long.txt")
+	line := strings.Repeat("x", 70*1024)
+	ktest.RequireNoError(t, os.WriteFile(path, []byte(line+"\n"), 0o600))
+	ranges, err := parseLineRanges("1")
+	ktest.RequireNoError(t, err)
+	got, err := readFileContent(path, ranges, nil)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, string(got), line+"\n")
+}
+
+func TestRead_LineRangesAllowLineAtSupportedLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "limit.txt")
+	line := strings.Repeat("x", maxTextLineBytes)
+	ktest.RequireNoError(t, os.WriteFile(path, []byte(line+"\r\n"), 0o600))
+	ranges, err := parseLineRanges("1")
+	ktest.RequireNoError(t, err)
+	got, err := readFileContent(path, ranges, nil)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, string(got), line+"\n")
+}
+
+func TestRead_LineRangesRejectLineAboveSupportedLimit(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "too-long.txt")
+	ktest.RequireNoError(t, os.WriteFile(path, []byte(strings.Repeat("x", maxTextLineBytes+1)), 0o600))
+	ranges, err := parseLineRanges("1")
+	ktest.RequireNoError(t, err)
+	if _, err := readFileContent(path, ranges, nil); err == nil {
+		t.Fatal("readFileContent succeeded for a line above the supported limit")
+	}
 }
 
 func TestRead_OpenRange(t *testing.T) {

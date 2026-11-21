@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	stdIo "io"
 	"iter"
 	"os"
@@ -13,9 +14,12 @@ import (
 )
 
 const (
-	scanInitialBuffer = 64 * 1024
-	scanMaxLineBytes  = 16 * 1024 * 1024
+	scanInitialBuffer  = 64 * 1024
+	scanMaxLineBytes   = 16 * 1024 * 1024
+	scanMaxBufferBytes = scanMaxLineBytes + 2 // allow the CRLF delimiter
 )
+
+var errStdinLineTooLong = errors.New("line exceeds 16 MiB limit")
 
 // InConfig controls io.stdin's per-line decoding.
 type InConfig struct {
@@ -39,7 +43,7 @@ func inFrom(reader stdIo.Reader) *action.StreamAction[InConfig, any] {
 			format = "lines"
 		}
 		scanner := bufio.NewScanner(reader)
-		scanner.Buffer(make([]byte, scanInitialBuffer), scanMaxLineBytes)
+		scanner.Buffer(make([]byte, scanInitialBuffer), scanMaxBufferBytes)
 		switch format {
 		case "lines":
 			return scanLines(ctx, scanner), nil
@@ -53,9 +57,20 @@ func inFrom(reader stdIo.Reader) *action.StreamAction[InConfig, any] {
 
 func scanLines(ctx context.Context, scanner *bufio.Scanner) iter.Seq2[any, error] {
 	return func(yield func(any, error) bool) {
-		for scanner.Scan() {
+		for {
 			if err := ctx.Err(); err != nil {
 				yield(nil, err)
+				return
+			}
+			if !scanner.Scan() {
+				break
+			}
+			if err := ctx.Err(); err != nil {
+				yield(nil, err)
+				return
+			}
+			if len(scanner.Bytes()) > scanMaxLineBytes {
+				yield(nil, xerr.Internal("io.stdin: read", errStdinLineTooLong))
 				return
 			}
 			if !yield(scanner.Text(), nil) {
@@ -70,9 +85,20 @@ func scanLines(ctx context.Context, scanner *bufio.Scanner) iter.Seq2[any, error
 
 func scanNDJSON(ctx context.Context, scanner *bufio.Scanner) iter.Seq2[any, error] {
 	return func(yield func(any, error) bool) {
-		for scanner.Scan() {
+		for {
 			if err := ctx.Err(); err != nil {
 				yield(nil, err)
+				return
+			}
+			if !scanner.Scan() {
+				break
+			}
+			if err := ctx.Err(); err != nil {
+				yield(nil, err)
+				return
+			}
+			if len(scanner.Bytes()) > scanMaxLineBytes {
+				yield(nil, xerr.Internal("io.stdin: read", errStdinLineTooLong))
 				return
 			}
 			line := scanner.Bytes()

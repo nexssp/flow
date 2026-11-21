@@ -510,6 +510,14 @@ fs.walk(root: "./data")
 
 Filesystem, stdout, clipboard, and rendering actions remain domain capabilities. They use the host’s configured resolver and filesystem policy.
 
+`fs.read_lines` and `fs.read` when selecting line ranges support lines up to
+16 MiB; longer scanned lines return an error. Whole-file `fs.read` does not
+scan by line, so this per-line bound does not apply to an unfiltered read.
+`io.stdin` accepts lines up to 16 MiB. It checks cancellation before and after
+each scan, but a context cannot interrupt a generic `io.Reader` blocked inside
+its `Read` method; the host must close or cancel the underlying reader to unblock
+such a read.
+
 ## 11. Fan-out, dispatch, and pools
 
 ### Dispatch through named members

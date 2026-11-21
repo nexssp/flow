@@ -339,6 +339,24 @@ func TestParseAtBrace_RejectsMalformed(t *testing.T) {
 	}
 }
 
+func TestParseAtBrace_MultilineNestedErrorPosition(t *testing.T) {
+	t.Parallel()
+	source := "wrap (\n  outer: {\n    key 1\n  }\n)"
+	parser := NewParserWithFileOffset(context.Background(), NewOperatorTable(), nil, source, "flow.nflow", 0)
+	_, err := parser.Parse()
+	if err == nil {
+		t.Fatal("Parse() succeeded, want malformed nested map error")
+	}
+	want := Position{File: "flow.nflow", Line: 3, Col: 9}
+	got, ok := PositionOf(err)
+	if !ok || got != want {
+		t.Fatalf("PositionOf(error) = (%+v, %t), want (%+v, true); error: %v", got, ok, want, err)
+	}
+	if !strings.Contains(err.Error(), want.String()+":") {
+		t.Fatalf("error rendering = %q, want source location %s", err, want)
+	}
+}
+
 func TestParseAtBrace_QuotedBracesAndDuplicateKeys(t *testing.T) {
 	t.Parallel()
 	parsed, err := newTestParser(t, `wrap ( text: "{ nested }" )`).Parse()

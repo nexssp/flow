@@ -112,6 +112,48 @@ func fakeArchive(t *testing.T, binary []byte) []byte {
 	return out.Bytes()
 }
 
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func TestToolchainReleaseLookupUsesGitHubTokenOnlyForAPI(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "ci-test-token")
+	var apiAuthorization, assetAuthorization string
+	resolver := &toolchainResolver{
+		apiURL: githubReleaseAPI,
+		client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			switch req.URL.Hostname() {
+			case "api.github.com":
+				apiAuthorization = req.Header.Get("Authorization")
+			case "github.com":
+				assetAuthorization = req.Header.Get("Authorization")
+			default:
+				t.Errorf("unexpected release request host %q", req.URL.Hostname())
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader("[]")),
+				Request:    req,
+			}, nil
+		})},
+	}
+	if _, err := resolver.get(t.Context(), githubReleaseAPI+"?per_page=100&page=1"); err != nil {
+		t.Fatalf("release metadata request failed: %v", err)
+	}
+	if _, err := resolver.get(t.Context(), "https://github.com/nexssp/flow/releases/download/v0.44.2/nflow.tar.gz"); err != nil {
+		t.Fatalf("release asset request failed: %v", err)
+	}
+	if apiAuthorization != "Bearer ci-test-token" {
+		t.Fatalf("release API authorization = %q, want bearer token", apiAuthorization)
+	}
+	if assetAuthorization != "" {
+		t.Fatalf("release asset received authorization header %q", assetAuthorization)
+	}
+}
+
 func TestToolchainConstraintResolutionChoosesNewestCompatible(t *testing.T) {
 	resolver := newFakeToolchainResolver(t,
 		fakeRelease{version: "v0.38.0", archive: fakeArchive(t, []byte("core-38"))},

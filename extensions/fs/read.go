@@ -14,7 +14,11 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
-const readBufferSize = 64 * 1024
+const (
+	readBufferSize      = 64 * 1024
+	maxTextLineBytes    = 16 * 1024 * 1024
+	maxTextScannerBytes = maxTextLineBytes + 2 // allow the CRLF delimiter
+)
 
 // readBufferPool amortizes the read buffer across Read invocations.
 var readBufferPool = sync.Pool{
@@ -122,11 +126,16 @@ func readFileContent(path string, ranges []lineRange, scratch []byte) ([]byte, e
 
 	var result bytes.Buffer
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, readBufferSize), maxTextScannerBytes)
 	lineNo := 0
 	for scanner.Scan() {
 		lineNo++
+		line := scanner.Bytes()
+		if err := checkTextLineLimit(line); err != nil {
+			return nil, err
+		}
 		if isLineIncluded(lineNo, ranges) {
-			result.Write(scanner.Bytes())
+			result.Write(line)
 			result.WriteByte('\n')
 		}
 	}
@@ -134,6 +143,13 @@ func readFileContent(path string, ranges []lineRange, scratch []byte) ([]byte, e
 		return nil, err
 	}
 	return result.Bytes(), nil
+}
+
+func checkTextLineLimit(line []byte) error {
+	if len(line) > maxTextLineBytes {
+		return errors.New("line exceeds 16 MiB limit")
+	}
+	return nil
 }
 
 func isLineIncluded(line int, ranges []lineRange) bool {

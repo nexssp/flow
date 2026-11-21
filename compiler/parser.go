@@ -120,6 +120,18 @@ func (p *Parser) currentPos() Position {
 	return Position{File: p.file, Line: tok.Line + p.lineBase, Col: col}
 }
 
+func (p *Parser) positionAtOffset(offset int) Position {
+	offset = min(max(offset, 0), len(p.src))
+	line, lineStart := 1, 0
+	for index := range offset {
+		if p.src[index] == '\n' {
+			line++
+			lineStart = index + 1
+		}
+	}
+	return Position{File: p.file, Line: line + p.lineBase, Col: offset - lineStart + 1}
+}
+
 func (p *Parser) Position() Position { return p.currentPos() }
 
 func (p *Parser) Fail(_ int, format string, args ...any) error {
@@ -843,7 +855,7 @@ func (p *Parser) parseParenthesizedArgs(a *Atom) error {
 	if err != nil {
 		return err
 	}
-	args, spreads, err := parseAtBrace(raw, p.currentPos())
+	args, spreads, err := parseAtBrace(raw, p.positionAtOffset(open.EndOffset))
 	if err != nil {
 		return err
 	}

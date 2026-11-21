@@ -113,7 +113,8 @@ Commas are required between branches; a trailing comma is optional. Labels
 must be unique and the block must contain at least one branch. A branch may
 contain the existing parenthesized `&` form. If a branch fails, the error
 propagates; as with `(a & b)`, a following pipeline step does not receive a
-partial result map.
+partial result map. If several branches fail, the error from the first failing
+branch in source order is reported, even when a later branch fails sooner.
 
 Fallback:
 
@@ -134,10 +135,13 @@ race {
 ```
 
 The first successful candidate supplies the result; a failed candidate does
-not win. Kernel cancels remaining candidates after a success and waits for all
+not win. Kernel runs up to 16 candidates at once and starts additional
+candidates as slots become free; not all candidates launch immediately. The
+default overall timeout is two minutes unless the caller's context has an earlier
+deadline. Kernel cancels remaining candidates after a success and waits for all
 launched candidates to finish before returning. If every candidate fails, the
 race returns an error. A candidate that ignores cancellation can therefore
-delay the result. Unlike `||`, all race candidates are started concurrently.
+delay the result.
 
 ---
 

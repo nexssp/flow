@@ -260,6 +260,10 @@ The compiler-version directive is spelled `@nflow_version` only; the previous sp
 
 `@config.load` and `@const.load` are different: the former writes flattened values to compile-time configuration; the latter creates a named JSON symbol and can validate it against `@schema`. YAML loading via `@config.load` requires the optional `config_yaml` bundle to be added with `@require` or mounted by the host. See [`extensions/config/load.go`](../extensions/config/load.go), [`extensions/config/load_test.go`](../extensions/config/load_test.go), [`extensions/flow_version/library.go`](../extensions/flow_version/library.go), and [`extensions/flow_version/library_test.go`](../extensions/flow_version/library_test.go).
 
+The YAML decoder is registered when the optional `config_yaml` bundle is
+instantiated, not merely because its package is linked into a host. Registration
+is process-global and remains active for the host's lifetime once enabled.
+
 ### Extension-dependent directive
 
 `@embed NAME "relative/path"` is supplied by the optional `embed` bundle, not by `native.Bundles()`. The bundle must be mounted with an explicit filesystem root (there is no implicit process-working-directory root); it validates the path, applies a byte limit (16 MiB by default), and exposes the asset reference as `embed.NAME`. The asset bytes remain behind the file resolver rather than being copied into Flow metadata. See [`extensions/embed/library.go`](../extensions/embed/library.go) and [`docs/static-embed.md`](static-embed.md).

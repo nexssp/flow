@@ -12,7 +12,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/expr-lang/expr/ast"
 	"github.com/expr-lang/expr/builtin"
+	"github.com/expr-lang/expr/parser"
 	"github.com/nexssp/kernel/action"
 	kernelstream "github.com/nexssp/kernel/stream"
 	"github.com/nexssp/kernel/xerr"
@@ -1408,6 +1410,9 @@ func resolveValue(ctx context.Context, v *Value, state any) (any, error) {
 		if v.Program == nil {
 			return nil, xerr.Internal("argument-map expression was not compiled")
 		}
+		if err := rejectUnavailableExpressionBinding(ctx, v.Expression, state); err != nil {
+			return nil, err
+		}
 		return v.Program.Evaluate(ctx, state)
 	case ValueMap:
 		out := make(map[string]any, len(v.Map))
@@ -1431,6 +1436,46 @@ func resolveValue(ctx context.Context, v *Value, state any) (any, error) {
 		return out, nil
 	}
 	return nil, xerr.Validation(fmt.Sprintf("unsupported argument value kind %d", v.Kind))
+}
+
+func rejectUnavailableExpressionBinding(ctx context.Context, source string, input any) error {
+	names := ExpressionUnavailableBindingNames(ctx)
+	if len(names) == 0 {
+		return nil
+	}
+	env := MergeSymbolNamespaces(ctx, BuildEnv(input))
+	failedBindings := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		if _, available := env[name]; !available {
+			failedBindings[name] = struct{}{}
+		}
+	}
+	if len(failedBindings) == 0 {
+		return nil
+	}
+	// This scan is best-effort: source-local compilers may accept syntax that
+	// expr's AST parser cannot inspect.
+	tree, err := parser.Parse(PreprocessDots(source))
+	if err == nil {
+		// The AST keeps string literals and map keys separate from identifiers.
+		references := make(map[string]struct{})
+		ast.Find(tree.Node, func(node ast.Node) bool {
+			identifier, ok := node.(*ast.IdentifierNode)
+			if !ok {
+				return false
+			}
+			if _, failed := failedBindings[identifier.Value]; failed {
+				references[identifier.Value] = struct{}{}
+			}
+			return false
+		})
+		for _, name := range names {
+			if _, referenced := references[name]; referenced {
+				return xerr.Validation(fmt.Sprintf("pipeline binding %q is unavailable because its action failed", name))
+			}
+		}
+	}
+	return nil
 }
 
 func resolveSymbolsInAtom(ctx context.Context, a *Atom) {

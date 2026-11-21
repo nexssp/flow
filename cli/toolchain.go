@@ -122,6 +122,11 @@ func (r *toolchainResolver) get(ctx context.Context, rawURL string) ([]byte, err
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-Github-Api-Version", "2022-11-28")
 	req.Header.Set("User-Agent", "nflow-toolchain-launcher")
+	if parsed.Hostname() == "api.github.com" {
+		if token := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+	}
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, err

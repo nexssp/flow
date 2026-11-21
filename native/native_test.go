@@ -2,13 +2,51 @@ package native_test
 
 import (
 	"io/fs"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
 
+	"github.com/nexssp/flow/extensions/config"
+	"github.com/nexssp/flow/extensions/config_yaml"
 	"github.com/nexssp/flow/native"
 )
+
+func TestNativeDefaultDoesNotRegisterOptionalYAML(t *testing.T) {
+	const childEnv = "FLOW_TEST_YAML_BUNDLE_CHILD"
+	if os.Getenv(childEnv) == "1" {
+		_ = native.Bundles()
+		if _, err := config.DecodeFile([]byte("key: value\n"), ".yml"); err == nil || !strings.Contains(err.Error(), "optional config_yaml decoder") {
+			t.Fatalf("default native bundles unexpectedly enabled YAML: %v", err)
+		}
+		_ = config_yaml.Bundle(nil)
+		decoded, err := config.DecodeFile([]byte("key: value\n"), ".yml")
+		if err != nil {
+			t.Fatalf("explicit config_yaml bundle did not enable YAML: %v", err)
+		}
+		if decoded["key"] != "value" {
+			t.Fatalf("decoded YAML = %#v, want key=value", decoded)
+		}
+		return
+	}
+
+	// #nosec G204 G702 -- Re-executes this test binary with a fixed test selector.
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestNativeDefaultDoesNotRegisterOptionalYAML$")
+	cmd.Env = make([]string, 0, len(os.Environ())+1)
+	for _, entry := range os.Environ() {
+		if strings.HasPrefix(entry, childEnv+"=") {
+			continue
+		}
+		cmd.Env = append(cmd.Env, entry)
+	}
+	cmd.Env = append(cmd.Env, childEnv+"=1")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("isolated registration-boundary test failed: %v\n%s", err, output)
+	}
+}
 
 func TestSelftest_EveryBundleFixtureUsesOnlyRegisteredDirectives(t *testing.T) {
 	bundles := native.SelftestBundles()

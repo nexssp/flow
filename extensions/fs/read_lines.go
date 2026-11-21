@@ -19,7 +19,7 @@ type ReadLinesRequest struct {
 
 // ReadLinesAction reads non-empty, trimmed lines from a local text file.
 var ReadLinesAction = action.New("fs.read_lines", readLines).
-	Description("Read trimmed, non-empty lines from a text file, optionally stripping comments").
+	Description("Read trimmed, non-empty lines from a text file (maximum 16 MiB per line), optionally stripping comments").
 	Tag("fs", "read").
 	Build()
 
@@ -47,9 +47,13 @@ func readLines(ctx context.Context, req ReadLinesRequest) (out []string, err err
 
 	lines := make([]string, 0)
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, readBufferSize), maxTextScannerBytes)
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+		if err := checkTextLineLimit(scanner.Bytes()); err != nil {
+			return nil, xerr.Internal("fs.read_lines: could not scan file", err)
 		}
 		line := scanner.Text()
 		if req.CommentPrefix != "" {

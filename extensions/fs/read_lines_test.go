@@ -90,11 +90,38 @@ func TestReadLinesReturnsCanceledContext(t *testing.T) {
 	}
 }
 
-func TestReadLinesRejectsOversizedLine(t *testing.T) {
+func TestReadLinesAllowsLineLargerThanScannerDefault(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "long.txt")
 	ktest.RequireNoError(t, os.WriteFile(path, []byte(strings.Repeat("x", 70*1024)), 0o600))
+
+	got, err := ReadLinesAction.DoAny(context.Background(), map[string]any{"path": path})
+	ktest.RequireNoError(t, err)
+	lines, ok := got.([]string)
+	ktest.RequireCondition(t, ok, "ReadLinesAction result type = %T, want []string", got)
+	ktest.RequireEqual(t, len(lines), 1)
+	ktest.RequireEqual(t, len(lines[0]), 70*1024)
+}
+
+func TestReadLinesAllowsLineAtSupportedLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "limit.txt")
+	line := strings.Repeat("x", maxTextLineBytes)
+	ktest.RequireNoError(t, os.WriteFile(path, []byte(line+"\r\n"), 0o600))
+
+	got, err := ReadLinesAction.DoAny(context.Background(), map[string]any{"path": path})
+	ktest.RequireNoError(t, err)
+	lines, ok := got.([]string)
+	ktest.RequireCondition(t, ok, "ReadLinesAction result type = %T, want []string", got)
+	ktest.RequireEqual(t, len(lines), 1)
+	ktest.RequireEqual(t, len(lines[0]), maxTextLineBytes)
+}
+
+func TestReadLinesRejectsLineAboveSupportedLimit(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "too-long.txt")
+	ktest.RequireNoError(t, os.WriteFile(path, []byte(strings.Repeat("x", maxTextLineBytes+1)), 0o600))
 
 	_, err := ReadLinesAction.DoAny(context.Background(), map[string]any{"path": path})
 	ktest.RequireNotNil(t, err)

@@ -172,7 +172,7 @@ No NFlow performance measurement is provided for Kernel patterns without an NFlo
 
 - `left || right` is a sequential fallback for an ordinary error. It can catch permanent errors too; use typed recovery when only selected failures should recover. Caller cancellation remains terminal.
 - `? on_error { ... }` handles one expression; `@on_error { ... }` handles a pipeline. Match typed kinds and use `error.reraise` for errors that must remain failures.
-- `race { ... }` starts candidates concurrently and returns the first successful result. It is not delayed hedging: it launches all candidates immediately, can multiply traffic, and is appropriate only for safe-to-repeat work. Ensure losers honor cancellation.
+- `race { ... }` runs up to 16 candidates concurrently and starts queued candidates as slots free; it returns the first successful result. Its default overall timeout is two minutes unless the caller's context has an earlier deadline. It is not delayed hedging: it can multiply traffic and is appropriate only for safe-to-repeat work. Kernel cancels and joins launched losers after a success, so candidates must honor cancellation to avoid delaying the result.
 
 ## Before production
 

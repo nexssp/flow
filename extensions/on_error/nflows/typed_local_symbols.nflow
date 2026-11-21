@@ -1,9 +1,10 @@
 @description "File-local symbols remain available in typed on_error handlers"
 @symbols codes { timeout: int = 504 }
-cov.typed_projection
+cov.typed_projection as execution
 -> runtime.fail ( kind: "Unavailable", message: "expected failure" )
 ? on_error {
   xerr.KindUnavailable
-    -> { timeout_code: codes.timeout }
+    -> { timeout_code: codes.timeout, prior_stdout: execution.stdout }
 }
 @assert: result.timeout_code == 504
+@assert: result.prior_stdout == "typed result"

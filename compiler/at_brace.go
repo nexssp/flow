@@ -38,7 +38,21 @@ func (b *braceScanner) peek() byte {
 func (b *braceScanner) advance() { b.pos++ }
 
 func (b *braceScanner) errf(format string, args ...any) error {
-	return SourceError(b.base, "%s", "(...): "+fmt.Sprintf(format, args...))
+	return b.errfAt(b.pos, format, args...)
+}
+
+func (b *braceScanner) errfAt(offset int, format string, args ...any) error {
+	offset = min(max(offset, 0), len(b.src))
+	pos := b.base
+	for index := range offset {
+		if b.src[index] == '\n' {
+			pos.Line++
+			pos.Col = 1
+		} else {
+			pos.Col++
+		}
+	}
+	return SourceError(pos, "%s", "(...): "+fmt.Sprintf(format, args...))
 }
 
 func (b *braceScanner) skipWS() {
@@ -527,7 +541,7 @@ func (b *braceScanner) readParenthesizedExpression() (*Value, error) {
 			scan = commentEnd
 			continue
 		}
-		closed, err := b.consumeParenthesizedDelimiter(current, &depth)
+		closed, err := b.consumeParenthesizedDelimiter(current, scan, &depth)
 		if err != nil {
 			return nil, err
 		}
@@ -539,16 +553,16 @@ func (b *braceScanner) readParenthesizedExpression() (*Value, error) {
 			}
 			expression := strings.TrimSpace(expressionSource)
 			if expression == "" {
-				return nil, b.errf("empty parenthesized expression")
+				return nil, b.errfAt(scan, "empty parenthesized expression")
 			}
 			b.pos = scan + 1
 			return &Value{Kind: ValueExpression, Expression: expression}, nil
 		}
 		if b.depth+depth.parentheses+depth.brackets+depth.braces > maxParseDepth {
-			return nil, b.errf("parse depth exceeded (%d)", maxParseDepth)
+			return nil, b.errfAt(scan, "parse depth exceeded (%d)", maxParseDepth)
 		}
 	}
-	return nil, b.errf("unclosed parenthesized expression")
+	return nil, b.errfAt(len(b.src), "unclosed parenthesized expression")
 }
 
 func (b *braceScanner) parenthesizedExpressionCommentEnd(position int) (end int, isComment bool, err error) {
@@ -565,7 +579,7 @@ func (b *braceScanner) parenthesizedExpressionCommentEnd(position int) (end int,
 	case '*':
 		commentEnd := strings.Index(b.src[position+2:], "*/")
 		if commentEnd < 0 {
-			return position, true, b.errf("unclosed block comment in parenthesized expression")
+			return position, true, b.errfAt(position, "unclosed block comment in parenthesized expression")
 		}
 		return position + commentEnd + 3, true, nil
 	default:
@@ -587,17 +601,17 @@ func (b *braceScanner) parenthesizedHashCommentEnd(position int, depth functionE
 	return end, true
 }
 
-func (b *braceScanner) consumeParenthesizedDelimiter(current byte, depth *functionExpressionDepth) (closed bool, err error) {
+func (b *braceScanner) consumeParenthesizedDelimiter(current byte, position int, depth *functionExpressionDepth) (closed bool, err error) {
 	switch current {
 	case '(':
 		depth.parentheses++
 	case ')':
 		if depth.parentheses == 0 {
-			return false, b.errf("unmatched ')' in parenthesized expression")
+			return false, b.errfAt(position, "unmatched ')' in parenthesized expression")
 		}
 		if depth.parentheses == 1 {
 			if depth.brackets != 0 || depth.braces != 0 {
-				return false, b.errf("unclosed delimiter in parenthesized expression")
+				return false, b.errfAt(position, "unclosed delimiter in parenthesized expression")
 			}
 			return true, nil
 		}
@@ -606,14 +620,14 @@ func (b *braceScanner) consumeParenthesizedDelimiter(current byte, depth *functi
 		depth.brackets++
 	case ']':
 		if depth.brackets == 0 {
-			return false, b.errf("unmatched ']' in parenthesized expression")
+			return false, b.errfAt(position, "unmatched ']' in parenthesized expression")
 		}
 		depth.brackets--
 	case '{':
 		depth.braces++
 	case '}':
 		if depth.braces == 0 {
-			return false, b.errf("unclosed parenthesized expression")
+			return false, b.errfAt(position, "unclosed parenthesized expression")
 		}
 		depth.braces--
 	}

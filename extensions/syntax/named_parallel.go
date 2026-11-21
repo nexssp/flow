@@ -2,7 +2,9 @@ package syntax
 
 import (
 	"context"
+	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 
 	"github.com/nexssp/kernel/action"
@@ -81,6 +83,16 @@ type namedParallelBranch struct {
 	expr  compiler.Expr
 }
 
+type namedParallelTask struct {
+	index int
+	input any
+}
+
+type namedParallelActionBranch struct {
+	label  string
+	action action.AnyAction
+}
+
 // NamedParallelExpr runs expressions concurrently and returns results keyed by
 // the explicit labels in its source block.
 type NamedParallelExpr struct {
@@ -153,8 +165,7 @@ func namedParallelResultType(fields []reflect.StructField) (result reflect.Type)
 }
 
 func (e *NamedParallelExpr) Build(ctx context.Context, bCtx *compiler.BuildContext) (action.AnyAction, error) {
-	// Kernel returns partial results alongside a branch error; Flow's pipe semantics discard them, matching `(a & b)`.
-	routes := make(map[string]action.AnyAction, len(e.branches))
+	branches := make([]namedParallelActionBranch, 0, len(e.branches))
 	var children []action.IntrospectionChild
 	if bCtx.Introspect {
 		children = make([]action.IntrospectionChild, 0, len(e.branches))
@@ -165,14 +176,53 @@ func (e *NamedParallelExpr) Build(ctx context.Context, bCtx *compiler.BuildConte
 			return nil, err
 		}
 		compiled = compiler.WithChildExpressionScopeAction(compiled)
-		routes[branch.label] = compiled
+		branches = append(branches, namedParallelActionBranch{label: branch.label, action: compiled})
 		if bCtx.Introspect {
 			children = append(children, action.IntrospectionChild{
 				Node: compiled, Relation: compiler.IntrospectionKindBranch, Role: "branch", Label: branch.label,
 			})
 		}
 	}
-	program := action.ParallelNamed[any](parallelKeyword, routes).Build()
+	branchWorker := action.New("parallel.named.branch", func(execCtx context.Context, task namedParallelTask) (any, error) {
+		branch := branches[task.index]
+		var result any
+		var branchErr error
+		func() {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					branchErr = fmt.Errorf("panic in parallel branch [%s]: %v", branch.label, recovered)
+				}
+			}()
+			result, branchErr = action.InvokeAny(execCtx, branch.action, task.input)
+		}()
+		return result, branchErr
+	}).Build()
+
+	programBuilder := action.New(parallelKeyword, func(execCtx context.Context, input any) (map[string]any, error) {
+		tasks := make([]namedParallelTask, len(branches))
+		for index := range branches {
+			tasks[index] = namedParallelTask{index: index, input: input}
+		}
+		outcomes := action.FanOutWithOptions(execCtx, branchWorker, tasks, action.AsyncOptions{})
+		results := make(map[string]any, len(branches))
+		for index, outcome := range outcomes {
+			if outcome.Err != nil {
+				return results, fmt.Errorf("parallel branch [%s] failed: %w", branches[index].label, outcome.Err)
+			}
+			results[branches[index].label] = outcome.Value
+		}
+		return results, nil
+	}).Description(fmt.Sprintf("Heterogeneous parallel execution of %d branches", len(branches)))
+	tags := []string{"parallel", "named", "composer"}
+	for _, branch := range branches {
+		for _, tag := range branch.action.Describe().Tags {
+			if !slices.Contains(tags, tag) {
+				tags = append(tags, tag)
+			}
+		}
+	}
+	programBuilder.Tag(tags...)
+	program := programBuilder.Build()
 	return compiler.TrackActionComposition(bCtx, program, action.IntrospectionComposition{
 		Kind: "parallel.named", Children: children,
 	}), nil

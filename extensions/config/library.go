@@ -41,12 +41,12 @@ func Bundle(_ map[string]string) compiler.Bundle {
 }
 
 // yamlLoader holds the optional YAML decoder registered by
-// extensions/config_yaml. Nil when the YAML bundle is not linked in
-// or was not @require'd by the flow.
+// extensions/config_yaml.Bundle. Registration is process-global and remains
+// active for the host lifetime once that bundle is explicitly loaded.
 var yamlLoader atomic.Pointer[func([]byte) (map[string]any, error)]
 
 // RegisterYAMLLoader installs a YAML decoder. Called from the
-// config_yaml bundle's init. Idempotent; later registrations win.
+// config_yaml bundle factory. Idempotent; later registrations win.
 func RegisterYAMLLoader(fn func([]byte) (map[string]any, error)) {
 	yamlLoader.Store(&fn)
 }

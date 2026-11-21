@@ -68,6 +68,13 @@ The harness is cached under `$XDG_CACHE_HOME/nflow/harness` (or the
 platform equivalent); a source change to a local module invalidates the
 entry automatically.
 
+**Trust boundary:** the CLI is not a sandbox. A flow can invoke the capabilities
+in its active registry, including shipped filesystem and process-execution
+actions, and required Go modules run with the host process's permissions. The
+CLI does not isolate filesystem or network access per flow. Run only trusted
+flow files and review their `@require` modules; use operating-system isolation
+and least-privilege credentials when executing untrusted workflows.
+
 A successful run prints the flow's output. A failed run prints the
 error and, at verbosity ≥ 1, compile timing plus an execution trace if
 runtime actions started. Compile-time failures explicitly say when no runtime

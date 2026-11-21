@@ -73,6 +73,8 @@ jobs:
           cache: true
 
       - name: Run self-test
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: go run ./cmd/nflow self test
 
   nflow-specs:
@@ -91,6 +93,8 @@ jobs:
           cache: true
 
       - name: Run integrated specifications
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: go run ./cmd/nflow test ./spec
 
   nflow-spec-lint:
@@ -109,6 +113,8 @@ jobs:
           cache: true
 
       - name: Lint NFlow specifications
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: go run ./cmd/nflow lint ./spec
 
   lint:
