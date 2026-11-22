@@ -3,8 +3,7 @@
 @schema DynamicStringInput {
   value any
 }
-@pipeline projection_typed_dynamic_to_string
-  :request-schema=!DynamicStringInput
+@pipeline projection_typed_dynamic_to_string(request: !DynamicStringInput)
   { value: .value }
   -> cov.string_field
 @end

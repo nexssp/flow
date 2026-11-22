@@ -1,10 +1,9 @@
 @description "Runtime named arguments are evaluated against input, then validated as the complete strict pipeline request"
 @schema LookupRequest {
-  Request map[string]any `json:"request" validate:"required"`
-  Region  string          `json:"region"  default:"eu" validate:"oneof=eu us"`
+  request! map[string]any
+  region  string `default:"eu" validate:"oneof=eu us"`
 }
-@pipeline lookup
-  :request-schema=!LookupRequest
+@pipeline lookup(request: !LookupRequest)
   {
     query: .request.search_text,
     region: .region

@@ -1,16 +1,15 @@
-@description "spec: response-schema=[]Item rejects an invalid array item"
+@description "spec: typed []Item response rejects an invalid array item"
 @schema Item {
-  Name string `json:"name" validate:"required"`
+  name! string `validate:"required"`
 }
-@pipeline items
-  :response-schema=[]Item
+@pipeline items(): []Item
   {value: [{ name: "" }]}
     -> pick(field: "value")
 @end
 pipeline.items ? on_error {
   xerr.KindValidation
-    -> { rejected: true },
+  -> { rejected: true },
   else
-    -> error.reraise
+  -> error.reraise
 }
 @assert: result.rejected == true

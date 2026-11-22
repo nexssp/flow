@@ -1,7 +1,4 @@
 @description "Render UTF-8 template source loaded from a runtime file"
-@assert: result.succeeded == 1
-@assert: result.items[0].ok == true
-@assert: result.items[0].result == "Welcome Ada — Grüß Gott, 世界 🌍\n"
 @pipeline render_runtime_template_file
   template.render ( template_bytes: .Content, variables: { name: "Ada" } )
 @end
@@ -10,3 +7,9 @@ fs.walk ( dir: ".", ext: "tmpl" )
   -> collect
   -> { files: . }
   -> distribute.map ( action: pipeline.render_runtime_template_file, items: .files )
+
+@assert {
+  succeeded == 1
+  items[0].ok == true
+  items[0].result == "Welcome Ada — Grüß Gott, 世界 🌍\n"
+}

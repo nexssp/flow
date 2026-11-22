@@ -1,8 +1,17 @@
-@description "Config block values interpolate into a flow"
+@description "Select practical API settings for local development or production"
 @config {
-  retries: 3       :cli="r,retries" :desc="Max attempts"
-  timeout: "10s"  :cli="t"
+  environment: "dev" :cli="e,environment" :desc="dev or prod"
 }
-@assert: result.retries == "3"
-@assert: result.timeout == "10s"
-{ retries: "@config.retries", timeout: "@config.timeout" }
+{
+  environment: "@config.environment",
+  endpoint: @config.environment == "prod" ? "https://api.example.test" : "http://127.0.0.1:8080",
+  retry_limit: @config.environment == "prod" ? 5 : 1,
+  tls_required: @config.environment == "prod"
+}
+
+@assert {
+  environment == "dev" || environment == "prod"
+  endpoint == (environment == "prod" ? "https://api.example.test" : "http://127.0.0.1:8080")
+  retry_limit == (environment == "prod" ? 5 : 1)
+  tls_required == (environment == "prod")
+}

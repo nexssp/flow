@@ -1,4 +1,4 @@
 @description "Expression string literals reject malformed Unicode escapes"
 # @expect-compile-error invalid char escape
 @assert: "bad\uZZZZ" == "bad"
-runtime.noop
+noop

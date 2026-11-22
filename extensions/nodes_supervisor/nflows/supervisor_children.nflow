@@ -5,28 +5,29 @@
 # A failing child does not stop its siblings. Results preserve input order.
 
 @schema SupervisorChildTask struct {
-  ID string `json:"id" validate:"required"`
-  DSL string `json:"dsl" validate:"required"`
-  Payload any `json:"payload"`
-  TimeoutMS int64 `json:"timeout_ms,omitempty"`
+  id! string
+  dsl! string
+  payload any
+  timeout_ms int64
 }
 
 @schema SupervisorInput struct {
-  Tasks []SupervisorChildTask `json:"tasks" validate:"required,min=1"`
+  tasks! []SupervisorChildTask `validate:"min=1"`
 }
 
-@assert: result.total == 3
-@assert: result.succeeded == 2
-@assert: result.failed == 1
-@assert: result.results[0].task_id == "num"
-@assert: result.results[0].output == 42
-@assert: result.results[1].task_id == "boom"
-@assert: result.results[2].task_id == "echo"
-@assert: result.results[2].output.greeting == "hi"
-
-@pipeline supervisor_children
-  :request-schema=!SupervisorInput
+@pipeline supervisor_children(request: !SupervisorInput)
   { tasks: .tasks }
   -> supervisor.run
 @end
 pipeline.supervisor_children
+
+@assert {
+  total == 3
+  succeeded == 2
+  failed == 1
+  results[0].task_id == "num"
+  results[0].output == 42
+  results[1].task_id == "boom"
+  results[2].task_id == "echo"
+  results[2].output.greeting == "hi"
+}

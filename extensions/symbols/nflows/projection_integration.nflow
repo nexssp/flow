@@ -16,6 +16,8 @@
   backup: queues.dlq
 }
 
-@assert: result.id == "ORD-99"
-@assert: result.target == "in.orders.high"
-@assert: result.backup == "dlq.orders"
+@assert {
+  id == "ORD-99"
+  target == "in.orders.high"
+  backup == "dlq.orders"
+}

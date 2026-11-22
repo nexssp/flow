@@ -1,10 +1,9 @@
 @description "input does not acquire fields from a typed stage"
 # @expect-compile-error stdout
 @schema Request {
-  Request string `json:"request" validate:"required"`
+  request! string
 }
-@pipeline request_scope_rejects_stage_field_on_input
-  :request-schema=Request
+@pipeline request_scope_rejects_stage_field_on_input(request: Request)
   cov.typed_projection
   -> { invalid: input.stdout }
 @end

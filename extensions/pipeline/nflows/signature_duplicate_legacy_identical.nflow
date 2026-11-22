@@ -1,6 +1,6 @@
 @description "spec: repeated identical legacy schema declarations and a matching signature are accepted"
 @schema Request {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
 @pipeline repeat(req: Request)
   :request-schema=Request
@@ -9,4 +9,4 @@
 @end
 {name: (input.name ?? "repeat")}
   -> pipeline.repeat
-@assert: result.name == "repeat"
+@assert: name == "repeat"

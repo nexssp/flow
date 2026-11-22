@@ -1,5 +1,35 @@
-@description "Error recovery: route an unavailable decision backend to fallback"
-@assert: result == "recovered"
-{ backend: "missing", questions: { x: { type: "label" } } }
+@description "Route an unavailable decision backend to manual review while preserving the order ID"
+{
+  backend: "primary",
+  state: {
+    order_id: "ORD-4821",
+    customer_message: "The package arrived damaged"
+  },
+  questions: {
+    next_action: {
+      type: "label",
+      question: "Choose the safest next step for this order",
+      labels: ["refund", "replacement", "manual_review"]
+    }
+  },
+  timeout_ms: 2000
+} as order_context
   -> decide.run
-|| "recovered"
+  ? on_error {
+    xerr.KindNotFound
+    -> {
+      status: "manual_review",
+      queue: "risk_review",
+      order_id: order_context.state.order_id,
+      reason: "decision_backend_not_registered"
+    },
+    else
+    -> error.reraise
+  }
+
+@assert {
+  status == "manual_review"
+  queue == "risk_review"
+  order_id == "ORD-4821"
+  reason == "decision_backend_not_registered"
+}

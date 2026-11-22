@@ -1,13 +1,16 @@
 @description "spec: shared schema=[]Item validates both input and output arrays"
 @schema Item {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
 @pipeline echo
   :schema=[]Item
-  runtime.noop
+  noop
 @end
 {value: [{ name: "Ada" }, { name: "Lin" }]}
   -> pick(field: "value")
 -> pipeline.echo
-@assert: result[0].name == "Ada"
-@assert: result[1].name == "Lin"
+
+@assert {
+  result[0].name == "Ada"
+  result[1].name == "Lin"
+}

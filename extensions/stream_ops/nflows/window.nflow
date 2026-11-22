@@ -1,6 +1,9 @@
 @description "Create overlapping stream windows"
-@assert: len(result) == 3
-@assert: len(result[0]) == 2
 cov.items
   -> stream.window ( size: 2, step: 1 )
   -> collect
+
+@assert {
+  len(result) == 3
+  len(result[0]) == 2
+}

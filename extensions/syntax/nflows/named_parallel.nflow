@@ -1,7 +1,10 @@
 @description "Named parallel happy path (branch failures are covered by Go tests)"
-@assert: result.profile == "profile-ready"
-@assert: result.metrics == "metrics-ready"
 parallel {
   profile: "profile-ready",
   metrics: "metrics-ready",
+}
+
+@assert {
+  profile == "profile-ready"
+  metrics == "metrics-ready"
 }

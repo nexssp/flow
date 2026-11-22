@@ -2,8 +2,8 @@
 {
   user: {
     profile: {
-      name: "Ada",
-      handle: "ada"
+      name: "Maksymilian",
+      handle: "maksymilian"
     }
   }
 }
@@ -14,6 +14,9 @@
   second: profile.handle,
   repeated: display
 }
-@assert: result.first == "Ada"
-@assert: result.second == "ada"
-@assert: result.repeated == "Ada"
+
+@assert {
+  .first == "Maksymilian"
+  second == "maksymilian"
+  repeated == "Maksymilian"
+}

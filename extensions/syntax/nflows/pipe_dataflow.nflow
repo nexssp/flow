@@ -4,7 +4,9 @@
 -> { id: .id, role: .user, active: true }
 -> { ... , processed: true }
 
-@assert: result.id == 100
-@assert: result.role == "admin"
-@assert: result.active == true
-@assert: result.processed == true
+@assert {
+  id == 100
+  role == "admin"
+  active == true
+  processed == true
+}

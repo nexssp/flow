@@ -1,8 +1,9 @@
 @description "spec: conflicting signature and legacy request strictness fail compilation"
 @schema Request {
-  Name string `json:"name"`
+  name string
 }
-@pipeline invalid(req: !Request) :request-schema=Request
+@pipeline invalid(req: !Request)
+  :request-schema=Request
   noop
 @end
 pipeline.invalid

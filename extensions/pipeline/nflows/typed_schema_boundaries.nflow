@@ -4,20 +4,17 @@
   timeout: duration = 5s
 }
 @schema TypedRequest {
-  Status  int      `json:"status" default:"boundary_values.status" validate:"eq=boundary_values.status"`
-  Timeout duration `json:"timeout" default:"boundary_values.timeout" validate:"gte=boundary_values.timeout"`
+  status  int `default:"boundary_values.status" validate:"eq=boundary_values.status"`
+  timeout duration `default:"boundary_values.timeout" validate:"gte=boundary_values.timeout"`
 }
 @schema TypedResponse {
-  Status  int      `json:"status" validate:"eq=boundary_values.status"`
-  Timeout duration `json:"timeout" validate:"gte=boundary_values.timeout"`
+  status  int `validate:"eq=boundary_values.status"`
+  timeout duration `validate:"gte=boundary_values.timeout"`
 }
-@pipeline typed_boundary
-  :request-schema=TypedRequest
-  :response-schema=TypedResponse
-  runtime.noop
+@pipeline typed_boundary(request: TypedRequest): TypedResponse
+  noop
 @end
-@pipeline typed_invalid_response
-  :response-schema=TypedResponse
+@pipeline typed_invalid_response(): TypedResponse
   { status: 202, timeout: boundary_values.timeout }
 @end
 pipeline.typed_boundary

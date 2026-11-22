@@ -7,14 +7,17 @@
   byte = "\xff"
 }
 @schema Order {
-  status OrderStatus `json:"status" default:"OrderStatus.pending"`
-  refund_status! OrderStatus `json:"refund_status" validate:"oneof=OrderStatus.paid OrderStatus.canceled"`
-  unicode_status OrderStatus `json:"unicode_status" default:"OrderStatus.unicode"`
-  byte_status OrderStatus `json:"byte_status" default:"OrderStatus.byte"`
+  status OrderStatus `default:"OrderStatus.pending"`
+  refund_status! OrderStatus `validate:"oneof=OrderStatus.paid OrderStatus.canceled"`
+  unicode_status OrderStatus `default:"OrderStatus.unicode"`
+  byte_status OrderStatus `default:"OrderStatus.byte"`
 }
 { status: OrderStatus.paid, refund_status: OrderStatus.canceled }
   -> Order.validate
-@assert: result.status == "settled"
-@assert: result.refund_status == "canceled_by_user"
-@assert: result.unicode_status == "A"
-@assert: result.byte_status == "ÿ"
+
+@assert {
+  status == "settled"
+  refund_status == "canceled_by_user"
+  unicode_status == "A"
+  byte_status == "ÿ"
+}

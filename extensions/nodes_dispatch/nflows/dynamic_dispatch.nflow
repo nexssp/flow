@@ -1,8 +1,8 @@
 @description "Dispatch: first successful capability from a declared list"
 
-@assert: result.value == "value-here"
+@assert: value == "value-here"
 
 dispatch.run (
-  members: [runtime.fail, runtime.noop],
+  members: [runtime.fail, noop],
   payload: { value: "value-here" },
 )

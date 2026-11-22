@@ -1,3 +1,4 @@
 @description "Modifiers and ternary colons remain distinct during execution"
 @assert: result == "then"
-true ? "then" : "else" -> runtime.noop :timeout=2s :retry=1
+true ? "then" : "else"
+  -> noop :timeout=2s :retry=1

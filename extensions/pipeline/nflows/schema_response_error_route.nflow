@@ -1,16 +1,14 @@
 @description "Outer @on_error routes called-pipeline response schema validation by TaskResponse message prefix"
 
 @schema TaskRequest {
-  Email string `json:"email" validate:"required,email"`
-  Title string `json:"title" validate:"required"`
+  email! string `validate:"email"`
+  title! string
 }
 @schema TaskResponse {
-  ID string `json:"id" validate:"required"`
+  id! string
 }
 
-@pipeline create_task
-  :request-schema=TaskRequest
-  :response-schema=TaskResponse
+@pipeline create_task(request: TaskRequest): TaskResponse
   # This local catch wraps only the body. Response validation happens after
   # the body returns, outside this catch, so the outer route must recover it.
   @on_error {
@@ -42,5 +40,7 @@
 { email: "alex@example.com", title: "Boundary test" }
   -> pipeline.create_task
 
-@assert: result.route == "response-schema"
-@assert: result.kind == "Validation"
+@assert {
+  route == "response-schema"
+  kind == "Validation"
+}

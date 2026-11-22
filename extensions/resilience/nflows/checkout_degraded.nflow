@@ -9,10 +9,10 @@
   reset_timeout: "30s"
 }
 @schema CheckoutRequest struct {
-  OrderID  string `json:"order_id" validate:"required"`
-  SKU      string `json:"sku" validate:"required"`
-  Quantity int    `json:"quantity" validate:"gte=1"`
-  Currency string `json:"currency" validate:"required,oneof=USD EUR"`
+  order_id!  string
+  sku!      string
+  quantity int `validate:"gte=1"`
+  currency! string `validate:"oneof=USD EUR"`
 }
 @profile provider_read
   :timeout=250ms
@@ -44,11 +44,11 @@
   pipeline.fetch_live_quote
   ? on_error {
     xerr.KindUnavailable
-      -> pipeline.last_known_quote,
+    -> pipeline.last_known_quote,
     xerr.KindTimeout
-      -> pipeline.last_known_quote,
+    -> pipeline.last_known_quote,
     else
-      -> error.reraise
+    -> error.reraise
   }
 @end
 @pipeline checkout
@@ -70,17 +70,17 @@
   }
 @end
 @assert {
-  result.order_id == "SO-2049"
-  result.sku == "USB-C-02"
-  result.quantity == 3
-  result.estimated_unit_price_minor == 1249
-  result.estimated_total_minor == 3747
-  result.quote_status == "stale"
-  result.quote_source == "last-known-snapshot"
-  result.status == "awaiting_price_confirmation"
-  result.inventory_status == "not_reserved"
-  result.payment_status == "not_started"
-  result.customer_confirmation_required == true
+  order_id == "SO-2049"
+  sku == "USB-C-02"
+  quantity == 3
+  estimated_unit_price_minor == 1249
+  estimated_total_minor == 3747
+  quote_status == "stale"
+  quote_source == "last-known-snapshot"
+  status == "awaiting_price_confirmation"
+  inventory_status == "not_reserved"
+  payment_status == "not_started"
+  customer_confirmation_required == true
 }
 {
   order_id: "SO-2049",

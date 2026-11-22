@@ -1,4 +1,7 @@
 @description "Parallel ampersand joins both branch results under canonical action keys"
-@assert: result["literal#1"] == "left"
-@assert: result["literal#2"] == "right"
 ( "left" & "right" )
+
+@assert {
+  result["literal#1"] == "left"
+  result["literal#2"] == "right"
+}

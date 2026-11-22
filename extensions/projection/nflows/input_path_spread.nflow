@@ -4,7 +4,7 @@
   { ok: true, data: "candidate answer" }
   -> match {
     .ok == true
-      -> {
+    -> {
       ...input.state,
       status: "success",
       answer: .data
@@ -13,5 +13,8 @@
 @end
 { state: { request: "keep me", status: "pending", candidate_id: "candidate-1", answer: "old", stop: false } }
   -> pipeline.candidate_result
-@assert: result.request == "keep me" && result.status == "success" && result.candidate_id == "candidate-1"
-@assert: result.answer == "candidate answer" && result.stop == false
+
+@assert {
+  request == "keep me" && status == "success" && candidate_id == "candidate-1"
+  answer == "candidate answer" && stop == false
+}

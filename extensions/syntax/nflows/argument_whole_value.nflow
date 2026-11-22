@@ -1,7 +1,7 @@
 @description "Whole-value dot and unwrapped names preserve scalar and collection inputs"
 @func whole_value.echo(value string) string = value
 @pipeline argument_scope
-  runtime.noop as person
+  noop as person
   -> {
     original_name: input.name,
     binding: person,
@@ -10,40 +10,43 @@
   }
 @end
 @pipeline scalar_passthrough
-  runtime.noop
+  noop
 @end
-@assert: result.text == "the exact scalar"
-@assert: result.number == 37.5
-@assert: result.boolean == false
-@assert: result.null_value == nil
-@assert: result.list[0] == 1 && result.list[1] == 2
-@assert: result.nested.items[0] == "nested scalar"
-@assert: result.expression == "expression scalar"
-@assert: result.object.value.name == "Julia" && result.object.value.nested.count == 2 && result.object.first_name == "Julia"
-@assert: result.named_pipeline.request == "the exact named scalar"
-@assert: result.scope.original_name == "Julia" && result.scope.binding.name == "Julia"
-@assert: result.scope.binding_name == "Julia"
-@assert: result.scope.name == "Julia"
 parallel {
   text: "the exact scalar"
-    -> {value: .} -> pick(field: "value"),
+  -> {value: .} -> pick(field: "value"),
   number: 37.5
-    -> {value: .} -> pick(field: "value"),
+  -> {value: .} -> pick(field: "value"),
   boolean: false
-    -> {value: .} -> pick(field: "value"),
+  -> {value: .} -> pick(field: "value"),
   null_value: null
-    -> {value: .} -> pick(field: "value"),
+  -> {value: .} -> pick(field: "value"),
   list: {value: [1, 2]}
-    -> pick(field: "value")
-    -> {value: .} -> pick(field: "value"),
+  -> pick(field: "value")
+  -> {value: .} -> pick(field: "value"),
   nested: "nested scalar"
-    -> { items: [.] },
+  -> { items: [.] },
   expression: "expression scalar"
-    -> {value: whole_value.echo(.)} -> pick(field: "value"),
+  -> {value: whole_value.echo(.)} -> pick(field: "value"),
   named_pipeline: "the exact named scalar"
-    -> pipeline.scalar_passthrough ( request: . ),
+  -> pipeline.scalar_passthrough ( request: . ),
   object: { name: "Julia", nested: { count: 2 } }
-    -> runtime.noop ( value: ., first_name: .name ),
+  -> noop ( value: ., first_name: .name ),
   scope: { name: "Julia" }
-    -> pipeline.argument_scope
+  -> pipeline.argument_scope
+}
+
+@assert {
+  text == "the exact scalar"
+  number == 37.5
+  boolean == false
+  null_value == nil
+  list[0] == 1 && list[1] == 2
+  nested.items[0] == "nested scalar"
+  expression == "expression scalar"
+  object.value.name == "Julia" && object.value.nested.count == 2 && object.first_name == "Julia"
+  named_pipeline.request == "the exact named scalar"
+  scope.original_name == "Julia" && scope.binding.name == "Julia"
+  scope.binding_name == "Julia"
+  scope.name == "Julia"
 }

@@ -1,17 +1,16 @@
 @description "The ! prefix makes request and response schema boundaries strict independently"
 
 @schema StrictRequest {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
 @schema StrictResponse {
-  Message string `json:"message" validate:"required"`
+  message! string
 }
 
-@pipeline greet_strict
-  :request-schema=!StrictRequest
-  :response-schema=!StrictResponse
+@pipeline greet_strict(request: !StrictRequest): !StrictResponse
   { message: .name }
 @end
 
-{ name: "Ada" } -> pipeline.greet_strict
-@assert: result.message == "Ada"
+{ name: "Ada" }
+  -> pipeline.greet_strict
+@assert: message == "Ada"

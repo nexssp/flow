@@ -1,15 +1,9 @@
 @description "Projection values compose parallel, race and subject-relative match"
-@assert: result.metadata.peak == 98
-@assert: result.work.copy.peak == 98
-@assert: result.work.nested.label == "critical"
-@assert: result.winner == "replica"
-@assert: result.category == "CRITICAL_SPIKE"
-@assert: result.lazy == "skipped"
 { peak: 98 }
 -> {
   metadata: .,
   work: parallel {
-    copy: runtime.noop,
+    copy: noop,
     nested: { label: match(.peak) { > 90 -> "critical", _ -> "normal" } }
   },
   winner: race {
@@ -18,11 +12,20 @@
   },
   category: match(.peak) {
     > 90
-      -> "CRITICAL_SPIKE",
+    -> "CRITICAL_SPIKE",
     >= 50
-      -> "ELEVATED",
+    -> "ELEVATED",
     _
-      -> "NORMAL"
+    -> "NORMAL"
   },
   lazy: false ? race { runtime.fail ( message: "must not run" ) } : "skipped"
+}
+
+@assert {
+  metadata.peak == 98
+  work.copy.peak == 98
+  work.nested.label == "critical"
+  winner == "replica"
+  category == "CRITICAL_SPIKE"
+  lazy == "skipped"
 }

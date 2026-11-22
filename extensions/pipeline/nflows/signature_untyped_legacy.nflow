@@ -4,5 +4,8 @@
 @end
 {name: (input.name ?? "legacy"), extra: (input.extra ?? true)}
   -> pipeline.legacy
-@assert: result.name == "legacy"
-@assert: result.extra == true
+
+@assert {
+  name == "legacy"
+  extra == true
+}

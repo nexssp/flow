@@ -1,10 +1,9 @@
 # @expect-compile-error projection: ambiguous bare identifier "tool"
 @description "compile-error: reject a bare name shared by a typed request field and pipeline binding"
 @schema Request {
-  Tool string `json:"tool"`
+  tool string
 }
-@pipeline invalid_ambiguous_binding
-  :request-schema=Request
+@pipeline invalid_ambiguous_binding(request: Request)
   noop as tool
   -> { selected: tool }
 @end

@@ -2,5 +2,5 @@
 @macro make_record(key: Identifier, label: String, amount: Integer, seed: Expr, finish: ActionRef) {
   $seed -> { ..., $key: $amount, label: $label } -> $finish
 }
-@assert: result.count == 7 && result.label == "typed" && result.seed == true
-@make_record(count, "typed", 7, { seed: true }, runtime.noop)
+@assert: result.count == 7 && label == "typed" && seed == true
+@make_record(count, "typed", 7, { seed: true }, noop)

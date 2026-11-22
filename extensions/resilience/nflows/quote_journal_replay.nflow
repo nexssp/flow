@@ -1,7 +1,7 @@
 @description "JSON-safe quote snapshot for a durable journal replay smoke test"
 @assert {
-  result.symbol == "ACME/USD"
-  result.price == 41.9
+  symbol == "ACME/USD"
+  price == 41.9
 }
 {
   symbol: "ACME/USD",

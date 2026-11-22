@@ -4,9 +4,11 @@ parallel {
   alpha: 100,
   beta:  200,
   gamma: { x: 5 }
-    -> { result: .x * 2 }
+  -> { result: .x * 2 }
 }
 
-@assert: result.alpha == 100
-@assert: result.beta == 200
-@assert: result.gamma.result == 10
+@assert {
+  alpha == 100
+  beta == 200
+  gamma.result == 10
+}

@@ -1,8 +1,46 @@
-@description "Declare an approval gate without invoking it"
+@description "Require finance review before returning an approved transfer record; no funds are moved"
 @approval finance_review {
-  role: reviewer
-  reason: confirm the transfer
+  role: finance_reviewer
+  reason: review transfer TR-1042
   expires: 30m
 }
-"declaration loaded"
-@assert: result == "declaration loaded"
+
+@schema TransferRequest {
+  transfer_id! string
+  amount! float64
+  currency! string
+  beneficiary! string
+}
+
+@schema TransferDecision {
+  transfer_id! string
+  amount! float64
+  currency! string
+  beneficiary! string
+  status! string
+}
+
+@pipeline review_transfer(transfer: !TransferRequest): !TransferDecision
+  approval.finance_review
+    -> {
+      transfer_id: .transfer_id,
+      amount: .amount,
+      currency: .currency,
+      beneficiary: .beneficiary,
+      status: "approved"
+    }
+@end
+
+{
+  transfer_id: "TR-1042",
+  amount: 1250.50,
+  currency: "USD",
+  beneficiary: "Northwind Supplies"
+}
+  -> pipeline.review_transfer
+
+@assert {
+  transfer_id == "TR-1042"
+  amount == 1250.50
+  status == "approved"
+}

@@ -1,6 +1,6 @@
 @description "spec: out-schema=[]Item validates each response array item"
 @schema Item {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
 @pipeline items
   :out-schema=[]Item

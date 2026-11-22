@@ -4,8 +4,7 @@
 @schema PointerScoreInput {
   score *float32
 }
-@pipeline projection_pointer_float32_to_float32
-  :request-schema=!PointerScoreInput
+@pipeline projection_pointer_float32_to_float32(request: !PointerScoreInput)
   { score: .score }
   -> cov.float32
 @end

@@ -7,6 +7,9 @@
 }
 @include ./child.nflow AS billing
 { status: invoice.needs_review, local_queue: queues.review, imported_queue: billing.queues.review }
-@assert: result.status == invoice.needs_review
-@assert: result.local_queue == "parent-review"
-@assert: result.imported_queue == "ap-exceptions"
+
+@assert {
+  status == invoice.needs_review
+  local_queue == "parent-review"
+  imported_queue == "ap-exceptions"
+}

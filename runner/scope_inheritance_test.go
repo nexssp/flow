@@ -142,8 +142,8 @@ func TestDataMasterFixtureExecutesExpectedTrainingRows(t *testing.T) {
 		if row["id"] != wantIDs[i] {
 			t.Errorf("fixture row %d id = %v, want %s", i, row["id"], wantIDs[i])
 		}
-		if len(row) != 3 || row["amount"] != nil {
-			t.Errorf("fixture row %d fields = %#v, want only id/text/label", i, row)
+		if len(row) != 4 || row["amount"] == nil {
+			t.Errorf("fixture row %d fields = %#v, want id/text/label/amount", i, row)
 		}
 	}
 }

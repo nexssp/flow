@@ -1,5 +1,5 @@
 @description "if branches see current input, original input, and outer aliases without leaking local bindings"
-@assert: result.selected == "inner" && result.original == "original" && result.outer_still_visible == true
+@assert: selected == "inner" && original == "original" && outer_still_visible == true
 @pipeline if_scope
   { enabled: true } as outer
   -> if (.enabled && input.request == "original" && outer.enabled == true) {

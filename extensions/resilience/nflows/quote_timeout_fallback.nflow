@@ -5,7 +5,7 @@
   max_backoff: "1ms"
 }
 @description "Cancel a slow simulated quote call and return a cached snapshot"
-@assert: result.source == "cached"
+@assert: source == "cached"
 sleep :timeout=20ms ( duration_ms: 200 )
 || {
   source: "cached",

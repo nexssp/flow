@@ -1,4 +1,4 @@
 @description "@config.load reads and flattens a prefixed JSON file at compile time"
 @config.load:path="settings.json" :prefix="app"
-@assert: result.retries == "3" && result.mode == "safe"
+@assert: retries == "3" && mode == "safe"
 { retries: @config.app.retries, mode: @config.app.mode }

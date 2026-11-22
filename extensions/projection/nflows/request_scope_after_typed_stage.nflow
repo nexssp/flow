@@ -1,10 +1,9 @@
 @description "input remains the original request while __root__ is the current typed stage"
-@assert: result.original_request == "original request" && result.current_stage_stdout == "typed result" && result.bound_stage_stdout == "typed result"
+@assert: original_request == "original request" && current_stage_stdout == "typed result" && bound_stage_stdout == "typed result"
 @schema Request {
-  Request string `json:"request" validate:"required"`
+  request! string
 }
-@pipeline request_scope_after_typed_stage
-  :request-schema=Request
+@pipeline request_scope_after_typed_stage(request: Request)
   cov.typed_projection as typed
   -> {
     original_request: input.request,

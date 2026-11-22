@@ -1,5 +1,5 @@
 @description "Named pipeline bindings are additional lexical names, not payload wrappers"
-@assert: result.known == true && result.choice == "approved" && result.original == "original request" && result.flowing == true
+@assert: known == true && choice == "approved" && original == "original request" && flowing == true
 @pipeline named_binding_example
   { Known: true, Answers: [{ Choice: "approved" }] } as estimate
   -> { known: estimate.Known, choice: estimate.Answers[0].Choice, original: input.request, flowing: .Known }

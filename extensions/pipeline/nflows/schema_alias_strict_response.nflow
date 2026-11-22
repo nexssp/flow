@@ -1,7 +1,7 @@
 @description "spec: strict :out-schema rejects unknown fields at the response boundary"
 @schema ChatTurn {
-  Role    string `json:"role" validate:"required"`
-  Content string `json:"content" validate:"required"`
+  role!    string
+  content! string
 }
 @pipeline strict_output
   :out-schema=!ChatTurn
@@ -16,4 +16,4 @@
 }
 { role: "assistant", content: "hello" }
   -> pipeline.strict_output
-@assert: result.route == "strict-response-rejected"
+@assert: route == "strict-response-rejected"

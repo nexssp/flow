@@ -1,4 +1,4 @@
 @description "Persist a benchmark result as JSON"
-@assert: result.file == "bench.json"
+@assert: file == "bench.json"
 { file: "bench.json", action: "noop", iterations: 1, p95_ms: 10.0 }
   -> bench.save

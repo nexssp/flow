@@ -15,8 +15,10 @@
   other: .canbe.something
 }
 
-@assert: result.name == "Ada"
-@assert: result.email == "ada@example.test"
-@assert: result.somethingelse == "nested"
-@assert: result.another == "copied"
-@assert: result.other == "explicit"
+@assert {
+  name == "Ada"
+  email == "ada@example.test"
+  somethingelse == "nested"
+  another == "copied"
+  other == "explicit"
+}

@@ -24,6 +24,9 @@ func TestAllNFlowConformance(t *testing.T) {
 	}
 	ktest.RequireCondition(t, want > 0, "no conformance features were discovered")
 
+	// The bytes fixture uses paths relative to the repository root.
+	t.Chdir("../..")
+
 	var out bytes.Buffer
 	code := selftest.Run(context.Background(), selftest.Options{
 		Out:     &out,

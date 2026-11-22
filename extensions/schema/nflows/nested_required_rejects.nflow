@@ -1,9 +1,9 @@
 @description "spec: nested @schema fields enforce required markers recursively"
 @schema Attempt {
-  AttemptID! string `json:"attempt_id"`
+  attempt_id! string
 }
 @schema Candidate {
-  Attempt! Attempt `json:"attempt"`
+  attempt! Attempt
 }
 { attempt: {} }
 -> Candidate.validate ? on_error {
@@ -12,4 +12,4 @@
   else
   -> error.reraise
 }
-@assert: result.rejected == true
+@assert: rejected == true

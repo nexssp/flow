@@ -1,4 +1,7 @@
 @description "Run a portable external command"
-@assert: result.ok == true
-@assert: result.exit_code == 0
 external.exec ( cmd: "echo hello" )
+
+@assert {
+  ok == true
+  exit_code == 0
+}

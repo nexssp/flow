@@ -1,4 +1,4 @@
 @description "@pool members reachable via dispatch.run"
 @pool coverage [noop]
-@assert: result.value == "p"
+@assert: value == "p"
 dispatch.run ( members: [pool.coverage], payload: { value: "p" } )

@@ -1,9 +1,11 @@
-@description "spec: response-schema=[]string validates primitive items and preserves the array result"
-@pipeline words
-  :response-schema=[]string
+@description "spec: typed []string response validates primitive items and preserves the array result"
+@pipeline words(): []string
   {value: ["first", "second"]}
     -> pick(field: "value")
 @end
 pipeline.words
-@assert: result[0] == "first"
-@assert: result[1] == "second"
+
+@assert {
+  result[0] == "first"
+  result[1] == "second"
+}

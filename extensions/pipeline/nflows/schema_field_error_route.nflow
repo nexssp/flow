@@ -1,16 +1,14 @@
 @description "Outer @on_error routes called-pipeline request validation by error.details[0].Field email"
 
 @schema TaskRequest {
-  Email string `json:"email" validate:"required,email"`
-  Title string `json:"title" validate:"required"`
+  email! string `validate:"email"`
+  title! string
 }
 @schema TaskResponse {
-  ID string `json:"id" validate:"required"`
+  id! string
 }
 
-@pipeline create_task
-  :request-schema=TaskRequest
-  :response-schema=TaskResponse
+@pipeline create_task(request: TaskRequest): TaskResponse
   # This local catch wraps only the body. The entry schema check runs before
   # it, so the outer field-specific route must recover the invalid email.
   @on_error {
@@ -42,5 +40,7 @@
 { email: "not-an-email", title: "Boundary test" }
   -> pipeline.create_task
 
-@assert: result.route == "email-field"
-@assert: result.kind == "Validation"
+@assert {
+  route == "email-field"
+  kind == "Validation"
+}

@@ -4,8 +4,7 @@
 @schema WidenedSampleCountInput {
   count uint32
 }
-@pipeline projection_typed_schema_uint32_to_uint64
-  :request-schema=!WidenedSampleCountInput
+@pipeline projection_typed_schema_uint32_to_uint64(request: !WidenedSampleCountInput)
   { count: .count }
   -> cov.uint64_field
 @end

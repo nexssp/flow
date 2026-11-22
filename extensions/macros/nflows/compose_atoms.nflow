@@ -2,5 +2,5 @@
 @macro user_card(name) {
   { name: $name } -> wrap ( key: "card" )
 }
-@assert: result.card.name == "Maksymilian"
+@assert: card.name == "Maksymilian"
 @user_card("Maksymilian")

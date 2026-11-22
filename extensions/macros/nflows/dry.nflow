@@ -8,7 +8,7 @@
   { $to: .$from }
 }
 
-@assert: result.user_id == 42
+@assert: user_id == 42
 
 { id: 42, name: "alice" }
 -> @require_field(id)

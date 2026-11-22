@@ -1,5 +1,9 @@
-@description "Load a YAML object from a runtime file path"
-@assert: result.repositories[0] == "nexssp/kernel"
-@assert: result.repositories[1] == "nexssp/flow"
-@assert: result.metadata.source == "fixture"
-config_yaml.load ( path: "repopeek.yml" )
+@description "Load repository metadata from a local YAML file"
+config_yaml.load (path: "repopeek.yml")
+
+@assert {
+  len(repositories) == 2
+  repositories[0] == "nexssp/kernel"
+  repositories[1] == "nexssp/flow"
+  metadata.source == "fixture"
+}

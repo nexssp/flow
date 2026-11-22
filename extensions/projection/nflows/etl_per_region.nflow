@@ -7,19 +7,13 @@
 # Every expression below is expr-lang: filter, map, sum, len. No glue
 # actions, no intermediate structs, no manual bookkeeping.
 
-@assert: result.eu.total == 250
-@assert: result.eu.count == 2
-@assert: result.us.total == 400
-@assert: result.us.count == 2
-@assert: result.dropped == 1
-
 {
   orders: [
-    { id: 1, region: "eu", amount: 100 },
-    { id: 2, region: "us", amount: 200 },
-    { id: 3, region: "eu", amount: 150 },
-    { id: 4, region: "us", amount: 200 },
-    { id: 5, region: "eu", amount: 10 },
+  { id: 1, region: "eu", amount: 100 },
+  { id: 2, region: "us", amount: 200 },
+  { id: 3, region: "eu", amount: 150 },
+  { id: 4, region: "us", amount: 200 },
+  { id: 5, region: "eu", amount: 10 },
   ],
 }
 -> {
@@ -36,4 +30,12 @@
     count: len(valid | filter(#.region == "us")),
   },
   dropped: total - len(valid),
+}
+
+@assert {
+  eu.total == 250
+  eu.count == 2
+  us.total == 400
+  us.count == 2
+  dropped == 1
 }

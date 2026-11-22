@@ -1,8 +1,8 @@
 @description "spec: a module-local enum is visible through its include alias"
 @include ./billing.nflow AS billing
 @schema Order {
-  status billing.OrderStatus `json:"status"`
+  status billing.OrderStatus
 }
 { status: billing.OrderStatus.paid }
   -> Order.validate
-@assert: result.status == "settled"
+@assert: status == "settled"

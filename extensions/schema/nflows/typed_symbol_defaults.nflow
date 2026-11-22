@@ -5,11 +5,15 @@
   label: string = "created"
 }
 @schema TypedRequest {
-  Status  int      `json:"status" default:"constraints.status" validate:"eq=constraints.status"`
-  Timeout time.Duration `json:"timeout" default:"constraints.timeout" validate:"gte=constraints.timeout"`
-  Label   string   `json:"label" default:"constraints.label" validate:"oneof=constraints.label"`
+  status  int `default:"constraints.status" validate:"eq=constraints.status"`
+  timeout time.Duration `default:"constraints.timeout" validate:"gte=constraints.timeout"`
+  label   string `default:"constraints.label" validate:"oneof=constraints.label"`
 }
-{} -> TypedRequest.validate
-@assert: result.status == 201
-@assert: result.label == "created"
-@assert: result.timeout != nil
+{}
+  -> TypedRequest.validate
+
+@assert {
+  status == 201
+  label == "created"
+  timeout != nil
+}

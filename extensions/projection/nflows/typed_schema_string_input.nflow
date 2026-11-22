@@ -4,8 +4,7 @@
 @schema StringInput {
   value string
 }
-@pipeline projection_typed_schema_string
-  :request-schema=!StringInput
+@pipeline projection_typed_schema_string(request: !StringInput)
   { value: .value }
   -> cov.string_field
 @end

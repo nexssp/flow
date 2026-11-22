@@ -5,9 +5,12 @@
   done: "DONE"
 }
 
-{ n: 0, state: codes.waiting } ->
-  loop({ n: .n + 1, state: codes.done }) until(.state == codes.done) ->
-  assert(.state == codes.done, "loop did not reach the declared state") ->
+{ n: 0, state: codes.waiting }
+  ->
+  loop({ n: .n + 1, state: codes.done }) until(.state == codes.done)
+    ->
+  assert(.state == codes.done, "loop did not reach the declared state")
+    ->
   { final_state: .state }
 
-@assert: result.final_state == codes.done
+@assert: final_state == codes.done

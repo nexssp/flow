@@ -1,10 +1,13 @@
 @description "spec: shared schema=[]string validates request and response scalar arrays"
 @pipeline words
   :schema=[]string
-  runtime.noop
+  noop
 @end
 {value: ["first", "second"]}
   -> pick(field: "value")
 -> pipeline.words
-@assert: result[0] == "first"
-@assert: result[1] == "second"
+
+@assert {
+  result[0] == "first"
+  result[1] == "second"
+}

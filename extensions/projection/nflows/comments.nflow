@@ -1,9 +1,4 @@
 @description "Projection: hash comments are stripped before expr-lang compiles"
-@assert: result.name == "Julia"
-@assert: result.extra == 1
-@assert: result.filtered == ["alpha", "gamma"]
-@assert: result.coalesced == ["fallback", "present"]
-@assert: result.conditional == ["yes", "no"]
 {
   name: "Julia",
   extra: 1,
@@ -17,15 +12,23 @@
   name: .name,  # trailing comment
   extra: .extra,
   optional: .items | map(
-    #?.field
+  #?.field
   ),
   filtered: .labels | filter(
-    # != "beta"
+  # != "beta"
   ),
   coalesced: .nullable | map(
-    # ?? "fallback"
+  # ?? "fallback"
   ),
   conditional: .flags | map(
-    # ? "yes" : "no"
+  # ? "yes" : "no"
   )
+}
+
+@assert {
+  name == "Julia"
+  extra == 1
+  filtered == ["alpha", "gamma"]
+  coalesced == ["fallback", "present"]
+  conditional == ["yes", "no"]
 }

@@ -1,4 +1,4 @@
 @description "An included macro is callable through its module namespace"
 @include "child.nflow" AS billing
-@assert: result.greeting == "hello, Ada"
+@assert: greeting == "hello, Ada"
 billing.@greeting("hello, Ada")

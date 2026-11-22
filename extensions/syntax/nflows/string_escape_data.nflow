@@ -1,22 +1,22 @@
 @description "Double-quoted runtime strings decode consistently; backticks stay raw and single quotes keep legacy behavior"
 @assert {
-  result.line == "line\nbreak"
-  result.expression == "line\nbreak"
-  result.raw == `line\nbreak`
-  result.unicode == "A"
-  result.unicode_expression == "A"
-  result.byte == "ÿ"
-  result.action_line == "line\nbreak"
-  result.action_unicode == "A"
-  result.action_byte == "ÿ"
-  result.action_raw == `line\nbreak`
-  result.action_single == `line\nbreak`
-  result.action_nested.line == "line\nbreak"
-  result.action_array[0] == "A"
-  result.action_array[1] == "ÿ"
-  result.action_array[2] == `line\nbreak`
+  line == "line\nbreak"
+  expression == "line\nbreak"
+  raw == `line\nbreak`
+  unicode == "A"
+  unicode_expression == "A"
+  byte == "ÿ"
+  action_line == "line\nbreak"
+  action_unicode == "A"
+  action_byte == "ÿ"
+  action_raw == `line\nbreak`
+  action_single == `line\nbreak`
+  action_nested.line == "line\nbreak"
+  action_array[0] == "A"
+  action_array[1] == "ÿ"
+  action_array[2] == `line\nbreak`
 }
-runtime.noop(
+noop(
   action_line: "line\nbreak",
   action_unicode: "\u{41}",
   action_byte: "\xff",

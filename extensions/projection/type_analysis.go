@@ -827,10 +827,11 @@ func projectionStaticKey(node ast.Node) (string, bool) {
 }
 
 func projectionSchemaFromValue(value any) reflect.Type {
-	if object, ok := value.(map[string]any); ok {
-		fields := make([]reflect.StructField, 0, len(object))
-		keys := make([]string, 0, len(object))
-		for key := range object {
+	switch current := value.(type) {
+	case map[string]any:
+		fields := make([]reflect.StructField, 0, len(current))
+		keys := make([]string, 0, len(current))
+		for key := range current {
 			keys = append(keys, key)
 		}
 		for i := 0; i < len(keys); i++ {
@@ -841,15 +842,23 @@ func projectionSchemaFromValue(value any) reflect.Type {
 			}
 		}
 		for index, key := range keys {
-			fieldType := reflect.TypeOf(object[key])
-			if fieldType == nil {
-				fieldType = reflect.TypeFor[any]()
-			}
-			fields = append(fields, reflect.StructField{Name: fmt.Sprintf("Field%d", index), Type: projectionSchemaFromValueType(fieldType), Tag: reflect.StructTag("expr:" + strconv.Quote(key) + " flow_projection:\"true\"")})
+			fieldType := projectionSchemaFromValue(current[key])
+			fields = append(fields, reflect.StructField{Name: fmt.Sprintf("Field%d", index), Type: fieldType, Tag: reflect.StructTag("expr:" + strconv.Quote(key) + " flow_projection:\"true\"")})
 		}
 		if schema, err := makeProjectionStructType(fields); err == nil {
 			return schema
 		}
+	case []any:
+		if len(current) == 0 {
+			return reflect.TypeFor[[]any]()
+		}
+		elementType := projectionSchemaFromValue(current[0])
+		for _, element := range current[1:] {
+			if projectionSchemaFromValue(element) != elementType {
+				return reflect.TypeFor[[]any]()
+			}
+		}
+		return reflect.SliceOf(elementType)
 	}
 	return projectionSchemaFromValueType(reflect.TypeOf(value))
 }

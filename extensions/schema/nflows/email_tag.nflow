@@ -1,8 +1,8 @@
 @description "validate=email rejects a malformed address"
 @schema Contact {
-  Email! string `json:"email" validate:"email"`
+  email! string `validate:"email"`
 }
-@assert: result.status == "rejected"
+@assert: status == "rejected"
 { email: "not-an-email" }
   -> Contact.validate ? on_error {
     xerr.KindValidation

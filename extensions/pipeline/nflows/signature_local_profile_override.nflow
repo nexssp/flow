@@ -1,15 +1,15 @@
 @description "spec: pipeline-local schema modifiers win when inherited profile defaults appear later in the header"
 @schema ProfileRequest {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
 @schema ProfileResponse {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
 @schema LocalRequest {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
 @schema LocalResponse {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
 @profile base_defaults
   :request-schema=!ProfileRequest
@@ -24,4 +24,4 @@
 @end
 { name: "Lin" }
   -> pipeline.local_before_profile
-@assert: result.name == "Lin"
+@assert: name == "Lin"

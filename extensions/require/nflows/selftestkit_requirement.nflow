@@ -1,4 +1,5 @@
 @description "Declare an extension requirement before using it"
 @require selftestkit
-@assert: result.value == 7
-{ value: 7 } -> cov.echo
+@assert: value == 7
+{ value: 7 }
+  -> cov.echo

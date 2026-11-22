@@ -1,13 +1,4 @@
 @description "Lowercase projections work on typed Go fields without JSON tags"
-@assert: result.stdout == "typed result"
-@assert: result.exit_code == 0
-@assert: result.ok == true
-@assert: result.summary == "typed result"
-@assert: result.root_stdout == "typed result"
-@assert: result.nested.request_id == "request-42"
-@assert: result.nested_request_id == "request-42"
-@assert: result.indexed_request_id == "request-42"
-@assert: result.root_indexed_request_id == "request-42"
 @pipeline typed_go_fields
   cov.typed_projection as execution
   -> {
@@ -23,3 +14,15 @@
   }
 @end
 pipeline.typed_go_fields
+
+@assert {
+  stdout == "typed result"
+  exit_code == 0
+  ok == true
+  summary == "typed result"
+  root_stdout == "typed result"
+  nested.request_id == "request-42"
+  nested_request_id == "request-42"
+  indexed_request_id == "request-42"
+  root_indexed_request_id == "request-42"
+}

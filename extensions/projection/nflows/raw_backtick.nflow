@@ -1,5 +1,5 @@
 @description "Projection expressions use raw backtick boundaries"
-@assert: result.text == `prefix\` + `}`
+@assert: text == `prefix\` + `}`
 { untouched: true }
 -> {
   text: `prefix\` + `}`

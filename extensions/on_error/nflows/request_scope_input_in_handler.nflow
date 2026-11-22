@@ -1,15 +1,14 @@
 @description "Error handler retains the original request after a typed stage"
-@assert: result.original_request == "original request"
+@assert: original_request == "original request"
 @schema Request {
-  Request string `json:"request" validate:"required"`
+  request! string
 }
-@pipeline request_scope_input_in_handler
-  :request-schema=Request
+@pipeline request_scope_input_in_handler(request: Request)
   cov.typed_projection
   -> (runtime.fail ( kind: "Unavailable", message: "expected failure" )
       ? on_error {
         xerr.KindUnavailable
-          -> { original_request: input.request }
+        -> { original_request: input.request }
       })
 @end
 { request: "original request" }

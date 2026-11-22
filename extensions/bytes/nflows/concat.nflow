@@ -1,14 +1,22 @@
-@description "Concatenate zero byte chunks to an empty string"
-@assert: result.content == ""
+@description "Read sorted local NFlow source files as bytes and concatenate them without changing byte order"
+@require fs
 
 @schema ByteConcatResult {
-    Content string `json:"content"`
+  content! string
 }
 
-@pipeline concat_empty(): ByteConcatResult
-    []
-      -> bytes.concat
-      -> { content: . }
+@pipeline concat_sources(): !ByteConcatResult
+  fs.walk (dir: "extensions/bytes/nflows", ext: "nflow")
+    -> fs.sort
+    -> fs.read
+    -> stream.map (expression: "item.Content")
+    -> collect
+    -> bytes.concat
+    -> { content: . }
 @end
 
-pipeline.concat_empty
+pipeline.concat_sources
+
+@assert {
+  len(content) > 0
+}

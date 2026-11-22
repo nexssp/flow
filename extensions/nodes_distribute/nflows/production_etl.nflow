@@ -37,6 +37,9 @@
 )
 
 # ── 5. Verifications ─────────────────────────────────────────────────
-@assert: result.succeeded == 2
-@assert: result.failed == 0
-@assert: result.items[0].ok == true
+
+@assert {
+  succeeded == 2
+  failed == 0
+  items[0].ok == true
+}

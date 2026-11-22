@@ -2,11 +2,11 @@
 @pipeline guarded
   runtime.fail ( kind: "Validation", message: "boom" ) ? on_error {
     xerr.KindValidation
-      -> error.passthrough,
+    -> error.passthrough,
     else
-      -> error.reraise
+    -> error.reraise
   }
 @end
-@assert: result.original == 42
+@assert: original == 42
 { original: 42 }
   -> pipeline.guarded

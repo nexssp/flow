@@ -1,8 +1,9 @@
 @description "spec: conflicting signature and legacy response strictness fail compilation"
 @schema Response {
-  Name string `json:"name"`
+  name string
 }
-@pipeline invalid(): Response :response-schema=!Response
+@pipeline invalid(): Response
+  :response-schema=!Response
   noop
 @end
 pipeline.invalid

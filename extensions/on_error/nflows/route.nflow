@@ -2,5 +2,5 @@
 @on_error {
   when error.kind == "Internal" -> error.info
 }
-@assert: result.kind == "Internal"
+@assert: kind == "Internal"
 fail ( kind: "Internal", message: "boom" )

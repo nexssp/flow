@@ -1,12 +1,4 @@
 @description "Projection: preserve spread sources and apply explicit overrides"
-@assert: result.request_id == "REQ-42"
-@assert: result.attempt_id == "ATT-7"
-@assert: result.policy == "keep"
-@assert: result.original_status == "queued"
-@assert: result.current_status == "running"
-@assert: result.status == "complete"
-@assert: result.attempt == 2
-@assert: result.current_stage == "advance"
 @pipeline advanced_spread_precedence
   {
     ...,
@@ -45,3 +37,14 @@
   }
 }
 -> pipeline.advanced_spread_precedence
+
+@assert {
+  request_id == "REQ-42"
+  attempt_id == "ATT-7"
+  policy == "keep"
+  original_status == "queued"
+  current_status == "running"
+  status == "complete"
+  attempt == 2
+  current_stage == "advance"
+}

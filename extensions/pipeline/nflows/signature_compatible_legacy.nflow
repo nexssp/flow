@@ -1,9 +1,9 @@
 @description "spec: identical signature and legacy request/response contracts coexist during migration"
 @schema DualRequest {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
 @schema DualResponse {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
 @pipeline compatible(req: !DualRequest): !DualResponse
   :request-schema=!DualRequest
@@ -12,4 +12,4 @@
 @end
 {name: (input.name ?? "dual")}
   -> pipeline.compatible
-@assert: result.name == "dual"
+@assert: name == "dual"

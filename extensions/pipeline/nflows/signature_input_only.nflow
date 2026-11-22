@@ -1,10 +1,10 @@
 @description "spec: a named typed request binding works without an output contract"
 @schema LookupRequest {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
 @pipeline lookup(lookup_req: LookupRequest)
   {name: (lookup_req.name ?? "Lin")}
 @end
 {name: "Lin"}
   -> pipeline.lookup
-@assert: result.name == "Lin"
+@assert: name == "Lin"

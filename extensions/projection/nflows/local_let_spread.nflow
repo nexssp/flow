@@ -14,7 +14,10 @@
   display: profile.name,
   status: "active"
 }
-@assert: result.name == "Ada"
-@assert: result.display == "Ada Lovelace"
-@assert: result.status == "active"
-@assert: result.extra == "preserved"
+
+@assert {
+  name == "Ada"
+  display == "Ada Lovelace"
+  status == "active"
+  extra == "preserved"
+}

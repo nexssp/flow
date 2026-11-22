@@ -11,4 +11,4 @@
   let days_until_due = .days_until_due ?? -2;
   status: billing.status(is_paid, days_until_due)
 }
-@assert: result.status == "overdue"
+@assert: status == "overdue"

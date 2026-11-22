@@ -6,4 +6,4 @@
   $a -> $b
 }
 @assert: result == "inner"
-@seq(@echo("inner"), runtime.noop)
+@seq(@echo("inner"), noop)

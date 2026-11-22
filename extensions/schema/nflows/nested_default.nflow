@@ -1,11 +1,11 @@
 @description "spec: nested schemas apply defaults before validating required fields"
 @schema Attempt {
-  AttemptID! string `json:"attempt_id"`
-  ExpectedCurrency! string `json:"expected_currency" default:"USD"`
+  attempt_id! string
+  expected_currency! string `default:"USD"`
 }
 @schema Request {
-  Attempt! Attempt `json:"attempt"`
+  attempt! Attempt
 }
 { attempt: { attempt_id: "decision-17" } }
   -> Request.validate
-@assert: result.attempt.expected_currency == "USD"
+@assert: attempt.expected_currency == "USD"

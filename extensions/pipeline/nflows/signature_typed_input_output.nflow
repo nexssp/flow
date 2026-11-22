@@ -1,14 +1,14 @@
 @description "spec: a named typed request binding validates and reaches the pipeline body"
 @schema CreateRequest {
-  Name string `json:"name" validate:"required"`
-  Region string `json:"region" default:"US"`
+  name! string
+  region string `default:"US"`
 }
 @schema CreateResponse {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
 @pipeline create_order(order_req: !CreateRequest): !CreateResponse
   {name: (order_req.region)}
 @end
 { name: "Ada" }
   -> pipeline.create_order
-@assert: result.name == "US"
+@assert: name == "US"

@@ -1,16 +1,9 @@
 @description "Unwrapped action-argument expressions evaluate runtime values"
-@assert: result.arithmetic == 5 && result.conditional == "high"
-@assert: result.from_input == "Julia" && result.from_binding == "Julia"
-@assert: result.nested.double_score == 8 && result.nested.current_name == "Julia"
-@assert: result.values[0] == 6 && result.values[1] == 7 && result.values[2].name == "Julia"
-@assert: result.greeting == "Hello, Julia" && result.length == 1
-@assert: result.legacy_input == "Julia" && result.legacy_binding.name == "Julia" && result.legacy_path == "Julia"
-@assert: result.literal == "input.name"
 { name: "Julia", score: 4, tags: ["nflow"] }
 -> pipeline.argument_implicit_expression
 @pipeline argument_implicit_expression
-  runtime.noop as person
-  -> runtime.noop(
+  noop as person
+  -> noop(
     arithmetic: .score + 1,
     conditional: input.score > 3 ? "high" : "low",
     from_input: input.name,
@@ -28,3 +21,13 @@
     literal: "input.name"
   )
 @end
+
+@assert {
+  arithmetic == 5 && conditional == "high"
+  from_input == "Julia" && from_binding == "Julia"
+  nested.double_score == 8 && nested.current_name == "Julia"
+  .values[0] == 6 && .values[1] == 7 && .values[2].name == "Julia"
+  greeting == "Hello, Julia" && length == 1
+  legacy_input == "Julia" && legacy_binding.name == "Julia" && legacy_path == "Julia"
+  literal == "input.name"
+}

@@ -1,9 +1,9 @@
 @description "Schema validates numeric bounds, array element rules, and json wire names"
 
 @schema OrderBatch {
-  BatchRef! string  `json:"batch_ref"`
-  Amounts! []int    `json:"amounts"   validate:"min=1,max=15,dive,gt=0"`
-  Limit    float64  `json:"limit"     default:"1000.50" validate:"gt=0"`
+  batch_ref! string
+  amounts! []int `validate:"min=1,max=15,dive,gt=0"`
+  limit    float64 `default:"1000.50" validate:"gt=0"`
 }
 
 {
@@ -12,6 +12,8 @@
 }
 -> OrderBatch.validate
 
-@assert: result.batch_ref == "REF-2026"
-@assert: len(result.amounts) == 3
-@assert: result.limit == 1000.50
+@assert {
+  batch_ref == "REF-2026"
+  len(amounts) == 3
+  limit == 1000.50
+}

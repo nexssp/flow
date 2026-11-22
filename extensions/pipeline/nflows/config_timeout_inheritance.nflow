@@ -2,8 +2,10 @@
 @config {
   pipeline_timeout: "240s"
 }
-@pipeline configured_loop :timeout=@config.pipeline_timeout
+@pipeline configured_loop
+  :timeout=@config.pipeline_timeout
   loop({ n: .n + 1 }) until(.n >= 1)
 @end
-{ n: 0 } -> pipeline.configured_loop
-@assert: result.n == 1
+{ n: 0 }
+  -> pipeline.configured_loop
+@assert: n == 1

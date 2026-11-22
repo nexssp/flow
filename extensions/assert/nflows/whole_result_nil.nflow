@@ -1,0 +1,3 @@
+@description "Post-run assertions can check a nil whole-flow result"
+null
+@assert: result == nil

@@ -1,10 +1,5 @@
 @description "Data shaping: pick, with, wrap compose without glue"
 
-@assert: result.payload.id == 42
-@assert: result.payload.name == "alice"
-@assert: result.payload.audited == true
-@assert: !("secret" in result.payload)
-
 {
   id: 42,
   name: "alice",
@@ -14,3 +9,10 @@
 -> pick ( only: ["id", "name"] )
 -> with ( audited: true )
 -> wrap ( key: "payload" )
+
+@assert {
+  payload.id == 42
+  payload.name == "alice"
+  payload.audited == true
+  !("secret" in payload)
+}

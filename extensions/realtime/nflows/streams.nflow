@@ -16,13 +16,16 @@
 @end
 
 # 5 items batched by 2 yields 3 batches: [2 items], [2 items], [1 item]
-@assert: len(result.ticks) == 3
-@assert: len(result.batches) == 3
-@assert: len(result.batches[0]) == 2
-@assert: len(result.batches[1]) == 2
-@assert: len(result.batches[2]) == 1
 
 parallel {
   ticks: pipeline.realtime_test,
   batches: pipeline.batch_test
+}
+
+@assert {
+  len(ticks) == 3
+  len(batches) == 3
+  len(batches[0]) == 2
+  len(batches[1]) == 2
+  len(batches[2]) == 1
 }

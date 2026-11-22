@@ -14,6 +14,6 @@
   shipping_minor: shipping.feeMinor(subtotal_minor, destination)
 }
 @assert {
-  result.free_shipping == true
-  result.shipping_minor == 0
+  free_shipping == true
+  shipping_minor == 0
 }

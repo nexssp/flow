@@ -1,10 +1,10 @@
 # @expect-compile-error response schemas must not declare defaults
 @description "spec: out-schema array rejects response defaults with its authored selector"
 @schema Item {
-  Name string `json:"name" validate:"required"`
-  Role string `json:"role" default:"guest" validate:"required"`
+  name! string
+  role! string `default:"guest"`
 }
 @pipeline items
   :out-schema=[]Item
-  runtime.noop
+  noop
 @end

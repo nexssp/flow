@@ -1,4 +1,5 @@
 @description "@hook:hook.verify attaches a context marker"
 @hook:hook.verify
-@assert: result.hook_verified == true
-{ test: "data" } -> hook.probe
+@assert: hook_verified == true
+{ test: "data" }
+  -> hook.probe

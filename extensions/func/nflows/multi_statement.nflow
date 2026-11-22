@@ -6,11 +6,11 @@
 }
 {
   total_minor: pricing.totalMinor(
-    .subtotal_minor ?? 1250,
-    .discount_minor ?? 50,
-    .tax_rate_percent ?? 10
+  .subtotal_minor ?? 1250,
+  .discount_minor ?? 50,
+  .tax_rate_percent ?? 10
   )
 }
 @assert {
-  result.total_minor == 1320
+  total_minor == 1320
 }

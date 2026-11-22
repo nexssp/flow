@@ -10,6 +10,9 @@
   comma_separated: colors.red + "|" + colors.green + "|" + colors.blue,
   mapped: states.review + "|" + states.approved
 }
-@assert: result.spaced == "alpha|beta|gamma"
-@assert: result.comma_separated == "red|green|blue"
-@assert: result.mapped == "needs_review|APPROVED"
+
+@assert {
+  spaced == "alpha|beta|gamma"
+  comma_separated == "red|green|blue"
+  mapped == "needs_review|APPROVED"
+}

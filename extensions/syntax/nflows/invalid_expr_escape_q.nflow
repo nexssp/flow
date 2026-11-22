@@ -1,4 +1,4 @@
 @description "Expression string literals reject unknown escapes"
 # @expect-compile-error invalid char escape
 @assert: "bad\q" == "bad"
-runtime.noop
+noop

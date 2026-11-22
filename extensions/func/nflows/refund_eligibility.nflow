@@ -15,4 +15,4 @@
     final_sale
   )
 }
-@assert: result.refund_eligible == true
+@assert: refund_eligible == true

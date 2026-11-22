@@ -11,11 +11,14 @@
     previous_tool: previous.tool.name
   }
 @end
-@assert: result.current_tool == "current"
-@assert: result.original_tool == "original"
-@assert: result.tool.name == "current"
-@assert: result.current_stage == "current-stage"
-@assert: result.original_request_id == "REQ-17"
-@assert: result.previous_tool == "bound"
 { request_id: "REQ-17", tool: { name: "original" }, stage: "request-stage" }
 -> pipeline.advanced_roots_and_bindings
+
+@assert {
+  current_tool == "current"
+  original_tool == "original"
+  tool.name == "current"
+  current_stage == "current-stage"
+  original_request_id == "REQ-17"
+  previous_tool == "bound"
+}

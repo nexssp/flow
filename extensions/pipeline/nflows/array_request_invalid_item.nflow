@@ -1,17 +1,16 @@
 @description "spec: request-schema=[]Item rejects an invalid input item"
 @schema Item {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
-@pipeline items
-  :request-schema=[]Item
-  runtime.noop
+@pipeline items(request: []Item)
+  noop
 @end
-{value: [{ name: "" }]}
+{value: [{}]}
   -> pick(field: "value")
 -> pipeline.items ? on_error {
   xerr.KindValidation
-    -> { rejected: true },
+  -> { rejected: true },
   else
-    -> error.reraise
+  -> error.reraise
 }
-@assert: result.rejected == true
+@assert: rejected == true

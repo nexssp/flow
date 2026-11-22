@@ -1,18 +1,11 @@
 @description "Projection: reuse ordered local calculations and default optional data"
-@assert: result.id == "C-42"
-@assert: result.eligible_count == 2
-@assert: result.subtotal_minor == 320
-@assert: result.discount_minor == 0
-@assert: result.total_minor == 320
-@assert: result.eligible_skus[0] == "BOOK-1"
-@assert: result.eligible_skus[1] == "PEN-2"
 {
   customer: { id: "C-42" },
   discount_minor: null,
   orders: [
-    { sku: "BOOK-1", unit_minor: 120, quantity: 2 },
-    { sku: "PEN-2", unit_minor: 80, quantity: 1 },
-    { sku: "VOID-0", unit_minor: 999, quantity: 0 }
+  { sku: "BOOK-1", unit_minor: 120, quantity: 2 },
+  { sku: "PEN-2", unit_minor: 80, quantity: 1 },
+  { sku: "VOID-0", unit_minor: 999, quantity: 0 }
   ]
 }
 -> {
@@ -24,4 +17,14 @@
   discount_minor: .discount_minor ?? 0,
   total_minor: sum(line_totals) - (.discount_minor ?? 0),
   eligible_skus: eligible | map(#.sku)
+}
+
+@assert {
+  id == "C-42"
+  eligible_count == 2
+  subtotal_minor == 320
+  discount_minor == 0
+  total_minor == 320
+  eligible_skus[0] == "BOOK-1"
+  eligible_skus[1] == "PEN-2"
 }

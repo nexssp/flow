@@ -1,17 +1,17 @@
 @description "spec: strict in-schema array alias rejects undeclared item fields"
 @schema Item {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
 @pipeline items
   :in-schema=![]Item
-  runtime.noop
+  noop
 @end
 {value: [{ name: "Ada", extra: true }]}
   -> pick(field: "value")
 -> pipeline.items ? on_error {
   xerr.KindValidation
-    -> { rejected: true },
+  -> { rejected: true },
   else
-    -> error.reraise
+  -> error.reraise
 }
-@assert: result.rejected == true
+@assert: rejected == true

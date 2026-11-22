@@ -1,14 +1,16 @@
 @description "spec: request-schema=[]Item applies defaults and validates every input item"
 @schema Item {
-  Name string `json:"name" validate:"required"`
-  Role string `json:"role" default:"guest" validate:"required"`
+  name! string
+  role! string `default:"guest"`
 }
-@pipeline items
-  :request-schema=[]Item
-  runtime.noop
+@pipeline items(request: []Item)
+  noop
 @end
 {value: [{ name: "Ada" }, { name: "Lin", role: "member" }]}
   -> pick(field: "value")
 -> pipeline.items
-@assert: result[0].role == "guest"
-@assert: result[1].role == "member"
+
+@assert {
+  result[0].role == "guest"
+  result[1].role == "member"
+}

@@ -1,16 +1,14 @@
 @description "Outer @on_error routes called-pipeline request schema validation by TaskRequest message prefix"
 
 @schema TaskRequest {
-  Email string `json:"email" validate:"required,email"`
-  Title string `json:"title" validate:"required"`
+  email! string `validate:"email"`
+  title! string
 }
 @schema TaskResponse {
-  ID string `json:"id" validate:"required"`
+  id! string
 }
 
-@pipeline create_task
-  :request-schema=TaskRequest
-  :response-schema=TaskResponse
+@pipeline create_task(request: TaskRequest): TaskResponse
   # This local catch wraps only the body. Request and response boundaries
   # surround the pipeline call and must be caught by the outer directive.
   @on_error {
@@ -42,5 +40,7 @@
 { email: "alex@example.com" }
   -> pipeline.create_task
 
-@assert: result.route == "request-schema"
-@assert: result.kind == "Validation"
+@assert {
+  route == "request-schema"
+  kind == "Validation"
+}

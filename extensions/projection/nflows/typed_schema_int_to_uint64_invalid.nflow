@@ -3,8 +3,7 @@
 @schema SignedSampleCountInput {
   count int
 }
-@pipeline projection_typed_int_to_uint64
-  :request-schema=!SignedSampleCountInput
+@pipeline projection_typed_int_to_uint64(request: !SignedSampleCountInput)
   { count: .count }
   -> cov.uint64_field
 @end

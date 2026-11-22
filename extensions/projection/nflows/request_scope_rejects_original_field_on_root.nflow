@@ -1,10 +1,9 @@
 @description "current root does not acquire original-request fields"
 # @expect-compile-error request
 @schema Request {
-  Request string `json:"request" validate:"required"`
+  request! string
 }
-@pipeline request_scope_rejects_original_field_on_root
-  :request-schema=Request
+@pipeline request_scope_rejects_original_field_on_root(request: Request)
   cov.typed_projection
   -> { invalid: __root__.request }
 @end

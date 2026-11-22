@@ -1,0 +1,7 @@
+@description "match accepts default as a fallback arm"
+{ ready: false }
+-> match {
+  .ready -> "ready",
+  default -> "fallback"
+}
+@assert: result == "fallback"

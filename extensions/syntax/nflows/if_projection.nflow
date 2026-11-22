@@ -1,5 +1,5 @@
 @description "nested if expressions compose inside projection values"
-@assert: result.choice == "nested-yes"
+@assert: choice == "nested-yes"
 { outer: true, inner: true }
 -> {
   choice: if (.outer) {

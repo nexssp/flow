@@ -1,3 +1,3 @@
 @description "dispatch.run by explicit members"
-@assert: result.value == "d"
+@assert: value == "d"
 dispatch.run ( members: [cov.echo, noop], payload: { value: "d" } )

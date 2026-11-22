@@ -8,6 +8,9 @@
   .user.current.attempt.attempt_id,
   override: "new"
 }
-@assert: result.attempt_id == "attempt-7"
-@assert: result.keep == true
-@assert: result.override == "new"
+
+@assert {
+  attempt_id == "attempt-7"
+  keep == true
+  override == "new"
+}

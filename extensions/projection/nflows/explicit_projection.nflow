@@ -9,5 +9,7 @@
   email: .email
 }
 
-@assert: result.name == "Ada"
-@assert: result.email == "ada@example.test"
+@assert {
+  name == "Ada"
+  email == "ada@example.test"
+}

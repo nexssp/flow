@@ -1,5 +1,5 @@
 @description "if with no matching condition passes the current input through unchanged"
-@assert: result.kept == "value" && result.flag == false
+@assert: kept == "value" && flag == false
 { kept: "value", flag: false }
 -> if (.flag) {
   fail ( message: "true branch was evaluated for a false condition" )

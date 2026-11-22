@@ -7,18 +7,6 @@
   $field: @config.stats_$field
 }
 
-@assert: result.tree_only == "true"
-@assert: result.full_tree == "false"
-@assert: result.tree_files == "128"
-@assert: result.depth == "4"
-@assert: result.name == "Keon"
-@assert: result.email == "keon@example.test"
-@assert: result.account_id == "acct-42"
-@assert: result.timeout == 5
-@assert: result.retries == 2
-@assert: result.url == "/v1"
-@assert: result.profile.account_id == "acct-42"
-@assert: result.text == "# literal // remains text"
 {
   name: "Keon",
   email: "keon@example.test",
@@ -38,4 +26,19 @@
   url: .url, # URL remains explicit after spreading defaults
   profile: { account_id },
   text: "# literal // remains text", // Comment markers in quotes are literal,
+}
+
+@assert {
+  tree_only == "true"
+  full_tree == "false"
+  tree_files == "128"
+  depth == "4"
+  name == "Keon"
+  email == "keon@example.test"
+  account_id == "acct-42"
+  timeout == 5
+  retries == 2
+  url == "/v1"
+  profile.account_id == "acct-42"
+  text == "# literal // remains text"
 }

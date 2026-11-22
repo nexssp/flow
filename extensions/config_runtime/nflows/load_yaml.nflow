@@ -1,13 +1,24 @@
-@description "Load a structured YAML config at runtime and validate it with @schema"
+@description "Load a YAML web-service config at runtime and validate its nested TLS settings"
+@require config_yaml
+@schema TLSSettings {
+  mode! string
+  ciphers! []string `validate:"min=1,dive,required"`
+}
 @schema WebSettings {
-  Host    string `json:"host" validate:"required"`
-  Port    int    `json:"port" validate:"gte=1,lte=65535"`
-  Enabled bool   `json:"enabled"`
+  host! string
+  port! int `validate:"gte=1,lte=65535"`
+  enabled! bool
+  tls! TLSSettings
 }
 {}
-  -> config_runtime.load ( path: "settings.yml" )
+  -> config_runtime.load (path: "settings.yml")
   -> WebSettings.validate
-@assert: result.host == "api.example.test"
-@assert: result.port == 8443
-@assert: result.enabled == true
-@assert: result.tls.mode == "strict"
+
+@assert {
+  host == "api.example.test"
+  port == 8443
+  enabled == true
+  tls.mode == "strict"
+  tls.ciphers[0] == "modern"
+  tls.ciphers[1] == "approved"
+}

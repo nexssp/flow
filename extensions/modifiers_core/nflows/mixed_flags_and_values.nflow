@@ -4,7 +4,10 @@
 {
   status: "ok",
   capacity: 50
-} -> noop :idempotent :dedup :coalesce :concurrency=4 :rate_limit=50 :timeout=2s
+}
+  -> noop :idempotent :dedup :coalesce :concurrency=4 :rate_limit=50 :timeout=2s
 
-@assert: result.status == "ok"
-@assert: result.capacity == 50
+@assert {
+  status == "ok"
+  capacity == 50
+}

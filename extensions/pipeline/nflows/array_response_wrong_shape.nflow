@@ -1,15 +1,14 @@
-@description "spec: response-schema=[]Item rejects a non-array top-level result"
+@description "spec: typed []Item response rejects a non-array top-level result"
 @schema Item {
-  Name string `json:"name" validate:"required"`
+  name! string
 }
-@pipeline items
-  :response-schema=[]Item
+@pipeline items(): []Item
   { name: "not-an-array" }
 @end
 pipeline.items ? on_error {
   xerr.KindValidation
-    -> { rejected: true },
+  -> { rejected: true },
   else
-    -> error.reraise
+  -> error.reraise
 }
 @assert: result.rejected == true

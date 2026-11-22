@@ -1,5 +1,5 @@
 @description "a branch-local binding shapes its branch result without escaping its scope"
-@assert: result.after == "branch"
+@assert: after == "branch"
 { enabled: true } as parent
 -> if (.enabled) {
   "branch" as branch_only

@@ -24,8 +24,8 @@
   total_minor: pricing.totalMinor(subtotal, (discount), tax)
 }
 @assert {
-  result.subtotal_minor == 3897
-  result.discount_minor == 389
-  result.tax_minor == 280
-  result.total_minor == 3788
+  subtotal_minor == 3897
+  discount_minor == 389
+  tax_minor == 280
+  total_minor == 3788
 }

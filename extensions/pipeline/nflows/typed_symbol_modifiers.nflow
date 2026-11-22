@@ -2,10 +2,14 @@
 @symbols http_status { created: int = 201 }
 @symbols policy { short: duration = 5s }
 @include ./catalog.nflow AS api
-@pipeline local_typed :status=http_status.created :timeout=policy.short
-  runtime.noop
+@pipeline local_typed
+  :status=http_status.created
+  :timeout=policy.short
+  noop
 @end
-@pipeline imported_typed :status=api.http_status.created :timeout=api.policy.short
-  runtime.noop
+@pipeline imported_typed
+  :status=api.http_status.created
+  :timeout=api.policy.short
+  noop
 @end
 pipeline.local_typed

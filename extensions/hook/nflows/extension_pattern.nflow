@@ -55,5 +55,6 @@
 
 @hook:hook.verify
 
-@assert: result.hook_verified == true
-{ probe: "input" } -> hook.probe
+@assert: hook_verified == true
+{ probe: "input" }
+  -> hook.probe

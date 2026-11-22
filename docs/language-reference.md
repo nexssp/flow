@@ -194,9 +194,9 @@ The example above is the executable [`match_predicates.nflow`](../extensions/mat
 There are two standard runtime assertion forms:
 
 - `assert(condition, message)` is a runtime expression in the pipeline. It checks the current value and fails that execution if the condition is false.
-- `@assert: expression` records a post-run assertion evaluated against the completed result (including `result`, direct result fields, `duration_ms`, and `actions`). The CLI reports failures and exits nonzero. `nflow run --assert=EXPR` adds the same kind of post-run check from the command line.
+- `@assert: expression` records a post-run assertion evaluated against the completed result. Object results expose their top-level fields directly (for example, `ok`); use `result` for a whole-value check such as `result == nil`. The assertion context also includes `duration_ms` and `actions`. The CLI reports failures and exits nonzero. `nflow run --assert=EXPR` adds the same kind of post-run check from the command line.
 
-For frequent checks, `@assert {` starts a multiline block with one assertion per non-empty, non-comment line, and `@assert: { expr1, expr2, ... }` is a compact list. Each expression is evaluated independently in source order; commas inside strings, nested calls, or collections do not split the compact list. Expressions use the existing expr-lang evaluator (for example, `len(result.items) > 0` or `all(result.items, # != "")`). Failure output identifies the assertion's source file and line. The original single-expression form is unchanged.
+For frequent checks, `@assert {` starts a multiline block with one assertion per non-empty, non-comment line, and `@assert: { expr1, expr2, ... }` is a compact list. Each expression is evaluated independently in source order; commas inside strings, nested calls, or collections do not split the compact list. Expressions use the existing expr-lang evaluator (for example, `len(items) > 0` or `all(items, # != "")` for an object result). Use `result` when the assertion concerns the complete returned value, including a nil result. Failure output identifies the assertion's source file and line. The original single-expression form is unchanged.
 
 These are runtime checks; neither is a compile-time input schema. See [`extensions/assert/`](../extensions/assert/), [`runner/assertions.go`](../runner/assertions.go), and [`extensions/assert/nflows/`](../extensions/assert/nflows/).
 
@@ -213,7 +213,7 @@ Directives are preprocessed declarations, not ordinary action calls. The stock C
 | Directive | Form and effect |
 |---|---|
 | `@description` | `@description "text"`; descriptive metadata. |
-| `@assert` | `@assert: result.ok == true`, `@assert { ... }`, or `@assert: { expr1, expr2 }`; post-run assertions, evaluated after execution in source order. |
+| `@assert` | `@assert: ok == true`, `@assert { ... }`, or `@assert: { expr1, expr2 }`; post-run assertions, evaluated after execution in source order. |
 | `@func` | `@func namespace.name(arg Type, ...) Result = expression` or `Result { expression }`; the braced form may span lines but remains one pure expression. |
 | `@pipeline` / `@end` | `@pipeline NAME[(name: Input)][: Output]` followed by header modifiers and a Flow expression, then `@end`; declares callable `pipeline.NAME`. The optional request name becomes an immutable lexical binding in the body. Input and output types are optional; use `()` for output-only signatures. Header modifiers may be same-line or on indented colon-only lines. `@end` alone is an error. |
 | `@scope` | `@scope :timeout=5s :retry=3 {` newline, scoped source, then `}`; applies inheritable modifiers within its source span. An atom's own modifier wins; nested scopes override by name. |

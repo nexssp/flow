@@ -4,8 +4,7 @@
   name string
 }
 @func commerce.echo(value string) string = value
-@pipeline typed_argument_expression_valid
-  :request-schema=!TypedArgumentValidInput
+@pipeline typed_argument_expression_valid(request: !TypedArgumentValidInput)
   {value: commerce.echo(.name)}
     -> pick(field: "value")
 @end

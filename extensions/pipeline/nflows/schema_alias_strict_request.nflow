@@ -1,11 +1,11 @@
 @description "spec: strict :in-schema rejects unknown fields at the request boundary"
 @schema ChatTurn {
-  Role    string `json:"role" validate:"required"`
-  Content string `json:"content" validate:"required"`
+  role!    string
+  content! string
 }
 @pipeline strict_input
   :in-schema=!ChatTurn
-  runtime.noop
+  noop
 @end
 @pipeline request_rejected
   { route: "strict-request-rejected" }
@@ -16,4 +16,4 @@
 }
 { role: "assistant", content: "hello", unexpected: true }
   -> pipeline.strict_input
-@assert: result.route == "strict-request-rejected"
+@assert: route == "strict-request-rejected"

@@ -1,0 +1,12 @@
+@description "Action named arguments can spread an object path"
+{ defaults: { name: "Julia", attempts: 2 }, enabled: true }
+-> noop(
+  ... .defaults,
+  ready: .enabled
+)
+
+@assert {
+  name == "Julia"
+  attempts == 2
+  ready == true
+}

@@ -5,10 +5,12 @@
 # a map so distribute.reduce can consume its fields via named arguments.
 # This is scatter-gather with one line of glue.
 
-@assert: result.strategy == "collect"
-@assert: len(result.results) == 3
-
 { items: [1, 2, 3] }
 -> distribute.map ( action: noop, items: .items )
 -> flatten
 -> distribute.reduce ( strategy: "collect" )
+
+@assert {
+  strategy == "collect"
+  len(results) == 3
+}

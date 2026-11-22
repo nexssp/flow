@@ -1,7 +1,7 @@
 # @expect-compile-error duplicate pipeline binding "order_req"
 @description "compile-error: typed request aliases are immutable in the body"
 @schema Request {
-  Task string `json:"task"`
+  task string
 }
 @pipeline typed(order_req: Request)
   noop as order_req

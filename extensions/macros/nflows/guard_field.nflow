@@ -2,5 +2,5 @@
 @macro require_id() {
   assert(.id != nil, "id is required")
 }
-@assert: result.ok == true
+@assert: ok == true
 { id: "usr_1" } -> @require_id() -> { ok: true }

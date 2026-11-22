@@ -1,3 +1,3 @@
 @description "Unclosed block comments in parenthesized argument expressions fail compilation"
 # @expect-compile-error unclosed block comment in parenthesized expression
-runtime.noop(value: (1 /* unclosed )
+noop(value: (1 /* unclosed )

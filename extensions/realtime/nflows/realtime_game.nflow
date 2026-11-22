@@ -22,7 +22,9 @@ realtime.ticks ( hz: 60, max_catchup_ms: 32 )
   }})
 }
 
-@assert: len(result.ticks) == 3
-@assert: result.ticks[0].server_fps == 60
-@assert: result.ticks[0].match_status == "in_progress"
-@assert: len(result.ticks[0].players) == 2
+@assert {
+  len(ticks) == 3
+  ticks[0].server_fps == 60
+  ticks[0].match_status == "in_progress"
+  len(ticks[0].players) == 2
+}

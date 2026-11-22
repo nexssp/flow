@@ -1,14 +1,13 @@
 @description "spec: request-schema=[]int rejects a scalar item with the wrong type"
-@pipeline numbers
-  :request-schema=[]int
-  runtime.noop
+@pipeline numbers(request: []int)
+  noop
 @end
 {value: ["not an integer"]}
   -> pick(field: "value")
 -> pipeline.numbers ? on_error {
   xerr.KindValidation
-    -> { rejected: true },
+  -> { rejected: true },
   else
-    -> error.reraise
+  -> error.reraise
 }
-@assert: result.rejected == true
+@assert: rejected == true
