@@ -1,11 +1,15 @@
 package external
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
@@ -66,6 +70,70 @@ func TestExecArgvHelper(_ *testing.T) {
 		os.Exit(1)
 	}
 	os.Exit(0)
+}
+
+func TestExec_CancellationPreservesContextError(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	ready := filepath.Join(t.TempDir(), "child-ready")
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, execErr := action.InvokeAny(ctx, Exec, map[string]any{
+			"cmd": executable,
+			"args": []string{
+				"-test.run=^TestExecCancellationHelper$", "--", "external-exec-cancel-helper", ready,
+			},
+		})
+		done <- execErr
+	}()
+
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	startDeadline := time.NewTimer(5 * time.Second)
+	defer startDeadline.Stop()
+	for {
+		if _, statErr := os.Stat(ready); statErr == nil {
+			break
+		} else if !os.IsNotExist(statErr) {
+			t.Fatalf("stat child ready marker: %v", statErr)
+		}
+		select {
+		case execErr := <-done:
+			t.Fatalf("child exited before signaling readiness: %v", execErr)
+		case <-ticker.C:
+		case <-startDeadline.C:
+			t.Fatal("child did not signal readiness")
+		}
+	}
+
+	cancel()
+	select {
+	case execErr := <-done:
+		if !errors.Is(execErr, context.Canceled) {
+			t.Fatalf("external exec error = %v, want context.Canceled", execErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("external exec did not return after cancellation")
+	}
+}
+
+func TestExecCancellationHelper(t *testing.T) {
+	marker := slices.Index(os.Args, "external-exec-cancel-helper")
+	if marker < 0 {
+		return
+	}
+	if marker+1 >= len(os.Args) {
+		t.Fatal("missing child ready marker path")
+	}
+	// #nosec G703 -- Only the parent test's temporary marker path is passed here.
+	if err := os.WriteFile(os.Args[marker+1], []byte("ready"), 0o600); err != nil {
+		t.Fatalf("write child ready marker: %v", err)
+	}
+	select {}
 }
 
 func TestExec_NonZeroExit(t *testing.T) {

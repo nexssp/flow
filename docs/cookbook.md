@@ -10,7 +10,7 @@ The standard CLI bundle set is assembled in [`native/native.go`](../native/nativ
 nflow run flow.nflow
 nflow run flow.nflow '{"user_id":42}'
 nflow run -vv flow.nflow
-nflow show flow.nflow
+nflow info flow.nflow
 nflow catalog --flow flow.nflow
 nflow lint flow.nflow
 nflow fmt --write flow.nflow
@@ -603,7 +603,7 @@ Every named hook must exist in the active Kernel registry.
 1. Run `nflow catalog --flow FILE` and confirm every action, source, operator, directive, and modifier is mounted.
 2. Run `nflow lint FILE` before debugging runtime behavior.
 3. Use `nflow run -vv FILE` for action names and `-vvv` for payload-level tracing.
-4. Use `nflow show FILE` or `nflow explain` to inspect compiled structure where supported by the CLI version.
+4. Use `nflow info FILE` for pipeline shape or `nflow explain FILE` for effective policies.
 5. If a flow uses `@require`, verify the module/version and harness build output.
 6. If an approval or idempotent flow behaves unexpectedly, use a fresh execution ID when the source or callsite layout changed.
 7. Keep tests deterministic: use `@assert` for run contracts and `nflow test` with `@test` for suite-only checks.

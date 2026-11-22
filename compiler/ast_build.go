@@ -832,6 +832,7 @@ func (c *ConditionalExpr) Build(ctx context.Context, bCtx *BuildContext) (action
 		}
 	}
 	cond = WithChildExpressionScopeAction(cond)
+	cond = normalizeConditionalCondition(cond, bCtx)
 	thenBranch = WithChildExpressionScopeAction(thenBranch)
 	if elseBranch != nil {
 		elseBranch = WithChildExpressionScopeAction(elseBranch)
@@ -853,6 +854,31 @@ func (c *ConditionalExpr) Build(ctx context.Context, bCtx *BuildContext) (action
 		composition.Notes = []string{"else branch is absent; a false condition returns nil"}
 	}
 	return action.WithComposition(program, composition), nil
+}
+
+func normalizeConditionalCondition(inner action.AnyAction, bCtx *BuildContext) action.AnyAction {
+	condition := action.Dynamic(inner).UseFirst(func(next action.Fn[any, any]) action.Fn[any, any] {
+		return func(ctx context.Context, input any) (any, error) {
+			value, err := next(ctx, input)
+			if err != nil {
+				return nil, err
+			}
+			if _, ok := value.(bool); ok {
+				return value, nil
+			}
+			reflected := reflect.ValueOf(value)
+			if reflected.IsValid() && reflected.Kind() == reflect.Bool {
+				return reflected.Bool(), nil
+			}
+			return value, nil
+		}
+	}).Build()
+	return TrackActionComposition(bCtx, condition, action.IntrospectionComposition{
+		Kind: "conditional_condition",
+		Children: []action.IntrospectionChild{{
+			Node: inner, Relation: IntrospectionKindWraps, Role: "condition",
+		}},
+	})
 }
 
 func (l *LoopExpr) Analyze(r CapabilityResolver) error {

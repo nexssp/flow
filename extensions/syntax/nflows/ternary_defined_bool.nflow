@@ -1,0 +1,4 @@
+# @syntax-only
+@description "Ternary routes a defined false boolean to the false branch"
+@assert: result == "false"
+.condition ? "true" : "false"

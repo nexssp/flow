@@ -4,7 +4,7 @@
 
 Before adding code, search `github.com/nexssp/kernel`, this repository, and other Nexss packages for an existing primitive. Reuse the existing contract instead of copying it.
 
-Use [`docs/REUSE_INDEX.md`](docs/REUSE_INDEX.md) as the quick navigation catalog, then verify the actual signature in source and tests.
+Search Kernel and repository source/tests for reusable primitives; use the [extension architecture guide](docs/extensions.md) to navigate extension points, then verify the actual signature in source and tests.
 
 Prefer, in this order:
 
@@ -65,6 +65,11 @@ cover parser internals, wiring, and behavior a fixture cannot express (live
 network, subprocess isolation, host filesystem root); each such case must
 document why it cannot be a fixture. Do not create a second registry, parser,
 runner, or hook system.
+
+For NFlow examples and specs, prefer `->` for sequential steps, same-name
+projection shorthand, and `@assert { ... }` with direct map-result fields
+(no redundant `result.`); omit parentheses around simple field arguments, using a
+leading `let` when needed to avoid projection-entry ambiguity.
 
 ## 4. Duplicate and overwrite policy
 

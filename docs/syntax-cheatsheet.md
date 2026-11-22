@@ -11,7 +11,7 @@ nflow run -vv flow.nflow
 nflow lint flow.nflow
 nflow fmt --write flow.nflow
 nflow catalog --flow flow.nflow
-nflow show flow.nflow
+nflow explain flow.nflow
 nflow run flow.nflow --assert='result.ok == true'
 ```
 
@@ -58,12 +58,15 @@ request.action :timeout=3s :retry=2 (id: .id)
 | `with` | `runtime.with` |
 | `pick` | `runtime.pick` |
 | `wrap` | `runtime.wrap` |
-| `fail` | `fail` |
-| `noop` | `noop` |
+| `fail` | `runtime.fail` |
+| `noop` | `runtime.noop` |
 | `sleep` | `runtime.sleep` |
 | `env` | `runtime.env` |
 | `uuid` | `runtime.uuid` |
 | `json` | `json.clean` |
+| `print` | `runtime.print` |
+| `debug` | `runtime.debug` |
+| `flatten` | `runtime.flatten` |
 
 ## Pipelines and control flow
 

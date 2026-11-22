@@ -2,8 +2,10 @@ package builder
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/nexssp/kernel/xerr"
 
@@ -25,7 +27,7 @@ func packageBuildSources(ctx context.Context, path, source string, requirements 
 	ctx = compiler.WithPreprocessObserver(ctx, func(event compiler.PreprocessEvent) {
 		name, nameErr := relativeBuildSourceName(root, event.File)
 		if nameErr != nil {
-			snapshotErr = xerr.Conflict("build source path cannot be made relative: " + event.File)
+			snapshotErr = xerr.Conflict("build source path cannot be made relative: " + nameErr.Error())
 			return
 		}
 		rewrittenSource, includeErr := rewriteAbsoluteIncludePaths(event.Original, root, event.Metadata)
@@ -55,6 +57,10 @@ func relativeBuildSourceName(root, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	resolvedRoot, err := filepath.EvalSymlinks(absoluteRoot)
+	if err != nil {
+		return "", err
+	}
 	absolute, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
@@ -62,6 +68,20 @@ func relativeBuildSourceName(root, path string) (string, error) {
 	relative, err := filepath.Rel(absoluteRoot, absolute)
 	if err != nil {
 		return "", err
+	}
+	if relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", errors.New("source path is outside the build root")
+	}
+	resolvedPath, err := filepath.EvalSymlinks(absolute)
+	if err != nil {
+		return "", err
+	}
+	resolvedRelative, err := filepath.Rel(resolvedRoot, resolvedPath)
+	if err != nil {
+		return "", err
+	}
+	if resolvedRelative == ".." || strings.HasPrefix(resolvedRelative, ".."+string(filepath.Separator)) {
+		return "", errors.New("source resolves outside the build root")
 	}
 	return filepath.ToSlash(filepath.Clean(relative)), nil
 }

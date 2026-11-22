@@ -95,3 +95,90 @@ func TestPackagedSourcesRewriteAbsoluteIncludesToRelativePaths(t *testing.T) {
 	ktest.RequireEqual(t, resolved, "parts/child.nflow")
 	ktest.RequireEqual(t, string(data), files["parts/child.nflow"])
 }
+
+func TestPackagedSourcesRejectParentDirectoryInclude(t *testing.T) {
+	t.Parallel()
+	workspace := t.TempDir()
+	root := filepath.Join(workspace, "project")
+	flow := filepath.Join(root, "main.nflow")
+	source := "@include ../private.nflow\n"
+	writeSourceGraphFixture(t, flow, source)
+	writeSourceGraphFixture(t, filepath.Join(workspace, "private.nflow"), "sensitive.marker\n")
+
+	_, _, err := packageBuildSources(t.Context(), flow, source, nil)
+	if err == nil || !strings.Contains(err.Error(), "outside the build root") {
+		t.Fatalf("packageBuildSources error = %v, want outside-root rejection", err)
+	}
+}
+
+func TestPackagedSourcesRejectAbsoluteIncludeOutsideRoot(t *testing.T) {
+	t.Parallel()
+	workspace := t.TempDir()
+	root := filepath.Join(workspace, "project")
+	flow := filepath.Join(root, "main.nflow")
+	outside := filepath.Join(workspace, "private.nflow")
+	source := "@include \"" + filepath.ToSlash(outside) + "\"\n"
+	writeSourceGraphFixture(t, flow, source)
+	writeSourceGraphFixture(t, outside, "sensitive.marker\n")
+
+	_, _, err := packageBuildSources(t.Context(), flow, source, nil)
+	if err == nil || !strings.Contains(err.Error(), "outside the build root") {
+		t.Fatalf("packageBuildSources error = %v, want outside-root rejection", err)
+	}
+}
+
+func TestPackagedSourcesAllowParentRelativeIncludeWithinRoot(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	flow := filepath.Join(root, "main.nflow")
+	child := filepath.Join(root, "parts", "child.nflow")
+	source := "@include parts/child.nflow\n"
+	writeSourceGraphFixture(t, flow, source)
+	writeSourceGraphFixture(t, child, "@include ../shared.nflow\n")
+	writeSourceGraphFixture(t, filepath.Join(root, "shared.nflow"), "inside.marker\n")
+
+	_, files, err := packageBuildSources(t.Context(), flow, source, nil)
+	ktest.RequireNoError(t, err)
+	if _, ok := files["shared.nflow"]; !ok {
+		t.Fatalf("parent-relative in-root include missing from packaged files: %#v", files)
+	}
+}
+
+func TestPackagedSourcesRejectOutsideSymlinkToInsideRoot(t *testing.T) {
+	t.Parallel()
+	workspace := t.TempDir()
+	root := filepath.Join(workspace, "project")
+	flow := filepath.Join(root, "main.nflow")
+	target := filepath.Join(root, "shared.nflow")
+	alias := filepath.Join(workspace, "shared-alias.nflow")
+	source := "@include \"" + filepath.ToSlash(alias) + "\"\n"
+	writeSourceGraphFixture(t, flow, source)
+	writeSourceGraphFixture(t, target, "inside.marker\n")
+	if err := os.Symlink(target, alias); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	_, _, err := packageBuildSources(t.Context(), flow, source, nil)
+	if err == nil || !strings.Contains(err.Error(), "outside the build root") {
+		t.Fatalf("packageBuildSources error = %v, want lexical outside-root rejection", err)
+	}
+}
+
+func TestPackagedSourcesRejectSymlinkEscape(t *testing.T) {
+	t.Parallel()
+	workspace := t.TempDir()
+	root := filepath.Join(workspace, "project")
+	flow := filepath.Join(root, "main.nflow")
+	source := "@include linked.nflow\n"
+	writeSourceGraphFixture(t, flow, source)
+	outside := filepath.Join(workspace, "private.nflow")
+	writeSourceGraphFixture(t, outside, "sensitive.marker\n")
+	if err := os.Symlink(outside, filepath.Join(root, "linked.nflow")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	_, _, err := packageBuildSources(t.Context(), flow, source, nil)
+	if err == nil || !strings.Contains(err.Error(), "outside the build root") {
+		t.Fatalf("packageBuildSources error = %v, want symlink-escape rejection", err)
+	}
+}

@@ -54,10 +54,16 @@ var Exec = action.New("external.exec", func(ctx context.Context, in map[string]a
 	}
 
 	var exitErr *exec.ExitError
-	if !asExitError(runErr, &exitErr) {
+	isExitError := asExitError(runErr, &exitErr)
+	if isExitError {
+		result.ExitCode = exitErr.ExitCode()
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return result, ctxErr
+	}
+	if !isExitError {
 		return result, xerr.Internal("exec " + command + ": " + runErr.Error())
 	}
-	result.ExitCode = exitErr.ExitCode()
 
 	return result, xerr.Internal(fmt.Sprintf(
 		"exec %q failed with exit code %d: %s",

@@ -1,0 +1,102 @@
+@description "Release gate: verify false and zero boundaries, exact-limit routing, pure decisions, and safety invariants with local inputs"
+
+# This scenario uses builtin NFlow values. A defined Go bool alias needs a Go-backed input test.
+@schema ReleaseRequest struct {
+  RequestID      string `json:"request_id" validate:"required"`
+  Enabled        bool   `json:"enabled"`
+  AvailableCents int    `json:"available_cents" validate:"gte=0"`
+  RequestedCents int    `json:"requested_cents" validate:"gte=0"`
+}
+
+@func release.is_allowed(enabled bool, requested int, available int) bool {
+  enabled && requested > 0 && requested <= available
+}
+
+@func release.decision(enabled bool, requested int, available int) string {
+  !enabled
+    ? "disabled"
+    : requested == 0
+      ? "zero-request"
+      : requested > available
+        ? "over-limit"
+        : "approved"
+}
+
+@macro assert_approved_requests_are_safe() {
+  assert(.decision != "approved" || .enabled && .requested_cents > 0 && .requested_cents <= .available_cents, "approval requires an enabled account and a nonzero request within the limit")
+}
+
+@pipeline review_request
+  ReleaseRequest.validate
+  -> {
+    let approved = release.is_allowed(.enabled, .requested_cents, .available_cents);
+    let decision = release.decision(.enabled, .requested_cents, .available_cents);
+    request_id,
+    enabled,
+    available_cents,
+    requested_cents,
+    approved,
+    decision,
+    headroom_cents: .available_cents - .requested_cents
+  }
+  -> @assert_approved_requests_are_safe()
+@end
+
+@assert {
+  disabled_zero.request_id == "RG-100"
+  disabled_zero.enabled == false
+  disabled_zero.requested_cents == 0
+  disabled_zero.approved == false
+  disabled_zero.decision == "disabled"
+  disabled_zero.headroom_cents == 0
+  zero_request.enabled == true
+  zero_request.requested_cents == 0
+  zero_request.approved == false
+  zero_request.decision == "zero-request"
+  zero_request.headroom_cents == 0
+  exact_limit.approved == true
+  exact_limit.decision == "approved"
+  exact_limit.headroom_cents == 0
+  over_limit.approved == false
+  over_limit.decision == "over-limit"
+  over_limit.headroom_cents == -1
+}
+
+parallel {
+  disabled_zero: (
+  {
+    request_id: "RG-100",
+    enabled: false,
+    available_cents: 0,
+    requested_cents: 0
+  }
+  -> pipeline.review_request
+  ),
+  zero_request: (
+  {
+    request_id: "RG-103",
+    enabled: true,
+    available_cents: 0,
+    requested_cents: 0
+  }
+  -> pipeline.review_request
+  ),
+  exact_limit: (
+  {
+    request_id: "RG-101",
+    enabled: true,
+    available_cents: 12500,
+    requested_cents: 12500
+  }
+  -> pipeline.review_request
+  ),
+  over_limit: (
+  {
+    request_id: "RG-102",
+    enabled: true,
+    available_cents: 12500,
+    requested_cents: 12501
+  }
+  -> pipeline.review_request
+  )
+}

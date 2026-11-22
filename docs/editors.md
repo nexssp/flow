@@ -192,7 +192,7 @@ nflow fmt --check flow.nflow
 cat flow.nflow | nflow fmt --stdin
 nflow lint flow.nflow
 nflow catalog --flow flow.nflow
-nflow show flow.nflow
+nflow info flow.nflow
 ```
 
 `nflow fmt` is the single formatting implementation used by the editor integrations. `nflow lint` performs preprocessing, parsing, registry, and compile-time checks. Neither command evaluates arbitrary runtime input or proves external service behavior.

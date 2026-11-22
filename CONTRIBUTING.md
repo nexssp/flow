@@ -22,10 +22,10 @@ The normal full verification workflow is:
 task tidy       # update go.mod / go.sum; inspect and commit any required changes
 task fmt        # auto-format Go sources; inspect the resulting diff
 task pre-push   # extension self-tests, lint, short race tests
-task ci         # extension self-tests, integrated specs, lint, uncached race tests
+task ci         # extension self-tests, integrated specs, lint, uncached race tests, vulnerability scan
 ```
 
-`task ci` runs its dependencies in parallel. Formatting is a separate operation, not a dependency of these gates. There is no `ci:pr`, `fmt:check`, `examples`, or `test:harness` target in this checkout.
+`task ci` runs its dependencies in parallel. Formatting is a separate operation, not a dependency of these gates. Hosted GitHub Actions also runs module-tidy, build, NFlow spec-lint, harness, and benchmark checks. There is no `ci:pr`, `fmt:check`, or `examples` target in this checkout; `test:harness` is available below.
 
 Useful focused checks:
 
@@ -38,6 +38,7 @@ task test:nflow # run the integrated NFlow acceptance suite via nflow test ./spe
 task specs      # execute the integrated acceptance flows and their assertions
 task self       # native and optional-bundle extension conformance checks
 task test:smoke # CLI smoke checks
+task test:harness # harness integration checks
 task vuln       # govulncheck
 ```
 

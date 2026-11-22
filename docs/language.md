@@ -147,7 +147,7 @@ delay the result.
 
 ## 2. Native keywords
 
-Nine action keyword names are part of the language itself. They compile to
+Twelve action keyword names are part of the language itself. They compile to
 canonical actions at parse time and cannot be overridden by any bundle.
 
 | Keyword | Compiles to | Meaning |
@@ -161,6 +161,9 @@ canonical actions at parse time and cannot be overridden by any bundle.
 | `env` | `runtime.env` | Read an environment variable |
 | `uuid` | `runtime.uuid` | Generate a UUID v4 |
 | `json` | `json.clean` | Strip markdown fences and prose from a JSON body |
+| `print` | `runtime.print` | Print a value |
+| `debug` | `runtime.debug` | Emit debug output |
+| `flatten` | `runtime.flatten` | Flatten nested values |
 
 Each listed keyword compiles to its canonical action. The control-flow keyword
 `if` is also reserved when the standard `syntax` bundle is loaded, but it does

@@ -92,11 +92,11 @@ The similarly named build commands do different jobs:
 
 - `nflow build -o ./bin/my-flow flow/00_flow_basics/04_data_transformation.nflow` creates a standalone executable with the flow embedded. It is a packaging/build command, not a check-only validator; the flow runs when you launch the generated executable. Build flags may precede or follow the input path; use `nflow help build` for supported options.
 - `task build` compiles the repository's Go packages. It does not validate or execute `.nflow` files.
-- `task test` runs the repository's short test suite. Use `task test -- ./runner` to target a package, `task test:race` for race detection, and `task ci` for the complete repository gate.
+- `task test` runs the repository's short test suite. Use `task test -- ./runner` to target a package, `task test:race` for race detection, and `task ci` for the configured local Taskfile gate; it is not the complete hosted GitHub Actions suite.
 
 ## Repository workflows
 
-All local verification goes through [Task](https://taskfile.dev), matching CI:
+Use [Task](https://taskfile.dev) for common local checks. The hosted GitHub Actions workflow also runs separate module-tidy, build, NFlow spec-lint, harness, and benchmark checks, so `task ci` alone is not a substitute for every hosted check.
 
 ```sh
 task --list

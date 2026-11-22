@@ -47,7 +47,7 @@ Action argument details are assembled in [`compiler/parser.go`](../compiler/pars
 [`compiler/at_brace.go`](../compiler/at_brace.go), and
 [`compiler/ast_build.go`](../compiler/ast_build.go).
 
-Flow has nine reserved runtime keyword actions that map to canonical capabilities and cannot be shadowed by a bundle:
+Flow has twelve reserved runtime keyword actions that map to canonical capabilities and cannot be shadowed by a bundle:
 
 | Keyword | Canonical action |
 |---|---|
@@ -60,6 +60,9 @@ Flow has nine reserved runtime keyword actions that map to canonical capabilitie
 | `env` | `runtime.env` |
 | `uuid` | `runtime.uuid` |
 | `json` | `json.clean` |
+| `print` | `runtime.print` |
+| `debug` | `runtime.debug` |
+| `flatten` | `runtime.flatten` |
 
 The keyword map is in [`compiler/reserved.go`](../compiler/reserved.go). Compile-time `@const` is a separate directive for named constants; it is not a runtime action.
 
