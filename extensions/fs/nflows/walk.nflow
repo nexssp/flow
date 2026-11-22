@@ -1,3 +1,4 @@
-@description "Discover files recursively with fs.walk"
+@description "Discover files with fs.walk and stop at the first traversal error"
 @assert: len(result) == 2
-fs.walk -> collect
+fs.walk ( dir: ".", fail_on_error: true )
+  -> collect

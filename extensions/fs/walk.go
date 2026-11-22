@@ -32,8 +32,10 @@ type WalkConfig struct {
 	Skip          []string `json:"skip"           cli:"skip"`
 	IncludeHidden bool     `json:"include_hidden" cli:"include_hidden"`
 	IncludeAll    bool     `json:"include_all"    cli:"include_all"`
-	Ext           string   `json:"ext"            cli:"ext"`
-	MaxDepth      int      `json:"max_depth"      cli:"max_depth"`
+	// FailOnError propagates the first traversal or entry metadata error and stops the walk.
+	FailOnError bool   `json:"fail_on_error" cli:"fail_on_error"`
+	Ext         string `json:"ext"            cli:"ext"`
+	MaxDepth    int    `json:"max_depth"      cli:"max_depth"`
 }
 
 func WalkSource() action.AnyStreamAction {
@@ -77,11 +79,11 @@ func walkOneDir(
 			return fs.SkipAll
 		}
 		if walkErr != nil {
-			// The root itself is the only fatal case: yield the error
-			// and stop. Non-root errors are skipped because a single
-			// unreadable file must not abort the whole traversal.
-			// walkErr is not "swallowed" — it is either propagated via
-			// yield or it triggers SkipAll.
+			// By default, non-root traversal errors are skipped and root
+			// errors are yielded. FailOnError yields the first error and stops.
+			if config.FailOnError {
+				return stopWithWalkError(walkErr, &stop, yield)
+			}
 			if path == absPath {
 				if !yield(FileMeta{}, walkErr) {
 					stop = true
@@ -99,6 +101,12 @@ func walkOneDir(
 	return !stop
 }
 
+func stopWithWalkError(err error, stop *bool, yield func(FileMeta, error) bool) error {
+	*stop = true
+	yield(FileMeta{}, err)
+	return fs.SkipAll
+}
+
 func visitEntry(
 	path string,
 	entry fs.DirEntry,
@@ -112,7 +120,10 @@ func visitEntry(
 	name := entry.Name()
 	relPath, relErr := filepath.Rel(root, path)
 	if relErr != nil {
-		//nolint:nilerr // path is always under root; unreachable in practice
+		if config.FailOnError {
+			return stopWithWalkError(relErr, stop, yield)
+		}
+		// A path returned by WalkDir is always under root.
 		return nil
 	}
 	depth := calculateDepth(relPath)
@@ -151,7 +162,10 @@ func visitEntry(
 
 	info, infoErr := entry.Info()
 	if infoErr != nil {
-		//nolint:nilerr // unreadable entry: skip it, do not abort the walk
+		if config.FailOnError {
+			return stopWithWalkError(infoErr, stop, yield)
+		}
+		// Skip unreadable entries unless the caller requested fail-fast errors.
 		return nil
 	}
 

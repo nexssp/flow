@@ -2,6 +2,7 @@ package fs
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -110,6 +111,41 @@ func TestWalkSource_RealFilesystem(t *testing.T) {
 	})
 }
 
+func TestWalkSource_FailOnErrorPropagatesNonRootTraversalError(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "a.go"), "package a")
+	unreadable := filepath.Join(root, "z-unreadable")
+	writeFile(t, filepath.Join(unreadable, "b.go"), "package b")
+	if err := os.Chmod(unreadable, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(unreadable, 0o700); err != nil {
+			t.Errorf("restore unreadable directory permissions: %v", err)
+		}
+	})
+
+	strictPaths, strictErr := collectPathsWithError(t, WalkConfig{Dir: root, FailOnError: true})
+	if strictErr == nil {
+		t.Skip("filesystem does not enforce directory read permissions")
+	}
+	if !errors.Is(strictErr, os.ErrPermission) {
+		t.Fatalf("strict walk error = %v, want permission error", strictErr)
+	}
+	if !contains(strictPaths, "a.go") {
+		t.Fatalf("strict walk paths = %v, want the readable file before the error", strictPaths)
+	}
+	if contains(strictPaths, "z-unreadable/b.go") {
+		t.Fatalf("strict walk continued below the unreadable directory: %v", strictPaths)
+	}
+
+	defaultPaths, defaultErr := collectPathsWithError(t, WalkConfig{Dir: root})
+	ktest.RequireNoError(t, defaultErr)
+	ktest.RequireCondition(t, contains(defaultPaths, "a.go"), "default walk lost readable file: %v", defaultPaths)
+	ktest.RequireCondition(t, !contains(defaultPaths, "z-unreadable/b.go"), "default walk entered unreadable directory: %v", defaultPaths)
+}
+
 func writeFile(tb testing.TB, path, content string) {
 	tb.Helper()
 	ktest.RequireNoError(tb, os.MkdirAll(filepath.Dir(path), 0o755))
@@ -133,6 +169,29 @@ func collectPaths(tb testing.TB, cfg WalkConfig) []string {
 		return true
 	})
 	return paths
+}
+
+func collectPathsWithError(tb testing.TB, cfg WalkConfig) ([]string, error) {
+	tb.Helper()
+	stream, err := WalkSource().DoStreamAny(context.Background(), cfg)
+	if err != nil {
+		return nil, err
+	}
+	var paths []string
+	var walkErr error
+	stream(func(item any, itemErr error) bool {
+		if itemErr != nil {
+			walkErr = itemErr
+			return true
+		}
+		meta, ok := item.(FileMeta)
+		if !ok {
+			tb.Fatalf("item type = %T, want FileMeta", item)
+		}
+		paths = append(paths, meta.RelPath)
+		return true
+	})
+	return paths, walkErr
 }
 
 func contains(haystack []string, needle string) bool {
