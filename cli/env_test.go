@@ -58,9 +58,9 @@ func TestEnvReport(t *testing.T) {
 	}
 	ktest.RequireEqual(t, false, strings.ContainsRune(text, '\x1b'))
 	ktest.RequireEqual(t, 2, len(envGroups))
-	ktest.RequireEqual(t, 12, len(seen))
+	ktest.RequireEqual(t, 13, len(seen))
 	for _, name := range []string{
-		"NFLOW_GO_VERBOSE", "NFLOW_GO_TIMEOUT", "NFLOW_HARNESS_CACHE", "NFLOW_HARNESS",
+		"NFLOW_GO_VERBOSE", "NFLOW_GO_TIMEOUT", "NFLOW_STDIN_WAIT", "NFLOW_HARNESS_CACHE", "NFLOW_HARNESS",
 		"LOG_LEVEL", "LOG_FORMAT", "NO_COLOR", "GOBIN", "GOPATH", "GOWORK", "TEMP", "TMP",
 	} {
 		ktest.RequireEqual(t, true, seen[name])

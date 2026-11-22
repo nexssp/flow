@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/nexssp/kernel/ai/dag"
 	"github.com/nexssp/kernel/xctx"
@@ -27,6 +28,19 @@ const (
 	preserveStdinFlag  = "--preserve-stdin"
 	suppressOutputFlag = "--suppress-output"
 )
+
+// defaultStdinWait bounds how long `run` waits for piped stdin to deliver its
+// first byte before proceeding without stdin input. Once a byte has arrived,
+// the read continues to EOF without a deadline, so live producers are never
+// cut short. The bound prevents `nflow run` from blocking forever in
+// environments where stdin is an open pipe that never delivers data and never
+// closes (CI runners, containers, editors). NFLOW_STDIN_WAIT overrides it.
+const defaultStdinWait = 250 * time.Millisecond
+
+// stdinWaitEnvName is the environment knob for the piped-stdin first-byte
+// bound: a non-negative Go duration, where 0s restores the legacy unbounded
+// wait.
+const stdinWaitEnvName = "NFLOW_STDIN_WAIT"
 
 func RunWithBundles(args []string, bundles []compiler.Bundle) int {
 	return RunWithBundlesForRequirements(args, bundles, nil)
@@ -579,7 +593,8 @@ func emitPreparedOutput(output any, suppressOutput, wantJSON, isTerm, useColor b
 }
 
 func readPipedStdin(current map[string]any) (map[string]any, error) {
-	stat, err := os.Stdin.Stat()
+	stdin := os.Stdin
+	stat, err := stdin.Stat()
 	if err != nil {
 		return nil, fmt.Errorf("stat stdin: %w", err)
 	}
@@ -587,9 +602,14 @@ func readPipedStdin(current map[string]any) (map[string]any, error) {
 		return current, nil
 	}
 
-	raw, err := io.ReadAll(os.Stdin)
+	wait := stdinWait()
+	raw, timedOut, err := readStdinBounded(stdin, wait)
 	if err != nil {
 		return nil, fmt.Errorf("read stdin: %w", err)
+	}
+	if timedOut {
+		fmt.Fprintf(os.Stderr, "nflow: stdin is open but delivered no input within %s; continuing without it (pipe a JSON payload, or set %s=0s to wait indefinitely)\n", wait, stdinWaitEnvName)
+		return current, nil
 	}
 
 	trimmed := strings.TrimSpace(string(raw))
@@ -616,6 +636,65 @@ func readPipedStdin(current map[string]any) (map[string]any, error) {
 		}
 	}
 	return current, nil
+}
+
+// stdinWait resolves the first-byte piped-stdin bound. Empty uses the
+// default; 0 or a negative duration waits indefinitely; invalid values warn
+// and fall back to the default, matching NFLOW_GO_TIMEOUT's convention.
+func stdinWait() time.Duration {
+	raw := strings.TrimSpace(os.Getenv(stdinWaitEnvName))
+	if raw == "" {
+		return defaultStdinWait
+	}
+	parsed, err := time.ParseDuration(raw)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "nflow: ignoring invalid %s %q (expected a non-negative Go duration such as 2s); using %s\n", stdinWaitEnvName, raw, defaultStdinWait)
+		return defaultStdinWait
+	}
+	return parsed
+}
+
+// readStdinBounded reads all of stdin but bounds the wait for the FIRST byte.
+// If no byte arrives within wait, it reports timedOut without consuming
+// anything. After the first byte the read blocks until EOF exactly as before,
+// so producers that are slow but live are never truncated. wait <= 0 waits
+// indefinitely (legacy behavior).
+func readStdinBounded(stdin io.Reader, wait time.Duration) (data []byte, timedOut bool, err error) {
+	if wait <= 0 {
+		data, err = io.ReadAll(stdin)
+		return data, false, err
+	}
+
+	first := make([]byte, 1)
+	type firstResult struct {
+		n   int
+		err error
+	}
+	done := make(chan firstResult, 1)
+	go func() {
+		n, readErr := stdin.Read(first)
+		done <- firstResult{n, readErr}
+	}()
+
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case result := <-done:
+		if result.err != nil && !errors.Is(result.err, io.EOF) {
+			return nil, false, result.err
+		}
+		if result.n == 0 {
+			// Immediate EOF: empty stdin, consumed without a timeout.
+			return []byte{}, false, nil
+		}
+		rest, restErr := io.ReadAll(stdin)
+		if restErr != nil {
+			return nil, false, restErr
+		}
+		return append(first[:result.n], rest...), false, nil
+	case <-timer.C:
+		return nil, true, nil
+	}
 }
 
 func readRunInput(payload map[string]any, source string, flags []string) (input map[string]any, remainingFlags []string, err error) {

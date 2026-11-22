@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nexssp/kernel/xtest/ktest"
 )
@@ -167,4 +168,178 @@ func TestRunSource_NonStdinFlow_ConsumesStdinAsPayload(t *testing.T) {
 	})
 
 	ktest.RequireStringContains(t, out, `"who":"stdin"`)
+}
+
+// withOpenStdin replaces os.Stdin with a pipe whose writer stays open for the
+// duration of the test: stdin is non-terminal, delivers no data, and never
+// reaches EOF. This is the shape CI runners and containers provide.
+func withOpenStdin(t *testing.T) {
+	t.Helper()
+	r, w, err := os.Pipe()
+	ktest.RequireNoError(t, err)
+	t.Cleanup(func() {
+		_ = w.Close()
+		_ = r.Close()
+	})
+	old := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = old })
+}
+
+// readPipedStdinDeadline runs fn and fails the test if it does not finish
+// within the deadline, so a regression to an unbounded stdin read cannot hang
+// the suite.
+func readPipedStdinDeadline(t *testing.T, deadline time.Duration, fn func()) {
+	t.Helper()
+	finished := make(chan struct{})
+	go func() {
+		fn()
+		close(finished)
+	}()
+	select {
+	case <-finished:
+	case <-time.After(deadline):
+		t.Fatalf("readPipedStdin did not return within %s; open stdin is blocking the run again", deadline)
+	}
+}
+
+func TestReadPipedStdin_OpenSilentStdinDoesNotBlock(t *testing.T) {
+	withOpenStdin(t)
+	t.Setenv("NFLOW_STDIN_WAIT", "20ms")
+
+	payload := map[string]any{"x": 1}
+	var got map[string]any
+	var readErr error
+	readPipedStdinDeadline(t, 5*time.Second, func() {
+		got, readErr = readPipedStdin(payload)
+	})
+	ktest.RequireNoError(t, readErr)
+
+	ktest.RequireEqual(t, got, map[string]any{"x": 1})
+}
+
+func TestReadPipedStdin_LiveSlowProducerStillWaitsForEOF(t *testing.T) {
+	t.Setenv("NFLOW_STDIN_WAIT", "50ms")
+	r, w, err := os.Pipe()
+	ktest.RequireNoError(t, err)
+	old := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() {
+		os.Stdin = old
+		_ = r.Close()
+		_ = w.Close()
+	})
+
+	// First byte is immediate; EOF arrives only after the first-byte bound has
+	// passed. The read must still deliver the complete payload.
+	_, err = w.WriteString(`{"user":"alice"}`)
+	ktest.RequireNoError(t, err)
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		_ = w.Close()
+	}()
+
+	payload := map[string]any{"existing": "kept"}
+	var got map[string]any
+	var readErr error
+	readPipedStdinDeadline(t, 5*time.Second, func() {
+		got, readErr = readPipedStdin(payload)
+	})
+	ktest.RequireNoError(t, readErr)
+
+	ktest.RequireEqual(t, got["user"], "alice")
+	ktest.RequireEqual(t, got["existing"], "kept")
+}
+
+func TestStdinWait_InvalidValueWarnsAndUsesDefault(t *testing.T) {
+	t.Setenv("NFLOW_STDIN_WAIT", "not-a-duration")
+
+	wait := stdinWait()
+	ktest.RequireEqual(t, wait, defaultStdinWait)
+}
+
+func TestStdinWait_ZeroWaitsIndefinitely(t *testing.T) {
+	t.Setenv("NFLOW_STDIN_WAIT", "0s")
+	ktest.RequireEqual(t, stdinWait(), time.Duration(0))
+}
+
+func TestReadStdinBounded_ImmediateEmptyEOFIsEmptyRead(t *testing.T) {
+	withStdin(t, "")
+	t.Setenv("NFLOW_STDIN_WAIT", "50ms")
+
+	data, timedOut, err := readStdinBounded(os.Stdin, stdinWait())
+	ktest.RequireNoError(t, err)
+	ktest.RequireFalse(t, timedOut)
+	ktest.RequireEqual(t, string(data), "")
+}
+
+type blockedStdinReader struct {
+	started  chan struct{}
+	release  chan struct{}
+	finished chan struct{}
+}
+
+func (r *blockedStdinReader) Read([]byte) (int, error) {
+	close(r.started)
+	defer close(r.finished)
+	<-r.release
+	return 0, io.EOF
+}
+
+func TestReadStdinBoundedTimeoutDoesNotRaceWithStdinReplacement(t *testing.T) {
+	temporaryStdin, stdinWriter, err := os.Pipe()
+	ktest.RequireNoError(t, err)
+	oldStdin := os.Stdin
+	os.Stdin = temporaryStdin
+	t.Cleanup(func() {
+		os.Stdin = oldStdin
+		_ = temporaryStdin.Close()
+		_ = stdinWriter.Close()
+	})
+
+	reader := &blockedStdinReader{
+		started:  make(chan struct{}),
+		release:  make(chan struct{}),
+		finished: make(chan struct{}),
+	}
+	releaseReader := func() {
+		select {
+		case <-reader.release:
+		default:
+			close(reader.release)
+		}
+	}
+	defer releaseReader()
+
+	type result struct {
+		timedOut bool
+		err      error
+	}
+	got := make(chan result, 1)
+	go func() {
+		_, timedOut, readErr := readStdinBounded(reader, 20*time.Millisecond)
+		got <- result{timedOut: timedOut, err: readErr}
+	}()
+
+	select {
+	case <-reader.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("bounded reader did not use the supplied stdin reader")
+	}
+	select {
+	case readResult := <-got:
+		ktest.RequireNoError(t, readResult.err)
+		ktest.RequireTrue(t, readResult.timedOut)
+	case <-time.After(5 * time.Second):
+		t.Fatal("bounded stdin read did not return after its deadline")
+	}
+
+	// Cleanup replaces os.Stdin while the timed-out read is still blocked.
+	os.Stdin = oldStdin
+	releaseReader()
+	select {
+	case <-reader.finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("blocked stdin read did not finish after release")
+	}
 }

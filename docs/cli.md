@@ -36,6 +36,13 @@ following flags:
 | `--preserve-stdin` | Do not consume piped stdin as workflow input; reserve it for an action or transport such as an MCP stdio server. |
 | `--suppress-output` | Suppress the runner's final result on stdout. Output written directly by workflow actions or transports is unaffected. |
 
+When stdin is piped, `run` waits at most `NFLOW_STDIN_WAIT` (default 250ms,
+`0s` waits indefinitely) for the first byte before continuing without stdin
+input; a notice is printed to stderr whenever input is skipped this way. Once
+a byte has arrived the read waits for EOF, so slow but live producers are
+never truncated. Environments that keep stdin open without sending data (some
+CI runners, containers, editors) no longer stall the run.
+
 For local testing of an in-process stdio transport, use
 `nflow run server.nflow --preserve-stdin --suppress-output`: the first flag
 leaves stdin to the transport and the second prevents the runner's final result

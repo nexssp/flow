@@ -25,6 +25,7 @@ var envGroups = []struct {
 		vars: []envVariable{
 			{"NFLOW_GO_VERBOSE", "1 streams Go subprocess diagnostics and disables the progress spinner; default: quiet Go output."},
 			{"NFLOW_GO_TIMEOUT", "Timeout per harness Go command, as a positive Go duration (e.g. 2m); default: 10m. Invalid values warn and use the default."},
+			{"NFLOW_STDIN_WAIT", "How long `run` waits for piped stdin to deliver its first byte before proceeding without it, as a non-negative Go duration (e.g. 2s); 0s waits indefinitely. Default: 250ms. Invalid values warn and use the default."},
 			{"NFLOW_HARNESS_CACHE", "Harness cache root; empty/unset: OS user cache directory + nflow/harness, falling back to the temporary directory + nflow/harness."},
 			{"NFLOW_HARNESS", "Internal child-runner marker; any non-empty value skips external harness delegation. Default: unset; do not set manually."},
 			{"LOG_LEVEL", "CLI log threshold: debug, warn, error (case-insensitive); debug also shows the using NFlow notice when the current core is selected; default, empty or unrecognized: info."},
