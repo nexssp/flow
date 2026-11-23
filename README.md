@@ -86,7 +86,7 @@ The root [`spec/`](spec/README.md) suite contains deterministic, real-world work
 
 Use `nflow lint <file.nflow>` for a static check, or pass a directory or Go-style recursive target such as `nflow lint ./flow/...` to discover sources automatically. It preprocesses each file, parses its pipeline, and checks referenced atoms and modifiers against that file's active registry; it does **not** execute flows. Lint is not a substitute for exercising runtime behavior, and it does not prove every expression or input will succeed.
 
-For local performance measurements, use `nflow self bench`; it compiles and runs the bundled benchmark scenarios in-process, with warmup excluded from the reported timings. This is separate from `nflow self test`, which checks feature correctness. See the [CLI guide](docs/cli.md#benchmark-built-in-scenarios) for filters, custom scenario paths, metrics, and safety details.
+For local performance measurements, use `nflow self bench`; it compiles and runs the bundled benchmark scenarios in-process, with warmup excluded from the reported timings. Its text report graphs phase-level Go heap allocations; add `--profile` for per-action warm timing (including profiler hook overhead). This is separate from `nflow self test`, which checks feature correctness. See the [CLI guide](docs/cli.md#benchmark-built-in-scenarios) for filters, custom scenario paths, metrics, and safety details.
 
 The similarly named build commands do different jobs:
 

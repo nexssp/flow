@@ -143,17 +143,18 @@ var helpRegistry = map[string]helpText{
 	},
 	"self": {
 		Summary: "Manage the installed nflow binary, run self-tests, or benchmark built-in scenarios.",
-		Usage:   "nflow self <up|test|bench> [filter...] [flags]\n  nflow self bench [filter...] [--path FILE_OR_DIR] [--iterations N] [--warmup N] [--json] [--list]",
+		Usage:   "nflow self <up|test|bench> [filter...] [flags]\n  nflow self bench [filter...] [--path FILE_OR_DIR] [--iterations N] [--warmup N] [--profile] [--json] [--list]",
 		Flags: `Self test:
       --verbose             print DSL on failure
       --json                machine-readable JSON summary
       --no-color            disable ANSI color
       --syntax-only         compile selected fixtures without executing flows or probing language runtimes
 Self bench:
-      --path FILE_OR_DIR    benchmark one file or discover a directory instead of built-ins
-      --iterations N        measured iterations (default 50; range 1..1000000)
-      --warmup N            unreported warmups (default 3; range 0..1000000)
-      --json                machine-readable benchmark report
+	      --path FILE_OR_DIR    benchmark one file or discover a directory instead of built-ins
+	      --iterations N        measured iterations (default 50; range 1..1000000)
+	      --warmup N            unreported warmups (default 3; range 0..1000000)
+	      --profile             include per-action warm timings (adds hook overhead)
+	      --json                machine-readable benchmark report
       --list                list matching scenarios without running them`,
 		Examples: []string{
 			`nflow self up                        # rebuild with VCS metadata from source tree`,
@@ -166,6 +167,7 @@ Self bench:
 			`nflow self bench                    # benchmark built-in scenarios`,
 			`nflow self bench resilience         # benchmark NFlow resilience patterns`,
 			`nflow self bench api --iterations 100 --warmup 5`,
+			`nflow self bench pipeline --profile # show per-action warm timing`,
 			`nflow self bench --path ./flows --list`,
 		},
 	},

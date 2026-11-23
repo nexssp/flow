@@ -21,16 +21,36 @@ type Options struct {
 	Warmup     int
 	JSON       bool
 	List       bool
+	Profile    bool
 }
 
-// Result separates one compilation and first execution from warm samples.
+// AllocationStats counts Go heap allocations made during a phase. Bytes are
+// cumulative allocated bytes, not live heap size or resident memory.
+type AllocationStats struct {
+	Allocations uint64 `json:"allocations"`
+	Bytes       uint64 `json:"bytes"`
+}
+
+// AllocationPerRun summarizes allocations over repeated runs.
+type AllocationPerRun struct {
+	Runs              int     `json:"runs"`
+	AllocationsPerRun float64 `json:"allocations_per_run"`
+	BytesPerRun       float64 `json:"bytes_per_run"`
+}
+
+// Result separates compilation, first execution, and warm samples.
 type Result struct {
-	Name       string                  `json:"name"`
-	CompileMs  float64                 `json:"compile_ms"`
-	FirstRunMs float64                 `json:"first_run_ms"`
-	Warmup     int                     `json:"warmup"`
-	Warm       nodes_bench.BenchRunRes `json:"warm"`
-	Error      string                  `json:"error,omitempty"`
+	Name               string                  `json:"name"`
+	CompileMs          float64                 `json:"compile_ms"`
+	CompileAllocation  AllocationStats         `json:"compile_allocation"`
+	FirstRunMs         float64                 `json:"first_run_ms"`
+	FirstRunAllocation AllocationStats         `json:"first_run_allocation"`
+	Warmup             int                     `json:"warmup"`
+	WarmupAllocation   AllocationPerRun        `json:"warmup_allocation"`
+	Warm               nodes_bench.BenchRunRes `json:"warm"`
+	WarmAllocation     AllocationPerRun        `json:"warm_allocation"`
+	Actions            []ActionProfile         `json:"actions,omitempty"`
+	Error              string                  `json:"error,omitempty"`
 }
 
 type Report struct {
@@ -40,6 +60,7 @@ type Report struct {
 	Arch       string   `json:"arch"`
 	CPUs       int      `json:"cpus"`
 	GOMAXPROCS int      `json:"gomaxprocs"`
+	Profiled   bool     `json:"profiled"`
 	Results    []Result `json:"results"`
 }
 
@@ -59,7 +80,7 @@ func Run(ctx context.Context, cfg runner.Config, scenarios []Scenario, opts Opti
 		}
 		return 0
 	}
-	report := Report{Version: 1, GoVersion: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH, CPUs: runtime.NumCPU(), GOMAXPROCS: runtime.GOMAXPROCS(0), Results: make([]Result, 0, len(scenarios))}
+	report := Report{Version: 1, GoVersion: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH, CPUs: runtime.NumCPU(), GOMAXPROCS: runtime.GOMAXPROCS(0), Profiled: opts.Profile, Results: make([]Result, 0, len(scenarios))}
 	code := 0
 	for _, scenario := range scenarios {
 		result := measure(ctx, cfg, scenario, opts)
@@ -107,6 +128,11 @@ func writeReport(report Report, opts Options) error {
 func measure(ctx context.Context, cfg runner.Config, scenario Scenario, opts Options) (result Result) {
 	result.Name = scenario.Name
 	result.Warmup = opts.Warmup
+	var profile *actionProfiler
+	if opts.Profile {
+		profile = newActionProfiler()
+		cfg.EventSink = combineEventSinks(cfg.EventSink, profile)
+	}
 	// A faulty custom scenario must be a failed benchmark, not crash the suite.
 	defer func() {
 		if p := recover(); p != nil {
@@ -117,9 +143,11 @@ func measure(ctx context.Context, cfg runner.Config, scenario Scenario, opts Opt
 		result.Error = err.Error()
 		return result
 	}
+	compileBefore := readAllocationCounter()
 	start := time.Now()
 	compiled, err := runner.Compile(ctx, cfg, scenario.Source, scenario.File)
 	result.CompileMs = milliseconds(time.Since(start))
+	result.CompileAllocation = allocationDelta(compileBefore, readAllocationCounter())
 	if err != nil {
 		result.Error = "compile: " + err.Error()
 		return result
@@ -137,26 +165,75 @@ func measure(ctx context.Context, cfg runner.Config, scenario Scenario, opts Opt
 		}
 		return nil
 	}
+	firstBefore := readAllocationCounter()
 	start = time.Now()
 	err = invoke(ctx)
 	result.FirstRunMs = milliseconds(time.Since(start))
+	result.FirstRunAllocation = allocationDelta(firstBefore, readAllocationCounter())
 	if err != nil {
 		result.Error = "first run: " + err.Error()
 		return result
 	}
-	for range opts.Warmup {
-		if err = invoke(ctx); err != nil {
-			result.Error = "warmup: " + err.Error()
-			return result
+	if opts.Warmup > 0 {
+		warmupBefore := readAllocationCounter()
+		warmupRuns := 0
+		for range opts.Warmup {
+			warmupRuns++
+			if err = invoke(ctx); err != nil {
+				result.WarmupAllocation = allocationAverage(allocationDelta(warmupBefore, readAllocationCounter()), warmupRuns)
+				result.Error = "warmup: " + err.Error()
+				return result
+			}
 		}
+		result.WarmupAllocation = allocationAverage(allocationDelta(warmupBefore, readAllocationCounter()), warmupRuns)
 	}
-	result.Warm, err = nodes_bench.Measure(ctx, opts.Iterations, invoke)
+	warmBefore := readAllocationCounter()
+	result.Warm, err = measureWarm(ctx, opts.Iterations, invoke, profile)
+	result.WarmAllocation = allocationAverage(allocationDelta(warmBefore, readAllocationCounter()), result.Warm.Iterations)
+	if profile != nil {
+		result.Actions = profile.Snapshot()
+	}
 	result.Warm.Action = scenario.Name
 	result.Warm.Warmup = opts.Warmup
 	if err != nil {
 		result.Error = err.Error()
 	}
 	return result
+}
+
+func measureWarm(ctx context.Context, iterations int, invoke func(context.Context) error, profile *actionProfiler) (nodes_bench.BenchRunRes, error) {
+	if profile == nil {
+		return nodes_bench.Measure(ctx, iterations, invoke)
+	}
+	profile.SetEnabled(true)
+	defer profile.SetEnabled(false)
+	return nodes_bench.Measure(ctx, iterations, invoke)
+}
+
+type allocationCounter struct {
+	objects uint64
+	bytes   uint64
+}
+
+func readAllocationCounter() allocationCounter {
+	var stats runtime.MemStats
+	runtime.ReadMemStats(&stats)
+	return allocationCounter{objects: stats.Mallocs, bytes: stats.TotalAlloc}
+}
+
+func allocationDelta(before, after allocationCounter) AllocationStats {
+	return AllocationStats{Allocations: after.objects - before.objects, Bytes: after.bytes - before.bytes}
+}
+
+func allocationAverage(stats AllocationStats, runs int) AllocationPerRun {
+	if runs < 1 {
+		return AllocationPerRun{}
+	}
+	return AllocationPerRun{
+		Runs:              runs,
+		AllocationsPerRun: float64(stats.Allocations) / float64(runs),
+		BytesPerRun:       float64(stats.Bytes) / float64(runs),
+	}
 }
 
 func milliseconds(d time.Duration) float64 { return float64(d) / float64(time.Millisecond) }

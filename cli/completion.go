@@ -58,7 +58,7 @@ _nflow() {
         completion) flags="bash zsh pwsh powershell" ;;
         self)
             if [ "$COMP_CWORD" -eq 2 ]; then flags="up test bench"
-            elif [[ "$op" == "bench" ]]; then flags="--path --iterations --warmup --json --list"
+            elif [[ "$op" == "bench" ]]; then flags="--path --iterations --warmup --profile --json --list"
             elif [[ "$op" == "test" ]]; then flags="--verbose --json --no-color --syntax-only"
             else flags=""
             fi ;;
@@ -170,6 +170,7 @@ _nflow() {
                     '--path=[use a custom file or directory]:file or directory:()' \
                     '--iterations=[number of measured iterations]:N:()' \
                     '--warmup=[number of warmup iterations]:N:()' \
+                    '--profile[include per-action warm timings]' \
                     '--json[emit a JSON report]' \
                     '--list[list matching scenarios without running]'
             elif [[ "${words[3]}" == "test" ]]; then
@@ -279,7 +280,7 @@ Register-ArgumentCompleter -Native -CommandName nflow -ScriptBlock {
     $flags = switch ($sub) {
         'run'   { @('-v', '-vv', '-vvv', '--assert=', '--approval=', '--budget=', '--max-tokens=', '--journal-dir=', '--execution-id=', '--preserve-stdin', '--suppress-output') }
         'build' { @('-o', '--output=', '--debug', '-d', '--no-trimpath', '--all-bundles') }
-'self' { if ($tokens.Count -ge 3 -and $tokens[2].ToString() -eq 'bench') { @('--path', '--iterations', '--warmup', '--json', '--list') } elseif ($tokens.Count -ge 3 -and $tokens[2].ToString() -eq 'test') { @('--verbose', '--json', '--no-color', '--syntax-only') } else { @() } }
+	'self' { if ($tokens.Count -ge 3 -and $tokens[2].ToString() -eq 'bench') { @('--path', '--iterations', '--warmup', '--profile', '--json', '--list') } elseif ($tokens.Count -ge 3 -and $tokens[2].ToString() -eq 'test') { @('--verbose', '--json', '--no-color', '--syntax-only') } else { @() } }
 		'require' { if ($tokens.Count -ge 3 -and $tokens[2].ToString() -in @('check', 'update', 'pin')) { @('--package') } else { @() } }
         'pin' { @('--package') }
         default { @() }

@@ -448,7 +448,7 @@ for their static lint gate.
 ## Benchmark built-in scenarios
 
 ```sh
-nflow self bench [filter...] [--path FILE_OR_DIR] [--iterations N] [--warmup N] [--json] [--list]
+nflow self bench [filter...] [--path FILE_OR_DIR] [--iterations N] [--warmup N] [--profile] [--json] [--list]
 ```
 
 `self bench` measures whole `.nflow` scenarios, reusing the sampling and
@@ -480,6 +480,7 @@ them.
 | `--path FILE_OR_DIR` | Use one custom `.nflow` file or recursively discover `*.nflow` files below a directory instead of embedded scenarios. |
 | `--iterations N` | Number of measured warm iterations; default `50`, allowed range `1..1000000`. |
 | `--warmup N` | Number of unreported warmup iterations; default `3`, allowed range `0..1000000`. |
+| `--profile` | Add an action-level timing breakdown for measured warm runs. This installs lifecycle hooks, so the hook overhead is included in the reported timings. |
 | `--json` | Emit the benchmark report as JSON. |
 | `--list` | List matching scenario paths and do not execute them. |
 
@@ -487,7 +488,20 @@ For each scenario, `compile_ms` measures in-process compile/setup time and
 `first_run_ms` measures its first execution. **`first_run_ms` is not an OS or
 process cold-start measurement.** Warm-run metrics exclude warmup and report
 minimum, maximum, mean, p50, p95, and p99 latency, runs per second (`rps`), and
-errors. Each scenario is compiled once; repeated executions reuse its compiled
+errors. The text report graphs time for compile, first run, and average measured
+warm execution, alongside Go heap allocation counts and bytes for compile, first
+run, warmup runs, and measured warm runs. These are cumulative allocated bytes,
+not live heap size or process
+RSS; phase counters are process-wide deltas and include a small amount of bench
+harness bookkeeping.
+
+With `--profile`, the report lists lifecycle actions observed during measured
+warm runs, ranked by accumulated inclusive time. Nested action durations overlap,
+so do not sum them as if they were disjoint. Allocation bytes are reported at
+phase level rather than attributed to individual actions: nested and concurrent
+actions make process-wide allocation deltas ambiguous at action granularity.
+The profile covers registered action lifecycle events, not every expression
+operator or internal compiler step. Each scenario is compiled once; repeated executions reuse its compiled
 program and any retained cache/state, but receive fresh payload maps and execution
 identities. Timed samples include the normal runner execution wrapper; they are
 not isolated action-call timings. `@assert:` directives are checked by scenario

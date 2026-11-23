@@ -12,9 +12,10 @@ func TestSelfBenchHelp(t *testing.T) {
 		t.Fatal("PrintCommandHelp(self) returned false")
 	}
 	for _, want := range []string{
-		"nflow self bench [filter...] [--path FILE_OR_DIR] [--iterations N] [--warmup N] [--json] [--list]",
+		"nflow self bench [filter...] [--path FILE_OR_DIR] [--iterations N] [--warmup N] [--profile] [--json] [--list]",
 		"--iterations N        measured iterations (default 50; range 1..1000000)",
 		"--warmup N            unreported warmups (default 3; range 0..1000000)",
+		"--profile             include per-action warm timings (adds hook overhead)",
 		"--list                list matching scenarios without running them",
 	} {
 		if !strings.Contains(output.String(), want) {
@@ -31,7 +32,7 @@ func TestSelfBenchCompletionFlagsDoNotCompleteScenarioValues(t *testing.T) {
 				t.Fatalf("Completion(%q): %v", shell, err)
 			}
 			text := script.String()
-			for _, flag := range []string{"--path", "--iterations", "--warmup", "--json", "--list", "--syntax-only"} {
+			for _, flag := range []string{"--path", "--iterations", "--warmup", "--profile", "--json", "--list", "--syntax-only"} {
 				if !strings.Contains(text, flag) {
 					t.Errorf("%s completion does not contain %s", shell, flag)
 				}

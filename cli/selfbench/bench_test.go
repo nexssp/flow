@@ -131,10 +131,52 @@ func TestBuiltinScenarios(t *testing.T) {
 			xtest.RequireEqual(t, r.Warm.Iterations, 3)
 			xtest.RequireEqual(t, r.Warm.Warmup, 1)
 			xtest.RequireEqual(t, r.Warm.Errors, 0)
+			xtest.RequireCondition(t, r.CompileAllocation.Bytes > 0 && r.CompileAllocation.Allocations > 0,
+				"compile phase must report Go heap allocations: %+v", r.CompileAllocation)
+			xtest.RequireCondition(t, r.FirstRunAllocation.Bytes > 0 && r.FirstRunAllocation.Allocations > 0,
+				"first run must report Go heap allocations: %+v", r.FirstRunAllocation)
+			xtest.RequireEqual(t, r.WarmupAllocation.Runs, 1)
+			xtest.RequireEqual(t, r.WarmAllocation.Runs, 3)
+			xtest.RequireCondition(t, r.WarmAllocation.BytesPerRun > 0 && r.WarmAllocation.AllocationsPerRun > 0,
+				"warm runs must report average Go heap allocations: %+v", r.WarmAllocation)
 			// Very short phases can fall below the platform clock's resolution.
 			xtest.RequireCondition(t, r.CompileMs >= 0 && r.FirstRunMs >= 0 && r.Warm.RPS > 0,
 				"phase timings must be non-negative and throughput positive (compile=%vms first-run=%vms rps=%v)", r.CompileMs, r.FirstRunMs, r.Warm.RPS)
 		}
+	})
+}
+
+func TestActionProfileCapturesOnlyMeasuredWarmRuns(t *testing.T) {
+	withConfig(t, func(ctx context.Context, cfg runner.Config) {
+		actionCalls := 0
+		probe := action.New("benchprobe.profile", func(_ context.Context, _ any) (any, error) {
+			actionCalls++
+			return "ok", nil
+		}).Build()
+		xtest.RequireNoError(t, cfg.Resolver.Mount(action.Library{Name: "benchprobe", Actions: []action.AnyAction{probe}}))
+		scenarios := []Scenario{{Name: "profile.nflow", File: "profile.nflow", Source: "benchprobe.profile"}}
+		var output bytes.Buffer
+		code := Run(ctx, cfg, scenarios, Options{Out: &output, Iterations: 3, Warmup: 2, JSON: true, Profile: true})
+		xtest.RequireEqual(t, code, 0)
+		var report Report
+		xtest.RequireNoError(t, json.Unmarshal(output.Bytes(), &report))
+		xtest.RequireEqual(t, report.Profiled, true)
+		xtest.RequireEqual(t, actionCalls, 6)
+		result := report.Results[0]
+		xtest.RequireEqual(t, result.WarmupAllocation.Runs, 2)
+		xtest.RequireEqual(t, result.WarmAllocation.Runs, 3)
+		var profiled *ActionProfile
+		for i := range result.Actions {
+			if result.Actions[i].Action == "benchprobe.profile" {
+				profiled = &result.Actions[i]
+				break
+			}
+		}
+		xtest.RequireCondition(t, profiled != nil, "expected action profile, got %+v", result.Actions)
+		xtest.RequireEqual(t, profiled.Calls, 3)
+		xtest.RequireEqual(t, profiled.Errors, 0)
+		xtest.RequireCondition(t, profiled.TotalMs >= 0 && profiled.MeanMs >= 0,
+			"profile durations must be non-negative: %+v", profiled)
 	})
 }
 

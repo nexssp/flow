@@ -13,13 +13,14 @@ import (
 )
 
 func TestParseSelfBenchArgs(t *testing.T) {
-	parsed, err := parseSelfBenchArgs([]string{"API", "--iterations", "7", "parallel", "--warmup=0", "--json", "--path", "some folder"}, io.Discard)
+	parsed, err := parseSelfBenchArgs([]string{"API", "--iterations", "7", "parallel", "--warmup=0", "--json", "--profile", "--path", "some folder"}, io.Discard)
 	xtest.RequireNoError(t, err)
 	xtest.RequireEqual(t, parsed.filters, []string{"API", "parallel"})
 	xtest.RequireEqual(t, parsed.path, "some folder")
 	xtest.RequireEqual(t, parsed.options.Iterations, 7)
 	xtest.RequireEqual(t, parsed.options.Warmup, 0)
 	xtest.RequireEqual(t, parsed.options.JSON, true)
+	xtest.RequireEqual(t, parsed.options.Profile, true)
 	defaults, err := parseSelfBenchArgs(nil, io.Discard)
 	xtest.RequireNoError(t, err)
 	xtest.RequireEqual(t, defaults.options.Iterations, 50)
@@ -37,7 +38,7 @@ func TestSelfBenchDispatch(t *testing.T) {
 	for _, args := range [][]string{
 		{"self", "bench", "--list", "--json"},
 		{"self", "bench", "--path", file, "custom", "--iterations=2", "--warmup=0", "--json"},
-		{"self", "bench", "--path", dir, "--iterations=1", "--warmup=0"},
+		{"self", "bench", "--path", dir, "--iterations=1", "--warmup=0", "--profile"},
 	} {
 		code := -1
 		content, _ := captureIO(t, func() { code = RunContext(context.Background(), args) })
