@@ -272,7 +272,7 @@ jobs:
       - name: Run benchmark smoke check
         run: >-
           go test -run='^$'
-          -bench='^(BenchmarkResilienceWorkflow|BenchmarkExpressionValueViewTypedProjectionOutput|BenchmarkExprEvaluatorTypedProjectionOutput)$'
+          -bench='^(BenchmarkResilienceWorkflow|BenchmarkExpressionValueViewTypedProjectionOutput|BenchmarkExprEvaluatorTypedProjectionOutput|BenchmarkProjectionActionInjectedRoot)$'
           -benchmem ./...
 
   # This is the stable branch-protection gate; keep its identity unchanged.

@@ -15,6 +15,12 @@ func projectionAction(eval Evaluator) action.AnyAction {
 	return action.New("projection.project",
 		func(ctx context.Context, input map[string]any) (any, error) {
 			raw, _ := input["raw"].(string)
+			if root, ok := input[expressionRootName]; ok {
+				_, hasRaw := input["raw"]
+				if len(input) == 1 || (len(input) == 2 && hasRaw) {
+					return eval(ctx, Request{Raw: raw, Input: root})
+				}
+			}
 
 			state := make(map[string]any, len(input))
 			for key, value := range input {

@@ -26,7 +26,7 @@ tasks:
   test:race:nocache:short: { desc: "{{.GOTEST}} -race -short -count=1 [./...]", cmds: ['{{.GOTEST}} -race -short -count=1 {{.CLI_ARGS | default "./..."}}'] }
   test:harness: { desc: "Run harness integration tests with concise failure reporting", cmds: ['go test -count=1 ./cmd/ci-test-summary', 'go run ./cmd/ci-test-summary'] }
   test:cover:        { desc: "{{.GOTEST}} -coverprofile=coverage.out [./...]",  cmds: ['{{.GOTEST}} -coverprofile=coverage.out -short {{.CLI_ARGS | default "./..."}}', go tool cover -func=coverage.out] }
-  bench:             { desc: "Run quick benchmarks (exclude cold harness builds) [./...]", cmds: ["{{.GOTEST}} -run='^$' -bench='^(BenchmarkResilienceWorkflow|BenchmarkExpressionValueViewTypedProjectionOutput|BenchmarkExprEvaluatorTypedProjectionOutput)$' -benchmem {{.CLI_ARGS | default \"./...\"}}"] }
+  bench:             { desc: "Run quick benchmarks (exclude cold harness builds) [./...]", cmds: ["{{.GOTEST}} -run='^$' -bench='^(BenchmarkResilienceWorkflow|BenchmarkExpressionValueViewTypedProjectionOutput|BenchmarkExprEvaluatorTypedProjectionOutput|BenchmarkProjectionActionInjectedRoot)$' -benchmem {{.CLI_ARGS | default \"./...\"}}"] }
   bench:all:         { desc: "Run all benchmarks, including cold harness builds [./...]", cmds: ["{{.GOTEST}} -run='^$' -bench=. -benchmem {{.CLI_ARGS | default \"./...\"}}"] }
 
   bench:harness:
