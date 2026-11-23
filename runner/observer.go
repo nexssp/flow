@@ -73,7 +73,20 @@ func (o *Observer) Emit(ctx context.Context, event observe.Event) {
 	if o == nil {
 		return
 	}
-	event = sanitizeObservedEvent(event, o.secretContracts, activeSecretScrubber(ctx, o.secretScrubber))
+	if o.verbosity >= 3 {
+		// Live payload tracing prints request and response data, so the full
+		// sanitization pass is required before anything is rendered.
+		event = sanitizeObservedEvent(event, o.secretContracts, activeSecretScrubber(ctx, o.secretScrubber))
+	} else {
+		// Below verbosity 3 the sanitized payloads have no consumer: the
+		// memory sink stores metadata-only snapshots (metadataOnlyEvent strips
+		// request, response, error, and recovered values) and records keep only
+		// action, duration, and error data. Walking every payload would compute
+		// redactions that are then discarded, so only the error is sanitized.
+		// Secret capture still runs through the action hooks, keeping the
+		// scrubber able to redact these values from the execution result.
+		event.Error = activeSecretScrubber(ctx, o.secretScrubber).SanitizeError(event.Error)
+	}
 	if o.events != nil {
 		o.events.Emit(ctx, metadataOnlyEvent(event))
 	}
@@ -241,12 +254,6 @@ func (sink secretSanitizingSink) Emit(ctx context.Context, event observe.Event) 
 
 var _ observe.Sink = secretSanitizingSink{}
 
-type secretCaptureSink struct{}
-
-func (secretCaptureSink) Emit(context.Context, observe.Event) {}
-
-var _ observe.Sink = secretCaptureSink{}
-
 type secretContractRegistry struct {
 	mu        sync.RWMutex
 	contracts map[string]secretActionContract
@@ -338,8 +345,14 @@ func secretSanitizingHook(hook action.AnyHook, registry *secretContractRegistry,
 		safe.Before = func(ctx context.Context, request any, meta *action.Meta) (context.Context, error) {
 			event := sanitizeHookEvent(ctx, observe.Event{Action: hookActionName(meta), Request: request}, registry, scrubber)
 			next, err := hook.Before(ctx, event.Request, meta)
-			event.Error = err
-			return next, sanitizeHookEvent(ctx, event, registry, scrubber).Error
+			if err != nil {
+				// The hook error is the only value returned to the caller, and
+				// the scrubber already captured the request's secret values when
+				// the event above was sanitized, so redacting the error alone is
+				// equivalent to re-sanitizing the full event.
+				err = activeSecretScrubber(ctx, scrubber).SanitizeError(err)
+			}
+			return next, err
 		}
 	}
 	if hook.After != nil {

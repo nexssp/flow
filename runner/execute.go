@@ -206,7 +206,9 @@ func compilePrepared(ctx context.Context, cfg Config, prepared *compiler.Prepare
 	if cfg.secretContracts == nil {
 		cfg.secretContracts = newSecretContractRegistry()
 	}
-	cfg.Hooks = append(append([]action.AnyHook(nil), cfg.Hooks...), observe.Hook(secretCaptureSink{}))
+	// The execution-scoped secret capture and execution-start recording hook
+	// is appended by newExecutionResolverWithSecretContracts itself, without
+	// the payload-sanitizing wrapper.
 	if cfg.EventSink != nil {
 		cfg.Hooks = append(append([]action.AnyHook(nil), cfg.Hooks...), observe.Hook(secretSanitizingSink{
 			next: cfg.EventSink, secretContracts: cfg.secretContracts, secretScrubber: cfg.secretScrubber,

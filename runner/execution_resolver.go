@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -59,10 +60,15 @@ func newExecutionResolverWithSecretContracts(base compiler.CapabilityResolver, h
 	if base == nil {
 		return nil, errors.New("executionResolver: base resolver is nil")
 	}
-	safeHooks := make([]action.AnyHook, len(hooks))
-	for index, hook := range hooks {
-		safeHooks[index] = secretSanitizingHook(hook, secretContracts, scrubber)
+	safeHooks := make([]action.AnyHook, 0, len(hooks)+1)
+	for _, hook := range hooks {
+		safeHooks = append(safeHooks, secretSanitizingHook(hook, secretContracts, scrubber))
 	}
+	// The secret capture hook is appended without the sanitizing wrapper: it
+	// only records secret values for later scrubbing and never reads event
+	// payloads, so wrapping it would reflectively walk every payload for a
+	// hook that ignores them.
+	safeHooks = append(safeHooks, secretCaptureHook(scrubber, secretContracts))
 	// Materializers mount declarations into the resolver, so each execution
 	// needs an overlay even when no hooks are configured.
 	r := &executionResolver{
@@ -141,6 +147,66 @@ var (
 	_ compiler.ContractProvider  = (*executionResolver)(nil)
 	_ compiler.ContractRegistrar = (*executionResolver)(nil)
 )
+
+// secretCaptureHook remembers secret values seen in action payloads so echoed
+// values can be scrubbed from later outputs and errors. It replaces the former
+// observe.Hook(secretCaptureSink{}) wiring: the no-op sink existed only to route
+// RecordExecutionStart and secret capture through the sanitizing wrapper, whose
+// full payload sanitization protected nothing because no callback of this hook
+// ever reads a request or response. Capture itself still walks payloads; that
+// walk is what keeps the execution-scoped scrubber able to redact secrets later.
+func secretCaptureHook(scrubber *secret.Scrubber, contracts *secretContractRegistry) action.AnyHook {
+	capture := func(ctx context.Context, actionName string, request, response, recovered any) {
+		active := activeSecretScrubber(ctx, scrubber)
+		if active == nil {
+			return
+		}
+		var requestType, responseType reflect.Type
+		if contracts != nil {
+			if contract, ok := contracts.contractTypes(actionName); ok {
+				requestType, responseType = contract.request, contract.response
+			}
+		}
+		active.Capture(request, requestType)
+		active.Capture(response, responseType)
+		active.Capture(recovered, nil)
+	}
+	return action.AnyHook{
+		Before: func(ctx context.Context, _ any, _ *action.Meta) (context.Context, error) {
+			return action.RecordExecutionStart(ctx), nil
+		},
+		OnSuccess: func(ctx context.Context, request, response any, meta *action.Meta) {
+			capture(ctx, hookActionName(meta), request, response, nil)
+		},
+		OnTimeout: func(ctx context.Context, request any, meta *action.Meta) {
+			capture(ctx, hookActionName(meta), request, nil, nil)
+		},
+		OnError: func(ctx context.Context, request any, _ error, meta *action.Meta) {
+			capture(ctx, hookActionName(meta), request, nil, nil)
+		},
+		OnRetry: func(ctx context.Context, request any, _ int, _ error, meta *action.Meta) {
+			capture(ctx, hookActionName(meta), request, nil, nil)
+		},
+		OnCacheHit: func(ctx context.Context, request, response any, meta *action.Meta) {
+			capture(ctx, hookActionName(meta), request, response, nil)
+		},
+		OnCacheMiss: func(ctx context.Context, request any, meta *action.Meta) {
+			capture(ctx, hookActionName(meta), request, nil, nil)
+		},
+		OnCoalesced: func(ctx context.Context, request any, meta *action.Meta) {
+			capture(ctx, hookActionName(meta), request, nil, nil)
+		},
+		OnDeduplicated: func(ctx context.Context, request any, meta *action.Meta) {
+			capture(ctx, hookActionName(meta), request, nil, nil)
+		},
+		OnCancel: func(ctx context.Context, request any, meta *action.Meta) {
+			capture(ctx, hookActionName(meta), request, nil, nil)
+		},
+		OnPanic: func(ctx context.Context, request, recovered any, meta *action.Meta) {
+			capture(ctx, hookActionName(meta), request, nil, recovered)
+		},
+	}
+}
 
 func (r *executionResolver) Action(name string) (action.AnyAction, bool) {
 	r.mu.Lock()
