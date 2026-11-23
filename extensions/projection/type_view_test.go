@@ -507,6 +507,28 @@ func TestExpressionViewConvertsDeepAndCyclicRecursiveValues(t *testing.T) {
 	if err != nil || value != "cycle" {
 		t.Fatalf("evaluate recursive pointer-cycle path = (%#v, %v), want cycle", value, err)
 	}
+	deepCycle := &recursiveProjectionNode{Name: "deep-cycle"}
+	deepTail := deepCycle
+	for range 10 {
+		deepTail.Next = &recursiveProjectionNode{Name: "nested"}
+		deepTail = deepTail.Next
+	}
+	deepTail.Next = deepCycle
+	deepCycleView, ok := expressionValueView(deepCycle).(map[string]any)
+	if !ok {
+		t.Fatalf("deep cyclic view = %T, want map[string]any", expressionValueView(deepCycle))
+	}
+	deepCurrent := deepCycleView
+	for range 10 {
+		deepCurrent, ok = deepCurrent["next"].(map[string]any)
+		if !ok {
+			t.Fatal("deep cyclic view lost a nested node")
+		}
+	}
+	deepSelf, ok := deepCurrent["next"].(map[string]any)
+	if !ok || reflect.ValueOf(deepSelf).Pointer() != reflect.ValueOf(deepCycleView).Pointer() {
+		t.Fatal("deep cyclic view did not preserve its reference after the active stack spilled")
+	}
 
 	cycleMap := map[string]any{}
 	cycleMap["self"] = cycleMap

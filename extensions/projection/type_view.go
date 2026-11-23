@@ -2,7 +2,9 @@ package projection
 
 import (
 	"context"
+	"maps"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -44,9 +46,17 @@ type expressionViewKey struct {
 }
 
 type expressionViewState struct {
-	active           map[expressionViewKey]any
+	active           []expressionViewEntry
+	smallActive      [8]expressionViewEntry
 	typeCache        *expressionViewTypeCache
 	snakeCaseAliases map[string]string
+	partialReference bool
+}
+
+type expressionViewEntry struct {
+	key     expressionViewKey
+	view    any
+	partial bool
 }
 
 const (
@@ -186,39 +196,82 @@ func expressionValueViewDepth(value reflect.Value, state *expressionViewState) a
 		value = value.Elem()
 	}
 	key, tracked := expressionViewReferenceKey(value)
+	activeIndex := -1
 	if tracked {
-		if view, exists := state.active[key]; exists {
+		if view, exists := state.activeView(key); exists {
 			return view
 		}
-		if state.active == nil {
-			state.active = make(map[expressionViewKey]any)
-		}
-		state.active[key] = nil
-		defer delete(state.active, key)
+		activeIndex = state.pushActive(key)
 	}
 
-	//nolint:exhaustive // Only pointers, structs, maps and sequences need recursive conversion.
+	var view any
 	switch value.Kind() {
 	case reflect.Pointer:
-		if value.IsNil() {
-			return nil
+		if !value.IsNil() {
+			if value.Elem().Kind() == reflect.Struct {
+				view = expressionStructView(value.Elem(), value, state, activeIndex)
+			} else {
+				view = expressionValueViewDepth(value.Elem(), state)
+			}
 		}
-		if value.Elem().Kind() == reflect.Struct {
-			return expressionStructView(value.Elem(), value, state, key, tracked)
-		}
-		return expressionValueViewDepth(value.Elem(), state)
 	case reflect.Struct:
-		return expressionStructView(value, value, state, key, tracked)
+		view = expressionStructView(value, value, state, activeIndex)
 	case reflect.Map:
-		return expressionMapView(value, state, key, tracked)
+		view = expressionMapView(value, state, activeIndex)
 	case reflect.Slice, reflect.Array:
-		return expressionSequenceView(value, state, key, tracked)
-	default:
+		view = expressionSequenceView(value, state, activeIndex)
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+		reflect.Chan, reflect.Func, reflect.Interface, reflect.String, reflect.UnsafePointer:
 		if value.CanInterface() {
-			return value.Interface()
+			view = value.Interface()
 		}
-		return nil
 	}
+	state.popActive(activeIndex)
+	return view
+}
+
+func (state *expressionViewState) activeView(key expressionViewKey) (any, bool) {
+	for _, entry := range slices.Backward(state.active) {
+		if entry.key == key {
+			if entry.partial {
+				state.partialReference = true
+			}
+			return entry.view, true
+		}
+	}
+	return nil, false
+}
+
+func (state *expressionViewState) pushActive(key expressionViewKey) int {
+	if state.active == nil {
+		state.active = state.smallActive[:0]
+	}
+	index := len(state.active)
+	state.active = append(state.active, expressionViewEntry{key: key})
+	return index
+}
+
+func (state *expressionViewState) setActiveView(index int, view any) {
+	if index >= 0 {
+		state.active[index].view = view
+	}
+}
+
+func (state *expressionViewState) setActivePartialView(index int, view any) {
+	if index >= 0 {
+		state.active[index].view = view
+		state.active[index].partial = true
+	}
+}
+
+func (state *expressionViewState) popActive(index int) {
+	if index < 0 {
+		return
+	}
+	state.active[index] = expressionViewEntry{}
+	state.active = state.active[:index]
 }
 
 func expressionViewReferenceKey(value reflect.Value) (expressionViewKey, bool) {
@@ -246,7 +299,7 @@ func expressionViewReferenceKey(value reflect.Value) (expressionViewKey, bool) {
 	}
 }
 
-func expressionMapView(value reflect.Value, state *expressionViewState, key expressionViewKey, tracked bool) any {
+func expressionMapView(value reflect.Value, state *expressionViewState, activeIndex int) any {
 	if value.Type().Key().Kind() != reflect.String {
 		return value.Interface()
 	}
@@ -255,9 +308,10 @@ func expressionMapView(value reflect.Value, state *expressionViewState, key expr
 	}
 	if value.Type() == reflect.TypeFor[map[string]any]() {
 		items, ok := reflect.TypeAssert[map[string]any](value)
-		if ok {
-			return expressionStringAnyMapView(items, state, key, tracked)
+		if !ok {
+			return value.Interface()
 		}
+		return expressionStringAnyMapView(items, state, activeIndex)
 	}
 	out := make(map[string]any, value.Len()*2)
 	keys := make([]string, 0, value.Len())
@@ -266,9 +320,7 @@ func expressionMapView(value reflect.Value, state *expressionViewState, key expr
 		keys = append(keys, iterator.Key().String())
 	}
 	sort.Strings(keys)
-	if tracked {
-		state.active[key] = out
-	}
+	state.setActiveView(activeIndex, out)
 	for _, name := range keys {
 		mapKey := reflect.ValueOf(name)
 		if mapKey.Type() != value.Type().Key() {
@@ -295,17 +347,18 @@ type expressionMapAlias struct {
 	alias string
 }
 
-func expressionStringAnyMapView(value map[string]any, state *expressionViewState, key expressionViewKey, tracked bool) any {
+func expressionStringAnyMapView(value map[string]any, state *expressionViewState, activeIndex int) any {
 	if value == nil {
 		return nil
 	}
-	var aliases []expressionMapAlias
-	out := make(map[string]any, len(value))
-	if tracked {
-		state.active[key] = out
-	}
+	var smallAliases [8]expressionMapAlias
+	aliases := smallAliases[:0]
+	out := maps.Clone(value)
+	state.setActiveView(activeIndex, out)
 	for name, child := range value {
-		out[name] = expressionValueViewAny(child, state)
+		if !expressionValueViewIsScalar(child) {
+			out[name] = expressionValueViewAny(child, state)
+		}
 		if !expressionMapKeyHasUppercase(name) {
 			continue
 		}
@@ -315,7 +368,9 @@ func expressionStringAnyMapView(value map[string]any, state *expressionViewState
 		}
 	}
 	if len(aliases) > 1 {
-		sort.Slice(aliases, func(i, j int) bool { return aliases[i].name < aliases[j].name })
+		slices.SortFunc(aliases, func(left, right expressionMapAlias) int {
+			return strings.Compare(left.name, right.name)
+		})
 	}
 	for _, item := range aliases {
 		if _, exists := out[item.alias]; !exists {
@@ -344,14 +399,21 @@ func expressionMapKeyHasUppercase(name string) bool {
 }
 
 func expressionValueViewAny(value any, state *expressionViewState) any {
+	if expressionValueViewIsScalar(value) {
+		return value
+	}
+	return expressionValueViewDepth(reflect.ValueOf(value), state)
+}
+
+func expressionValueViewIsScalar(value any) bool {
 	switch value.(type) {
 	case nil, bool, string,
 		int, int8, int16, int32, int64,
 		uint, uint8, uint16, uint32, uint64,
 		float32, float64:
-		return value
+		return true
 	default:
-		return expressionValueViewDepth(reflect.ValueOf(value), state)
+		return false
 	}
 }
 
@@ -370,22 +432,21 @@ func (state *expressionViewState) snakeCaseAlias(name string) string {
 	return alias
 }
 
-func expressionSequenceView(value reflect.Value, state *expressionViewState, key expressionViewKey, tracked bool) any {
+func expressionSequenceView(value reflect.Value, state *expressionViewState, activeIndex int) any {
 	if value.Type() == reflect.TypeFor[[]any]() {
 		items, ok := reflect.TypeAssert[[]any](value)
-		if ok {
-			if items == nil {
-				return []any(nil)
-			}
-			out := make([]any, len(items))
-			if tracked {
-				state.active[key] = out
-			}
-			for index, item := range items {
-				out[index] = expressionValueViewAny(item, state)
-			}
-			return out
+		if !ok {
+			return value.Interface()
 		}
+		if items == nil {
+			return []any(nil)
+		}
+		out := make([]any, len(items))
+		state.setActiveView(activeIndex, out)
+		for index, item := range items {
+			out[index] = expressionValueViewAny(item, state)
+		}
+		return out
 	}
 	if value.Kind() == reflect.Slice && expressionScalarKind(value.Type().Elem().Kind()) {
 		if value.IsNil() {
@@ -394,18 +455,14 @@ func expressionSequenceView(value reflect.Value, state *expressionViewState, key
 		out := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
 		reflect.Copy(out, value)
 		view := out.Interface()
-		if tracked {
-			state.active[key] = view
-		}
+		state.setActiveView(activeIndex, view)
 		return view
 	}
 	if value.Kind() == reflect.Slice && value.IsNil() {
 		return []any(nil)
 	}
 	out := make([]any, value.Len())
-	if tracked {
-		state.active[key] = out
-	}
+	state.setActiveView(activeIndex, out)
 	for index := range value.Len() {
 		out[index] = expressionValueViewDepth(value.Index(index), state)
 	}
@@ -423,20 +480,17 @@ func expressionScalarKind(kind reflect.Kind) bool {
 		reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map,
 		reflect.Pointer, reflect.Slice, reflect.Struct, reflect.UnsafePointer:
 		return false
-	default:
-		return false
 	}
+	return false
 }
 
-func expressionStructView(value, methodReceiver reflect.Value, state *expressionViewState, key expressionViewKey, tracked bool) any {
+func expressionStructView(value, methodReceiver reflect.Value, state *expressionViewState, activeIndex int) any {
 	fields := state.typeCache.fieldsFor(value.Type())
 	if len(fields) == 0 && methodReceiver.NumMethod() == 0 {
 		return value.Interface()
 	}
 	out := make(map[string]any, len(fields)*2+methodReceiver.NumMethod())
-	if tracked {
-		state.active[key] = out
-	}
+	state.setActiveView(activeIndex, out)
 	type projectedField struct {
 		value any
 		valid bool
@@ -610,7 +664,22 @@ func normalizeExpressionEnvironmentForProjection(ctx context.Context, environmen
 	return normalizeExpressionEnvironment(ctx, environment, typeCache, projectionSourceUsesOriginalInput(source), protectedBindings...)
 }
 
+func normalizeExpressionEnvironmentForProjectionWithRootSelection(ctx context.Context, environment map[string]any, typeCache *expressionViewTypeCache, source string, selection *expressionRootViewSelection, protectedBindings ...map[string]struct{}) map[string]any {
+	return normalizeExpressionEnvironmentWithRootSelection(ctx, environment, typeCache, projectionSourceUsesOriginalInput(source), selection, protectedBindings...)
+}
+
 func normalizeExpressionEnvironment(ctx context.Context, environment map[string]any, typeCache *expressionViewTypeCache, includeOriginalInput bool, protectedBindings ...map[string]struct{}) map[string]any {
+	return normalizeExpressionEnvironmentWithRootSelection(ctx, environment, typeCache, includeOriginalInput, nil, protectedBindings...)
+}
+
+func expressionRootViewForNormalization(value any, typeCache *expressionViewTypeCache, selection *expressionRootViewSelection) any {
+	if selection != nil {
+		return expressionValueViewWithRootSelection(value, typeCache, selection)
+	}
+	return expressionValueViewWithCache(value, typeCache)
+}
+
+func normalizeExpressionEnvironmentWithRootSelection(ctx context.Context, environment map[string]any, typeCache *expressionViewTypeCache, includeOriginalInput bool, rootSelection *expressionRootViewSelection, protectedBindings ...map[string]struct{}) map[string]any {
 	out := make(map[string]any, len(environment)+2)
 	var inputView any
 	hasInputView := false
@@ -631,7 +700,7 @@ func normalizeExpressionEnvironment(ctx context.Context, environment map[string]
 			continue
 		}
 		if name == expressionRootName && hasInputRoot {
-			out[name] = expressionValueViewWithCache(root.value, typeCache)
+			out[name] = expressionRootViewForNormalization(root.value, typeCache, rootSelection)
 			continue
 		}
 		if name == expressionInputName && hasInputView {

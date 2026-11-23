@@ -47,13 +47,42 @@ func NewExprEvaluator() Evaluator {
 		}
 
 		pipelineInputNames := compiler.ExpressionPipelineInputBindingNames(ctx)
-		env := normalizeExpressionEnvironmentForProjection(ctx, compiler.MergeSymbolNamespaces(ctx, buildEnv(req.Input)), viewCache, body, pipelineInputNames)
-		if err := rejectUnavailableProjectionBindings(body, compiler.ExpressionUnavailableBindingNames(ctx), env); err != nil {
-			return nil, xerr.Validation(err.Error())
+		environment := compiler.MergeSymbolNamespaces(ctx, buildEnv(req.Input))
+		var rootSelection *expressionRootViewSelection
+		var selectionVisibleNames map[string]struct{}
+		if root, ok := environment[expressionRootName].(expressionEnvironmentRoot); ok {
+			if rootMap, ok := root.value.(map[string]any); ok {
+				rootBindings := expressionRootMapVisibleBindings(rootMap, pipelineInputNames)
+				selectionVisibleNames = projectionRuntimeVisibleNames(ctx)
+				for name := range environment {
+					selectionVisibleNames[name] = struct{}{}
+				}
+				for name := range rootBindings {
+					selectionVisibleNames[name] = struct{}{}
+				}
+				rootSelection, _ = cache.rootViewSelection(body, selectionVisibleNames, pipelineInputNames, rootBindings, rootMap)
+			}
+		}
+
+		var env map[string]any
+		if rootSelection != nil {
+			env = normalizeExpressionEnvironmentForProjectionWithRootSelection(ctx, environment, viewCache, body, rootSelection, pipelineInputNames)
+		} else {
+			env = normalizeExpressionEnvironmentForProjection(ctx, environment, viewCache, body, pipelineInputNames)
 		}
 		visibleNames := projectionRuntimeVisibleNames(ctx)
 		for name := range env {
 			visibleNames[name] = struct{}{}
+		}
+		if rootSelection != nil && !sameProjectionVisibleNames(selectionVisibleNames, visibleNames) {
+			env = normalizeExpressionEnvironmentForProjection(ctx, environment, viewCache, body, pipelineInputNames)
+			visibleNames = projectionRuntimeVisibleNames(ctx)
+			for name := range env {
+				visibleNames[name] = struct{}{}
+			}
+		}
+		if err := rejectUnavailableProjectionBindings(body, compiler.ExpressionUnavailableBindingNames(ctx), env); err != nil {
+			return nil, xerr.Validation(err.Error())
 		}
 		program, err := cache.compileScoped(body, visibleNames, pipelineInputNames)
 		if err != nil {
@@ -72,7 +101,8 @@ func NewExprEvaluator() Evaluator {
 }
 
 type programCache struct {
-	entries sync.Map
+	entries       sync.Map
+	rootPathPlans sync.Map
 }
 
 func newProgramCache() *programCache { return &programCache{} }
