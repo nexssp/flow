@@ -123,7 +123,8 @@ func (p *composedProjection) Build(ctx context.Context, bCtx *compiler.BuildCont
 		if conflictErr := rejectRuntimeProjectionBindingConflict(callCtx, p.raw, input, viewCache); conflictErr != nil {
 			return nil, conflictErr
 		}
-		env := normalizeExpressionEnvironmentWithCache(compiler.MergeSymbolNamespaces(callCtx, buildEnv(input)), viewCache)
+		pipelineInputNames := compiler.ExpressionPipelineInputBindingNames(callCtx)
+		env := normalizeExpressionEnvironmentWithCache(compiler.MergeSymbolNamespaces(callCtx, buildEnv(input)), viewCache, pipelineInputNames)
 		if err := rejectUnavailableProjectionBindings(p.raw, compiler.ExpressionUnavailableBindingNames(callCtx), env); err != nil {
 			return nil, xerr.Validation(err.Error())
 		}
@@ -135,6 +136,7 @@ func (p *composedProjection) Build(ctx context.Context, bCtx *compiler.BuildCont
 		program, compileErr := programs.compileWithOptions(
 			p.raw,
 			visibleNames,
+			pipelineInputNames,
 			rewriteFunctions,
 			options...,
 		)

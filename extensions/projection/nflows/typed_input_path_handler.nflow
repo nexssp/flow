@@ -1,0 +1,21 @@
+@description "An error handler compiles current-payload and typed input paths"
+@schema ProjectionRootsHandlerRequest {
+  Current string `json:"current" default:"typed-default"`
+  Request map[string]any
+}
+@pipeline projection_typed_input_path_handler(request: ProjectionRootsHandlerRequest)
+  { request: { task: "current" } }
+  -> assert(false, "force recovery")
+  ? on_error {
+    xerr.KindValidation
+    -> {
+      task: .,
+      typed: request.current
+    },
+    else
+    -> error.reraise
+  }
+@end
+{ current: "input-current" }
+-> pipeline.projection_typed_input_path_handler
+@assert: typed == "input-current"

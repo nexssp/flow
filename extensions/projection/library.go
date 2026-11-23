@@ -48,6 +48,9 @@ func Bundle(_ map[string]string) compiler.Bundle {
 			if !known {
 				return nil // Dynamic action arguments are validated by the evaluator.
 			}
+			if projectionHasPotentialTypedInputPath(raw) {
+				return nil // The enclosing typed pipeline analysis knows which roots are declared inputs.
+			}
 			if _, err := newProgramCache().compile(raw); err != nil {
 				return compiler.SourceError(atom.Pos, "%w", err)
 			}

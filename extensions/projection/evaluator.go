@@ -46,7 +46,8 @@ func NewExprEvaluator() Evaluator {
 			return map[string]any{}, nil
 		}
 
-		env := normalizeExpressionEnvironmentWithCache(compiler.MergeSymbolNamespaces(ctx, buildEnv(req.Input)), viewCache)
+		pipelineInputNames := compiler.ExpressionPipelineInputBindingNames(ctx)
+		env := normalizeExpressionEnvironmentWithCache(compiler.MergeSymbolNamespaces(ctx, buildEnv(req.Input)), viewCache, pipelineInputNames)
 		if err := rejectUnavailableProjectionBindings(body, compiler.ExpressionUnavailableBindingNames(ctx), env); err != nil {
 			return nil, xerr.Validation(err.Error())
 		}
@@ -54,7 +55,7 @@ func NewExprEvaluator() Evaluator {
 		for name := range env {
 			visibleNames[name] = struct{}{}
 		}
-		program, err := cache.compile(body, visibleNames)
+		program, err := cache.compileScoped(body, visibleNames, pipelineInputNames)
 		if err != nil {
 			return nil, err
 		}
@@ -94,21 +95,22 @@ func projectionRuntimeVisibleNames(ctx context.Context) map[string]struct{} {
 	return names
 }
 
-func (c *programCache) compile(raw string, visibleNames ...map[string]struct{}) (*vm.Program, error) {
-	var names map[string]struct{}
-	if len(visibleNames) != 0 {
-		names = visibleNames[0]
-	}
-	return c.compileWithOptions(raw, names, nil, expr.AllowUndefinedVariables(), spreadMergeOption)
+func (c *programCache) compile(raw string) (*vm.Program, error) {
+	return c.compileScoped(raw, nil, nil)
+}
+
+func (c *programCache) compileScoped(raw string, visibleNames, pipelineInputNames map[string]struct{}) (*vm.Program, error) {
+	return c.compileWithOptions(raw, visibleNames, pipelineInputNames, nil, expr.AllowUndefinedVariables(), spreadMergeOption)
 }
 
 func (c *programCache) compileWithOptions(
 	raw string,
 	visibleNames map[string]struct{},
+	pipelineInputNames map[string]struct{},
 	sourceRewrite func(string) string,
 	options ...expr.Option,
 ) (*vm.Program, error) {
-	key := projectionProgramCacheKey(raw, visibleNames)
+	key := projectionProgramCacheKey(raw, visibleNames, pipelineInputNames)
 	if cached, ok := c.entries.Load(key); ok {
 		if program, ok := cached.(*vm.Program); ok {
 			return program, nil
@@ -117,7 +119,7 @@ func (c *programCache) compileWithOptions(
 		c.entries.Delete(key)
 	}
 
-	source, err := buildProgramSourceWithVisibleNames(raw, visibleNames)
+	source, err := buildProgramSourceWithVisibleNames(raw, visibleNames, pipelineInputNames)
 	if err != nil {
 		return nil, xerr.Validation(fmt.Sprintf("projection %q: %v", strings.TrimSpace(raw), err))
 	}
@@ -133,8 +135,8 @@ func (c *programCache) compileWithOptions(
 	return program, nil
 }
 
-func projectionProgramCacheKey(raw string, visibleNames map[string]struct{}) string {
-	if len(visibleNames) == 0 {
+func projectionProgramCacheKey(raw string, visibleNames, pipelineInputNames map[string]struct{}) string {
+	if len(visibleNames) == 0 && len(pipelineInputNames) == 0 {
 		return raw
 	}
 	names := make([]string, 0, len(visibleNames))
@@ -142,7 +144,12 @@ func projectionProgramCacheKey(raw string, visibleNames map[string]struct{}) str
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	return raw + "\x00" + strings.Join(names, "\x00")
+	pipelineNames := make([]string, 0, len(pipelineInputNames))
+	for name := range pipelineInputNames {
+		pipelineNames = append(pipelineNames, name)
+	}
+	sort.Strings(pipelineNames)
+	return raw + "\x00visible\x00" + strings.Join(names, "\x00") + "\x00typed-inputs\x00" + strings.Join(pipelineNames, "\x00")
 }
 
 // buildEnv marks the input root for one-pass view normalization.

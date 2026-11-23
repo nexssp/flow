@@ -1,0 +1,22 @@
+@description "Current and typed request roots remain distinct in control expressions"
+@schema ProjectionRootsControlRequest {
+  Current string `json:"current" default:"typed-default"`
+}
+@pipeline projection_typed_input_path_control(request: ProjectionRootsControlRequest)
+  { request: { task: "current" } }
+  -> assert(.request.task == "current" && request.current == "typed-default", "typed and current roots were mixed")
+  -> match {
+    .request.task == "current" && request.current == "typed-default"
+      -> { request: { task: "current" } },
+    _
+      -> { request: { task: "unexpected" } }
+  }
+  -> if (.request.task == "current" && request.current == "typed-default") {
+    { result: "matched" }
+  } else {
+    { result: "unexpected" }
+  }
+@end
+{ request: { original: "original" } }
+-> pipeline.projection_typed_input_path_control
+@assert result == "matched"

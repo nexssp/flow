@@ -20,8 +20,10 @@ type CompileReq struct {
 	Prepared           *PreparedSource
 	// TypeAnalysisInput seeds static analysis for sources compiled by a materializer.
 	TypeAnalysisInput TypeDescriptor
-	// TypeAnalysisBindings seeds immutable lexical bindings for materialized sources.
+	// TypeAnalysisBindings seeds named typed pipeline input bindings for materialized sources.
 	TypeAnalysisBindings map[string]TypeDescriptor
+	// TypeAnalysisPipelineInputBindings distinguishes typed pipeline inputs from `as` outputs.
+	TypeAnalysisPipelineInputBindings map[string]struct{}
 }
 
 // PreparedSource is the result of preprocessing one source. Its fields are
@@ -269,12 +271,13 @@ func runCompile(
 		req.TypeAnalysisInput,
 		effectiveCfg.argSchemas,
 		req.TypeAnalysisBindings,
+		req.TypeAnalysisPipelineInputBindings,
 		SymbolsFromMeta(prepared.meta),
 	); analyzeErr != nil {
 		return CompileRes{}, analyzeErr
 	}
 
-	program, err := buildProgram(ctx, resolver, mt, ast, effectiveCfg, prepared.meta)
+	program, err := buildProgram(ctx, resolver, mt, ast, effectiveCfg, prepared.meta, req.TypeAnalysisPipelineInputBindings)
 	if err != nil {
 		return CompileRes{}, err
 	}
@@ -378,6 +381,7 @@ func buildProgram(
 	ast Expr,
 	cfg *compileConfig,
 	meta map[string]any,
+	pipelineInputRoots map[string]struct{},
 ) (action.AnyAction, error) {
 	advisors := cfg.advisors
 	if len(cfg.argSchemas) > 0 {
@@ -387,7 +391,7 @@ func buildProgram(
 		)
 	}
 
-	program, err := buildAction(ctx, resolver, mt, ast, cfg.actionIntrospection, cfg.expressionCompiler, advisors...)
+	program, err := buildAction(ctx, resolver, mt, ast, cfg.actionIntrospection, cfg.expressionCompiler, pipelineInputRoots, advisors...)
 	if err != nil {
 		return nil, err
 	}

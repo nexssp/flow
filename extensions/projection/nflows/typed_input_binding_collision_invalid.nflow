@@ -1,0 +1,9 @@
+@description "A pipeline alias cannot shadow a declared typed input"
+# @expect-compile-error duplicate pipeline binding "request"
+@schema ProjectionRootsCollisionRequest {
+  Current string `json:"current"`
+}
+@pipeline projection_typed_input_binding_collision(request: ProjectionRootsCollisionRequest)
+  noop as request
+@end
+pipeline.projection_typed_input_binding_collision

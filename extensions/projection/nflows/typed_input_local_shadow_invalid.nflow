@@ -1,0 +1,10 @@
+@description "A projection local cannot shadow a typed pipeline input"
+# @expect-compile-error projection: local binding "request" shadows a typed pipeline input
+@schema ProjectionRootsShadowRequest {
+  Current string `json:"current" default:"typed-default"`
+}
+@pipeline projection_typed_input_local_shadow(request: ProjectionRootsShadowRequest)
+  { request: { task: "current" } }
+  -> { let request = .request; request.current }
+@end
+pipeline.projection_typed_input_local_shadow

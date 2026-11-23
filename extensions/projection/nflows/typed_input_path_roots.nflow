@@ -1,0 +1,20 @@
+@description "Current, original, and typed pipeline input roots stay distinct in path shorthand"
+@schema ProjectionRootsRequest {
+  Current string `json:"current" default:"typed-default"`
+  Request map[string]any
+}
+@pipeline projection_typed_input_path_roots(request: ProjectionRootsRequest)
+  { request: { task: "current" } }
+  -> {
+    .request.task,
+    input.request.original,
+    request.current
+  }
+@end
+{ request: { original: "original" } }
+-> pipeline.projection_typed_input_path_roots
+@assert {
+  task == "current"
+  original == "original"
+  current == "typed-default"
+}

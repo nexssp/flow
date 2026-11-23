@@ -22,14 +22,17 @@ type TypeAnalysisContext struct {
 	// OriginalInput is the payload supplied when the expression scope began.
 	// A nil pointer preserves standalone-analysis behavior by treating Input as
 	// the original request; a non-nil descriptor may intentionally have no type.
-	OriginalInput      *TypeDescriptor
-	Bindings           map[string]TypeDescriptor
-	PipelineBindings   map[string]struct{}
-	SymbolNamespaces   map[string]SymbolNamespace
-	ArgSchemas         map[string][]ArgFieldSpec
-	CheckExpression    TypedSourceExpressionChecker
-	ExpressionCompiler ExpressionCompiler
-	projectionInput    bool
+	OriginalInput    *TypeDescriptor
+	Bindings         map[string]TypeDescriptor
+	PipelineBindings map[string]struct{}
+	// PipelineInputBindings identifies named inputs declared by a pipeline
+	// signature; unlike `as` outputs, these names select the typed request root.
+	PipelineInputBindings map[string]struct{}
+	SymbolNamespaces      map[string]SymbolNamespace
+	ArgSchemas            map[string][]ArgFieldSpec
+	CheckExpression       TypedSourceExpressionChecker
+	ExpressionCompiler    ExpressionCompiler
+	projectionInput       bool
 }
 
 // TypedExpressionAnalyzer is an optional static-analysis contract for AST
@@ -101,6 +104,9 @@ func analyzeTypedExpressionWithBindings(
 	case *PipeExpr:
 		return analyzeTypedPipeWithBindings(ctx, current)
 	case *BindingExpr:
+		if err := validateTypedPipelineInputRebinding(ctx, current.Name, current.Pos); err != nil {
+			return TypeDescriptor{}, nil, err
+		}
 		output, bindings, err := analyzeTypedExpressionWithBindings(ctx, current.Inner)
 		if err == nil {
 			bindings[current.Name] = output
@@ -221,6 +227,9 @@ func analyzeTypedPipelineNode(ctx TypeAnalysisContext, node Expr) (TypeDescripto
 	case *PipeExpr:
 		return analyzeTypedPipe(ctx, current)
 	case *BindingExpr:
+		if err := validateTypedPipelineInputRebinding(ctx, current.Name, current.Pos); err != nil {
+			return TypeDescriptor{}, true, err
+		}
 		output, err := analyzeTypedNode(ctx, current.Inner)
 		if err == nil {
 			// The caller owns a cloned binding map for this analysis scope.
@@ -250,6 +259,11 @@ func analyzeTypedPipeWithBindings(
 	projectionInput := false
 	for _, step := range flattenPipe(pipe) {
 		inner, binding := unwrapBinding(step)
+		if binding != nil {
+			if err := validateTypedPipelineInputRebinding(ctx, binding.Name, binding.Pos); err != nil {
+				return TypeDescriptor{}, nil, err
+			}
+		}
 		stepContext := ctx
 		stepContext.Input = state
 		stepContext.projectionInput = projectionInput
@@ -707,6 +721,13 @@ func validateInitialBindingCollisions(root Expr, bindings map[string]TypeDescrip
 	return nil
 }
 
+func validateTypedPipelineInputRebinding(ctx TypeAnalysisContext, name string, pos Position) error {
+	if _, exists := ctx.PipelineInputBindings[name]; exists {
+		return SourceError(pos, "duplicate pipeline binding %q", name)
+	}
+	return nil
+}
+
 func cloneTypeBindings(bindings map[string]TypeDescriptor) map[string]TypeDescriptor {
 	if len(bindings) == 0 {
 		return make(map[string]TypeDescriptor)
@@ -718,6 +739,9 @@ func withPipelineBindingNames(ctx TypeAnalysisContext) TypeAnalysisContext {
 	if ctx.PipelineBindings == nil {
 		ctx.PipelineBindings = make(map[string]struct{}, len(ctx.Bindings))
 		for name := range ctx.Bindings {
+			if _, isPipelineInput := ctx.PipelineInputBindings[name]; isPipelineInput {
+				continue
+			}
 			ctx.PipelineBindings[name] = struct{}{}
 		}
 		return ctx

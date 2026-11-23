@@ -409,8 +409,12 @@ type expressionEnvironmentRoot struct {
 	value any
 }
 
-func normalizeExpressionEnvironmentWithCache(environment map[string]any, typeCache *expressionViewTypeCache) map[string]any {
+func normalizeExpressionEnvironmentWithCache(environment map[string]any, typeCache *expressionViewTypeCache, protectedBindings ...map[string]struct{}) map[string]any {
 	out := make(map[string]any, len(environment)+2)
+	var protected map[string]struct{}
+	if len(protectedBindings) > 0 {
+		protected = protectedBindings[0]
+	}
 	root, hasInputRoot := environment[expressionRootName].(expressionEnvironmentRoot)
 	for name, value := range environment {
 		if name == expressionRootName && hasInputRoot {
@@ -423,8 +427,10 @@ func normalizeExpressionEnvironmentWithCache(environment map[string]any, typeCac
 		rootView := out[expressionRootName]
 		if fields, ok := rootView.(map[string]any); ok {
 			for name, value := range fields {
-				if name != expressionRootName && name != expressionStateName && name != "input" && !projectionFieldIsBuiltin(name) {
-					out[name] = value
+				if name != expressionRootName && name != expressionStateName && name != expressionInputName && !projectionFieldIsBuiltin(name) {
+					if _, isProtected := protected[name]; !isProtected {
+						out[name] = value
+					}
 				}
 			}
 		}

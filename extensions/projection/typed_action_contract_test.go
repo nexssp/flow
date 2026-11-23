@@ -65,6 +65,32 @@ func TestProjectionTypedActionInputContracts(t *testing.T) {
 	}
 }
 
+func TestProjectionTypedInputRootFixtures(t *testing.T) {
+	cfg, err := runner.BuildConfig(native.SelftestBundles())
+	if err != nil {
+		t.Fatalf("build self-test config: %v", err)
+	}
+	fixtures := projectionext.Bundle(nil).Fixtures
+	for _, name := range []string{
+		"typed_input_path_roots.nflow",
+		"typed_input_path_let_spread.nflow",
+		"typed_input_path_control.nflow",
+		"typed_input_path_controls.nflow",
+		"typed_input_path_handler.nflow",
+		"typed_input_any.nflow",
+	} {
+		t.Run(name, func(t *testing.T) {
+			fixture, err := fs.ReadFile(fixtures, "nflows/"+name)
+			if err != nil {
+				t.Fatalf("read fixture: %v", err)
+			}
+			if _, err := runner.Execute(t.Context(), cfg, string(fixture), name, nil); err != nil {
+				t.Fatalf("execute typed input root fixture: %v", err)
+			}
+		})
+	}
+}
+
 func TestProjectionTypedActionContractCompileErrors(t *testing.T) {
 	cfg, err := runner.BuildConfig(native.SelftestBundles())
 	if err != nil {
@@ -78,6 +104,8 @@ func TestProjectionTypedActionContractCompileErrors(t *testing.T) {
 		"typed_schema_int_to_uint64_invalid.nflow",
 		"typed_argument_expression_invalid.nflow",
 		"typed_argument_spread_expression_invalid.nflow",
+		"typed_input_local_shadow_invalid.nflow",
+		"typed_input_binding_collision_invalid.nflow",
 	} {
 		t.Run(name, func(t *testing.T) {
 			fixture, err := fs.ReadFile(fixtures, "nflows/"+name)

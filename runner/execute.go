@@ -241,6 +241,13 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 	topContribs := prepared.Contributions()
 
 	compileSubValuesWithInputAndBindings := func(subName, subSource string, modifiers []compiler.ModifierValue, analysisInput compiler.TypeDescriptor, analysisBindings map[string]compiler.TypeDescriptor) (action.AnyAction, error) {
+		var pipelineInputBindings map[string]struct{}
+		if len(analysisBindings) > 0 {
+			pipelineInputBindings = make(map[string]struct{}, len(analysisBindings))
+			for name := range analysisBindings {
+				pipelineInputBindings[name] = struct{}{}
+			}
+		}
 		wrapperMods, bodyMods := SplitPipelineModifierValues(cfg.Modifiers, modifiers)
 
 		subOpts := append([]compiler.CompileOption(nil), cfg.CompileOpts...)
@@ -264,12 +271,13 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 			resolver, cfg.Directives, cfg.Modifiers,
 			cfg.Operators, cfg.Primaries, subOpts...,
 		).Do(ctx, compiler.CompileReq{
-			Source:               subSource,
-			Name:                 subName,
-			InheritedPrimaries:   topContribs.Primaries,
-			InheritedMeta:        meta,
-			TypeAnalysisInput:    analysisInput,
-			TypeAnalysisBindings: analysisBindings,
+			Source:                            subSource,
+			Name:                              subName,
+			InheritedPrimaries:                topContribs.Primaries,
+			InheritedMeta:                     meta,
+			TypeAnalysisInput:                 analysisInput,
+			TypeAnalysisBindings:              analysisBindings,
+			TypeAnalysisPipelineInputBindings: pipelineInputBindings,
 		})
 		if subErr != nil {
 			return nil, subErr

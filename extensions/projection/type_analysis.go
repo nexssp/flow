@@ -37,7 +37,8 @@ func analyzeProjectionTypes(
 	ctxName string,
 ) (compiler.TypeDescriptor, error) {
 	visibleNames := projectionTypeVisibleNames(ctx, flowBindings, ctxName)
-	source, sourceErr := buildProgramSourceWithVisibleNames(raw, visibleNames)
+	typedInputNames := projectionTypedPipelineInputNames(ctx)
+	source, sourceErr := buildProgramSourceWithVisibleNames(raw, visibleNames, typedInputNames)
 	if sourceErr != nil {
 		return compiler.TypeDescriptor{}, compiler.SourceError(pos, "projection: %v", sourceErr)
 	}
@@ -122,6 +123,20 @@ func analyzeProjectionTypes(
 		return compiler.TypeDescriptor{}, compiler.SourceError(pos, "projection: %v", err)
 	}
 	return compiler.TypeDescriptor{Type: projectionOutputTypeWithStaticTypes(program.Node(), staticTypes)}, nil
+}
+
+func projectionTypedPipelineInputNames(ctx compiler.TypeAnalysisContext) map[string]struct{} {
+	if len(ctx.PipelineInputBindings) == 0 {
+		return nil
+	}
+	names := make(map[string]struct{}, len(ctx.PipelineInputBindings))
+	for name := range ctx.PipelineInputBindings {
+		if _, shadowedByAs := ctx.PipelineBindings[name]; shadowedByAs {
+			continue
+		}
+		names[name] = struct{}{}
+	}
+	return names
 }
 
 func projectionTypeVisibleNames(
@@ -249,7 +264,7 @@ func replaceProjectionReferences(source, name, replacement string) string {
 // CheckTypedSourceExpression is wired by the projection bundle so core control
 // expressions can be checked without coupling the compiler to expr-lang.
 func CheckTypedSourceExpression(source string, ctx compiler.TypeAnalysisContext, pos compiler.Position) (compiler.TypeDescriptor, error) {
-	source = compiler.PreprocessDots(source)
+	source = compiler.PreprocessDotsWithRoots(source, projectionTypedPipelineInputNames(ctx))
 	env, staticTypes := typedProjectionEnvironment(ctx, projectionExpressionProxyDepth(source))
 	if parsed, parseErr := parser.Parse(source); parseErr == nil {
 		visitor := secretExpressionVisitor{staticTypes: staticTypes}
@@ -312,6 +327,7 @@ func typedProjectionEnvironment(ctx compiler.TypeAnalysisContext, proxyDepth int
 	}
 	setStaticEnvValue(env, expressionInputName, projectionStaticValueWithBuilder(inputType, proxyDepth, builder))
 	staticTypes[expressionInputName] = inputType
+	typedInputNames := projectionTypedPipelineInputNames(ctx)
 	for name := range ctx.SymbolNamespaces {
 		setProjectionStaticTypeAlias(staticTypes, name, reflect.TypeFor[map[string]any]())
 	}
@@ -320,6 +336,16 @@ func typedProjectionEnvironment(ctx compiler.TypeAnalysisContext, proxyDepth int
 		if bindingType == nil || descriptor.Stream {
 			bindingType = reflect.TypeFor[any]()
 		}
+		bindingValue := projectionStaticValueWithBuilder(bindingType, proxyDepth, builder)
+		if _, isPipelineInput := typedInputNames[name]; isPipelineInput {
+			// A named typed input has its own root: `request.field` selects this
+			// binding, while `.request.field` explicitly selects the current payload.
+			delete(env, name)
+			delete(staticTypes, name)
+			setStaticEnvValue(env, name, bindingValue)
+			staticTypes[name] = bindingType
+			continue
+		}
 		// Runtime projection normalization flattens payload fields after merging
 		// pipeline scope, so a same-named payload alias takes precedence.
 		// The guard reads staticTypes (written in lockstep with env) so it still
@@ -327,7 +353,7 @@ func typedProjectionEnvironment(ctx compiler.TypeAnalysisContext, proxyDepth int
 		if _, payloadFieldExists := staticTypes[name]; payloadFieldExists {
 			continue
 		}
-		setStaticEnvValue(env, name, projectionStaticValueWithBuilder(bindingType, proxyDepth, builder))
+		setStaticEnvValue(env, name, bindingValue)
 		staticTypes[name] = bindingType
 	}
 	return env, staticTypes

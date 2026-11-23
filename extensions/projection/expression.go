@@ -22,7 +22,11 @@ func buildProgramSource(raw string) (string, error) {
 	return buildProgramSourceWithVisibleNames(raw, nil)
 }
 
-func buildProgramSourceWithVisibleNames(raw string, visibleNames map[string]struct{}) (string, error) {
+func buildProgramSourceWithVisibleNames(raw string, visibleNames map[string]struct{}, typedInputNames ...map[string]struct{}) (string, error) {
+	var typedNames map[string]struct{}
+	if len(typedInputNames) > 0 {
+		typedNames = typedInputNames[0]
+	}
 	letPrefix, body, bindings, err := splitLeadingProjectionLets(raw)
 	if err != nil {
 		return "", err
@@ -35,10 +39,10 @@ func buildProgramSourceWithVisibleNames(raw string, visibleNames map[string]stru
 	}
 	localNames := make(map[string]struct{}, len(bindings))
 	for _, binding := range bindings {
+		if _, shadowsTypedInput := typedNames[binding.name]; shadowsTypedInput {
+			return "", fmt.Errorf("projection: local binding %q shadows a typed pipeline input", binding.name)
+		}
 		localNames[binding.name] = struct{}{}
-	}
-	if err := validateProjectionObjectKeys("{" + body + "}"); err != nil {
-		return "", err
 	}
 
 	var object string
@@ -46,14 +50,17 @@ func buildProgramSourceWithVisibleNames(raw string, visibleNames map[string]stru
 	switch {
 	case !hasSpread:
 		body = rewriteProjectionDataValues(body, localNames, visibleNames)
-		object = "{ " + expandProjectionShorthand(body) + " }"
+		object = "{ " + expandProjectionShorthand(body, typedNames) + " }"
 	case strings.TrimSpace(rest) == "":
 		object = state
 	default:
 		rest = rewriteProjectionDataValues(rest, localNames, visibleNames)
-		object = "__spread__(" + state + ", { " + expandProjectionShorthand(rest) + " })"
+		object = "__spread__(" + state + ", { " + expandProjectionShorthand(rest, typedNames) + " })"
 	}
-	return compiler.PreprocessDots(letPrefix + object), nil
+	if err := validateProjectionObjectKeys(object); err != nil {
+		return "", err
+	}
+	return compiler.PreprocessDotsWithRoots(letPrefix+object, typedNames), nil
 }
 
 type projectionEntrySpan struct {
@@ -633,20 +640,26 @@ func nextProjectionSignificant(raw string, position int) byte {
 }
 
 type projectionShorthandScanner struct {
-	raw             string
-	rewritten       strings.Builder
-	quote           byte
-	parenDepth      int
-	containers      []byte
-	lastSignificant byte
-	bareFields      *[]projectionIdentifierSpan
+	raw                    string
+	rewritten              strings.Builder
+	quote                  byte
+	parenDepth             int
+	containers             []byte
+	lastSignificant        byte
+	bareFields             *[]projectionIdentifierSpan
+	typedInputs            map[string]struct{}
+	potentialTypedRootPath *bool
 }
 
 // expandProjectionShorthand rewrites a bare identifier in an object-entry
 // position to an explicit reference to the same input field. It only runs on
 // projection bodies; structured argument objects keep their literal grammar.
-func expandProjectionShorthand(raw string) string {
-	scanner := projectionShorthandScanner{raw: raw, lastSignificant: '{', containers: []byte{'{'}}
+func expandProjectionShorthand(raw string, typedInputNames ...map[string]struct{}) string {
+	var typedInputs map[string]struct{}
+	if len(typedInputNames) > 0 {
+		typedInputs = typedInputNames[0]
+	}
+	scanner := projectionShorthandScanner{raw: raw, lastSignificant: '{', containers: []byte{'{'}, typedInputs: typedInputs}
 	scanner.rewritten.Grow(len(raw))
 	for index := 0; index < len(raw); {
 		index = scanner.rewriteAt(index)
@@ -669,6 +682,20 @@ func (s *projectionShorthandScanner) rewriteAt(index int) int {
 	case c == '.' && s.isObjectEntryStart():
 		return s.copyPathShorthand(index)
 	case isProjectionIdentifierStart(c):
+		if s.isObjectEntryStart() {
+			if s.potentialTypedRootPath != nil {
+				if _, _, root, ok := projectionAnyNamedPathAt(s.raw, index); ok && root != expressionInputName {
+					*s.potentialTypedRootPath = true
+				}
+			}
+			if end, key, ok := projectionNamedPathAt(s.raw, index, s.typedInputs); ok && projectionEntryEndsAt(s.raw, end, s.parenDepth) {
+				s.rewritten.WriteString(key)
+				s.rewritten.WriteString(": ")
+				s.rewritten.WriteString(s.raw[index:end])
+				s.lastSignificant = s.raw[end-1]
+				return end
+			}
+		}
 		return s.copyIdentifier(index)
 	default:
 		return s.copyByte(index)
@@ -813,6 +840,55 @@ func projectionInputPathAt(raw string) (end int, ok bool) {
 	}
 	end, _, ok = projectionPathAt(raw, len(root))
 	return end, ok
+}
+
+func projectionNamedPathAt(raw string, index int, typedInputNames map[string]struct{}) (end int, key string, ok bool) {
+	end, key, root, ok := projectionAnyNamedPathAt(raw, index)
+	if !ok {
+		return index, "", false
+	}
+	_, isTypedInput := typedInputNames[root]
+	if root != "input" && !isTypedInput {
+		return index, "", false
+	}
+	return end, key, true
+}
+
+func projectionAnyNamedPathAt(raw string, index int) (end int, key, root string, ok bool) {
+	if index >= len(raw) || !isProjectionIdentifierStart(raw[index]) {
+		return index, "", "", false
+	}
+	rootEnd := index + 1
+	for rootEnd < len(raw) && isProjectionIdentifierContinue(raw[rootEnd]) {
+		rootEnd++
+	}
+	root = raw[index:rootEnd]
+	if rootEnd >= len(raw) || raw[rootEnd] != '.' {
+		return index, "", "", false
+	}
+	end, key, ok = projectionPathAt(raw, rootEnd)
+	return end, key, root, ok
+}
+
+func projectionHasPotentialTypedInputPath(raw string) bool {
+	_, body, _, err := splitLeadingProjectionLets(raw)
+	if err != nil {
+		return false
+	}
+	if _, rest, hasSpread := splitSpread(body); hasSpread {
+		body = rest
+	}
+	if strings.TrimSpace(body) == "" {
+		return false
+	}
+	found := false
+	scanner := projectionShorthandScanner{
+		raw: body, lastSignificant: '{', containers: []byte{'{'}, potentialTypedRootPath: &found,
+	}
+	for index := 0; index < len(body) && !found; {
+		index = scanner.rewriteAt(index)
+	}
+	return found
 }
 
 func projectionSpreadRefEndsAt(raw string, end int) bool {

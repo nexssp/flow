@@ -1632,6 +1632,12 @@ func BuildEnv(input any) map[string]any {
 }
 
 func PreprocessDots(src string) string {
+	return PreprocessDotsWithRoots(src, nil)
+}
+
+// PreprocessDotsWithRoots additionally qualifies current-payload paths whose
+// first field collides with one of the named roots in extraRoots.
+func PreprocessDotsWithRoots(src string, extraRoots map[string]struct{}) string {
 	var out strings.Builder
 	out.Grow(len(src))
 
@@ -1671,7 +1677,7 @@ func PreprocessDots(src string) string {
 				}
 				// Use the installed expr version's registry, not a drifting hand-written list.
 				// Ordinary fields retain the established .name -> name rewrite.
-				if dotFieldNeedsRoot(src[i+1 : end]) {
+				if dotFieldNeedsRoot(src[i+1:end], extraRoots) {
 					out.WriteString("__root__.")
 				}
 				i++
@@ -1687,7 +1693,10 @@ func PreprocessDots(src string) string {
 	return out.String()
 }
 
-func dotFieldNeedsRoot(name string) bool {
+func dotFieldNeedsRoot(name string, extraRoots map[string]struct{}) bool {
+	if _, isExtraRoot := extraRoots[name]; isExtraRoot {
+		return true
+	}
 	if _, collides := builtin.Index[name]; collides {
 		return true
 	}

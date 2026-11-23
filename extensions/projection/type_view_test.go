@@ -88,6 +88,32 @@ func TestNormalizeExpressionEnvironmentPreservesOriginalInputBinding(t *testing.
 	}
 }
 
+func TestNormalizeExpressionEnvironmentPreservesTypedInputRootOnCollision(t *testing.T) {
+	input := map[string]any{"request": map[string]any{"task": "current"}}
+	ctx := compiler.WithExpressionScope(t.Context(), input)
+	if err := compiler.BindPipelineInputValue(ctx, "request", map[string]any{"current": "typed"}); err != nil {
+		t.Fatalf("bind typed pipeline input: %v", err)
+	}
+	env := compiler.MergeSymbolNamespaces(ctx, buildEnv(input))
+	normalized := normalizeExpressionEnvironmentWithCache(
+		env,
+		newExpressionViewTypeCache(),
+		compiler.ExpressionPipelineInputBindingNames(ctx),
+	)
+	typedRoot, ok := normalized["request"].(map[string]any)
+	if !ok || typedRoot["current"] != "typed" {
+		t.Fatalf("named typed input root = %#v, want typed request", normalized["request"])
+	}
+	currentRoot, ok := normalized[expressionRootName].(map[string]any)
+	if !ok {
+		t.Fatalf("current root = %T, want map[string]any", normalized[expressionRootName])
+	}
+	currentRequest, ok := currentRoot["request"].(map[string]any)
+	if !ok || currentRequest["task"] != "current" {
+		t.Fatalf("current payload field = %#v, want current task", currentRoot["request"])
+	}
+}
+
 func TestExpressionMapViewAliasCollisionsAreDeterministicAndNilIsPreserved(t *testing.T) {
 	input := map[string]int{"HttpServer": 2, "HTTPServer": 1}
 	for range 20 {

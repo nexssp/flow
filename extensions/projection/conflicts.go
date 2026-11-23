@@ -116,13 +116,20 @@ func validateStaticProjectionBindingConflict(source string, pos compiler.Positio
 	if ctx.Input.Type == nil || ctx.Input.Stream {
 		return nil
 	}
+	typedInputNames := projectionTypedPipelineInputNames(ctx)
 	bindingNames := make([]string, 0, len(ctx.Bindings))
 	if ctx.PipelineBindings != nil {
 		for name := range ctx.PipelineBindings {
+			if _, isPipelineInput := typedInputNames[name]; isPipelineInput {
+				continue
+			}
 			bindingNames = append(bindingNames, name)
 		}
 	} else {
 		for name := range ctx.Bindings {
+			if _, isPipelineInput := typedInputNames[name]; isPipelineInput {
+				continue
+			}
 			bindingNames = append(bindingNames, name)
 		}
 	}
@@ -212,8 +219,12 @@ func projectionSourcePosition(base compiler.Position, source string, offset int)
 
 func rejectRuntimeProjectionBindingConflict(ctx context.Context, source string, input any, cache *expressionViewTypeCache) error {
 	bindingNames := compiler.ExpressionBindingNames(ctx)
+	pipelineInputBindings := compiler.ExpressionPipelineInputBindingNames(ctx)
 	for _, reference := range projectionUsedBindingReferences(source, bindingNames) {
-		if reference.name == "input" || reference.name == expressionRootName || reference.name == expressionStateName || projectionFieldIsBuiltin(reference.name) {
+		if _, isPipelineInput := pipelineInputBindings[reference.name]; isPipelineInput {
+			continue
+		}
+		if reference.name == expressionInputName || reference.name == expressionRootName || reference.name == expressionStateName || projectionFieldIsBuiltin(reference.name) {
 			continue
 		}
 		fields, ok := expressionValueViewWithCache(input, cache).(map[string]any)

@@ -1,0 +1,18 @@
+@description "Typed pipeline roots are retained in each child analysis"
+@schema ProjectionRootsControlsRequest {
+  Current string `json:"current" default:"typed-default"`
+}
+@pipeline projection_typed_input_path_each(request: ProjectionRootsControlsRequest)
+  { rows: [{ request: { task: "current" } }] }
+  -> pick ( field: "rows" )
+  -> each {
+    { task: .request.task, typed: request.current }
+  }
+@end
+{ request: { original: "original" } }
+-> pipeline.projection_typed_input_path_each
+@assert {
+  len(result) == 1
+  result[0].task == "current"
+  result[0].typed == "typed-default"
+}

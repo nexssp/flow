@@ -53,7 +53,18 @@ func ExpressionCompilerFromMeta(meta map[string]any) ExpressionCompiler {
 // the source-local extension when one is available. The default compiler uses
 // expr-lang with undefined input fields allowed, matching projection semantics.
 func CompileRuntimeExpression(source string, position Position, expressionCompiler ExpressionCompiler) (ExpressionProgram, error) {
-	clean := PreprocessDots(source)
+	return CompileRuntimeExpressionWithRoots(source, position, expressionCompiler, nil)
+}
+
+// CompileRuntimeExpressionWithRoots preserves current-payload paths when their
+// first field collides with a named typed pipeline input.
+func CompileRuntimeExpressionWithRoots(
+	source string,
+	position Position,
+	expressionCompiler ExpressionCompiler,
+	pipelineInputRoots map[string]struct{},
+) (ExpressionProgram, error) {
+	clean := PreprocessDotsWithRoots(source, pipelineInputRoots)
 	if expressionCompiler != nil {
 		program, err := expressionCompiler.Compile(clean, position)
 		if err != nil {
@@ -96,5 +107,5 @@ func (b *BuildContext) CompileExpression(source string, position Position) (Expr
 	if b == nil {
 		return CompileRuntimeExpression(source, position, nil)
 	}
-	return CompileRuntimeExpression(source, position, b.ExpressionCompiler)
+	return CompileRuntimeExpressionWithRoots(source, position, b.ExpressionCompiler, b.PipelineInputRoots)
 }

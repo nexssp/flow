@@ -1,0 +1,10 @@
+@description "An any-typed field on a declared pipeline input remains usable in projection paths"
+@schema ProjectionAnyFieldRequest {
+  Value any
+}
+@pipeline projection_typed_any_field(request: ProjectionAnyFieldRequest)
+  { request.value.current }
+@end
+{ value: { current: "from-any" } }
+-> pipeline.projection_typed_any_field
+@assert current == "from-any"

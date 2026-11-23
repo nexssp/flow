@@ -1,0 +1,15 @@
+@description "Typed-input path shorthand is detected after local lets and spread prefixes"
+@schema ProjectionRootsRequest {
+  Current string `json:"current" default:"typed-default"`
+}
+@pipeline projection_typed_input_path_let_spread(request: ProjectionRootsRequest)
+  { request: { task: "current" } }
+  -> { let prefix = "v1"; ... .request, request.current, version: prefix }
+@end
+{ request: { original: "original" } }
+-> pipeline.projection_typed_input_path_let_spread
+@assert {
+  task == "current"
+  current == "typed-default"
+  version == "v1"
+}

@@ -88,7 +88,7 @@ func AnalyzeWithTypedExpressionCheckerAndInputAndArgSchemas(
 	symbolNamespaces ...map[string]SymbolNamespace,
 ) error {
 	return analyzeWithInitialBindings(
-		resolver, expr, checker, expressionCompiler, input, argSchemas, nil, symbolNamespaces...,
+		resolver, expr, checker, expressionCompiler, input, argSchemas, nil, nil, symbolNamespaces...,
 	)
 }
 
@@ -100,6 +100,7 @@ func analyzeWithInitialBindings(
 	input TypeDescriptor,
 	argSchemas map[string][]ArgFieldSpec,
 	initialBindings map[string]TypeDescriptor,
+	initialPipelineInputBindings map[string]struct{},
 	symbolNamespaces ...map[string]SymbolNamespace,
 ) error {
 	if resolver == nil {
@@ -120,14 +121,15 @@ func analyzeWithInitialBindings(
 	}
 	originalInput := input
 	return analyzeTypedExpressions(TypeAnalysisContext{
-		Resolver:           resolver,
-		Input:              input,
-		OriginalInput:      &originalInput,
-		Bindings:           cloneTypeBindings(initialBindings),
-		SymbolNamespaces:   localSymbols,
-		CheckExpression:    checker,
-		ExpressionCompiler: expressionCompiler,
-		ArgSchemas:         argSchemas,
+		Resolver:              resolver,
+		Input:                 input,
+		OriginalInput:         &originalInput,
+		Bindings:              cloneTypeBindings(initialBindings),
+		PipelineInputBindings: clonePipelineBindingNames(initialPipelineInputBindings),
+		SymbolNamespaces:      localSymbols,
+		CheckExpression:       checker,
+		ExpressionCompiler:    expressionCompiler,
+		ArgSchemas:            argSchemas,
 	}, expr)
 }
 

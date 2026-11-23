@@ -40,3 +40,21 @@ func TestPreprocessDots_UnifiedBehavior(t *testing.T) {
 		})
 	}
 }
+
+func TestPreprocessDotsWithTypedPipelineRoots(t *testing.T) {
+	t.Parallel()
+	roots := map[string]struct{}{"request": {}}
+	for _, tc := range []struct {
+		source string
+		want   string
+	}{
+		{source: `.request.task`, want: `__root__.request.task`},
+		{source: `request.task`, want: `request.task`},
+		{source: `other.request.task`, want: `other.request.task`},
+		{source: `".request.task"`, want: `".request.task"`},
+	} {
+		if got := compiler.PreprocessDotsWithRoots(tc.source, roots); got != tc.want {
+			t.Errorf("PreprocessDotsWithRoots(%q) = %q, want %q", tc.source, got, tc.want)
+		}
+	}
+}

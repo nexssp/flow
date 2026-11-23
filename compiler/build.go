@@ -14,6 +14,7 @@ type BuildContext struct {
 	Modifiers          *ModifierTable
 	Advisers           []AtomAdviseFunc
 	ExpressionCompiler ExpressionCompiler
+	PipelineInputRoots map[string]struct{}
 	Introspect         bool
 }
 
@@ -31,7 +32,7 @@ func Build(
 	e Expr,
 	advisers ...AtomAdviseFunc,
 ) (action.AnyAction, error) {
-	return buildAction(ctx, resolver, modifiers, e, false, nil, advisers...)
+	return buildAction(ctx, resolver, modifiers, e, false, nil, nil, advisers...)
 }
 
 func buildAction(
@@ -41,6 +42,7 @@ func buildAction(
 	e Expr,
 	introspect bool,
 	expressionCompiler ExpressionCompiler,
+	pipelineInputRoots map[string]struct{},
 	advisers ...AtomAdviseFunc,
 ) (action.AnyAction, error) {
 	bCtx := &BuildContext{
@@ -48,6 +50,7 @@ func buildAction(
 		Modifiers:          modifiers,
 		Advisers:           advisers,
 		ExpressionCompiler: expressionCompiler,
+		PipelineInputRoots: pipelineInputRoots,
 		Introspect:         introspect,
 	}
 	return e.Build(ctx, bCtx)

@@ -270,7 +270,7 @@ func mergeSignatureSelection(pipelineName, boundary string, legacy, signature sc
 func withPipelineInputBinding(inner action.AnyAction, name string) action.AnyAction {
 	return action.Dynamic(inner).UseFirst(func(next action.Fn[any, any]) action.Fn[any, any] {
 		return func(ctx context.Context, request any) (any, error) {
-			if err := compiler.BindExpressionValue(ctx, name, request); err != nil {
+			if err := compiler.BindPipelineInputValue(ctx, name, request); err != nil {
 				return nil, xerr.Validation(err.Error())
 			}
 			return next(ctx, request)

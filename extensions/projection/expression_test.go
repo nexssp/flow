@@ -72,6 +72,46 @@ func TestBuildProgramSourceWithVisibleNamesInsideBracedSpread(t *testing.T) {
 	ktest.RequireEqual(t, got, `__spread__(__root__, { bound: person.name, original: input.name, explicit: (person.score), literal: no_binding.path })`)
 }
 
+func TestBuildProgramSourceDistinguishesProjectionPathRoots(t *testing.T) {
+	t.Parallel()
+	visibleNames := map[string]struct{}{"input": {}, "request": {}, "__root__": {}}
+	typedInputs := map[string]struct{}{"request": {}}
+	got, err := buildProgramSourceWithVisibleNames(`.request.task, input.request.original, request.current`, visibleNames, typedInputs)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, got, `{ task: __root__.request.task, original: input.request.original, current: request.current }`)
+
+	_, err = buildProgramSourceWithVisibleNames(`request.current, current: "other"`, visibleNames, typedInputs)
+	ktest.RequireCondition(t, err != nil, "expected duplicate key after typed-input path expansion")
+	ktest.RequireStringContains(t, err.Error(), `duplicate key "current"`)
+
+	ordinaryBinding, err := buildProgramSourceWithVisibleNames(`current: request.current`, visibleNames)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, ordinaryBinding, `{ current: request.current }`)
+	ordinaryPath, err := buildProgramSourceWithVisibleNames(`request.current`, visibleNames)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, ordinaryPath, `{ request.current }`)
+	if _, err := newProgramCache().compileScoped(`request.current`, visibleNames, nil); err == nil {
+		t.Fatal("ordinary visible binding unexpectedly enabled named-input path shorthand")
+	}
+}
+
+func TestProjectionTypedPathCandidateAfterLetsAndSpread(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		raw  string
+		want bool
+	}{
+		{raw: `let prefix = "v1"; request.current`, want: true},
+		{raw: `... .state, request.current`, want: true},
+		{raw: `let prefix = "v1"; ordinary`, want: false},
+		{raw: `let prefix = "request.current"; value: 1`, want: false},
+	} {
+		if got := projectionHasPotentialTypedInputPath(tc.raw); got != tc.want {
+			t.Errorf("projectionHasPotentialTypedInputPath(%q) = %t, want %t", tc.raw, got, tc.want)
+		}
+	}
+}
+
 func TestProjectionScannersTreatBackticksAsRaw(t *testing.T) {
 	t.Parallel()
 

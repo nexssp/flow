@@ -170,16 +170,8 @@ func (e *EachExpr) AnalyzeTypes(ctx compiler.TypeAnalysisContext) (compiler.Type
 	if elementType != nil && elementType.Kind() != reflect.Interface {
 		childInput.Type = elementType
 	}
-	childContext := compiler.TypeAnalysisContext{
-		Resolver:           ctx.Resolver,
-		Input:              childInput,
-		OriginalInput:      ctx.OriginalInput,
-		Bindings:           ctx.Bindings,
-		PipelineBindings:   ctx.PipelineBindings,
-		SymbolNamespaces:   ctx.SymbolNamespaces,
-		CheckExpression:    ctx.CheckExpression,
-		ExpressionCompiler: ctx.ExpressionCompiler,
-	}
+	childContext := ctx
+	childContext.Input = childInput
 	if _, err := compiler.AnalyzeTypedExpression(childContext, e.Body); err != nil {
 		return compiler.TypeDescriptor{}, err
 	}

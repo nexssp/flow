@@ -12,10 +12,11 @@ import (
 )
 
 type expressionScope struct {
-	parent      *expressionScope
-	input       any
-	bindings    map[string]any
-	unavailable map[string]struct{}
+	parent                *expressionScope
+	input                 any
+	bindings              map[string]any
+	pipelineInputBindings map[string]struct{}
+	unavailable           map[string]struct{}
 }
 
 var expressionScopeKey = xctx.NewKey[*expressionScope]("flow.expression.scope")
@@ -107,6 +108,43 @@ func BindExpressionValue(ctx context.Context, name string, value any) error {
 	}
 	scope.bindings[name] = value
 	return nil
+}
+
+// BindPipelineInputValue adds a named value declared by a typed pipeline
+// signature and marks it as a distinct request root for projection paths.
+func BindPipelineInputValue(ctx context.Context, name string, value any) error {
+	if err := BindExpressionValue(ctx, name, value); err != nil {
+		return err
+	}
+	scope, _ := expressionScopeKey.From(ctx)
+	if scope.pipelineInputBindings == nil {
+		scope.pipelineInputBindings = make(map[string]struct{})
+	}
+	scope.pipelineInputBindings[name] = struct{}{}
+	return nil
+}
+
+// ExpressionPipelineInputBindingNames returns visible named typed pipeline
+// inputs, including bindings inherited from parent scopes.
+func ExpressionPipelineInputBindingNames(ctx context.Context) map[string]struct{} {
+	scope, _ := expressionScopeKey.From(ctx)
+	if scope == nil {
+		return nil
+	}
+	names := make(map[string]struct{})
+	seen := make(map[string]struct{})
+	for current := scope; current != nil; current = current.parent {
+		for name := range current.bindings {
+			if _, alreadySeen := seen[name]; alreadySeen {
+				continue
+			}
+			seen[name] = struct{}{}
+			if _, isPipelineInput := current.pipelineInputBindings[name]; isPipelineInput {
+				names[name] = struct{}{}
+			}
+		}
+	}
+	return names
 }
 
 // MarkExpressionBindingUnavailable records a name whose action failed before
