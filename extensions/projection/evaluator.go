@@ -119,8 +119,8 @@ func projectionRuntimeVisibleNames(ctx context.Context) map[string]struct{} {
 	for name := range compiler.LocalSymbolsFrom(ctx) {
 		names[name] = struct{}{}
 	}
-	for _, namespace := range compiler.Namespaces() {
-		names[namespace.Name] = struct{}{}
+	for _, name := range compiler.NamespaceNames() {
+		names[name] = struct{}{}
 	}
 	return names
 }

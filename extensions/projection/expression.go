@@ -642,6 +642,7 @@ func nextProjectionSignificant(raw string, position int) byte {
 type projectionShorthandScanner struct {
 	raw                    string
 	rewritten              strings.Builder
+	emit                   bool // false when callers only need spans or reachability state
 	quote                  byte
 	parenDepth             int
 	containers             []byte
@@ -649,6 +650,18 @@ type projectionShorthandScanner struct {
 	bareFields             *[]projectionIdentifierSpan
 	typedInputs            map[string]struct{}
 	potentialTypedRootPath *bool
+}
+
+func (s *projectionShorthandScanner) writeString(text string) {
+	if s.emit {
+		s.rewritten.WriteString(text)
+	}
+}
+
+func (s *projectionShorthandScanner) writeByte(value byte) {
+	if s.emit {
+		s.rewritten.WriteByte(value)
+	}
 }
 
 // expandProjectionShorthand rewrites a bare identifier in an object-entry
@@ -659,7 +672,7 @@ func expandProjectionShorthand(raw string, typedInputNames ...map[string]struct{
 	if len(typedInputNames) > 0 {
 		typedInputs = typedInputNames[0]
 	}
-	scanner := projectionShorthandScanner{raw: raw, lastSignificant: '{', containers: []byte{'{'}, typedInputs: typedInputs}
+	scanner := projectionShorthandScanner{raw: raw, emit: true, lastSignificant: '{', containers: []byte{'{'}, typedInputs: typedInputs}
 	scanner.rewritten.Grow(len(raw))
 	for index := 0; index < len(raw); {
 		index = scanner.rewriteAt(index)
@@ -676,7 +689,7 @@ func (s *projectionShorthandScanner) rewriteAt(index int) int {
 		return s.copyComment(index)
 	case isProjectionQuote(c):
 		s.quote = c
-		s.rewritten.WriteByte(c)
+		s.writeByte(c)
 		s.lastSignificant = c
 		return index + 1
 	case c == '.' && s.isObjectEntryStart():
@@ -689,9 +702,9 @@ func (s *projectionShorthandScanner) rewriteAt(index int) int {
 				}
 			}
 			if end, key, ok := projectionNamedPathAt(s.raw, index, s.typedInputs); ok && projectionEntryEndsAt(s.raw, end, s.parenDepth) {
-				s.rewritten.WriteString(key)
-				s.rewritten.WriteString(": ")
-				s.rewritten.WriteString(s.raw[index:end])
+				s.writeString(key)
+				s.writeString(": ")
+				s.writeString(s.raw[index:end])
 				s.lastSignificant = s.raw[end-1]
 				return end
 			}
@@ -704,14 +717,14 @@ func (s *projectionShorthandScanner) rewriteAt(index int) int {
 
 func (s *projectionShorthandScanner) copyQuoted(index int) int {
 	next, quote := advanceProjectionQuote(s.raw, index, s.quote)
-	s.rewritten.WriteString(s.raw[index:next])
+	s.writeString(s.raw[index:next])
 	s.quote = quote
 	return next
 }
 
 func (s *projectionShorthandScanner) copyComment(index int) int {
 	for index < len(s.raw) && s.raw[index] != '\n' && s.raw[index] != '\r' {
-		s.rewritten.WriteByte(s.raw[index])
+		s.writeByte(s.raw[index])
 		index++
 	}
 	return index
@@ -723,13 +736,13 @@ func (s *projectionShorthandScanner) copyIdentifier(index int) int {
 		end++
 	}
 	field := s.raw[index:end]
-	s.rewritten.WriteString(field)
+	s.writeString(field)
 	if s.isBareField(end) {
 		if s.bareFields != nil {
 			*s.bareFields = append(*s.bareFields, projectionIdentifierSpan{start: index, end: end})
 		}
-		s.rewritten.WriteString(": .")
-		s.rewritten.WriteString(field)
+		s.writeString(": .")
+		s.writeString(field)
 	}
 	s.lastSignificant = s.raw[end-1]
 	return end
@@ -751,16 +764,16 @@ func (s *projectionShorthandScanner) copyPathShorthand(index int) int {
 	if !ok || !projectionEntryEndsAt(s.raw, end, s.parenDepth) {
 		return s.copyByte(index)
 	}
-	s.rewritten.WriteString(key)
-	s.rewritten.WriteString(": ")
-	s.rewritten.WriteString(s.raw[index:end])
+	s.writeString(key)
+	s.writeString(": ")
+	s.writeString(s.raw[index:end])
 	s.lastSignificant = s.raw[end-1]
 	return end
 }
 
 func (s *projectionShorthandScanner) copyByte(index int) int {
 	c := s.raw[index]
-	s.rewritten.WriteByte(c)
+	s.writeByte(c)
 	switch c {
 	case '(':
 		s.parenDepth++

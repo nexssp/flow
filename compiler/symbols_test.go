@@ -115,3 +115,30 @@ func TestNamespaces_ReturnsSortedSnapshot(t *testing.T) {
 	ktest.RequireCondition(t, sawA && sawZ, "expected both symtest_aaa and symtest_zzz in %v", names)
 	ktest.RequireCondition(t, sorted, "names not sorted: %v", names)
 }
+
+func TestNamespaceNames_ReturnsSortedIndependentSnapshot(t *testing.T) {
+	t.Parallel()
+	RegisterNamespace(SymbolNamespace{Name: "symtest_names_zzz", Symbols: map[string]any{"z": 1}})
+	RegisterNamespace(SymbolNamespace{Name: "symtest_names_aaa", Symbols: map[string]any{"a": 1}})
+
+	names := NamespaceNames()
+	var sawA, sawZ bool
+	for index, name := range names {
+		if index > 0 && name < names[index-1] {
+			t.Fatalf("namespace names are not sorted: %v", names)
+		}
+		switch name {
+		case "symtest_names_aaa":
+			sawA = true
+		case "symtest_names_zzz":
+			sawZ = true
+		}
+	}
+	ktest.RequireCondition(t, sawA && sawZ, "expected both test namespaces in %v", names)
+
+	names[0] = "caller mutation"
+	second := NamespaceNames()
+	if second[0] == "caller mutation" {
+		t.Fatalf("a caller mutation changed the next namespace snapshot: %v", second)
+	}
+}

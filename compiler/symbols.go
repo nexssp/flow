@@ -80,6 +80,19 @@ func Namespaces() []SymbolNamespace {
 	return out
 }
 
+// NamespaceNames returns the registered namespace names, sorted by name.
+// Unlike Namespaces, it does not copy each namespace's symbol map.
+func NamespaceNames() []string {
+	symbolRegistryMu.RLock()
+	names := make([]string, 0, len(symbolRegistry))
+	for name := range symbolRegistry {
+		names = append(names, name)
+	}
+	symbolRegistryMu.RUnlock()
+	slices.Sort(names)
+	return names
+}
+
 // WithSymbolNamespaces returns a fresh environment with every registered
 // namespace bound under its name. Caller-supplied keys win on collision.
 // Namespace maps are shared read-only; do not mutate them.
