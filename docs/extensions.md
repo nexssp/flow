@@ -238,6 +238,30 @@ A stream source is a lazy `iter.Seq2[Item, error]`. A stream operator
 is a transform over a stream. Do not materialize the stream in a source;
 the boundary is `collect`.
 
+The built-in `stream.batch` size, `stream.window` size and step, and
+`stream.collect` limit must be from 1 through 1,000,000 items. Each of those
+buffering operators also accepts `max_bytes`: omit it or set it to `0` for the
+64 MiB default, or set it from 1 through 67,108,864 to choose a lower budget.
+The budget is reset for each batch, covers the complete collection for
+`stream.collect`, and applies to the active window plus its emitted slice copy
+for `stream.window`.
+
+Buffered items are detached before retention and must be JSON-compatible values:
+plain scalars, arrays/slices, maps with plain string keys, or structs with
+accessible JSON-compatible fields. Custom JSON/text marshalers, cyclic values,
+non-finite numbers, non-string map keys, and opaque values such as channels or
+functions are rejected. This avoids retaining unexpectedly large source
+backing arrays or map tables. The accounting is a conservative combination of
+the JSON representation upper bound and a logical detached-value/container
+estimate, including conservative slice-capacity slack; it is not an exact Go
+heap limit. Allocator/runtime overhead and values retained downstream of an
+operator are outside this budget, while the one-million-item cap remains in
+force.
+
+`stream.take` requires a positive `count`. `stream.throttle` requires an
+`interval_ms` from 1 through 9,223,372,036,854 so the interval fits in
+`time.Duration`.
+
 ---
 
 ## 5. Directives

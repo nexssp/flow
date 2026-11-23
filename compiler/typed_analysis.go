@@ -30,7 +30,6 @@ type TypeAnalysisContext struct {
 	CheckExpression    TypedSourceExpressionChecker
 	ExpressionCompiler ExpressionCompiler
 	projectionInput    bool
-	typedValueCache    map[*Value]typedValueResult
 }
 
 // TypedExpressionAnalyzer is an optional static-analysis contract for AST
@@ -131,7 +130,6 @@ func analyzeTypedNode(ctx TypeAnalysisContext, node Expr) (TypeDescriptor, error
 		atom, isAtom := node.(*Atom)
 		secretContract := contract.SecretBoundary || secret.TypeContains(contract.Input.Type)
 		if isAtom && atom != nil {
-			ctx.typedValueCache = make(map[*Value]typedValueResult)
 			atom.SecretBoundary = atom.SecretBoundary || secretContract
 			if secret.TypeContains(contract.Input.Type) {
 				atom.SecretRequestType = contract.Input.Type
@@ -322,7 +320,10 @@ func analyzeTypedProjection(ctx TypeAnalysisContext, projection *ProjectionExpr)
 
 func analyzeTypedParallel(ctx TypeAnalysisContext, parallel *ParallelExpr) (TypeDescriptor, error) {
 	for _, branch := range parallel.Branches {
-		if _, err := analyzeTypedNode(ctx, branch); err != nil {
+		branchContext := ctx
+		branchContext.Bindings = cloneTypeBindings(ctx.Bindings)
+		branchContext.PipelineBindings = clonePipelineBindingNames(ctx.PipelineBindings)
+		if _, err := analyzeTypedNode(branchContext, branch); err != nil {
 			return TypeDescriptor{}, err
 		}
 	}
@@ -405,9 +406,6 @@ func analyzeTypedAssert(ctx TypeAnalysisContext, assertion *AssertExpr) (TypeDes
 func analyzeTypedAtomValues(ctx TypeAnalysisContext, atom *Atom) error {
 	if atom == nil {
 		return nil
-	}
-	if ctx.typedValueCache == nil {
-		ctx.typedValueCache = make(map[*Value]typedValueResult)
 	}
 	for _, field := range ctx.ArgSchemas[atom.Name] {
 		if field.Kind == ArgSecret {
@@ -545,24 +543,11 @@ func analyzeTypedNamedPayload(ctx TypeAnalysisContext, atom *Atom) (TypeDescript
 	return TypeDescriptor{Type: reflect.StructOf(fields), ContainsSecret: containsSecret}, nil
 }
 
-type typedValueResult struct {
-	descriptor TypeDescriptor
-	err        error
-}
-
 func analyzeTypedValue(ctx TypeAnalysisContext, pos Position, value *Value) (TypeDescriptor, error) {
 	if value == nil {
 		return TypeDescriptor{}, nil
 	}
-	if ctx.typedValueCache == nil {
-		ctx.typedValueCache = make(map[*Value]typedValueResult)
-	}
-	if result, ok := ctx.typedValueCache[value]; ok {
-		return result.descriptor, result.err
-	}
-	descriptor, err := analyzeTypedValueUncached(ctx, pos, value)
-	ctx.typedValueCache[value] = typedValueResult{descriptor: descriptor, err: err}
-	return descriptor, err
+	return analyzeTypedValueUncached(ctx, pos, value)
 }
 
 //nolint:gocyclo // Handles each DSL value form with fail-closed Secret typing rules.

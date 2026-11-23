@@ -3,9 +3,11 @@ package stream_ops_test
 import (
 	"context"
 	"iter"
+	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/xerr"
 	"github.com/nexssp/kernel/xtest/ktest"
 
 	compiler "github.com/nexssp/flow/compiler"
@@ -87,4 +89,163 @@ func TestStreamOps_ThrottleAndTake(t *testing.T) {
 	ktest.RequireEqual(t, len(items), 2)
 	ktest.RequireEqual(t, items[0], "a")
 	ktest.RequireEqual(t, items[1], "b")
+}
+
+func TestStreamOps_AllocationLimits(t *testing.T) {
+	t.Parallel()
+	resolver, err := compiler.NewDynamicResolver(stream_ops.Bundle(nil).Libraries...)
+	ktest.RequireNoError(t, err)
+	cases := []struct {
+		operator string
+		config   map[string]any
+	}{
+		{"stream.batch", map[string]any{"size": 0}},
+		{"stream.batch", map[string]any{"size": 1_000_001}},
+		{"stream.window", map[string]any{"size": 1_000_001, "step": 1}},
+		{"stream.batch", map[string]any{"size": 1, "max_bytes": int64(-1)}},
+		{"stream.window", map[string]any{"size": 1, "step": 1, "max_bytes": int64(67_108_865)}},
+		{"stream.collect", map[string]any{"limit": 1, "max_bytes": int64(-1)}},
+		{"stream.take", map[string]any{}},
+		{"stream.take", map[string]any{"count": 0}},
+		{"stream.collect", map[string]any{"limit": 1_000_001}},
+	}
+	for _, tc := range cases {
+		t.Run(strings.ReplaceAll(tc.operator, ".", "_")+"_invalid", func(t *testing.T) {
+			t.Parallel()
+			op, ok := resolver.Operator(tc.operator)
+			ktest.RequireTrue(t, ok)
+			_, err := op.Build(tc.config)
+			if err == nil {
+				t.Fatalf("Build(%v) unexpectedly succeeded", tc.config)
+			}
+		})
+	}
+}
+
+func TestStreamOps_BufferByteBudgets(t *testing.T) {
+	t.Parallel()
+	resolver, err := compiler.NewDynamicResolver(stream_ops.Bundle(nil).Libraries...)
+	ktest.RequireNoError(t, err)
+	cases := []struct {
+		operator string
+		config   map[string]any
+	}{
+		{"stream.batch", map[string]any{"size": 1, "max_bytes": 1}},
+		{"stream.window", map[string]any{"size": 1, "step": 1, "max_bytes": 1}},
+		{"stream.collect", map[string]any{"limit": 1, "max_bytes": 1}},
+	}
+	for _, tc := range cases {
+		t.Run(strings.ReplaceAll(tc.operator, ".", "_")+"_over_budget", func(t *testing.T) {
+			op, ok := resolver.Operator(tc.operator)
+			ktest.RequireTrue(t, ok)
+			built, err := op.Build(tc.config)
+			ktest.RequireNoError(t, err)
+			upstream, err := streamSource("too large").DoStreamAny(t.Context(), struct{}{})
+			ktest.RequireNoError(t, err)
+			buffered, err := built.Apply(upstream)
+			ktest.RequireNoError(t, err)
+			var observed error
+			buffered(func(_ any, itemErr error) bool {
+				if itemErr != nil {
+					observed = itemErr
+				}
+				return true
+			})
+			if observed == nil {
+				t.Fatal("buffered operator accepted an item over max_bytes")
+			}
+			if kind := xerr.KindFrom(observed); kind != xerr.KindValidation {
+				t.Fatalf("buffered operator error kind = %s, want %s: %v", kind, xerr.KindValidation, observed)
+			}
+		})
+	}
+
+	collect, ok := resolver.Operator("stream.collect")
+	ktest.RequireTrue(t, ok)
+	built, err := collect.Build(map[string]any{"limit": 2, "max_bytes": 2048})
+	ktest.RequireNoError(t, err)
+	upstream, err := streamSource("small", []int{1, 2}).DoStreamAny(t.Context(), struct{}{})
+	ktest.RequireNoError(t, err)
+	buffered, err := built.Apply(upstream)
+	ktest.RequireNoError(t, err)
+	var got []any
+	var observed error
+	buffered(func(item any, itemErr error) bool {
+		if itemErr != nil {
+			observed = itemErr
+			return true
+		}
+		var isSlice bool
+		got, isSlice = item.([]any)
+		if !isSlice {
+			t.Errorf("stream.collect emitted %T, want []any", item)
+		}
+		return true
+	})
+	if observed != nil {
+		t.Fatalf("stream.collect errored within max_bytes: %v", observed)
+	}
+	if len(got) != 2 || got[0] != "small" {
+		t.Fatalf("collected values = %#v, want the two source values", got)
+	}
+	values, ok := got[1].([]int)
+	if !ok || len(values) != 2 || values[0] != 1 || values[1] != 2 {
+		t.Fatalf("collected typed slice = %#v, want []int{1, 2}", got[1])
+	}
+}
+
+func TestStreamOps_ThrottleIntervalBoundaries(t *testing.T) {
+	t.Parallel()
+	resolver, err := compiler.NewDynamicResolver(stream_ops.Bundle(nil).Libraries...)
+	ktest.RequireNoError(t, err)
+	op, ok := resolver.Operator("stream.throttle")
+	ktest.RequireTrue(t, ok)
+	for _, interval := range []int64{0, -1, 9_223_372_036_855} {
+		if _, err := op.Build(map[string]any{"interval_ms": interval}); err == nil {
+			t.Errorf("Build(interval_ms=%d) unexpectedly succeeded", interval)
+		}
+	}
+	if _, err := op.Build(map[string]any{"interval_ms": int64(9_223_372_036_854)}); err != nil {
+		t.Errorf("maximum representable interval rejected: %v", err)
+	}
+}
+
+func TestStreamOps_BoundedOperatorsClassifyUnsupportedValues(t *testing.T) {
+	t.Parallel()
+	resolver, err := compiler.NewDynamicResolver(stream_ops.Bundle(nil).Libraries...)
+	ktest.RequireNoError(t, err)
+	cases := []struct {
+		operator string
+		config   map[string]any
+	}{
+		{"stream.batch", map[string]any{"size": 1}},
+		{"stream.collect", map[string]any{"limit": 1}},
+		{"stream.window", map[string]any{"size": 1, "step": 1}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.operator, func(t *testing.T) {
+			t.Parallel()
+			op, ok := resolver.Operator(tc.operator)
+			ktest.RequireTrue(t, ok)
+			built, err := op.Build(tc.config)
+			ktest.RequireNoError(t, err)
+			upstream, err := streamSource(make(chan int)).DoStreamAny(t.Context(), struct{}{})
+			ktest.RequireNoError(t, err)
+			buffered, err := built.Apply(upstream)
+			ktest.RequireNoError(t, err)
+			var observed error
+			buffered(func(_ any, itemErr error) bool {
+				if itemErr != nil {
+					observed = itemErr
+				}
+				return true
+			})
+			if observed == nil {
+				t.Fatal("bounded operator accepted an unsupported channel value")
+			}
+			if kind := xerr.KindFrom(observed); kind != xerr.KindValidation {
+				t.Fatalf("bounded operator error kind = %s, want %s: %v", kind, xerr.KindValidation, observed)
+			}
+		})
+	}
 }

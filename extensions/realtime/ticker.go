@@ -21,9 +21,13 @@ func TickerSource() action.AnyStreamAction {
 		if req.Hz <= 0 {
 			return nil, xerr.BadRequest("hz must be positive")
 		}
-		maxCatchupDuration := time.Duration(req.MaxCatchupMs) * time.Millisecond
-		if maxCatchupDuration <= 0 {
-			maxCatchupDuration = 100 * time.Millisecond
+		maxCatchupDuration := 100 * time.Millisecond
+		if req.MaxCatchupMs > 0 {
+			var ok bool
+			maxCatchupDuration, ok = durationFromMilliseconds(int64(req.MaxCatchupMs))
+			if !ok {
+				return nil, xerr.BadRequest("max_catchup_ms exceeds maximum duration")
+			}
 		}
 		// Yields delta-time (dt) to feed the game loop
 		return stream.Ticks(ctx, req.Hz, maxCatchupDuration), nil

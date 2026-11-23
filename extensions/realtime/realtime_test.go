@@ -45,6 +45,23 @@ func requireTickerMetadata(t *testing.T, source action.AnyStreamAction) {
 	}
 }
 
+func TestRealtime_TickerRejectsCatchupDurationOverflow(t *testing.T) {
+	t.Parallel()
+
+	maxInt := int(^uint(0) >> 1)
+	maxDurationMs := (1<<63 - 1) / int64(time.Millisecond)
+	if int64(maxInt) <= maxDurationMs {
+		t.Skip("native int cannot exceed the time.Duration millisecond range on this architecture")
+	}
+	_, err := realtime.TickerSource().DoStreamAny(context.Background(), map[string]any{
+		"hz":             60,
+		"max_catchup_ms": maxInt,
+	})
+	if err == nil {
+		t.Fatal("TickerSource accepted an overflowing max_catchup_ms")
+	}
+}
+
 func TestRealtime_TopicPublish(t *testing.T) {
 	t.Parallel()
 
@@ -104,4 +121,21 @@ func TestRealtime_WheelScheduleAndAdvance(t *testing.T) {
 	}
 	ktest.RequireEqual(t, len(expired), 1)
 	ktest.RequireEqual(t, expired[0], "buff_expired")
+
+	maxDurationMs := (1<<63 - 1) / int64(time.Millisecond)
+	for _, tc := range []struct {
+		name   string
+		action action.AnyAction
+		input  map[string]any
+	}{
+		{name: "schedule overflow", action: schedAction, input: map[string]any{"delay_ms": maxDurationMs + 1}},
+		{name: "negative advance", action: advanceAction, input: map[string]any{"dt_ms": -1}},
+		{name: "advance overflow", action: advanceAction, input: map[string]any{"dt_ms": maxDurationMs + 1}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := action.InvokeAny(ctx, tc.action, tc.input); err == nil {
+				t.Fatalf("InvokeAny(%s) unexpectedly succeeded", tc.name)
+			}
+		})
+	}
 }

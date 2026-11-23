@@ -45,12 +45,6 @@ func Markdown(cfg Config) action.StreamOp[fs.FileContent, fs.FileContent] {
 			}
 			defer renderBufPool.Put(buffer)
 
-			if cfg.Prompt != "" && !cfg.NoHeader {
-				buffer.WriteString("> ")
-				buffer.WriteString(strings.ReplaceAll(strings.TrimSpace(cfg.Prompt), "\n", "\n> "))
-				buffer.WriteString("\n\n")
-			}
-
 			for file, err := range up {
 				if err != nil {
 					yield(fs.FileContent{}, err)
@@ -58,6 +52,11 @@ func Markdown(cfg Config) action.StreamOp[fs.FileContent, fs.FileContent] {
 				}
 
 				buffer.Reset()
+				if cfg.Prompt != "" && !cfg.NoHeader {
+					buffer.WriteString("> ")
+					buffer.WriteString(strings.ReplaceAll(strings.TrimSpace(cfg.Prompt), "\n", "\n> "))
+					buffer.WriteString("\n\n")
+				}
 				lang := file.Lang
 				if lang == "" {
 					lang = "text"

@@ -1,6 +1,7 @@
 package modifiers_meta
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/nexssp/kernel/action"
@@ -20,16 +21,7 @@ func Modifiers() []compiler.Modifier {
 			return b.Tag(tags...)
 		}),
 
-		compiler.String("scope", func(b *action.Builder[any, any], s string) *action.Builder[any, any] {
-			switch strings.ToLower(s) {
-			case "internal":
-				return b.Internal()
-			case "system":
-				return b.System()
-			default:
-				return b.Public()
-			}
-		}),
+		scopeModifier(),
 
 		compiler.Flag("read_only", func(b *action.Builder[any, any]) *action.Builder[any, any] {
 			return b.Tag("read_only")
@@ -46,5 +38,33 @@ func Modifiers() []compiler.Modifier {
 
 		compiler.Flag("strict", func(b *action.Builder[any, any]) *action.Builder[any, any] { return b }),
 		compiler.Flag("lenient", func(b *action.Builder[any, any]) *action.Builder[any, any] { return b }),
+	}
+}
+
+func scopeModifier() compiler.Modifier {
+	apply := func(b *action.Builder[any, any], value string) error {
+		switch strings.ToLower(value) {
+		case "public":
+			b.Public()
+		case "internal":
+			b.Internal()
+		case "system":
+			b.System()
+		default:
+			return fmt.Errorf("invalid scope %q (want public, internal, or system)", value)
+		}
+		return nil
+	}
+	return compiler.Modifier{
+		Name:      "scope",
+		ValueKind: compiler.ModifierKindString,
+		Apply:     apply,
+		ApplyNative: func(b *action.Builder[any, any], value any) error {
+			s, ok := value.(string)
+			if !ok {
+				return fmt.Errorf("expected string scope, got %T", value)
+			}
+			return apply(b, s)
+		},
 	}
 }

@@ -87,7 +87,11 @@ func setField(field reflect.Value, val string) error {
 			field.SetInt(int64(d))
 			return nil
 		}
-		n, err := strconv.ParseInt(val, 10, 64)
+		bitSize := 64
+		if field.Kind() == reflect.Int {
+			bitSize = strconv.IntSize
+		}
+		n, err := strconv.ParseInt(val, 10, bitSize)
 		if err != nil {
 			return err
 		}

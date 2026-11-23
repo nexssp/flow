@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/observe"
@@ -139,6 +140,44 @@ func TestObserverEventSnapshotIsBoundedAndConcurrencySafe(t *testing.T) {
 	events[0].Action = "mutated snapshot"
 	if got := observer.Events()[0].Action; got == "mutated snapshot" {
 		t.Fatal("modifying an event snapshot changed the observer's retained events")
+	}
+}
+
+func TestObserverRecordAndActionHistoryAreBounded(t *testing.T) {
+	observer := runner.NewObserver(nil, 0)
+	const capacity = 256
+	count := capacity + 10
+	for i := range count {
+		observer.Emit(context.Background(), observe.Event{
+			Kind:     observe.KindSuccess,
+			Action:   fmt.Sprintf("action-%d", i),
+			Duration: time.Millisecond,
+			Time:     time.Now(),
+		})
+	}
+
+	records := observer.Records()
+	if len(records) != capacity {
+		t.Fatalf("records retained %d entries, want %d", len(records), capacity)
+	}
+	if records[0].Action != "action-10" {
+		t.Fatalf("records start at %q, want action-10", records[0].Action)
+	}
+	actions := observer.ActionNames()
+	if len(actions) != capacity {
+		t.Fatalf("action history retained %d entries, want %d", len(actions), capacity)
+	}
+	if actions[0] != "action-10" || actions[len(actions)-1] != fmt.Sprintf("action-%d", count-1) {
+		t.Fatalf("action history has unexpected bounds/order: %d entries, first %q, last %q", len(actions), actions[0], actions[len(actions)-1])
+	}
+	if observer.ActionNamesComplete() {
+		t.Fatal("truncated action history was reported as complete")
+	}
+
+	var summary bytes.Buffer
+	observer.PrintSummary(&summary)
+	if !strings.Contains(summary.String(), "earlier trace records omitted") {
+		t.Fatalf("summary did not disclose omitted records:\n%s", summary.String())
 	}
 }
 

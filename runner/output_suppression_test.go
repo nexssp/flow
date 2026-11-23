@@ -3,6 +3,8 @@ package runner_test
 import (
 	"bytes"
 	"context"
+	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -79,4 +81,58 @@ func TestRunSourceSuppressesMarkedOutputAndPreservesAssertionValue(t *testing.T)
 			}
 		})
 	}
+}
+
+func TestRunLeanSuppressesMarkedOutputAndPreservesNormalOutput(t *testing.T) {
+	suppress := action.New("repopeek_test.suppress", func(_ context.Context, _ any) (any, error) {
+		return runner.SuppressOutput(map[string]any{"ok": true}), nil
+	}).Build()
+	normal := action.New("repopeek_test.normal", func(_ context.Context, _ any) (any, error) {
+		return "normal output", nil
+	}).Build()
+	bundles := append(native.Bundles(), compiler.Bundle{
+		ID: "repopeek-output-suppression-lean-test",
+		Libraries: []action.Library{{
+			Name:    "repopeek_test",
+			Actions: []action.AnyAction{suppress, normal},
+		}},
+	})
+
+	for _, tc := range []struct{ source, want string }{
+		{source: "repopeek_test.suppress", want: ""},
+		{source: "repopeek_test.normal", want: "normal output\n"},
+	} {
+		got := captureStdout(t, func() {
+			if code := runner.RunLean(t.Context(), tc.source, "lean.nflow", bundles, nil); code != 0 {
+				t.Fatalf("RunLean(%q) returned %d", tc.source, code)
+			}
+		})
+		if got != tc.want {
+			t.Errorf("RunLean(%q) stdout = %q, want %q", tc.source, got, tc.want)
+		}
+	}
+}
+
+func captureStdout(t *testing.T, run func()) string {
+	t.Helper()
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	original := os.Stdout
+	os.Stdout = write
+	defer func() { os.Stdout = original }()
+	run()
+	os.Stdout = original
+	if err := write.Close(); err != nil {
+		t.Fatalf("close stdout writer: %v", err)
+	}
+	output, err := io.ReadAll(read)
+	if err != nil {
+		t.Fatalf("read captured stdout: %v", err)
+	}
+	if err := read.Close(); err != nil {
+		t.Fatalf("close stdout reader: %v", err)
+	}
+	return string(output)
 }

@@ -36,6 +36,13 @@ func handleDirective(_ context.Context, req compiler.DirectiveReq) (compiler.Dir
 		}
 	}
 
+	if len(names) == 0 {
+		return compiler.DirectiveRes{}, compiler.SourceError(
+			compiler.Position{File: req.File, Line: req.I + 1},
+			"@hook requires at least one hook name (e.g. @hook:hook.verify)",
+		)
+	}
+
 	existing, _ := req.Out["hooks"].([]string)
 	req.Out["hooks"] = append(existing, names...)
 	return compiler.DirectiveRes{Next: req.I + 1}, nil

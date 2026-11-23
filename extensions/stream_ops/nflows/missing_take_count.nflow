@@ -1,0 +1,5 @@
+@description "stream.take requires its count configuration"
+# @expect-compile-error count
+cov.items
+  -> stream.take
+  -> collect

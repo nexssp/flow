@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/expr-lang/expr"
+	"github.com/expr-lang/expr/ast"
+	"github.com/expr-lang/expr/parser"
 
 	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/internal/terminal"
@@ -54,6 +56,12 @@ func RunAssertionsContextWithPositions(ctx context.Context, w io.Writer, result 
 // RunAssertionsContextWithExpressionCompiler evaluates assertions using the
 // source-local compiler attached to the prepared Flow source.
 func RunAssertionsContextWithExpressionCompiler(ctx context.Context, w io.Writer, result any, durationMS int64, actions, asserts []string, positions []compiler.Position, expressionCompiler compiler.ExpressionCompiler, verbosity int, localSymbols ...map[string]compiler.SymbolNamespace) int {
+	return RunAssertionsContextWithExpressionCompilerAndActionHistory(ctx, w, result, durationMS, actions, true, asserts, positions, expressionCompiler, verbosity, localSymbols...)
+}
+
+// RunAssertionsContextWithExpressionCompilerAndActionHistory evaluates assertions
+// while distinguishing a complete history from its retained bounded suffix.
+func RunAssertionsContextWithExpressionCompilerAndActionHistory(ctx context.Context, w io.Writer, result any, durationMS int64, actions []string, actionHistoryComplete bool, asserts []string, positions []compiler.Position, expressionCompiler compiler.ExpressionCompiler, verbosity int, localSymbols ...map[string]compiler.SymbolNamespace) int {
 	if len(asserts) == 0 {
 		return 0
 	}
@@ -66,9 +74,19 @@ func RunAssertionsContextWithExpressionCompiler(ctx context.Context, w io.Writer
 		_, _ = fmt.Fprintf(w, "\n🧪 ASSERTIONS (%d)\n", len(asserts))
 	}
 
+	resultActionsShadowed := false
+	if resultMap, ok := env["result"].(map[string]any); ok {
+		_, resultActionsShadowed = resultMap["actions"]
+	}
 	failed := 0
 	for i, src := range asserts {
 		location := assertionSourcePrefix(positions, i)
+		if !actionHistoryComplete && assertionReferencesBareActions(src, resultActionsShadowed) {
+			_, _ = fmt.Fprintf(w, "  %s %s%s  (unavailable: action history exceeded the observer retention limit)\n",
+				paintAssert("✗", assertRed, color), location, src)
+			failed++
+			continue
+		}
 		out, phase, err := evaluateAssertion(ctx, src, env, expressionCompiler)
 		if err != nil {
 			if phase == "runtime" {
@@ -104,6 +122,12 @@ func RunAssertionsContextWithExpressionCompiler(ctx context.Context, w io.Writer
 			paintAssert("✓ all assertions passed", assertGreen, color))
 	}
 	return 0
+}
+
+// RunAssertionsContextWithPositionsAndActionHistory reports unavailable
+// action-history checks without suppressing unrelated result assertions.
+func RunAssertionsContextWithPositionsAndActionHistory(ctx context.Context, w io.Writer, result any, durationMS int64, actions []string, actionHistoryComplete bool, asserts []string, positions []compiler.Position, verbosity int, localSymbols ...map[string]compiler.SymbolNamespace) int {
+	return RunAssertionsContextWithExpressionCompilerAndActionHistory(ctx, w, result, durationMS, actions, actionHistoryComplete, asserts, positions, nil, verbosity, localSymbols...)
 }
 
 // EvaluateAssertions evaluates assertions without rendering CLI output. It is
@@ -155,6 +179,24 @@ func assertionSourcePrefix(positions []compiler.Position, index int) string {
 		return ""
 	}
 	return fmt.Sprintf("%s:%d: ", position.File, position.Line)
+}
+
+func assertionReferencesBareActions(src string, actionsShadowed bool) bool {
+	if actionsShadowed {
+		return false
+	}
+	cleanExpr := strings.TrimSpace(compiler.StripExprComments(src))
+	if strings.HasPrefix(cleanExpr, ".") {
+		cleanExpr = compiler.PreprocessDots(cleanExpr)
+	}
+	tree, err := parser.Parse(cleanExpr)
+	if err != nil {
+		return false
+	}
+	return ast.Find(tree.Node, func(node ast.Node) bool {
+		identifier, ok := node.(*ast.IdentifierNode)
+		return ok && identifier.Value == "actions"
+	}) != nil
 }
 
 func assertionEnvironment(ctx context.Context, result any, durationMS int64, actions []string, localSymbols map[string]compiler.SymbolNamespace) map[string]any {

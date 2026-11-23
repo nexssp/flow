@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -9,97 +10,188 @@ import (
 	"time"
 )
 
-func TestHarnessLockStalenessExceedsConfiguredGoTimeout(t *testing.T) {
-	t.Setenv("NFLOW_GO_TIMEOUT", "17m")
-	if got := goCommandTimeout() + harnessLockStaleGrace; got <= 17*time.Minute {
-		t.Fatalf("stale lock threshold = %s, want greater than configured timeout", got)
+func TestAcquireHarnessLockRefreshesPIDMetadata(t *testing.T) {
+	dir := t.TempDir()
+	unlock, err := acquireHarnessLock(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("acquire lock: %v", err)
+	}
+	defer unlock()
+	data, err := os.ReadFile(filepath.Join(dir, "build.lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(data); got != strconv.Itoa(os.Getpid())+"\n" {
+		t.Fatalf("lock metadata = %q, want current PID", got)
 	}
 }
 
-func TestReclaimStaleHarnessLockChecksPIDLiveness(t *testing.T) {
-	now := time.Now()
-	staleAfter := 15 * time.Minute
-	path := filepath.Join(t.TempDir(), "build.lock")
-	if err := os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o600); err != nil {
+func TestAcquireHarnessLockSerializesCallers(t *testing.T) {
+	dir := t.TempDir()
+	firstUnlock, err := acquireHarnessLock(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("acquire first lock: %v", err)
+	}
+	defer firstUnlock()
+
+	file, err := os.OpenFile(filepath.Join(dir, "build.lock"), os.O_RDWR, 0o600)
+	if err != nil {
 		t.Fatal(err)
 	}
-	old := now.Add(-2 * staleAfter)
-	if err := os.Chtimes(path, old, old); err != nil {
-		t.Fatal(err)
+	defer file.Close()
+	if _, supported, err := lockHarnessFile(file); !supported {
+		t.Skip("platform does not provide advisory file locks")
+	} else if err == nil {
+		t.Fatal("second lock attempt unexpectedly acquired the held lock")
+	} else if !harnessLockBusy(err) {
+		t.Fatalf("second lock attempt failed for an unexpected reason: %v", err)
 	}
 
-	if reclaimed := reclaimStaleHarnessLockAt(path, now, staleAfter, func(int) (bool, error) {
-		return true, nil
-	}); reclaimed {
-		t.Fatal("reclaimed a lock whose owner PID is still live")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := acquireHarnessLock(ctx, dir); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled waiter error = %v, want context.Canceled", err)
 	}
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("live owner's lock was removed: %v", err)
+
+	firstUnlock()
+	secondUnlock, err := acquireHarnessLock(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("acquire after release: %v", err)
+	}
+	secondUnlock()
+	if _, err := os.Stat(filepath.Join(dir, "build.lock")); err != nil {
+		t.Fatalf("persistent lock file missing after release: %v", err)
 	}
 }
 
-func TestReclaimStaleHarnessLockReclaimsConfirmedDeadPID(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "build.lock")
-	if err := os.WriteFile(path, []byte("24680\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	called := false
-	if reclaimed := reclaimStaleHarnessLockAt(path, time.Now(), time.Hour, func(pid int) (bool, error) {
-		called = true
-		if pid != 24680 {
-			t.Fatalf("liveness checked PID %d, want 24680", pid)
+func TestAcquireHarnessLockDoesNotAcquireWithCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if unlock, err := acquireHarnessLock(ctx, t.TempDir()); !errors.Is(err, context.Canceled) {
+		if unlock != nil {
+			unlock()
 		}
-		return false, nil
-	}); !reclaimed {
-		t.Fatal("did not reclaim a lock owned by a confirmed-dead PID")
-	}
-	if !called {
-		t.Fatal("did not check the lock owner's PID")
-	}
-	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("dead owner's lock still exists: stat error %v", err)
+		t.Fatalf("canceled acquisition = %v, want context.Canceled", err)
 	}
 }
 
-func TestReclaimMalformedHarnessLockOnlyAfterTimeoutGrace(t *testing.T) {
-	now := time.Now()
-	staleAfter := 11 * time.Minute
-	path := filepath.Join(t.TempDir(), "build.lock")
-	if err := os.WriteFile(path, []byte("not-a-pid\n"), 0o600); err != nil {
+func TestHarnessLockReleaseDoesNotDeleteReplacementPath(t *testing.T) {
+	dir := t.TempDir()
+	unlock, err := acquireHarnessLock(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("acquire lock: %v", err)
+	}
+	path := filepath.Join(dir, "build.lock")
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("replace lock path: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("replacement\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if reclaimed := reclaimStaleHarnessLockAt(path, now, staleAfter, processAlive); reclaimed {
-		t.Fatal("reclaimed a recent malformed lock")
+	unlock()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("old handle removed replacement path: %v", err)
 	}
-
-	old := now.Add(-staleAfter - time.Second)
-	if err := os.Chtimes(path, old, old); err != nil {
-		t.Fatal(err)
-	}
-	if reclaimed := reclaimStaleHarnessLockAt(path, now, staleAfter, processAlive); !reclaimed {
-		t.Fatal("did not reclaim an aged malformed lock")
+	if string(data) != "replacement\n" {
+		t.Fatalf("replacement content = %q, want unchanged", data)
 	}
 }
 
-func TestReclaimHarnessLockUsesAgeFallbackWhenPIDProbeUnavailable(t *testing.T) {
-	now := time.Now()
-	staleAfter := 12 * time.Minute
-	path := filepath.Join(t.TempDir(), "build.lock")
-	if err := os.WriteFile(path, []byte("12345\n"), 0o600); err != nil {
+func TestAcquireHarnessLockWaitsUntilReleased(t *testing.T) {
+	dir := t.TempDir()
+	firstUnlock, err := acquireHarnessLock(context.Background(), dir)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if reclaimed := reclaimStaleHarnessLockAt(path, now, staleAfter, func(int) (bool, error) {
-		return false, errProcessLivenessUnavailable
-	}); reclaimed {
-		t.Fatal("reclaimed a lock before the fallback age threshold")
+	firstReleased := false
+	releaseFirst := func() {
+		if !firstReleased {
+			firstUnlock()
+			firstReleased = true
+		}
 	}
-	old := now.Add(-staleAfter - time.Second)
-	if err := os.Chtimes(path, old, old); err != nil {
+	defer releaseFirst()
+	busy := make(chan struct{}, 1)
+	result := make(chan error, 1)
+	go func() {
+		unlock, err := acquireHarnessLockWithBusyObserver(context.Background(), dir, func() {
+			select {
+			case busy <- struct{}{}:
+			default:
+			}
+		})
+		if err == nil {
+			unlock()
+		}
+		result <- err
+	}()
+
+	// The independently opened descriptor confirms contention before release.
+	file, err := os.OpenFile(filepath.Join(dir, "build.lock"), os.O_RDWR, 0o600)
+	if err != nil {
+		releaseFirst()
 		t.Fatal(err)
 	}
-	if reclaimed := reclaimStaleHarnessLockAt(path, now, staleAfter, func(int) (bool, error) {
-		return false, errProcessLivenessUnavailable
-	}); !reclaimed {
-		t.Fatal("did not apply the age fallback after the timeout grace")
+	_, supported, lockErr := lockHarnessFile(file)
+	_ = file.Close()
+	if !supported {
+		t.Skip("platform does not provide advisory file locks")
+	}
+	if lockErr == nil || !harnessLockBusy(lockErr) {
+		t.Fatalf("expected busy lock, got %v", lockErr)
+	}
+	select {
+	case <-busy:
+	case <-time.After(2 * time.Second):
+		t.Fatal("waiter did not observe the held lock")
+	}
+	releaseFirst()
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("second caller failed after release: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("second caller did not acquire after release")
+	}
+}
+
+func TestAcquireHarnessLockCancellationWhileWaiting(t *testing.T) {
+	dir := t.TempDir()
+	firstUnlock, err := acquireHarnessLock(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer firstUnlock()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	busy := make(chan struct{}, 1)
+	result := make(chan error, 1)
+	go func() {
+		unlock, err := acquireHarnessLockWithBusyObserver(ctx, dir, func() {
+			select {
+			case busy <- struct{}{}:
+			default:
+			}
+		})
+		if err == nil {
+			unlock()
+		}
+		result <- err
+	}()
+	select {
+	case <-busy:
+	case <-time.After(2 * time.Second):
+		t.Fatal("waiter did not observe the held lock")
+	}
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("waiter error = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("waiter did not stop after cancellation")
 	}
 }

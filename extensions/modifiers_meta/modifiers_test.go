@@ -174,6 +174,18 @@ func TestModifiers_Translation(t *testing.T) {
 	}
 }
 
+func TestModifiers_ScopeRejectsTypo(t *testing.T) {
+	t.Parallel()
+	table := compiler.NewModifierTable(Modifiers()...)
+	modifier, ok := table.ByName("scope")
+	ktest.RequireCondition(t, ok, "scope modifier not registered")
+	builder := action.New[any, any]("probe", func(_ context.Context, in any) (any, error) {
+		return in, nil
+	})
+	err := modifier.Apply(builder, "internel")
+	ktest.RequireCondition(t, err != nil, "expected invalid scope value to be rejected")
+}
+
 func TestModifiers_FlagRejectsValue(t *testing.T) {
 	t.Parallel()
 	table := compiler.NewModifierTable(Modifiers()...)

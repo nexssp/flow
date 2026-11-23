@@ -1,0 +1,5 @@
+@description "stream.window rejects a nonpositive step"
+# @expect-compile-error step must be between 1 and 1000000
+cov.items
+  -> stream.window ( size: 2, step: 0 )
+  -> collect

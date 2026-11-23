@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nexssp/kernel/xfs"
@@ -41,10 +42,6 @@ const defaultGoCommandTimeout = 10 * time.Minute
 const defaultAdapterDirectory = "nexssflow"
 
 const maxCapturedOutputBytes = 8 * 1024
-
-const harnessLockStaleGrace = time.Minute
-
-var errProcessLivenessUnavailable = errors.New("process liveness probing is unavailable")
 
 // HarnessEnv marks a process as running inside an external-module harness.
 const (
@@ -259,78 +256,100 @@ func requirementsToRetain(driverRequirements, harnessRequirements []moduleRequir
 }
 
 func acquireHarnessLock(ctx context.Context, dir string) (func(), error) {
+	return acquireHarnessLockWithBusyObserver(ctx, dir, nil)
+}
+
+// acquireHarnessLockWithBusyObserver lets tests synchronize on actual lock contention.
+func acquireHarnessLockWithBusyObserver(ctx context.Context, dir string, onBusy func()) (func(), error) {
 	lockPath := filepath.Join(dir, "build.lock")
-	staleAfter := goCommandTimeout() + harnessLockStaleGrace
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("harness: open lock %s: %w", lockPath, err)
+	}
 
+	const pollInterval = 25 * time.Millisecond
 	for {
-		file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if err == nil {
-			if _, writeErr := fmt.Fprintf(file, "%d\n", os.Getpid()); writeErr != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			_ = file.Close()
+			return nil, ctxErr
+		}
+		unlockFile, supported, lockErr := lockHarnessFile(file)
+		if !supported {
+			_ = file.Close()
+			return nil, fmt.Errorf("harness: lock %s: advisory locks are unsupported", lockPath)
+		}
+		if lockErr == nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				unlockFile()
 				_ = file.Close()
-				_ = os.Remove(lockPath)
-				return nil, fmt.Errorf("harness: write lock %s: %w", lockPath, writeErr)
+				return nil, ctxErr
 			}
-			if closeErr := file.Close(); closeErr != nil {
-				_ = os.Remove(lockPath)
-				return nil, fmt.Errorf("harness: close lock %s: %w", lockPath, closeErr)
+			if !sameHarnessLockFile(file, lockPath) {
+				unlockFile()
+				_ = file.Close()
+				return nil, fmt.Errorf("harness: lock path changed while acquiring %s", lockPath)
 			}
-			return func() { _ = os.Remove(lockPath) }, nil
+			if _, err = file.Seek(0, io.SeekStart); err == nil {
+				err = file.Truncate(0)
+			}
+			if err == nil {
+				_, err = fmt.Fprintf(file, "%d\n", os.Getpid())
+			}
+			if err == nil {
+				err = file.Sync()
+			}
+			if err != nil {
+				unlockFile()
+				_ = file.Close()
+				return nil, fmt.Errorf("harness: write lock %s: %w", lockPath, err)
+			}
+			if err := ctx.Err(); err != nil {
+				unlockFile()
+				_ = file.Close()
+				return nil, err
+			}
+			var unlockOnce sync.Once
+			return func() {
+				unlockOnce.Do(func() {
+					unlockFile()
+					_ = file.Close()
+				})
+			}, nil
 		}
-		if !errors.Is(err, fs.ErrExist) {
-			return nil, fmt.Errorf("harness: lock %s: %w", lockPath, err)
+		if !harnessLockBusy(lockErr) {
+			_ = file.Close()
+			return nil, fmt.Errorf("harness: lock %s: %w", lockPath, lockErr)
+		}
+		if onBusy != nil {
+			onBusy()
 		}
 
-		if reclaimStaleHarnessLockAt(lockPath, time.Now(), staleAfter, processAlive) {
-			continue
-		}
-
+		timer := time.NewTimer(pollInterval)
 		select {
 		case <-ctx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			_ = file.Close()
 			return nil, ctx.Err()
-		case <-time.After(100 * time.Millisecond):
+		case <-timer.C:
 		}
 	}
 }
 
-func reclaimStaleHarnessLockAt(lockPath string, now time.Time, staleAfter time.Duration, isAlive func(int) (bool, error)) bool {
-	info, err := os.Stat(lockPath)
+func sameHarnessLockFile(file *os.File, lockPath string) bool {
+	lockedInfo, err := file.Stat()
 	if err != nil {
 		return false
 	}
-	aged := now.Sub(info.ModTime()) > staleAfter
-
-	contents, err := os.ReadFile(lockPath)
-	if err != nil {
-		return false
-	}
-	pid, parseErr := strconv.Atoi(strings.TrimSpace(string(contents)))
-	if parseErr == nil && pid > 0 {
-		alive, probeErr := isAlive(pid)
-		switch {
-		case probeErr == nil && alive:
-			return false
-		case probeErr == nil && !alive:
-			// A confirmed-dead owner can be reclaimed immediately.
-		case errors.Is(probeErr, errProcessLivenessUnavailable):
-			if !aged {
-				return false
-			}
-		default:
-			return false
-		}
-	} else if !aged {
-		return false
-	}
-
-	currentInfo, err := os.Stat(lockPath)
-	if err != nil || !os.SameFile(info, currentInfo) {
-		return false
-	}
-	currentContents, err := os.ReadFile(lockPath)
-	if err != nil || !bytes.Equal(contents, currentContents) {
-		return false
-	}
-	return os.Remove(lockPath) == nil
+	pathInfo, err := os.Stat(lockPath)
+	return err == nil && os.SameFile(lockedInfo, pathInfo)
 }
 
 func flowDirectory(path string) string {

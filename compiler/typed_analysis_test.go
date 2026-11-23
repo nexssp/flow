@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -75,5 +76,72 @@ func TestAnalyzeTypedValueExprRecursesIntoArrayValues(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("expression checker calls = %d, want 1", calls)
+	}
+}
+
+func TestAnalyzeTypedParallelIsolatesBranchBindings(t *testing.T) {
+	resolver, err := NewDynamicResolver()
+	if err != nil {
+		t.Fatalf("create resolver: %v", err)
+	}
+	ctx := TypeAnalysisContext{
+		Resolver: resolver,
+		Bindings: map[string]TypeDescriptor{"outer": {Type: reflect.TypeFor[string]()}},
+		CheckExpression: func(source string, expressionContext TypeAnalysisContext, _ Position) (TypeDescriptor, error) {
+			descriptor, ok := expressionContext.Bindings[source]
+			if !ok {
+				return TypeDescriptor{}, errors.New("unknown binding: " + source)
+			}
+			return descriptor, nil
+		},
+	}
+	parallel := &ParallelExpr{Branches: []Expr{
+		&BindingExpr{Name: "branchLocal", Inner: &LiteralExpr{Val: "value"}},
+		&ValueExpr{Value: &Value{Kind: ValueRef, Ref: "branchLocal"}},
+	}}
+	if _, err := AnalyzeTypedExpression(ctx, parallel); err == nil {
+		t.Fatal("sibling branch unexpectedly resolved another branch's binding")
+	}
+	parallel.Branches[1] = &ValueExpr{Value: &Value{Kind: ValueRef, Ref: "outer"}}
+	if _, err := AnalyzeTypedExpression(ctx, parallel); err != nil {
+		t.Fatalf("parallel branch could not resolve inherited outer binding: %v", err)
+	}
+	if _, ok := ctx.Bindings["branchLocal"]; ok {
+		t.Fatal("branch-local binding leaked into parent context")
+	}
+}
+
+func TestAnalyzeTypedSharedValueUsesCurrentContext(t *testing.T) {
+	resolver, err := NewDynamicResolver()
+	if err != nil {
+		t.Fatalf("create resolver: %v", err)
+	}
+	sharedValue := &Value{Kind: ValueExpression, Expression: "same"}
+	checkerCalls := 0
+	check := func(source string, ctx TypeAnalysisContext, pos Position) (TypeDescriptor, error) {
+		checkerCalls++
+		if source != "same" {
+			t.Errorf("checked expression = %q, want %q", source, "same")
+		}
+		if ctx.Input.Type == reflect.TypeFor[bool]() {
+			if pos.File != "second.flow" {
+				t.Errorf("second analysis position = %q, want second.flow", pos.File)
+			}
+			return TypeDescriptor{}, errors.New("context-specific failure")
+		}
+		return TypeDescriptor{Type: reflect.TypeFor[string]()}, nil
+	}
+	first := &ValueExpr{Value: sharedValue, Pos: Position{File: "first.flow"}}
+	if descriptor, err := AnalyzeTypedExpression(TypeAnalysisContext{Resolver: resolver, Input: TypeDescriptor{Type: reflect.TypeFor[string]()}, CheckExpression: check}, first); err != nil {
+		t.Fatalf("first shared-value analysis: %v", err)
+	} else if descriptor.Type != reflect.TypeFor[string]() {
+		t.Fatalf("first descriptor type = %v, want string", descriptor.Type)
+	}
+	second := &ValueExpr{Value: sharedValue, Pos: Position{File: "second.flow"}}
+	if _, err := AnalyzeTypedExpression(TypeAnalysisContext{Resolver: resolver, Input: TypeDescriptor{Type: reflect.TypeFor[bool]()}, CheckExpression: check}, second); err == nil || err.Error() != "context-specific failure" {
+		t.Fatalf("second shared-value analysis error = %v, want context-specific failure", err)
+	}
+	if checkerCalls != 2 {
+		t.Fatalf("expression checker calls = %d, want 2", checkerCalls)
 	}
 }

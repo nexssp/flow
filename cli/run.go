@@ -491,31 +491,12 @@ func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string,
 	wantJSON := hasFlag(flags, "--json")
 	isTerm := terminal.IsTerminal(os.Stdout)
 
-	var journal *runner.FileJournal
-	if durability.JournalDir != "" {
-		if cfg.Journal != nil {
-			return fatalf("run options: --journal-dir cannot be combined with a journal already set in runner.Config")
-		}
-		var err error
-		journal, err = runner.NewFileJournal(durability.JournalDir)
-		if err != nil {
-			return fatalf("journal: %v", err)
-		}
-		cfg.Journal = journal
-		if cfg.IdempotencyStore == nil {
-			cfg.IdempotencyStore = journal
-		}
-		defer func() {
-			if err := journal.Close(); err != nil {
-				fmt.Fprintf(os.Stderr, "journal close: %v\n", err)
-			}
-		}()
+	ctx, cfg, closeJournal, err := configureRunDurability(ctx, cfg, durability)
+	if err != nil {
+		return fatalf("%v", err)
 	}
-	if durability.ExecutionID != "" && cfg.Journal == nil {
-		return fatalf("run options: --execution-id requires --journal-dir")
-	}
-	if durability.ExecutionID != "" {
-		ctx = xctx.WithExecutionID(ctx, durability.ExecutionID)
+	if closeJournal != nil {
+		defer closeJournal()
 	}
 
 	verbosity := countVerbosity(flags)
@@ -529,29 +510,7 @@ func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string,
 	}
 
 	if execErr != nil {
-		if ex.Suspension != nil {
-			printApprovalSuspension(os.Stderr, name, durability, ex.Suspension)
-			if !errors.Is(execErr, dag.ErrSuspended) {
-				fmt.Fprintf(os.Stderr, "  Suspension persistence error: %s\n", formatCleanError(execErr, useColorErr))
-			}
-			return 3
-		}
-		fmt.Fprintf(os.Stderr, "\n%s\n\n", paint("✗ Pipeline Execution Failed", ansiRed, useColorErr))
-		fmt.Fprintf(os.Stderr, "  %s\n\n", runner.FormatErrorDetail(execErr, src, name, useColorErr))
-		if verbosity >= 1 {
-			if trace := runner.FormatErrorTrace(execErr); trace != "" {
-				fmt.Fprintln(os.Stderr, trace)
-			}
-			fmt.Fprintf(os.Stderr, "  debug: compile finished in %s\n", runner.FormatDuration(ex.CompileDuration))
-			if ex.RunDuration == 0 {
-				fmt.Fprintln(os.Stderr, "  debug: execution did not start; no runtime action events are expected")
-			}
-			observer.PrintSummary(os.Stderr)
-		}
-		if ex.RunDuration == 0 {
-			return 2
-		}
-		return 1
+		return reportPreparedExecutionFailure(ex, execErr, src, name, durability, useColorErr, verbosity, observer)
 	}
 
 	if verbosity >= 1 {
@@ -564,17 +523,78 @@ func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string,
 	emitPreparedOutput(ex.Output, suppressOutput || ex.SuppressOutput, wantJSON, isTerm, useColorOut)
 
 	asserts, positions := runner.CollectAsserts(ex.Meta, flagsToAsserts(flags))
-	return runner.RunAssertionsContextWithPositions(
+	return runner.RunAssertionsContextWithPositionsAndActionHistory(
 		ctx,
 		os.Stderr,
 		ex.Output,
 		total.Milliseconds(),
 		observer.ActionNames(),
+		observer.ActionNamesComplete(),
 		asserts,
 		positions,
 		verbosity,
 		compiler.SymbolsFromMeta(ex.Meta),
 	)
+}
+
+func configureRunDurability(ctx context.Context, cfg runner.Config, durability runner.DurabilityOptions) (context.Context, runner.Config, func(), error) {
+	var journal *runner.FileJournal
+	if durability.JournalDir != "" {
+		if cfg.Journal != nil {
+			return ctx, cfg, nil, errors.New("run options: --journal-dir cannot be combined with a journal already set in runner.Config")
+		}
+		var err error
+		journal, err = runner.NewFileJournal(durability.JournalDir)
+		if err != nil {
+			return ctx, cfg, nil, fmt.Errorf("journal: %w", err)
+		}
+		cfg.Journal = journal
+		if cfg.IdempotencyStore == nil {
+			cfg.IdempotencyStore = journal
+		}
+	}
+	if durability.ExecutionID != "" && cfg.Journal == nil {
+		return ctx, cfg, nil, errors.New("run options: --execution-id requires --journal-dir")
+	}
+	if durability.ExecutionID != "" {
+		ctx = xctx.WithExecutionID(ctx, durability.ExecutionID)
+	}
+	if journal == nil {
+		return ctx, cfg, nil, nil
+	}
+	closeJournal := func() {
+		if err := journal.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "journal close: %v\n", err)
+		}
+	}
+	return ctx, cfg, closeJournal, nil
+}
+
+func reportPreparedExecutionFailure(ex runner.Execution, execErr error, src, name string, durability runner.DurabilityOptions, useColorErr bool, verbosity int, observer *runner.Observer) int {
+	if ex.Suspension != nil && errors.Is(execErr, dag.ErrSuspended) {
+		printApprovalSuspension(os.Stderr, name, durability, ex.Suspension)
+		return 3
+	}
+	if ex.Suspension != nil {
+		fmt.Fprintf(os.Stderr, "  Suspension persistence error: %s\n", formatCleanError(execErr, useColorErr))
+		fmt.Fprintln(os.Stderr, "  Approval pause was not persisted; configure a suspension-capable journal to resume safely.")
+	}
+	fmt.Fprintf(os.Stderr, "\n%s\n\n", paint("✗ Pipeline Execution Failed", ansiRed, useColorErr))
+	fmt.Fprintf(os.Stderr, "  %s\n\n", runner.FormatErrorDetail(execErr, src, name, useColorErr))
+	if verbosity >= 1 {
+		if trace := runner.FormatErrorTrace(execErr); trace != "" {
+			fmt.Fprintln(os.Stderr, trace)
+		}
+		fmt.Fprintf(os.Stderr, "  debug: compile finished in %s\n", runner.FormatDuration(ex.CompileDuration))
+		if ex.RunDuration == 0 {
+			fmt.Fprintln(os.Stderr, "  debug: execution did not start; no runtime action events are expected")
+		}
+		observer.PrintSummary(os.Stderr)
+	}
+	if ex.RunDuration == 0 {
+		return 2
+	}
+	return 1
 }
 
 func emitPreparedOutput(output any, suppressOutput, wantJSON, isTerm, useColor bool) {
@@ -657,44 +677,65 @@ func stdinWait() time.Duration {
 // readStdinBounded reads all of stdin but bounds the wait for the FIRST byte.
 // If no byte arrives within wait, it reports timedOut without consuming
 // anything. After the first byte the read blocks until EOF exactly as before,
-// so producers that are slow but live are never truncated. wait <= 0 waits
-// indefinitely (legacy behavior).
+// so producers that are slow but live are never truncated. A bounded read
+// requires deadline support; file-backed stdin uses an OS readiness check when
+// the file does not support deadlines. wait <= 0 waits indefinitely.
 func readStdinBounded(stdin io.Reader, wait time.Duration) (data []byte, timedOut bool, err error) {
 	if wait <= 0 {
 		data, err = io.ReadAll(stdin)
 		return data, false, err
 	}
-
-	first := make([]byte, 1)
-	type firstResult struct {
-		n   int
-		err error
+	if file, ok := stdin.(*os.File); ok {
+		info, statErr := file.Stat()
+		if statErr != nil {
+			return nil, false, fmt.Errorf("stat stdin: %w", statErr)
+		}
+		if info.Mode().IsRegular() {
+			data, err = io.ReadAll(stdin)
+			return data, false, err
+		}
 	}
-	done := make(chan firstResult, 1)
-	go func() {
-		n, readErr := stdin.Read(first)
-		done <- firstResult{n, readErr}
-	}()
-
-	timer := time.NewTimer(wait)
-	defer timer.Stop()
-	select {
-	case result := <-done:
-		if result.err != nil && !errors.Is(result.err, io.EOF) {
-			return nil, false, result.err
+	deadlineReader, ok := stdin.(interface{ SetReadDeadline(time.Time) error })
+	if !ok {
+		return nil, false, errors.New("bounded stdin read requires a reader with read-deadline support")
+	}
+	deadlineErr := deadlineReader.SetReadDeadline(time.Now().Add(wait))
+	if deadlineErr != nil {
+		file, isFile := stdin.(*os.File)
+		if !isFile {
+			return nil, false, fmt.Errorf("set stdin read deadline: %w", deadlineErr)
 		}
-		if result.n == 0 {
-			// Immediate EOF: empty stdin, consumed without a timeout.
-			return []byte{}, false, nil
+		ready, waitErr := waitForFileReadable(file, wait)
+		if waitErr != nil {
+			return nil, false, fmt.Errorf("set stdin read deadline: %w; wait for stdin: %w", deadlineErr, waitErr)
 		}
-		rest, restErr := io.ReadAll(stdin)
-		if restErr != nil {
-			return nil, false, restErr
+		if !ready {
+			return nil, true, nil
 		}
-		return append(first[:result.n], rest...), false, nil
-	case <-timer.C:
+	}
+	first := make([]byte, 1)
+	n, readErr := stdin.Read(first)
+	if deadlineErr == nil {
+		clearErr := deadlineReader.SetReadDeadline(time.Time{})
+		if clearErr != nil {
+			return nil, false, fmt.Errorf("clear stdin read deadline: %w", clearErr)
+		}
+	}
+	if n == 0 && errors.Is(readErr, os.ErrDeadlineExceeded) {
 		return nil, true, nil
 	}
+	if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, os.ErrDeadlineExceeded) {
+		return nil, false, readErr
+	}
+	if n == 0 {
+		// Immediate EOF: empty stdin, consumed without a timeout.
+		return []byte{}, false, nil
+	}
+	rest, restErr := io.ReadAll(stdin)
+	if restErr != nil {
+		return nil, false, restErr
+	}
+	return append(first[:n], rest...), false, nil
 }
 
 func readRunInput(payload map[string]any, source string, flags []string) (input map[string]any, remainingFlags []string, err error) {

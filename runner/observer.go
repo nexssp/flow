@@ -19,6 +19,8 @@ import (
 
 const observerEventCapacity = 256
 
+const observerRecordCapacity = observerEventCapacity
+
 var secretScrubberContextKey = xctx.NewKey[*secret.Scrubber]("flow.runner.secret-scrubber")
 
 func activeSecretScrubber(ctx context.Context, fallback *secret.Scrubber) *secret.Scrubber {
@@ -39,6 +41,9 @@ type Observer struct {
 
 	mu              sync.Mutex
 	records         []Record
+	actions         []string
+	droppedRecords  uint64
+	droppedActions  uint64
 	events          *observe.MemorySink
 	secretContracts *secretContractRegistry
 	secretScrubber  *secret.Scrubber
@@ -125,12 +130,20 @@ func (o *Observer) record(event observe.Event, err error) {
 	dur := event.Duration
 
 	o.mu.Lock()
-	o.records = append(o.records, Record{
+	var dropped bool
+	o.records, dropped = appendObserverHistory(o.records, Record{
 		Action:   event.Action,
 		Duration: dur,
 		Err:      err,
 		Start:    start,
-	})
+	}, observerRecordCapacity)
+	if dropped {
+		o.droppedRecords++
+	}
+	o.actions, dropped = appendObserverHistory(o.actions, event.Action, observerRecordCapacity)
+	if dropped {
+		o.droppedActions++
+	}
 	o.mu.Unlock()
 
 	// -vv prints live progress
@@ -186,11 +199,14 @@ func (o *Observer) Records() []Record {
 func (o *Observer) ActionNames() []string {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	out := make([]string, len(o.records))
-	for i, r := range o.records {
-		out[i] = r.Action
-	}
-	return out
+	return append([]string(nil), o.actions...)
+}
+
+// ActionNamesComplete reports whether ActionNames contains the complete run history.
+func (o *Observer) ActionNamesComplete() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.droppedActions == 0
 }
 
 func (o *Observer) PrintSummary(w io.Writer) {
@@ -198,8 +214,14 @@ func (o *Observer) PrintSummary(w io.Writer) {
 	if len(records) == 0 {
 		return
 	}
+	o.mu.Lock()
+	droppedRecords := o.droppedRecords
+	o.mu.Unlock()
 
 	fmt.Fprintln(w, "")
+	if droppedRecords > 0 {
+		fmt.Fprintf(w, "  (earlier trace records omitted; showing the most recent %d)\n", len(records))
+	}
 	fmt.Fprintln(w, "─── EXECUTION TRACE ───────────────────────────────────────────────────────────")
 	fmt.Fprintf(w, "  %-6s %-35s %10s   %s\n", "STATUS", "ACTION", "DURATION", "ERROR")
 
@@ -221,6 +243,15 @@ func (o *Observer) PrintSummary(w io.Writer) {
 	fmt.Fprintln(w, "───────────────────────────────────────────────────────────────────────────────")
 	fmt.Fprintf(w, "  %-6s %-35s %10s\n", "", "TOTAL", FormatDuration(total))
 	fmt.Fprintln(w, "")
+}
+
+func appendObserverHistory[T any](history []T, value T, capacity int) ([]T, bool) {
+	if len(history) < capacity {
+		return append(history, value), false
+	}
+	copy(history, history[1:])
+	history[len(history)-1] = value
+	return history, true
 }
 
 // FormatDuration handles Windows clock resolution limits cleanly without misleading '0ns' outputs.

@@ -48,6 +48,23 @@ func TestDirective_NoColonForm(t *testing.T) {
 	ktest.RequireEqual(t, hooks, []string{"hook.verify"})
 }
 
+func TestDirective_EmptyEntriesIgnoredWhenNamesRemain(t *testing.T) {
+	t.Parallel()
+	out, err := runDirective(t, `@hook: , hook.verify, `)
+	ktest.RequireNoError(t, err)
+
+	hooks, _ := out["hooks"].([]string)
+	ktest.RequireEqual(t, hooks, []string{"hook.verify"})
+}
+
+func TestDirective_OnlyEmptyEntriesRejected(t *testing.T) {
+	t.Parallel()
+	for _, line := range []string{`@hook:,,,`, "@hook: , \t ,"} {
+		_, err := runDirective(t, line)
+		ktest.RequireErrorContains(t, err, "at least one hook")
+	}
+}
+
 func TestDirective_EmptyRejected(t *testing.T) {
 	t.Parallel()
 	_, err := runDirective(t, `@hook:`)

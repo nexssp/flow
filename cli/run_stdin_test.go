@@ -273,73 +273,79 @@ func TestReadStdinBounded_ImmediateEmptyEOFIsEmptyRead(t *testing.T) {
 	ktest.RequireEqual(t, string(data), "")
 }
 
-type blockedStdinReader struct {
-	started  chan struct{}
-	release  chan struct{}
-	finished chan struct{}
+func TestReadStdinBounded_RegularFile(t *testing.T) {
+	file, err := os.CreateTemp(t.TempDir(), "stdin-*.json")
+	ktest.RequireNoError(t, err)
+	_, err = file.WriteString(`{"user":"alice"}`)
+	ktest.RequireNoError(t, err)
+	_, err = file.Seek(0, io.SeekStart)
+	ktest.RequireNoError(t, err)
+	old := os.Stdin
+	os.Stdin = file
+	t.Cleanup(func() {
+		os.Stdin = old
+		_ = file.Close()
+	})
+
+	got, timedOut, err := readStdinBounded(file, 50*time.Millisecond)
+	ktest.RequireNoError(t, err)
+	ktest.RequireFalse(t, timedOut)
+	ktest.RequireEqual(t, string(got), `{"user":"alice"}`)
 }
 
-func (r *blockedStdinReader) Read([]byte) (int, error) {
-	close(r.started)
-	defer close(r.finished)
-	<-r.release
+type unsupportedDeadlineReader struct{ readCalled bool }
+
+func (r *unsupportedDeadlineReader) Read([]byte) (int, error) {
+	r.readCalled = true
 	return 0, io.EOF
 }
 
-func TestReadStdinBoundedTimeoutDoesNotRaceWithStdinReplacement(t *testing.T) {
-	temporaryStdin, stdinWriter, err := os.Pipe()
+type dataAndDeadlineReader struct{ read bool }
+
+func (*dataAndDeadlineReader) SetReadDeadline(time.Time) error { return nil }
+
+func (r *dataAndDeadlineReader) Read(dst []byte) (int, error) {
+	if r.read {
+		return 0, io.EOF
+	}
+	r.read = true
+	dst[0] = 'x'
+	return 1, os.ErrDeadlineExceeded
+}
+
+func TestReadStdinBounded_PreservesBytesReturnedWithDeadline(t *testing.T) {
+	data, timedOut, err := readStdinBounded(&dataAndDeadlineReader{}, time.Millisecond)
 	ktest.RequireNoError(t, err)
-	oldStdin := os.Stdin
-	os.Stdin = temporaryStdin
-	t.Cleanup(func() {
-		os.Stdin = oldStdin
-		_ = temporaryStdin.Close()
-		_ = stdinWriter.Close()
-	})
+	ktest.RequireFalse(t, timedOut)
+	ktest.RequireEqual(t, string(data), "x")
+}
 
-	reader := &blockedStdinReader{
-		started:  make(chan struct{}),
-		release:  make(chan struct{}),
-		finished: make(chan struct{}),
+func TestReadStdinBoundedRejectsReaderWithoutDeadlineSupport(t *testing.T) {
+	reader := &unsupportedDeadlineReader{}
+	_, timedOut, err := readStdinBounded(reader, time.Millisecond)
+	if err == nil || timedOut {
+		t.Fatalf("bounded read = timedOut %v, err %v; want unsupported-reader error", timedOut, err)
 	}
-	releaseReader := func() {
-		select {
-		case <-reader.release:
-		default:
-			close(reader.release)
-		}
+	if reader.readCalled {
+		t.Fatal("bounded read called a reader it cannot safely interrupt")
 	}
-	defer releaseReader()
+}
 
-	type result struct {
-		timedOut bool
-		err      error
+func TestReadStdinBoundedTimeoutLeavesLaterBytesUnread(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	ktest.RequireNoError(t, err)
+	defer reader.Close()
+	defer writer.Close()
+	data, timedOut, err := readStdinBounded(reader, 20*time.Millisecond)
+	ktest.RequireNoError(t, err)
+	ktest.RequireTrue(t, timedOut)
+	ktest.RequireEqual(t, len(data), 0)
+	if _, err := writer.WriteString("later"); err != nil {
+		t.Fatal(err)
 	}
-	got := make(chan result, 1)
-	go func() {
-		_, timedOut, readErr := readStdinBounded(reader, 20*time.Millisecond)
-		got <- result{timedOut: timedOut, err: readErr}
-	}()
-
-	select {
-	case <-reader.started:
-	case <-time.After(5 * time.Second):
-		t.Fatal("bounded reader did not use the supplied stdin reader")
-	}
-	select {
-	case readResult := <-got:
-		ktest.RequireNoError(t, readResult.err)
-		ktest.RequireTrue(t, readResult.timedOut)
-	case <-time.After(5 * time.Second):
-		t.Fatal("bounded stdin read did not return after its deadline")
-	}
-
-	// Cleanup replaces os.Stdin while the timed-out read is still blocked.
-	os.Stdin = oldStdin
-	releaseReader()
-	select {
-	case <-reader.finished:
-	case <-time.After(5 * time.Second):
-		t.Fatal("blocked stdin read did not finish after release")
-	}
+	remaining := make([]byte, len("later"))
+	n, err := io.ReadFull(reader, remaining)
+	ktest.RequireNoError(t, err)
+	ktest.RequireEqual(t, n, len(remaining))
+	ktest.RequireEqual(t, string(remaining), "later")
 }

@@ -1,0 +1,4 @@
+@description "stream.collect rejects a nonpositive limit"
+# @expect-compile-error limit must be between 1 and 1000000
+cov.items
+  -> stream.collect ( limit: 0 )

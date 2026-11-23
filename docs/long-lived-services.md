@@ -2,6 +2,8 @@
 
 `supervisor.run` remains the finite fan-out action for child pipelines. Use the separate `supervisor.serve` action when one NFlow entrypoint owns several services that should stay alive together.
 
+Each `supervisor.run` call accepts up to 100,000 child tasks and runs at most 256 at once. Results retain request order. These per-call limits bound fan-out while allowing larger task lists to run in batches.
+
 ## Declare the service graph
 
 ```nflow

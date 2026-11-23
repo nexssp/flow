@@ -48,9 +48,7 @@ For local testing of an in-process stdio transport, use
 leaves stdin to the transport and the second prevents the runner's final result
 from being appended to its protocol stream. For production MCP stdio servers,
 prefer a standalone build (`nflow build server.nflow -o ./bin/server`) and
-launch that executable from the MCP client. Its `--suppress-output` option is
-available in the Flow CLI release that includes this patch; the current patch
-base, Flow v0.72.0, does not include it.
+launch that executable from the MCP client.
 
 For example, run once and save the reported execution ID, then supply that
 same ID with the same source name and journal directory to replay completed

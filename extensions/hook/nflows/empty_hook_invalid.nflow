@@ -1,0 +1,4 @@
+@description "An empty @hook directive is rejected during compilation"
+# @expect-compile-error @hook requires at least one hook name
+@hook:
+runtime.noop

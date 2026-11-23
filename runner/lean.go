@@ -34,7 +34,7 @@ func RunLean(ctx context.Context, source, name string, bundles []compiler.Bundle
 		return 1
 	}
 
-	if ex.Output != nil {
+	if ex.Output != nil && !ex.SuppressOutput {
 		if str, ok := ex.Output.(string); ok {
 			fmt.Println(str)
 		} else {

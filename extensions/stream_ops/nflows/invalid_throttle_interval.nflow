@@ -1,0 +1,5 @@
+@description "stream.throttle rejects an interval outside the duration-safe range"
+# @expect-compile-error interval_ms must be between 1 and 9223372036854
+cov.items
+  -> stream.throttle ( interval_ms: 9223372036855 )
+  -> collect

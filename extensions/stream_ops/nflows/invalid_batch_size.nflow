@@ -1,0 +1,5 @@
+@description "stream.batch rejects a size above its allocation limit"
+# @expect-compile-error size must be between 1 and 1000000
+cov.items
+  -> stream.batch ( size: 1000001 )
+  -> collect

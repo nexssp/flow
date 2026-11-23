@@ -15,6 +15,9 @@ import (
 
 const (
 	childDefaultTimeout = 30 * time.Second
+	// Keep supervisor requests consistent with the bounded fan-out item limit.
+	maxChildTasks       = 100_000
+	maxChildConcurrency = 256
 	maxChildTimeoutMS   = int64(math.MaxInt64) / int64(time.Millisecond)
 )
 
@@ -48,12 +51,15 @@ type SupervisorRes struct {
 	Results   []ChildResult `json:"results"`
 }
 
-// Supervisor compiles and runs each task's DSL. All children run
-// concurrently; each child is isolated (panic, error, timeout). The
-// compiler is read from the execution context.
+// Supervisor compiles and runs each task's DSL with bounded concurrency.
+// Children are isolated from panics, errors, and timeouts; results preserve
+// input order. The compiler is read from the execution context.
 var Supervisor = action.New("supervisor.run", func(ctx context.Context, req SupervisorReq) (SupervisorRes, error) {
 	if len(req.Tasks) == 0 {
 		return SupervisorRes{}, xerr.BadRequest("supervisor: no child tasks provided")
+	}
+	if len(req.Tasks) > maxChildTasks {
+		return SupervisorRes{}, xerr.BadRequest(fmt.Sprintf("supervisor: %d child tasks exceeds limit of %d", len(req.Tasks), maxChildTasks))
 	}
 	for _, task := range req.Tasks {
 		if task.TimeoutMS < 0 || task.TimeoutMS > maxChildTimeoutMS {
@@ -68,10 +74,27 @@ var Supervisor = action.New("supervisor.run", func(ctx context.Context, req Supe
 
 	results := make([]ChildResult, len(req.Tasks))
 	group, groupCtx := errgroup.WithContext(ctx)
+	slots := make(chan struct{}, maxChildConcurrency)
 
 	for i, task := range req.Tasks {
+		acquired := false
+		select {
+		case slots <- struct{}{}:
+			acquired = true
+		case <-groupCtx.Done():
+		}
+		if err := groupCtx.Err(); err != nil {
+			if acquired {
+				<-slots
+			}
+			for j := i; j < len(req.Tasks); j++ {
+				results[j] = ChildResult{TaskID: req.Tasks[j].ID, Error: err.Error()}
+			}
+			break
+		}
 		index, current := i, task
 		group.Go(func() error {
+			defer func() { <-slots }()
 			results[index] = runChild(groupCtx, compiler, current)
 			return nil
 		})
@@ -119,6 +142,11 @@ func runChild(ctx context.Context, compiler contracts.PipelineCompiler, task Chi
 
 	childCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	if err := childCtx.Err(); err != nil {
+		result.Error = err.Error()
+		result.DurationMs = time.Since(started).Milliseconds()
+		return result
+	}
 
 	pipeline, err := compiler.CompilePipeline(task.DSL)
 	if err != nil {

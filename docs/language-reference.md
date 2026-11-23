@@ -327,7 +327,7 @@ The stock CLI includes these principal groups:
 - Schema extension: `schema` (see the distinction above).
 - Optional, non-stock resilience extension: `circuit_breaker`. When mounted, its adviser also consumes selected Kernel policy modifiers; see [`docs/resilience.md`](resilience.md).
 
-The actual stock modifier contract is in [`extensions/modifiers_core/modifiers.go`](../extensions/modifiers_core/modifiers.go), [`extensions/modifiers_auth/modifiers.go`](../extensions/modifiers_auth/modifiers.go), [`extensions/modifiers_meta/modifiers.go`](../extensions/modifiers_meta/modifiers.go), and [`compiler/modifier.go`](../compiler/modifier.go). Retry and resilience behavior is in [`docs/retry.md`](retry.md) and [`docs/resilience.md`](resilience.md); resilience is not in the ordinary `native.Bundles()` set in this checkout.
+The metadata modifier `:scope` accepts `public`, `internal`, or `system` (case-insensitively); any other value is a compile-time error. The actual stock modifier contract is in [`extensions/modifiers_core/modifiers.go`](../extensions/modifiers_core/modifiers.go), [`extensions/modifiers_auth/modifiers.go`](../extensions/modifiers_auth/modifiers.go), [`extensions/modifiers_meta/modifiers.go`](../extensions/modifiers_meta/modifiers.go), and [`compiler/modifier.go`](../compiler/modifier.go). Retry and resilience behavior is in [`docs/retry.md`](retry.md) and [`docs/resilience.md`](resilience.md); resilience is not in the ordinary `native.Bundles()` set in this checkout.
 
 Reusable policies are applied by scopes and profiles. Atom-local settings take precedence over inherited settings; local pipeline-header modifiers override profile-provided modifiers of the same name. Use `nflow explain FILE --ast` to inspect effective modifiers and their origins.
 
@@ -339,7 +339,7 @@ The standard CLI bundle set includes core syntax/runtime, projections, symbols, 
 
 `@require` makes extension capabilities explicit for the CLI's build harness; a custom Go host may mount bundles directly. Bundles can contribute actions, directives, modifiers, operators, keyword primaries, symbols, hooks, preprocessors and materializers. A directive or operator supplied by an extension is valid only when that extension is active. The extension contract is described in [`docs/extensions.md`](extensions.md).
 
-`@hook` accepts one or more comma-separated hook names. The directive records them; the hook bundle resolves names against the Kernel registry and attaches them to the compiled program. Unknown names fail rather than silently becoming no-ops. The built-in `hook.verify` is a test/example hook, not a universal application hook. See [`extensions/hook/directive.go`](../extensions/hook/directive.go) and [`extensions/hook/library.go`](../extensions/hook/library.go#L55-L73).
+`@hook` requires one or more comma-separated hook names. An empty directive and unknown names fail during compilation rather than silently becoming no-ops. The hook bundle resolves names against the Kernel registry and attaches them to the compiled program. The built-in `hook.verify` is a test/example hook, not a universal application hook. See [`extensions/hook/directive.go`](../extensions/hook/directive.go) and [`extensions/hook/library.go`](../extensions/hook/library.go#L55-L73).
 
 ## Compile-time checks versus runtime behavior
 

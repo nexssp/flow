@@ -10,6 +10,15 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
+const maxDurationMilliseconds int64 = (1<<63 - 1) / int64(time.Millisecond)
+
+func durationFromMilliseconds(milliseconds int64) (time.Duration, bool) {
+	if milliseconds < -maxDurationMilliseconds || milliseconds > maxDurationMilliseconds {
+		return 0, false
+	}
+	return time.Duration(milliseconds) * time.Millisecond, true
+}
+
 // TopicKey provides the lock-free broadcast channel for the current room.
 var TopicKey = xctx.NewKey[interface{ Publish(any) }]("realtime.topic")
 
@@ -47,8 +56,11 @@ func WheelScheduleAction() action.AnyAction {
 		if req.DelayMs <= 0 {
 			return WheelScheduleRes{}, xerr.BadRequest("delay_ms must be > 0")
 		}
+		delay, ok := durationFromMilliseconds(req.DelayMs)
+		if !ok {
+			return WheelScheduleRes{}, xerr.BadRequest("delay_ms exceeds maximum duration")
+		}
 
-		delay := time.Duration(req.DelayMs) * time.Millisecond
 		id, err := wheel.Schedule(delay, req.Payload)
 		if err != nil {
 			return WheelScheduleRes{}, xerr.Unavailable("wheel exhausted", err)
@@ -85,10 +97,20 @@ func WheelAdvanceAction() action.AnyAction {
 		if !ok || wheel == nil {
 			return nil, xerr.Internal("realtime.wheel.advance: no wheel in context")
 		}
-		dt := time.Duration(req.DtMs) * time.Millisecond
+		if req.DtMs < 0 {
+			return nil, xerr.BadRequest("dt_ms must be >= 0")
+		}
+		dt, ok := durationFromMilliseconds(req.DtMs)
+		if !ok {
+			return nil, xerr.BadRequest("dt_ms exceeds maximum duration")
+		}
 
 		// Allocate the results slice here, as this is the boundary returning to the DSL.
-		return wheel.Advance(dt, nil), nil
+		advanced, err := wheel.AdvanceChecked(dt, nil)
+		if err != nil {
+			return nil, xerr.BadRequest("invalid dt_ms", err)
+		}
+		return advanced, nil
 	}).Description("Advance the timing wheel by DtMs and return expired payloads").
 		Tag("realtime", "timing").
 		Build()

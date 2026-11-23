@@ -1,8 +1,10 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -273,5 +275,77 @@ func TestPendingApprovalExpiryFailsClosed(t *testing.T) {
 	_, err = Execute(ctx, cfg, approvalSource, "approval-expiry.nflow", payload)
 	if xerr.KindFrom(err) != xerr.KindConflict {
 		t.Fatalf("expired approval error = %v, want conflict", err)
+	}
+}
+
+type failingApprovalSaveJournal struct {
+	*FileJournal
+	err error
+}
+
+func (j failingApprovalSaveJournal) SaveApprovalSuspension(context.Context, ApprovalSuspension) error {
+	return j.err
+}
+
+func TestRunSourceReportsApprovalSuspensionSaveFailure(t *testing.T) {
+	before := action.New("test.before", func(_ context.Context, input any) (any, error) { return input, nil }).Build()
+	after := action.New("test.after", func(_ context.Context, input any) (any, error) { return input, nil }).Build()
+	cfg, err := BuildConfig([]compiler.Bundle{
+		{ID: "approval-run-source-test-actions", Libraries: []action.Library{{Name: "test", Actions: []action.AnyAction{before, after}}}},
+		approval.Bundle(nil), runtime.Bundle(nil), syntax.Bundle(nil),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, err := NewFileJournal(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = base.Close() }()
+	saveErr := errors.New("disk unavailable")
+	cfg.Journal = failingApprovalSaveJournal{FileJournal: base, err: saveErr}
+	var stdout, stderr bytes.Buffer
+	code := RunSource(t.Context(), cfg, approvalSource, "approval-run-source.nflow", map[string]any{"amount": 125}, Opts{
+		Stdout: &stdout, Stderr: &stderr, ExecutionID: "approval-save-failure",
+	})
+	if code != 1 {
+		t.Fatalf("RunSource code = %d, want persistence failure code 1; stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "persist approval suspension") || !strings.Contains(stderr.String(), saveErr.Error()) {
+		t.Fatalf("stderr does not report persistence error as primary failure:\n%s", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "Approval pause was not persisted; configure a suspension-capable journal to resume safely.") {
+		t.Fatalf("stderr missing unsafe-to-resume warning:\n%s", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "Approval required:") {
+		t.Fatalf("save failure was reported as a normal pause:\n%s", stderr.String())
+	}
+}
+
+func TestRunSourceReportsPersistedApprovalPause(t *testing.T) {
+	before := action.New("test.before", func(_ context.Context, input any) (any, error) { return input, nil }).Build()
+	after := action.New("test.after", func(_ context.Context, input any) (any, error) { return input, nil }).Build()
+	cfg, err := BuildConfig([]compiler.Bundle{
+		{ID: "approval-run-source-pause-test-actions", Libraries: []action.Library{{Name: "test", Actions: []action.AnyAction{before, after}}}},
+		approval.Bundle(nil), runtime.Bundle(nil), syntax.Bundle(nil),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal, err := NewFileJournal(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = journal.Close() }()
+	cfg.Journal = journal
+	var stdout, stderr bytes.Buffer
+	code := RunSource(t.Context(), cfg, approvalSource, "approval-run-source.nflow", map[string]any{"amount": 125}, Opts{
+		Stdout: &stdout, Stderr: &stderr, ExecutionID: "approval-persisted-pause",
+	})
+	if code != 3 {
+		t.Fatalf("RunSource code = %d, want approval-pause code 3; stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "Approval required: gate finance_review") || strings.Contains(stderr.String(), "not persisted") {
+		t.Fatalf("persisted suspension was not reported as a normal safe pause:\n%s", stderr.String())
 	}
 }

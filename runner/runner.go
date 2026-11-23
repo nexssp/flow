@@ -3,11 +3,13 @@ package runner
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/nexssp/kernel/action"
+	"github.com/nexssp/kernel/ai/dag"
 	"github.com/nexssp/kernel/observe"
 	"github.com/nexssp/kernel/xctx"
 	"github.com/nexssp/kernel/xfile"
@@ -180,12 +182,13 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 	}
 
 	asserts, positions := CollectAsserts(ex.Meta, opts.Asserts)
-	return RunAssertionsContextWithExpressionCompiler(
+	return RunAssertionsContextWithExpressionCompilerAndActionHistory(
 		ctx,
 		stderr,
 		ex.Output,
 		total.Milliseconds(),
 		observer.ActionNames(),
+		observer.ActionNamesComplete(),
 		asserts,
 		positions,
 		compiler.ExpressionCompilerFromMeta(ex.Meta),
@@ -195,12 +198,16 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 }
 
 func reportRunSourceError(ex Execution, err error, src, name string, stderr io.Writer, observer *Observer, verbosity int) int {
-	if ex.Suspension != nil {
+	if ex.Suspension != nil && errors.Is(err, dag.ErrSuspended) {
 		fmt.Fprintf(stderr, "Approval required: gate %s (role %s): %s\n", ex.Suspension.Gate, ex.Suspension.Role, ex.Suspension.Reason)
 		if !ex.Suspension.Persisted {
 			fmt.Fprintln(stderr, "Approval pause was not persisted; configure a suspension-capable journal to resume safely.")
 		}
 		return 3
+	}
+	if ex.Suspension != nil {
+		fmt.Fprintf(stderr, "Suspension persistence error: %v\n", err)
+		fmt.Fprintln(stderr, "Approval pause was not persisted; configure a suspension-capable journal to resume safely.")
 	}
 	useColor := terminal.IsTerminal(stderr)
 	heading := diagnosticPaint("✗ Pipeline Execution Failed", diagnosticANSIRed, useColor)

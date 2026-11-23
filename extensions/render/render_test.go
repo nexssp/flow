@@ -45,6 +45,40 @@ func TestRenderMarkdown_Standard(t *testing.T) {
 	}
 }
 
+func TestRenderMarkdown_Prompt(t *testing.T) {
+	t.Parallel()
+	input := []fs.FileContent{{RelPath: "one.txt", Lang: "text", Content: []byte("one")}, {RelPath: "two.txt", Lang: "text", Content: []byte("two")}}
+	renderOp := render.Markdown(render.Config{Prompt: "Do this\ncarefully"})
+	var result []fs.FileContent
+	for item, err := range renderOp(action.StreamFromSlice(input)) {
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		result = append(result, item)
+	}
+	if len(result) != len(input) {
+		t.Fatalf("expected %d results, got %d", len(input), len(result))
+	}
+	for i, item := range result {
+		if !strings.HasPrefix(string(item.Content), "> Do this\n> carefully\n\n") {
+			t.Errorf("result %d missing quoted prompt:\n%s", i, item.Content)
+		}
+	}
+	renderOp = render.Markdown(render.Config{Prompt: "Do this", NoHeader: true})
+	for item, err := range renderOp(action.StreamFromSlice(input[:1])) {
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		output := string(item.Content)
+		if strings.Contains(output, "Do this") {
+			t.Errorf("NoHeader output should suppress prompt:\n%s", output)
+		}
+		if strings.Contains(output, "### ") {
+			t.Errorf("NoHeader output should suppress file header:\n%s", output)
+		}
+	}
+}
+
 func TestRenderMarkdown_Zed(t *testing.T) {
 	t.Parallel()
 
