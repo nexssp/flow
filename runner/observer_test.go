@@ -71,8 +71,10 @@ func TestObserverHookCapturesKernelLifecycleAndKeepsLegacyTrace(t *testing.T) {
 	if got := strings.Count(live.String(), "  ✓ test.observed") + strings.Count(live.String(), "  ✗ test.observed"); got != 2 {
 		t.Fatalf("live trace printed %d terminal rows, want 2; output:\n%s", got, live.String())
 	}
-	if strings.Contains(live.String(), "topsecret") || strings.Contains(live.String(), "response-secret") || !strings.Contains(live.String(), "[REDACTED]") {
-		t.Fatalf("verbose trace did not preserve Flow redaction:\n%s", live.String())
+	if strings.Contains(live.String(), "topsecret") || strings.Contains(live.String(), "response-secret") ||
+		!strings.Contains(live.String(), "in:  <omitted; intermediate payload>") ||
+		!strings.Contains(live.String(), "out: <omitted; intermediate payload>") {
+		t.Fatalf("verbose trace exposed intermediate payloads:\n%s", live.String())
 	}
 	if strings.Contains(live.String(), "retry") || strings.Contains(live.String(), "cache_hit") {
 		t.Fatalf("non-terminal Kernel events changed legacy CLI live output:\n%s", live.String())
@@ -202,7 +204,7 @@ func TestExecute_ConfigEventSinkReceivesKernelLifecycleEvents(t *testing.T) {
 	t.Fatalf("Config.EventSink did not receive probe.echo lifecycle event: %+v", sink.Events())
 }
 
-func TestRunSourcePreservesLegacyVerbosityAndTraceRedaction(t *testing.T) {
+func TestRunSourcePreservesLegacyVerbosityAndOmitsIntermediatePayloads(t *testing.T) {
 	cfg := observerTestConfig(t)
 	for _, tc := range []struct {
 		verbosity int
@@ -212,7 +214,7 @@ func TestRunSourcePreservesLegacyVerbosityAndTraceRedaction(t *testing.T) {
 		{verbosity: 0, want: []string{`{"__root__":null,"api_key":"topsecret","token":"response-secret","visible":"ok"}`}, absent: []string{"EXECUTION TRACE", "      in:  ", "✓ probe.echo"}},
 		{verbosity: 1, want: []string{"✓ map[__root__:map[] api_key:topsecret token:response-secret visible:ok]", "compile:", "run:", "EXECUTION TRACE"}, absent: []string{"      in:  "}},
 		{verbosity: 2, want: []string{"✓ probe.echo", "EXECUTION TRACE"}, absent: []string{"      in:  "}},
-		{verbosity: 3, want: []string{"✓ probe.echo", "EXECUTION TRACE", `"api_key":"[REDACTED]"`, `"token":"[REDACTED]"`}},
+		{verbosity: 3, want: []string{"✓ probe.echo", "EXECUTION TRACE", "in:  <omitted; intermediate payload>", "out: <omitted; intermediate payload>"}},
 	} {
 		var stdout, stderr bytes.Buffer
 		code := runner.RunSource(t.Context(), cfg, observerTestSource, "observer-output.nflow", nil, runner.Opts{
@@ -240,8 +242,8 @@ func TestRunSourcePreservesLegacyVerbosityAndTraceRedaction(t *testing.T) {
 		if tc.verbosity >= 3 {
 			for line := range strings.SplitSeq(got, "\n") {
 				if (strings.Contains(line, "      in:  ") || strings.Contains(line, "      out: ")) &&
-					(strings.Contains(line, "topsecret") || strings.Contains(line, "response-secret")) {
-					t.Errorf("verbosity 3 trace payload was not redacted: %s", line)
+					(!strings.Contains(line, "<omitted; intermediate payload>")) {
+					t.Errorf("verbosity 3 trace did not omit intermediate payload: %s", line)
 				}
 			}
 		}

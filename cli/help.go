@@ -143,7 +143,7 @@ var helpRegistry = map[string]helpText{
 	},
 	"self": {
 		Summary: "Manage the installed nflow binary, run self-tests, or benchmark built-in scenarios.",
-		Usage:   "nflow self <up|test|bench> [filter...] [flags]\n  nflow self bench [filter...] [--path FILE_OR_DIR] [--iterations N] [--warmup N] [--profile] [--json] [--list]",
+		Usage:   "nflow self <up|test|bench> [filter...] [flags]\n  nflow self bench [filter...] [--path FILE_OR_DIR] [--iterations N] [--warmup N] [--profile] [--cpu-profile FILE] [--json] [--list]",
 		Flags: `Self test:
       --verbose             print DSL on failure
       --json                machine-readable JSON summary
@@ -153,7 +153,8 @@ Self bench:
 	      --path FILE_OR_DIR    benchmark one file or discover a directory instead of built-ins
 	      --iterations N        measured iterations (default 50; range 1..1000000)
 	      --warmup N            unreported warmups (default 3; range 0..1000000)
-	      --profile             include per-action warm timings (adds hook overhead)
+			      --profile             include action call tree with inclusive/self wall time (adds hook overhead)
+			      --cpu-profile FILE    save Go CPU profile and show top functions (one scenario only; no action hook)
 	      --json                machine-readable benchmark report
       --list                list matching scenarios without running them`,
 		Examples: []string{

@@ -12,50 +12,11 @@ import (
 	"testing"
 
 	"github.com/nexssp/kernel/action"
-	"github.com/nexssp/kernel/observe"
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/compiler/secret"
 	"github.com/nexssp/flow/native"
 )
-
-type secretSinkCollector struct {
-	event  observe.Event
-	events []observe.Event
-}
-
-func (sink *secretSinkCollector) Emit(_ context.Context, event observe.Event) {
-	sink.event = event
-	sink.events = append(sink.events, event)
-}
-
-func TestSecretSanitizingSinkRedactsTypedValuesAndEchoes(t *testing.T) {
-	const token = "sensitive-canary"
-	collector := &secretSinkCollector{}
-	sink := secretSanitizingSink{next: collector}
-	sink.Emit(context.Background(), observe.Event{
-		Kind:      observe.KindError,
-		Request:   map[string]any{"bearer": secret.New(token)},
-		Response:  map[string]any{"body": "echoed: " + token},
-		Error:     errors.New("upstream included " + token),
-		Recovered: "panic with " + token,
-	})
-
-	for label, payload := range map[string]any{
-		"request":   collector.event.Request,
-		"response":  collector.event.Response,
-		"error":     collector.event.Error.Error(),
-		"recovered": collector.event.Recovered,
-	} {
-		text := fmt.Sprint(payload)
-		if strings.Contains(text, token) {
-			t.Errorf("%s leaked secret %q: %s", label, token, text)
-		}
-		if !strings.Contains(text, secret.Redacted) {
-			t.Errorf("%s lacks redaction marker: %s", label, text)
-		}
-	}
-}
 
 func TestSecretDiagnosticDoesNotEchoSourceSnippet(t *testing.T) {
 	const token = "sensitive-canary"
@@ -70,7 +31,7 @@ func TestSecretDiagnosticDoesNotEchoSourceSnippet(t *testing.T) {
 	}
 }
 
-func TestPipelineSecretSinkRedactsRawWireRequest(t *testing.T) {
+func TestPipelineSecretSinkRedactsFinalOutput(t *testing.T) {
 	const token = "pipeline-secret-canary"
 	var fail bool
 	consume := action.New("test.consume_secret", func(_ context.Context, input map[string]any) (map[string]any, error) {
@@ -104,19 +65,11 @@ func TestPipelineSecretSinkRedactsRawWireRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildConfig: %v", err)
 	}
-	collector := &secretSinkCollector{}
-	cfg.EventSink = collector
-	var hookPayloads []string
+	hookCalls := 0
 	cfg.Hooks = append(cfg.Hooks, action.AnyHook{
-		Before: func(ctx context.Context, request any, meta *action.Meta) (context.Context, error) {
-			hookPayloads = append(hookPayloads, fmt.Sprintf("before %s: %#v", hookActionName(meta), request))
+		Before: func(ctx context.Context, _ any, _ *action.Meta) (context.Context, error) {
+			hookCalls++
 			return ctx, nil
-		},
-		After: func(_ context.Context, request, response any, err error, meta *action.Meta) {
-			hookPayloads = append(hookPayloads, fmt.Sprintf("after %s: %#v %#v %v", hookActionName(meta), request, response, err))
-		},
-		OnError: func(_ context.Context, request any, err error, meta *action.Meta) {
-			hookPayloads = append(hookPayloads, fmt.Sprintf("error %s: %#v %v", hookActionName(meta), request, err))
 		},
 	})
 	source := `@schema Request {
@@ -138,35 +91,16 @@ pipeline.handle
 		t.Fatalf("RunSource exit code = %d; stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 	if strings.Contains(stdout.String(), token) || strings.Contains(stderr.String(), token) {
-		t.Fatalf("verbose run output leaked raw request Secret: stdout=%s stderr=%s", stdout.String(), stderr.String())
+		t.Fatalf("final output leaked raw request Secret: stdout=%s stderr=%s", stdout.String(), stderr.String())
 	}
 	if !strings.Contains(stdout.String(), secret.Redacted) {
-		t.Fatalf("echoed result omitted the redaction marker: stdout=%s", stdout.String())
+		t.Fatalf("echoed final result omitted the redaction marker: stdout=%s", stdout.String())
 	}
-	if len(hookPayloads) == 0 {
-		t.Fatal("configured action hooks did not run")
+	if hookCalls == 0 {
+		t.Fatal("configured action hook did not run")
 	}
-	for _, payload := range hookPayloads {
-		if strings.Contains(payload, token) {
-			t.Fatalf("configured action hook received the raw Secret: %s", payload)
-		}
-	}
-	foundPipelineRequest := false
-	for _, event := range collector.events {
-		payload := fmt.Sprintf("%#v %#v %#v %#v", event.Request, event.Response, event.Error, event.Recovered)
-		if strings.Contains(payload, token) {
-			t.Fatalf("event sink leaked request Secret in %s: %s", event.Action, payload)
-		}
-		if event.Action == "pipeline.handle" {
-			foundPipelineRequest = true
-			request, ok := event.Request.(map[string]any)
-			if !ok || request["api_key"] != secret.Redacted {
-				t.Fatalf("pipeline event request = %#v, want the api_key redacted", event.Request)
-			}
-		}
-	}
-	if !foundPipelineRequest {
-		t.Fatalf("event sink did not receive pipeline.handle request; events=%#v", collector.events)
+	if !strings.Contains(stdout.String(), "<omitted; intermediate payload>") {
+		t.Fatalf("verbose trace did not omit intermediate payloads: %s", stdout.String())
 	}
 	fail = true
 	stdout.Reset()
@@ -181,12 +115,6 @@ pipeline.handle
 	}
 	if strings.Contains(stdout.String(), token) || strings.Contains(stderr.String(), token) {
 		t.Fatalf("error diagnostics leaked raw request Secret: stdout=%s stderr=%s", stdout.String(), stderr.String())
-	}
-	for _, event := range collector.events {
-		payload := fmt.Sprintf("%#v %#v %#v %#v", event.Request, event.Response, event.Error, event.Recovered)
-		if strings.Contains(payload, token) {
-			t.Fatalf("failed run event leaked request Secret in %s: %s", event.Action, payload)
-		}
 	}
 }
 
@@ -207,7 +135,7 @@ func TestIncludedPipelineSecretContractSurvivesNamespaceMount(t *testing.T) {
 		if actual != token {
 			return nil, errors.New("api_key did not reach the explicitly typed action")
 		}
-		return map[string]any{"accepted": true}, nil
+		return map[string]any{"accepted": true, "echo": "included " + token}, nil
 	}).Build()
 	bundle := compiler.Bundle{
 		ID:        "included-pipeline-secret-sink-test",
@@ -253,8 +181,6 @@ func TestIncludedPipelineSecretContractSurvivesNamespaceMount(t *testing.T) {
 	} else if strings.Contains(err.Error(), token) {
 		t.Fatalf("compile diagnostic echoed source Secret: %v", err)
 	}
-	collector := &secretSinkCollector{}
-	cfg.EventSink = collector
 	var stdout, stderr bytes.Buffer
 	code := RunSource(t.Context(), cfg, include+"secrets.pipeline.handle\n", rootFile, map[string]any{"api_key": token}, Opts{
 		Verbosity: 3,
@@ -267,22 +193,8 @@ func TestIncludedPipelineSecretContractSurvivesNamespaceMount(t *testing.T) {
 	if strings.Contains(stdout.String(), token) || strings.Contains(stderr.String(), token) {
 		t.Fatalf("included pipeline trace leaked request Secret: stdout=%s stderr=%s", stdout.String(), stderr.String())
 	}
-	foundQualifiedRequest := false
-	for _, event := range collector.events {
-		payload := fmt.Sprintf("%#v %#v %#v %#v", event.Request, event.Response, event.Error, event.Recovered)
-		if strings.Contains(payload, token) {
-			t.Fatalf("included event leaked Secret in %s: %s", event.Action, payload)
-		}
-		if event.Action == "pipeline.handle" {
-			foundQualifiedRequest = true
-			request, ok := event.Request.(map[string]any)
-			if !ok || request["api_key"] != secret.Redacted {
-				t.Fatalf("included pipeline event request = %#v, want redacted api_key", event.Request)
-			}
-		}
-	}
-	if !foundQualifiedRequest {
-		t.Fatalf("event sink did not receive the qualified pipeline request; events=%#v", collector.events)
+	if !strings.Contains(stdout.String(), secret.Redacted) {
+		t.Fatalf("included pipeline final result omitted the redaction marker: stdout=%s", stdout.String())
 	}
 }
 
@@ -350,24 +262,16 @@ pipeline.handle
 	}
 }
 
-func TestSecretSinkRedactsRawSecretResponseSchemaField(t *testing.T) {
+func TestFinalOutputSanitizerCapturesOnlyDeclaredSecretFields(t *testing.T) {
 	const token = "raw-response-secret-canary"
 	type response struct {
 		APIKey secret.Value `json:"api_key"`
 	}
-	registry := newSecretContractRegistry()
-	registry.register("test.response_secret", nil, reflect.TypeFor[response]())
-	collector := &secretSinkCollector{}
-	sink := secretSanitizingSink{next: collector, secretContracts: registry}
-	sink.Emit(context.Background(), observe.Event{
-		Action:   "test.response_secret",
-		Response: map[string]any{"api_key": token},
-	})
-	responseValue, ok := collector.event.Response.(map[string]any)
-	if !ok || responseValue["api_key"] != secret.Redacted {
-		t.Fatalf("response event = %#v, want redacted api_key", collector.event.Response)
-	}
-	if strings.Contains(fmt.Sprint(collector.event.Response), token) {
-		t.Fatalf("response event leaked raw Secret: %#v", collector.event.Response)
+	scrubber := secret.NewScrubber()
+	scrubber.Capture(map[string]any{"api_key": token, "unrelated": "ordinary payload"}, reflect.TypeFor[response]())
+	ctx := secretScrubberContextKey.With(context.Background(), scrubber)
+	got := SanitizeOutputText(ctx, "server echoed "+token)
+	if strings.Contains(got, token) || !strings.Contains(got, secret.Redacted) {
+		t.Fatalf("final output = %q, want captured Secret redacted", got)
 	}
 }

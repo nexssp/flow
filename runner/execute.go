@@ -203,16 +203,10 @@ func ExecutePrepared(
 
 func compilePrepared(ctx context.Context, cfg Config, prepared *compiler.PreparedSource) (Compilation, error) {
 	cfg.CompileOpts = compileOptsWithRunnerPolicies(cfg)
-	if cfg.secretContracts == nil {
-		cfg.secretContracts = newSecretContractRegistry()
-	}
-	// The execution-scoped secret capture and execution-start recording hook
-	// is appended by newExecutionResolverWithSecretContracts itself, without
-	// the payload-sanitizing wrapper.
+	// Execution-start recording is lightweight; secret capture hooks are added
+	// only to actions with declared Secret-bearing contracts.
 	if cfg.EventSink != nil {
-		cfg.Hooks = append(append([]action.AnyHook(nil), cfg.Hooks...), observe.Hook(secretSanitizingSink{
-			next: cfg.EventSink, secretContracts: cfg.secretContracts, secretScrubber: cfg.secretScrubber,
-		}))
+		cfg.Hooks = append(append([]action.AnyHook(nil), cfg.Hooks...), observe.Hook(cfg.EventSink))
 	}
 	return compileSource(ctx, cfg, prepared, true)
 }
@@ -220,7 +214,7 @@ func compilePrepared(ctx context.Context, cfg Config, prepared *compiler.Prepare
 func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedSource, runtimeEntryInput bool) (Compilation, error) {
 	meta := prepared.Metadata()
 	ctx = compiler.WithLocalSymbols(ctx, compiler.SymbolsFromMeta(meta))
-	resolver, err := newExecutionResolverWithSecretContracts(cfg.Resolver, cfg.Hooks, cfg.secretContracts, cfg.secretScrubber)
+	resolver, err := newExecutionResolverWithScrubber(cfg.Resolver, cfg.Hooks, cfg.secretScrubber)
 	if err != nil {
 		return Compilation{}, err
 	}

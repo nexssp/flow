@@ -1,6 +1,7 @@
 package projection
 
 import (
+	"context"
 	"reflect"
 	"sort"
 	"strings"
@@ -8,12 +9,15 @@ import (
 	"unicode"
 
 	"github.com/expr-lang/expr/builtin"
+
+	"github.com/nexssp/flow/compiler"
 )
 
 const (
-	expressionRootName  = "__root__"
-	expressionStateName = "__state__"
-	expressionInputName = "input"
+	expressionRootName          = "__root__"
+	expressionStateName         = "__state__"
+	expressionInputName         = "input"
+	expressionInputViewCacheKey = "flow.projection.expression-value-view.v1"
 )
 
 func projectionFieldIsBuiltin(name string) bool {
@@ -40,11 +44,15 @@ type expressionViewKey struct {
 }
 
 type expressionViewState struct {
-	active    map[expressionViewKey]any
-	typeCache *expressionViewTypeCache
+	active           map[expressionViewKey]any
+	typeCache        *expressionViewTypeCache
+	snakeCaseAliases map[string]string
 }
 
-const maxCachedExpressionViewTypes = 128
+const (
+	maxCachedExpressionViewTypes   = 128
+	maxCachedExpressionViewAliases = 256
+)
 
 type expressionViewTypeCache struct {
 	mu     sync.RWMutex
@@ -245,6 +253,12 @@ func expressionMapView(value reflect.Value, state *expressionViewState, key expr
 	if value.IsNil() {
 		return value.Interface()
 	}
+	if value.Type() == reflect.TypeFor[map[string]any]() {
+		items, ok := reflect.TypeAssert[map[string]any](value)
+		if ok {
+			return expressionStringAnyMapView(items, state, key, tracked)
+		}
+	}
 	out := make(map[string]any, value.Len()*2)
 	keys := make([]string, 0, value.Len())
 	iterator := value.MapRange()
@@ -263,7 +277,10 @@ func expressionMapView(value reflect.Value, state *expressionViewState, key expr
 		out[name] = expressionValueViewDepth(value.MapIndex(mapKey), state)
 	}
 	for _, name := range keys {
-		alias := snakeCase(name)
+		if !expressionMapKeyHasUppercase(name) {
+			continue
+		}
+		alias := state.snakeCaseAlias(name)
 		if alias != name {
 			if _, exists := out[alias]; !exists {
 				out[alias] = out[name]
@@ -273,7 +290,115 @@ func expressionMapView(value reflect.Value, state *expressionViewState, key expr
 	return out
 }
 
+type expressionMapAlias struct {
+	name  string
+	alias string
+}
+
+func expressionStringAnyMapView(value map[string]any, state *expressionViewState, key expressionViewKey, tracked bool) any {
+	if value == nil {
+		return nil
+	}
+	var aliases []expressionMapAlias
+	out := make(map[string]any, len(value))
+	if tracked {
+		state.active[key] = out
+	}
+	for name, child := range value {
+		out[name] = expressionValueViewAny(child, state)
+		if !expressionMapKeyHasUppercase(name) {
+			continue
+		}
+		alias := state.snakeCaseAlias(name)
+		if alias != name {
+			aliases = append(aliases, expressionMapAlias{name: name, alias: alias})
+		}
+	}
+	if len(aliases) > 1 {
+		sort.Slice(aliases, func(i, j int) bool { return aliases[i].name < aliases[j].name })
+	}
+	for _, item := range aliases {
+		if _, exists := out[item.alias]; !exists {
+			out[item.alias] = out[item.name]
+		}
+	}
+	return out
+}
+
+func expressionMapKeyHasUppercase(name string) bool {
+	for index := range len(name) {
+		current := name[index]
+		if current >= 'A' && current <= 'Z' {
+			return true
+		}
+		if current >= 0x80 {
+			for _, current := range name[index:] {
+				if unicode.IsUpper(current) {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	return false
+}
+
+func expressionValueViewAny(value any, state *expressionViewState) any {
+	switch value.(type) {
+	case nil, bool, string,
+		int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		float32, float64:
+		return value
+	default:
+		return expressionValueViewDepth(reflect.ValueOf(value), state)
+	}
+}
+
+func (state *expressionViewState) snakeCaseAlias(name string) string {
+	if alias, exists := state.snakeCaseAliases[name]; exists {
+		return alias
+	}
+	alias := snakeCase(name)
+	if alias == name || len(state.snakeCaseAliases) >= maxCachedExpressionViewAliases {
+		return alias
+	}
+	if state.snakeCaseAliases == nil {
+		state.snakeCaseAliases = make(map[string]string, 16)
+	}
+	state.snakeCaseAliases[name] = alias
+	return alias
+}
+
 func expressionSequenceView(value reflect.Value, state *expressionViewState, key expressionViewKey, tracked bool) any {
+	if value.Type() == reflect.TypeFor[[]any]() {
+		items, ok := reflect.TypeAssert[[]any](value)
+		if ok {
+			if items == nil {
+				return []any(nil)
+			}
+			out := make([]any, len(items))
+			if tracked {
+				state.active[key] = out
+			}
+			for index, item := range items {
+				out[index] = expressionValueViewAny(item, state)
+			}
+			return out
+		}
+	}
+	if value.Kind() == reflect.Slice && expressionScalarKind(value.Type().Elem().Kind()) {
+		if value.IsNil() {
+			return reflect.Zero(value.Type()).Interface()
+		}
+		out := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
+		reflect.Copy(out, value)
+		view := out.Interface()
+		if tracked {
+			state.active[key] = view
+		}
+		return view
+	}
 	if value.Kind() == reflect.Slice && value.IsNil() {
 		return []any(nil)
 	}
@@ -285,6 +410,22 @@ func expressionSequenceView(value reflect.Value, state *expressionViewState, key
 		out[index] = expressionValueViewDepth(value.Index(index), state)
 	}
 	return out
+}
+
+func expressionScalarKind(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64, reflect.String:
+		return true
+	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128,
+		reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map,
+		reflect.Pointer, reflect.Slice, reflect.Struct, reflect.UnsafePointer:
+		return false
+	default:
+		return false
+	}
 }
 
 func expressionStructView(value, methodReceiver reflect.Value, state *expressionViewState, key expressionViewKey, tracked bool) any {
@@ -381,6 +522,52 @@ func setExpressionAlias(out map[string]any, name string, value any) {
 
 func snakeCase(name string) string {
 	hasUpper := false
+	for index := range len(name) {
+		current := name[index]
+		if current >= 0x80 {
+			return snakeCaseUnicode(name)
+		}
+		if current >= 'A' && current <= 'Z' {
+			hasUpper = true
+		}
+	}
+	if !hasUpper {
+		return name
+	}
+	return snakeCaseASCII(name)
+}
+
+func snakeCaseASCII(name string) string {
+	var out strings.Builder
+	out.Grow(len(name))
+	for index := range len(name) {
+		current := name[index]
+		if current >= 'A' && current <= 'Z' {
+			if index > 0 {
+				previous := name[index-1]
+				nextIsLowerOrDigit := index+1 < len(name) && (isASCIILower(name[index+1]) || isASCIIDigit(name[index+1]))
+				if isASCIILower(previous) || isASCIIDigit(previous) ||
+					(previous >= 'A' && previous <= 'Z' && nextIsLowerOrDigit) {
+					out.WriteByte('_')
+				}
+			}
+			current += 'a' - 'A'
+		}
+		out.WriteByte(current)
+	}
+	return out.String()
+}
+
+func isASCIILower(value byte) bool {
+	return value >= 'a' && value <= 'z'
+}
+
+func isASCIIDigit(value byte) bool {
+	return value >= '0' && value <= '9'
+}
+
+func snakeCaseUnicode(name string) string {
+	hasUpper := false
 	for _, current := range name {
 		if unicode.IsUpper(current) {
 			hasUpper = true
@@ -410,15 +597,45 @@ type expressionEnvironmentRoot struct {
 }
 
 func normalizeExpressionEnvironmentWithCache(environment map[string]any, typeCache *expressionViewTypeCache, protectedBindings ...map[string]struct{}) map[string]any {
+	return normalizeExpressionEnvironmentWithContext(context.TODO(), environment, typeCache, protectedBindings...)
+}
+
+func normalizeExpressionEnvironmentWithContext(ctx context.Context, environment map[string]any, typeCache *expressionViewTypeCache, protectedBindings ...map[string]struct{}) map[string]any {
+	return normalizeExpressionEnvironment(ctx, environment, typeCache, true, protectedBindings...)
+}
+
+// normalizeExpressionEnvironmentForProjection avoids recursively materializing
+// the original request when a projection only uses its current payload root.
+func normalizeExpressionEnvironmentForProjection(ctx context.Context, environment map[string]any, typeCache *expressionViewTypeCache, source string, protectedBindings ...map[string]struct{}) map[string]any {
+	return normalizeExpressionEnvironment(ctx, environment, typeCache, projectionSourceUsesOriginalInput(source), protectedBindings...)
+}
+
+func normalizeExpressionEnvironment(ctx context.Context, environment map[string]any, typeCache *expressionViewTypeCache, includeOriginalInput bool, protectedBindings ...map[string]struct{}) map[string]any {
 	out := make(map[string]any, len(environment)+2)
+	var inputView any
+	hasInputView := false
+	if includeOriginalInput && ctx != nil {
+		if _, hasInputBinding := environment[expressionInputName]; hasInputBinding {
+			inputView, hasInputView = compiler.CachedExpressionInputView(ctx, expressionInputViewCacheKey, func(input any) any {
+				return expressionValueViewWithCache(input, typeCache)
+			})
+		}
+	}
 	var protected map[string]struct{}
 	if len(protectedBindings) > 0 {
 		protected = protectedBindings[0]
 	}
 	root, hasInputRoot := environment[expressionRootName].(expressionEnvironmentRoot)
 	for name, value := range environment {
+		if name == expressionInputName && !includeOriginalInput {
+			continue
+		}
 		if name == expressionRootName && hasInputRoot {
 			out[name] = expressionValueViewWithCache(root.value, typeCache)
+			continue
+		}
+		if name == expressionInputName && hasInputView {
+			out[name] = inputView
 			continue
 		}
 		out[name] = expressionValueViewWithCache(value, typeCache)
@@ -438,4 +655,27 @@ func normalizeExpressionEnvironmentWithCache(environment map[string]any, typeCac
 		out[expressionStateName] = rootView
 	}
 	return out
+}
+
+// projectionSourceUsesOriginalInput uses a conservative token scan: string
+// literals can cause an unnecessary view, but a bare `input` cannot be missed.
+func projectionSourceUsesOriginalInput(source string) bool {
+	for offset := 0; offset < len(source); {
+		match := strings.Index(source[offset:], expressionInputName)
+		if match < 0 {
+			return false
+		}
+		start := offset + match
+		end := start + len(expressionInputName)
+		if (start == 0 || !expressionIdentifierByte(source[start-1])) &&
+			(end == len(source) || !expressionIdentifierByte(source[end])) {
+			return true
+		}
+		offset = end
+	}
+	return false
+}
+
+func expressionIdentifierByte(char byte) bool {
+	return char == '_' || char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9'
 }

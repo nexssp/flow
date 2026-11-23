@@ -456,15 +456,17 @@ func NewScrubber() *Scrubber {
 	return &Scrubber{seen: make(map[string]struct{})}
 }
 
-// Capture records typed Secret values and, when target is provided, raw values
-// occupying Secret-typed fields at a wire boundary.
+// Capture records typed Secret values, or only the fields declared Secret by a
+// target schema. Schema-directed capture avoids traversing ordinary sibling data.
 func (scrubber *Scrubber) Capture(value any, target reflect.Type) {
 	if scrubber == nil {
 		return
 	}
-	values := secretStrings(reflect.ValueOf(value))
-	if target != nil {
-		values = append(values, boundarySecretStrings(reflect.ValueOf(value), target)...)
+	var values []string
+	if target == nil {
+		values = secretStrings(reflect.ValueOf(value))
+	} else if TypeContains(target) {
+		values = boundarySecretStrings(reflect.ValueOf(value), target)
 	}
 	scrubber.add(values)
 }
@@ -484,6 +486,14 @@ func (scrubber *Scrubber) Sanitize(value any) any {
 			return Sanitize(value)
 		}
 		return value
+	}
+	if text, ok := value.(string); ok {
+		for _, secretValue := range values {
+			if secretValue != "" && strings.Contains(text, secretValue) {
+				text = strings.ReplaceAll(text, secretValue, Redacted)
+			}
+		}
+		return text
 	}
 	return SanitizeWithSecretValues(value, values...)
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
@@ -175,9 +176,112 @@ func TestActionProfileCapturesOnlyMeasuredWarmRuns(t *testing.T) {
 		xtest.RequireCondition(t, profiled != nil, "expected action profile, got %+v", result.Actions)
 		xtest.RequireEqual(t, profiled.Calls, 3)
 		xtest.RequireEqual(t, profiled.Errors, 0)
-		xtest.RequireCondition(t, profiled.TotalMs >= 0 && profiled.MeanMs >= 0,
+		xtest.RequireCondition(t, profiled.TotalMs >= 0 && profiled.SelfMs >= 0 && profiled.MeanMs >= 0 && profiled.MeanSelfMs >= 0,
 			"profile durations must be non-negative: %+v", profiled)
 	})
+}
+
+func TestCPUProfileDoesNotEnableActionProfile(t *testing.T) {
+	withConfig(t, func(ctx context.Context, cfg runner.Config) {
+		probe := action.New("benchprobe.cpu_profile", func(_ context.Context, _ any) (any, error) {
+			return "ok", nil
+		}).Build()
+		xtest.RequireNoError(t, cfg.Resolver.Mount(action.Library{Name: "benchprobe", Actions: []action.AnyAction{probe}}))
+		scenarios := []Scenario{{Name: "cpu-only.nflow", File: "cpu-only.nflow", Source: "benchprobe.cpu_profile"}}
+		var output bytes.Buffer
+		profilePath := filepath.Join(t.TempDir(), "cpu-only.pprof")
+		code := Run(ctx, cfg, scenarios, Options{Out: &output, Iterations: 1, Warmup: 0, JSON: true, CPUProfilePath: profilePath})
+		xtest.RequireEqual(t, code, 0)
+		var report Report
+		xtest.RequireNoError(t, json.Unmarshal(output.Bytes(), &report))
+		xtest.RequireEqual(t, report.Profiled, false)
+		xtest.RequireEqual(t, len(report.Results), 1)
+		xtest.RequireEqual(t, len(report.Results[0].Actions), 0)
+		xtest.RequireCondition(t, report.Results[0].CPUProfile != nil, "CPU profile summary missing")
+		info, err := os.Stat(profilePath)
+		xtest.RequireNoError(t, err)
+		xtest.RequireCondition(t, info.Size() > 0, "CPU profile is empty")
+	})
+}
+
+func TestActionProfileCountsRetriesAndFinalErrors(t *testing.T) {
+	profiler := NewActionProfiler()
+	hook := profiler.Hook()
+	profiler.Start()
+
+	retryMeta := &action.Meta{Name: "probe.retry_success"}
+	retryCtx, err := hook.Before(context.Background(), nil, retryMeta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook.OnRetry(retryCtx, nil, 1, xerr.BadRequest("transient"), retryMeta)
+	hook.OnRetry(retryCtx, nil, 2, xerr.BadRequest("transient"), retryMeta)
+	hook.After(retryCtx, nil, nil, nil, retryMeta)
+
+	errorMeta := &action.Meta{Name: "probe.final_failure"}
+	errorCtx, err := hook.Before(context.Background(), nil, errorMeta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook.After(errorCtx, nil, nil, xerr.BadRequest("final failure"), errorMeta)
+	profiler.Stop()
+
+	profiles := make(map[string]ActionProfile, len(profiler.Snapshot()))
+	for _, profile := range profiler.Snapshot() {
+		profiles[profile.Action] = profile
+	}
+	retried := profiles["probe.retry_success"]
+	if retried.Calls != 1 || retried.Retries != 2 || retried.Errors != 0 {
+		t.Fatalf("retry-success counters = %+v", retried)
+	}
+	failed := profiles["probe.final_failure"]
+	if failed.Calls != 1 || failed.Retries != 0 || failed.Errors != 1 {
+		t.Fatalf("final-failure counters = %+v", failed)
+	}
+}
+
+func TestActionProfileBuildsNestedTreeFromNFlowFixture(t *testing.T) {
+	scenarios, err := Discover("", []string{"diagnostics/action_tree.nflow"})
+	xtest.RequireNoError(t, err)
+	xtest.RequireEqual(t, len(scenarios), 1)
+
+	withConfig(t, func(ctx context.Context, cfg runner.Config) {
+		var output bytes.Buffer
+		code := Run(ctx, cfg, scenarios, Options{Out: &output, Iterations: 2, Warmup: 0, JSON: true, Profile: true})
+		xtest.RequireEqual(t, code, 0)
+		var report Report
+		xtest.RequireNoError(t, json.Unmarshal(output.Bytes(), &report))
+		profiles := make(map[string]ActionProfile, len(report.Results[0].Actions))
+		for _, profile := range report.Results[0].Actions {
+			profiles[profile.Action] = profile
+		}
+		parent, hasParent := profiles["pipeline.diagnostic_parent"]
+		child, hasChild := profiles["pipeline.diagnostic_leaf"]
+		leaf, hasLeaf := profiles["runtime.noop"]
+		xtest.RequireCondition(t, hasParent && hasChild && hasLeaf, "nested fixture actions missing from profile: %+v", report.Results[0].Actions)
+		xtest.RequireEqual(t, parent.Parent, "")
+		xtest.RequireEqual(t, child.Parent, parent.Path)
+		xtest.RequireEqual(t, leaf.Parent, child.Path)
+		for _, profile := range []ActionProfile{parent, child, leaf} {
+			xtest.RequireEqual(t, profile.Calls, 2)
+			xtest.RequireCondition(t, profile.SelfMs >= 0 && profile.SelfMs <= profile.TotalMs,
+				"self wall time must be bounded by inclusive wall time: %+v", profile)
+		}
+	})
+}
+
+func TestExclusiveWallTimeSubtractsUnionOfDirectChildren(t *testing.T) {
+	start := time.Unix(100, 0)
+	end := start.Add(10 * time.Second)
+	children := []timeInterval{
+		{start: start.Add(2 * time.Second), end: start.Add(6 * time.Second)},
+		{start: start.Add(4 * time.Second), end: start.Add(8 * time.Second)},
+		{start: start.Add(12 * time.Second), end: start.Add(15 * time.Second)},
+	}
+	got := exclusiveWallTime(start, end, children)
+	if want := 4 * time.Second; got != want {
+		t.Fatalf("exclusiveWallTime() = %s, want %s", got, want)
+	}
 }
 
 func TestJSONNormalizeSelfBenchScenario(t *testing.T) {

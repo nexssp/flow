@@ -3,9 +3,11 @@ package selfbench
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"runtime"
+	"slices"
 	"time"
 
 	"github.com/nexssp/kernel/xerr"
@@ -16,12 +18,13 @@ import (
 
 // Options controls measurement; zero warmup is meaningful.
 type Options struct {
-	Out        io.Writer
-	Iterations int
-	Warmup     int
-	JSON       bool
-	List       bool
-	Profile    bool
+	Out            io.Writer
+	Iterations     int
+	Warmup         int
+	JSON           bool
+	List           bool
+	Profile        bool
+	CPUProfilePath string
 }
 
 // AllocationStats counts Go heap allocations made during a phase. Bytes are
@@ -50,6 +53,7 @@ type Result struct {
 	Warm               nodes_bench.BenchRunRes `json:"warm"`
 	WarmAllocation     AllocationPerRun        `json:"warm_allocation"`
 	Actions            []ActionProfile         `json:"actions,omitempty"`
+	CPUProfile         *CPUProfileSummary      `json:"cpu_profile,omitempty"`
 	Error              string                  `json:"error,omitempty"`
 }
 
@@ -74,13 +78,26 @@ func Run(ctx context.Context, cfg runner.Config, scenarios []Scenario, opts Opti
 		fmt.Fprintln(opts.Out, "self bench: iterations must be 1..1000000, warmup 0..1000000, and scenarios nonempty")
 		return 2
 	}
+	if opts.CPUProfilePath != "" && opts.List {
+		fmt.Fprintln(opts.Out, "self bench: --cpu-profile cannot be combined with --list")
+		return 2
+	}
+	if opts.CPUProfilePath != "" && len(scenarios) != 1 {
+		fmt.Fprintln(opts.Out, "self bench: --cpu-profile requires exactly one selected scenario")
+		return 2
+	}
 	if opts.List {
 		if err := listScenarios(scenarios, opts); err != nil {
 			return 1
 		}
 		return 0
 	}
-	report := Report{Version: 1, GoVersion: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH, CPUs: runtime.NumCPU(), GOMAXPROCS: runtime.GOMAXPROCS(0), Profiled: opts.Profile, Results: make([]Result, 0, len(scenarios))}
+	profiled := opts.Profile
+	report := Report{
+		Version: 2, GoVersion: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH,
+		CPUs: runtime.NumCPU(), GOMAXPROCS: runtime.GOMAXPROCS(0), Profiled: profiled,
+		Results: make([]Result, 0, len(scenarios)),
+	}
 	code := 0
 	for _, scenario := range scenarios {
 		result := measure(ctx, cfg, scenario, opts)
@@ -128,10 +145,10 @@ func writeReport(report Report, opts Options) error {
 func measure(ctx context.Context, cfg runner.Config, scenario Scenario, opts Options) (result Result) {
 	result.Name = scenario.Name
 	result.Warmup = opts.Warmup
-	var profile *actionProfiler
+	var profile *ActionProfiler
 	if opts.Profile {
-		profile = newActionProfiler()
-		cfg.EventSink = combineEventSinks(cfg.EventSink, profile)
+		profile = NewActionProfiler()
+		cfg.Hooks = append(slices.Clip(cfg.Hooks), profile.Hook())
 	}
 	// A faulty custom scenario must be a failed benchmark, not crash the suite.
 	defer func() {
@@ -188,7 +205,7 @@ func measure(ctx context.Context, cfg runner.Config, scenario Scenario, opts Opt
 		result.WarmupAllocation = allocationAverage(allocationDelta(warmupBefore, readAllocationCounter()), warmupRuns)
 	}
 	warmBefore := readAllocationCounter()
-	result.Warm, err = measureWarm(ctx, opts.Iterations, invoke, profile)
+	result.Warm, result.CPUProfile, err = measureWarm(ctx, opts.Iterations, invoke, profile, opts.CPUProfilePath)
 	result.WarmAllocation = allocationAverage(allocationDelta(warmBefore, readAllocationCounter()), result.Warm.Iterations)
 	if profile != nil {
 		result.Actions = profile.Snapshot()
@@ -201,13 +218,27 @@ func measure(ctx context.Context, cfg runner.Config, scenario Scenario, opts Opt
 	return result
 }
 
-func measureWarm(ctx context.Context, iterations int, invoke func(context.Context) error, profile *actionProfiler) (nodes_bench.BenchRunRes, error) {
-	if profile == nil {
-		return nodes_bench.Measure(ctx, iterations, invoke)
+func measureWarm(ctx context.Context, iterations int, invoke func(context.Context) error, profile *ActionProfiler, cpuProfilePath string) (warm nodes_bench.BenchRunRes, cpuSummary *CPUProfileSummary, err error) {
+	if profile != nil {
+		profile.Start()
+		defer profile.Stop()
 	}
-	profile.SetEnabled(true)
-	defer profile.SetEnabled(false)
-	return nodes_bench.Measure(ctx, iterations, invoke)
+	var cpuProfile *CPUProfile
+	if cpuProfilePath != "" {
+		cpuProfile, err = startCPUProfile(ctx, cpuProfilePath)
+		if err != nil {
+			return warm, nil, fmt.Errorf("cpu profile: %w", err)
+		}
+		defer func() {
+			summary, stopErr := cpuProfile.Stop()
+			cpuSummary = &summary
+			if stopErr != nil {
+				err = errors.Join(err, fmt.Errorf("cpu profile: %w", stopErr))
+			}
+		}()
+	}
+	warm, err = nodes_bench.Measure(ctx, iterations, invoke)
+	return warm, cpuSummary, err
 }
 
 type allocationCounter struct {

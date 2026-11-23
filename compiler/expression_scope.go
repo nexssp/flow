@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"sort"
+	"sync"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xctx"
@@ -17,6 +19,8 @@ type expressionScope struct {
 	bindings              map[string]any
 	pipelineInputBindings map[string]struct{}
 	unavailable           map[string]struct{}
+	inputViewsMu          sync.Mutex
+	inputViews            map[string]any
 }
 
 var expressionScopeKey = xctx.NewKey[*expressionScope]("flow.expression.scope")
@@ -73,6 +77,85 @@ func WithChildExpressionScope(ctx context.Context) context.Context {
 func HasExpressionScope(ctx context.Context) bool {
 	scope, ok := expressionScopeKey.From(ctx)
 	return ok && scope != nil
+}
+
+// CachedExpressionInputView memoizes a derived view only when the original
+// request is immutable. Mutable inputs are rebuilt on every call so projection
+// expressions never observe stale copies after an action updates the request.
+// Child scopes share the root scope's cache. Callers using the same key must
+// use equivalent conversions.
+func CachedExpressionInputView(ctx context.Context, key string, build func(any) any) (any, bool) {
+	if ctx == nil || key == "" || build == nil {
+		return nil, false
+	}
+	scope, _ := expressionScopeKey.From(ctx)
+	if scope == nil {
+		return nil, false
+	}
+	for scope.parent != nil {
+		scope = scope.parent
+	}
+	if !immutableExpressionInput(reflect.ValueOf(scope.input), make(map[reflect.Type]bool)) {
+		return build(scope.input), true
+	}
+	scope.inputViewsMu.Lock()
+	defer scope.inputViewsMu.Unlock()
+	if view, exists := scope.inputViews[key]; exists {
+		return view, true
+	}
+	view := build(scope.input)
+	if scope.inputViews == nil {
+		scope.inputViews = make(map[string]any, 1)
+	}
+	scope.inputViews[key] = view
+	return view, true
+}
+
+func immutableExpressionInput(value reflect.Value, visiting map[reflect.Type]bool) bool {
+	if !value.IsValid() {
+		return true
+	}
+	for value.Kind() == reflect.Interface {
+		if value.IsNil() {
+			return true
+		}
+		value = value.Elem()
+	}
+	typeOf := value.Type()
+	if visiting[typeOf] {
+		return true
+	}
+	// Pointers, maps, and slices may be mutated through aliases while a scope is
+	// alive, making a memoized converted view stale.
+	switch value.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.UnsafePointer:
+		return value.IsNil()
+	case reflect.Array:
+		visiting[typeOf] = true
+		defer delete(visiting, typeOf)
+		for index := range value.Len() {
+			if !immutableExpressionInput(value.Index(index), visiting) {
+				return false
+			}
+		}
+	case reflect.Struct:
+		visiting[typeOf] = true
+		defer delete(visiting, typeOf)
+		for field := range value.Fields() {
+			if !immutableExpressionInput(value.FieldByIndex(field.Index), visiting) {
+				return false
+			}
+		}
+	case reflect.Chan, reflect.Func:
+		return false
+	case reflect.Invalid, reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+		reflect.Interface, reflect.String:
+		return true
+	}
+	return true
 }
 
 // ExpressionBindingNames returns the visible lexical binding names without

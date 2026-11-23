@@ -2,6 +2,7 @@ package selfbench
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -11,14 +12,9 @@ import (
 	"github.com/nexssp/flow/extensions/nodes_bench"
 )
 
-func TestWriteReportHumanIncludesMetricsAndFailures(t *testing.T) {
+func TestWriteReportHumanIncludesMetricsAndActionTree(t *testing.T) {
 	report := Report{
-		Profiled:   true,
-		GoVersion:  "go1.23.4",
-		OS:         "linux",
-		Arch:       "amd64",
-		CPUs:       8,
-		GOMAXPROCS: 4,
+		Version: 2, Profiled: true, GoVersion: "go1.23.4", OS: "linux", Arch: "amd64", CPUs: 8, GOMAXPROCS: 4,
 		Results: []Result{
 			{
 				Name: "ok.nflow", CompileMs: 1.25, CompileAllocation: AllocationStats{Allocations: 12, Bytes: 2048},
@@ -26,7 +22,11 @@ func TestWriteReportHumanIncludesMetricsAndFailures(t *testing.T) {
 				WarmupAllocation: AllocationPerRun{Runs: 3, AllocationsPerRun: 4, BytesPerRun: 256},
 				WarmAllocation:   AllocationPerRun{Runs: 5, AllocationsPerRun: 6, BytesPerRun: 128},
 				Warm:             nodes_bench.BenchRunRes{Iterations: 5, MinMs: 0.1, MeanMs: 0.2, MaxMs: 0.5, P50Ms: 0.15, P95Ms: 0.4, P99Ms: 0.5, RPS: 123.4},
-				Actions:          []ActionProfile{{Action: "pipeline.normalize", Calls: 5, TotalMs: 1.2, MeanMs: 0.24, MaxMs: 0.3}},
+				Actions: []ActionProfile{{
+					Action: "pipeline.normalize", Path: "pipeline.normalize", Calls: 5,
+					TotalMs: 1.2, SelfMs: 0.8, MeanMs: 0.24, MeanSelfMs: 0.16, MaxMs: 0.3, MaxSelfMs: 0.2,
+				}},
+				CPUProfile: &CPUProfileSummary{Path: "/tmp/scan.pprof", TopFunctions: "Total: 10ms"},
 			},
 			{
 				Name: "bad.nflow", CompileMs: 3, FirstRunMs: 4, Warmup: 2, Error: "first run: expected failure",
@@ -40,12 +40,13 @@ func TestWriteReportHumanIncludesMetricsAndFailures(t *testing.T) {
 	for _, want := range []string{
 		"NEXSS FLOW · SELF BENCH", "in-process timing; allocations are Go heap bytes created, not live memory or RSS",
 		"HOST go1.23.4 · linux/amd64 · 8 CPUs · GOMAXPROCS=4",
-		"action profile enabled; profiling hooks are included in measured timings",
+		"action spans enabled; hook overhead is included in measured timings; self time is wall time, not CPU time",
 		"▸ ok.nflow", "✓ passed", "Compilation", "1.250 ms", "First run", "2.500 ms", "Warmup", "3 runs",
 		"Warm samples", "5 samples", "min 0.100 · mean 0.200 · max 0.500 ms",
 		"p50 0.150 · p95 0.400 · p99 0.500 ms", "123.4 requests/s", "Sample errors",
 		"PHASE GRAPH", "compile", "first run", "warmup / run", "warm / run", "2.0 KiB", "512 B",
-		"ACTION GRAPH", "pipeline.normalize", "0.240 ms/call", "5 calls", "nested actions can overlap",
+		"ACTION TREE", "pipeline.normalize", "1.200 ms incl", "0.800 ms self", "5 calls", "direct-child span union",
+		"CPU PROFILE  /tmp/scan.pprof", "TOP CPU FUNCTIONS  (go tool pprof -top)", "Total: 10ms",
 		"▸ bad.nflow", "✗ failed", "7 samples", "45.6 requests/s", "1 passed", "1 failed", "(2 total)", "first run: expected failure",
 	} {
 		ktest.RequireStringContains(t, text, want)
@@ -63,78 +64,31 @@ func TestWriteReportPropagatesHumanWriterError(t *testing.T) {
 	ktest.RequireCondition(t, errors.Is(err, wantErr), "must propagate writer failure: %v", err)
 }
 
-func TestWriteReportJSONIncludesAllocationAndProfileMetrics(t *testing.T) {
+func TestWriteReportJSONIncludesActionTreeAndCPUProfile(t *testing.T) {
 	report := Report{
-		Version: 1, GoVersion: "go1", OS: "linux", Arch: "amd64", CPUs: 2, GOMAXPROCS: 2, Profiled: true,
+		Version: 2, GoVersion: "go1", OS: "linux", Arch: "amd64", CPUs: 2, GOMAXPROCS: 2, Profiled: true,
 		Results: []Result{{
 			Name: "ok.nflow", CompileMs: 1, CompileAllocation: AllocationStats{Allocations: 2, Bytes: 64},
 			FirstRunMs: 2, FirstRunAllocation: AllocationStats{Allocations: 3, Bytes: 128}, Warmup: 3,
 			WarmupAllocation: AllocationPerRun{Runs: 3, AllocationsPerRun: 4, BytesPerRun: 256},
 			WarmAllocation:   AllocationPerRun{Runs: 4, AllocationsPerRun: 5.5, BytesPerRun: 300},
 			Warm:             nodes_bench.BenchRunRes{Action: "ok.nflow", Iterations: 4, Warmup: 3, MinMs: 0.1, MaxMs: 0.5, MeanMs: 0.3, P50Ms: 0.2, P95Ms: 0.5, P99Ms: 0.5, RPS: 10, ElapsedMs: 400},
-			Actions:          []ActionProfile{{Action: "runtime.echo", Calls: 4, TotalMs: 0.8, MeanMs: 0.2, MaxMs: 0.3}},
+			Actions: []ActionProfile{{
+				Action: "runtime.echo", Path: "pipeline.root > runtime.echo", Parent: "pipeline.root", Depth: 1,
+				Calls: 4, Errors: 1, Retries: 2, TotalMs: 0.8, SelfMs: 0.5, MeanMs: 0.2, MeanSelfMs: 0.125, MaxMs: 0.3, MaxSelfMs: 0.2,
+			}},
+			CPUProfile: &CPUProfileSummary{Path: "scan.pprof", TopFunctions: "Total: 1ms"},
 		}},
 	}
 	var output bytes.Buffer
 	ktest.RequireNoError(t, writeReport(report, Options{Out: &output, JSON: true}))
-	const want = `{
-  "version": 1,
-  "go_version": "go1",
-  "os": "linux",
-  "arch": "amd64",
-  "cpus": 2,
-  "gomaxprocs": 2,
-  "profiled": true,
-  "results": [
-    {
-      "name": "ok.nflow",
-      "compile_ms": 1,
-      "compile_allocation": {
-        "allocations": 2,
-        "bytes": 64
-      },
-      "first_run_ms": 2,
-      "first_run_allocation": {
-        "allocations": 3,
-        "bytes": 128
-      },
-      "warmup": 3,
-      "warmup_allocation": {
-        "runs": 3,
-        "allocations_per_run": 4,
-        "bytes_per_run": 256
-      },
-      "warm": {
-        "action": "ok.nflow",
-        "iterations": 4,
-        "warmup": 3,
-        "errors": 0,
-        "min_ms": 0.1,
-        "max_ms": 0.5,
-        "mean_ms": 0.3,
-        "p50_ms": 0.2,
-        "p95_ms": 0.5,
-        "p99_ms": 0.5,
-        "rps": 10,
-        "elapsed_ms": 400
-      },
-      "warm_allocation": {
-        "runs": 4,
-        "allocations_per_run": 5.5,
-        "bytes_per_run": 300
-      },
-      "actions": [
-        {
-          "action": "runtime.echo",
-          "calls": 4,
-          "total_ms": 0.8,
-          "mean_ms": 0.2,
-          "max_ms": 0.3
-        }
-      ]
-    }
-  ]
-}
-`
-	ktest.RequireEqual(t, want, output.String())
+	var decoded Report
+	ktest.RequireNoError(t, json.Unmarshal(output.Bytes(), &decoded))
+	ktest.RequireEqual(t, decoded.Version, 2)
+	ktest.RequireEqual(t, decoded.Profiled, true)
+	ktest.RequireEqual(t, decoded.Results[0].Actions[0].Parent, "pipeline.root")
+	ktest.RequireEqual(t, decoded.Results[0].Actions[0].Retries, 2)
+	ktest.RequireEqual(t, decoded.Results[0].Actions[0].SelfMs, 0.5)
+	ktest.RequireEqual(t, decoded.Results[0].CPUProfile.Path, "scan.pprof")
+	ktest.RequireStringContains(t, output.String(), `"top_functions": "Total: 1ms"`)
 }

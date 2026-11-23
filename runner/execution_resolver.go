@@ -25,7 +25,7 @@ type executionResolver struct {
 	owners           map[string]executionOwner
 	mounts           map[string]string
 	contracts        map[string]compiler.CapabilityContract
-	secretContracts  *secretContractRegistry
+	secretScrubber   *secret.Scrubber
 
 	actionsSnapshot   []action.AnyAction
 	streamsSnapshot   []action.AnyStreamAction
@@ -53,22 +53,15 @@ func (r *executionResolver) baseOwner(name string) (executionOwner, bool) {
 }
 
 func newExecutionResolver(base compiler.CapabilityResolver, hooks []action.AnyHook) (compiler.CapabilityResolver, error) {
-	return newExecutionResolverWithSecretContracts(base, hooks, nil, nil)
+	return newExecutionResolverWithScrubber(base, hooks, nil)
 }
 
-func newExecutionResolverWithSecretContracts(base compiler.CapabilityResolver, hooks []action.AnyHook, secretContracts *secretContractRegistry, scrubber *secret.Scrubber) (compiler.CapabilityResolver, error) {
+func newExecutionResolverWithScrubber(base compiler.CapabilityResolver, hooks []action.AnyHook, scrubber *secret.Scrubber) (compiler.CapabilityResolver, error) {
 	if base == nil {
 		return nil, errors.New("executionResolver: base resolver is nil")
 	}
-	safeHooks := make([]action.AnyHook, 0, len(hooks)+1)
-	for _, hook := range hooks {
-		safeHooks = append(safeHooks, secretSanitizingHook(hook, secretContracts, scrubber))
-	}
-	// The secret capture hook is appended without the sanitizing wrapper: it
-	// only records secret values for later scrubbing and never reads event
-	// payloads, so wrapping it would reflectively walk every payload for a
-	// hook that ignores them.
-	safeHooks = append(safeHooks, secretCaptureHook(scrubber, secretContracts))
+	safeHooks := append([]action.AnyHook(nil), hooks...)
+	safeHooks = append(safeHooks, executionStartHook())
 	// Materializers mount declarations into the resolver, so each execution
 	// needs an overlay even when no hooks are configured.
 	r := &executionResolver{
@@ -80,7 +73,7 @@ func newExecutionResolverWithSecretContracts(base compiler.CapabilityResolver, h
 		owners:           make(map[string]executionOwner),
 		mounts:           make(map[string]string),
 		contracts:        make(map[string]compiler.CapabilityContract),
-		secretContracts:  secretContracts,
+		secretScrubber:   scrubber,
 	}
 	if lister, ok := base.(interface{ Actions() []action.AnyAction }); ok {
 		for _, act := range lister.Actions() {
@@ -133,12 +126,18 @@ func (r *executionResolver) RegisterContract(name string, contract compiler.Capa
 		return fmt.Errorf("executionResolver: cannot register a contract for unknown action %q", name)
 	}
 	contract.Name = name
-	if previous, exists := r.contracts[name]; exists && !reflect.DeepEqual(previous, contract) {
-		return fmt.Errorf("executionResolver: action %q already has a conflicting contract", name)
+	if previous, exists := r.contracts[name]; exists {
+		if !reflect.DeepEqual(previous, contract) {
+			return fmt.Errorf("executionResolver: action %q already has a conflicting contract", name)
+		}
+		return nil
 	}
 	r.contracts[name] = contract
-	if r.secretContracts != nil {
-		r.secretContracts.register(name, contract.Input.Type, contract.Output.Type)
+	if secret.TypeContains(contract.Input.Type) || secret.TypeContains(contract.Output.Type) {
+		if mounted, exists := r.mountedActions[name]; exists {
+			r.mountedActions[name] = mounted.CloneWithHooks(secretCaptureHook(r.secretScrubber, contract.Input.Type, contract.Output.Type))
+			r.actionsSnapshot = nil
+		}
 	}
 	return nil
 }
@@ -148,62 +147,39 @@ var (
 	_ compiler.ContractRegistrar = (*executionResolver)(nil)
 )
 
-// secretCaptureHook remembers secret values seen in action payloads so echoed
-// values can be scrubbed from later outputs and errors. It replaces the former
-// observe.Hook(secretCaptureSink{}) wiring: the no-op sink existed only to route
-// RecordExecutionStart and secret capture through the sanitizing wrapper, whose
-// full payload sanitization protected nothing because no callback of this hook
-// ever reads a request or response. Capture itself still walks payloads; that
-// walk is what keeps the execution-scoped scrubber able to redact secrets later.
-func secretCaptureHook(scrubber *secret.Scrubber, contracts *secretContractRegistry) action.AnyHook {
-	capture := func(ctx context.Context, actionName string, request, response, recovered any) {
-		active := activeSecretScrubber(ctx, scrubber)
-		if active == nil {
-			return
-		}
-		var requestType, responseType reflect.Type
-		if contracts != nil {
-			if contract, ok := contracts.contractTypes(actionName); ok {
-				requestType, responseType = contract.request, contract.response
-			}
-		}
-		active.Capture(request, requestType)
-		active.Capture(response, responseType)
-		active.Capture(recovered, nil)
-	}
+func executionStartHook() action.AnyHook {
 	return action.AnyHook{
 		Before: func(ctx context.Context, _ any, _ *action.Meta) (context.Context, error) {
 			return action.RecordExecutionStart(ctx), nil
 		},
-		OnSuccess: func(ctx context.Context, request, response any, meta *action.Meta) {
-			capture(ctx, hookActionName(meta), request, response, nil)
+		// Kernel allocates execution state per invocation when an OnSuccess hook
+		// exists. Keep this hook even though it has no work: fan-out children can
+		// otherwise inherit and concurrently mutate their parent's state.
+		OnSuccess: func(context.Context, any, any, *action.Meta) {},
+	}
+}
+
+// secretCaptureHook is installed only on actions whose declared request or
+// response contract contains Secret fields. It captures those schema paths for
+// one final output scrub and never inspects ordinary payloads.
+func secretCaptureHook(scrubber *secret.Scrubber, requestType, responseType reflect.Type) action.AnyHook {
+	capture := func(ctx context.Context, value any, target reflect.Type) {
+		active := activeSecretScrubber(ctx, scrubber)
+		if active == nil || !secret.TypeContains(target) {
+			return
+		}
+		active.Capture(value, target)
+	}
+	return action.AnyHook{
+		Before: func(ctx context.Context, request any, _ *action.Meta) (context.Context, error) {
+			capture(ctx, request, requestType)
+			return ctx, nil
 		},
-		OnTimeout: func(ctx context.Context, request any, meta *action.Meta) {
-			capture(ctx, hookActionName(meta), request, nil, nil)
+		OnSuccess: func(ctx context.Context, _, response any, _ *action.Meta) {
+			capture(ctx, response, responseType)
 		},
-		OnError: func(ctx context.Context, request any, _ error, meta *action.Meta) {
-			capture(ctx, hookActionName(meta), request, nil, nil)
-		},
-		OnRetry: func(ctx context.Context, request any, _ int, _ error, meta *action.Meta) {
-			capture(ctx, hookActionName(meta), request, nil, nil)
-		},
-		OnCacheHit: func(ctx context.Context, request, response any, meta *action.Meta) {
-			capture(ctx, hookActionName(meta), request, response, nil)
-		},
-		OnCacheMiss: func(ctx context.Context, request any, meta *action.Meta) {
-			capture(ctx, hookActionName(meta), request, nil, nil)
-		},
-		OnCoalesced: func(ctx context.Context, request any, meta *action.Meta) {
-			capture(ctx, hookActionName(meta), request, nil, nil)
-		},
-		OnDeduplicated: func(ctx context.Context, request any, meta *action.Meta) {
-			capture(ctx, hookActionName(meta), request, nil, nil)
-		},
-		OnCancel: func(ctx context.Context, request any, meta *action.Meta) {
-			capture(ctx, hookActionName(meta), request, nil, nil)
-		},
-		OnPanic: func(ctx context.Context, request, recovered any, meta *action.Meta) {
-			capture(ctx, hookActionName(meta), request, nil, recovered)
+		OnCacheHit: func(ctx context.Context, _, response any, _ *action.Meta) {
+			capture(ctx, response, responseType)
 		},
 	}
 }
@@ -223,6 +199,15 @@ func (r *executionResolver) actionLocked(name string) (action.AnyAction, bool) {
 		return nil, false
 	}
 	clone := base.CloneWithHooks(r.hooks...)
+	contract, hasContract := r.contracts[name]
+	if !hasContract {
+		if provider, ok := r.base.(compiler.ContractProvider); ok {
+			contract, hasContract = provider.Contract(name)
+		}
+	}
+	if hasContract && (secret.TypeContains(contract.Input.Type) || secret.TypeContains(contract.Output.Type)) {
+		clone = clone.CloneWithHooks(secretCaptureHook(r.secretScrubber, contract.Input.Type, contract.Output.Type))
+	}
 	r.mountedActions[name] = clone
 	r.actionsSnapshot = nil
 	return clone, true

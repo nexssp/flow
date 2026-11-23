@@ -217,19 +217,23 @@ func projectionSourcePosition(base compiler.Position, source string, offset int)
 	return position
 }
 
-func rejectRuntimeProjectionBindingConflict(ctx context.Context, source string, input any, cache *expressionViewTypeCache) error {
+func rejectRuntimeProjectionBindingConflict(ctx context.Context, source string, inputView any) error {
 	bindingNames := compiler.ExpressionBindingNames(ctx)
 	pipelineInputBindings := compiler.ExpressionPipelineInputBindingNames(ctx)
-	for _, reference := range projectionUsedBindingReferences(source, bindingNames) {
+	references := projectionUsedBindingReferences(source, bindingNames)
+	if len(references) == 0 {
+		return nil
+	}
+	fields, ok := inputView.(map[string]any)
+	if !ok {
+		return nil
+	}
+	for _, reference := range references {
 		if _, isPipelineInput := pipelineInputBindings[reference.name]; isPipelineInput {
 			continue
 		}
 		if reference.name == expressionInputName || reference.name == expressionRootName || reference.name == expressionStateName || projectionFieldIsBuiltin(reference.name) {
 			continue
-		}
-		fields, ok := expressionValueViewWithCache(input, cache).(map[string]any)
-		if !ok {
-			return nil
 		}
 		if _, collision := fields[reference.name]; !collision {
 			continue

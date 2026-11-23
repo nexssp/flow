@@ -46,8 +46,7 @@ type Config struct {
 	// result set this to nil.
 	Hooks []action.AnyHook
 
-	secretContracts *secretContractRegistry
-	secretScrubber  *secret.Scrubber
+	secretScrubber *secret.Scrubber
 
 	// EventSink, when non-nil, is wrapped by observe.Hook and appended
 	// to Hooks. Both paths end up on the execution-local resolver's
@@ -74,6 +73,9 @@ type Config struct {
 // Opts controls execution options for a single runner invocation.
 type Opts struct {
 	Verbosity int
+	// VerboseToStderr keeps the workflow result on Stdout while sending verbose
+	// diagnostics and execution traces to Stderr.
+	VerboseToStderr bool
 	// Info describes the source without executing it. Direct RunSource callers
 	// receive human-readable info on Stdout; the CLI handles --info separately.
 	Info    bool
@@ -122,6 +124,10 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 	if stderr == nil {
 		stderr = os.Stderr
 	}
+	verboseOutput := stdout
+	if opts.VerboseToStderr {
+		verboseOutput = stderr
+	}
 	if opts.ApprovalToken != "" {
 		ctx = xctx.WithApprovalToken(ctx, opts.ApprovalToken)
 	}
@@ -148,16 +154,11 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 		ctx = xctx.WithExecutionID(ctx, opts.ExecutionID)
 	}
 
-	observer := NewObserver(stdout, opts.Verbosity)
-	if cfg.secretContracts == nil {
-		cfg.secretContracts = newSecretContractRegistry()
-	}
+	observer := NewObserver(verboseOutput, opts.Verbosity)
 	if cfg.secretScrubber == nil {
 		cfg.secretScrubber = secret.NewScrubber()
 	}
 	defer cfg.secretScrubber.Clear()
-	observer.secretContracts = cfg.secretContracts
-	observer.secretScrubber = cfg.secretScrubber
 	cfg.Hooks = append(cfg.Hooks, observer.Hook())
 
 	ex, err := Execute(ctx, cfg, src, name, payload)
@@ -172,11 +173,15 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 
 	if opts.Verbosity >= 1 {
 		if !ex.SuppressOutput {
-			fmt.Fprintf(stdout, "✓ %v\n", ex.Output)
+			if opts.VerboseToStderr {
+				fmt.Fprintln(stdout, formatOutput(ex.Output))
+			} else {
+				fmt.Fprintf(stdout, "✓ %v\n", ex.Output)
+			}
 		}
-		fmt.Fprintf(stdout, "  compile: %s\n", FormatDuration(ex.CompileDuration))
-		fmt.Fprintf(stdout, "  run:     %s\n", FormatDuration(ex.RunDuration))
-		observer.PrintSummary(stdout)
+		fmt.Fprintf(verboseOutput, "  compile: %s\n", FormatDuration(ex.CompileDuration))
+		fmt.Fprintf(verboseOutput, "  run:     %s\n", FormatDuration(ex.RunDuration))
+		observer.PrintSummary(verboseOutput)
 	} else if !ex.SuppressOutput {
 		fmt.Fprintln(stdout, formatOutput(ex.Output))
 	}

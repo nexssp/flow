@@ -710,6 +710,7 @@ func main() {
 		}
 
 		opts.Verbosity = countVerbosity(flags)
+		opts.VerboseToStderr = true
 		opts.JournalDir = durability.JournalDir
 		opts.ExecutionID = durability.ExecutionID
 		cfg.CompileOpts = append(cfg.CompileOpts, compiler.WithCLIArgs(flags))

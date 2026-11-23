@@ -1,0 +1,12 @@
+@description "Exercise nested pipeline and action spans for self-bench diagnostics"
+@assert: result.value == "profiled"
+@pipeline diagnostic_leaf
+  { value: "profiled" }
+  -> runtime.noop
+@end
+@pipeline diagnostic_parent
+  {}
+  -> pipeline.diagnostic_leaf
+@end
+{}
+-> pipeline.diagnostic_parent

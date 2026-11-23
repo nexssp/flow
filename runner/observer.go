@@ -2,10 +2,9 @@ package runner
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"reflect"
 	"sync"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/nexssp/kernel/observe"
 	"github.com/nexssp/kernel/xctx"
 
-	"github.com/nexssp/flow/compiler/redact"
 	"github.com/nexssp/flow/compiler/secret"
 )
 
@@ -22,6 +20,8 @@ const observerEventCapacity = 256
 const observerRecordCapacity = observerEventCapacity
 
 var secretScrubberContextKey = xctx.NewKey[*secret.Scrubber]("flow.runner.secret-scrubber")
+
+var errIntermediateActionFailed = errors.New("action failed; details omitted until final error sanitization")
 
 func activeSecretScrubber(ctx context.Context, fallback *secret.Scrubber) *secret.Scrubber {
 	if ctx != nil {
@@ -32,6 +32,18 @@ func activeSecretScrubber(ctx context.Context, fallback *secret.Scrubber) *secre
 	return fallback
 }
 
+// SanitizeOutputText redacts captured secret values immediately before a
+// capability emits final text to a user-visible or persistent destination.
+func SanitizeOutputText(ctx context.Context, value string) string {
+	if scrubber := activeSecretScrubber(ctx, nil); scrubber != nil {
+		if sanitized, ok := scrubber.Sanitize(value).(string); ok {
+			return sanitized
+		}
+		return secret.Redacted
+	}
+	return value
+}
+
 // Observer adapts Kernel lifecycle events to Flow's existing CLI trace while
 // retaining a bounded, metadata-only snapshot for callers that need lifecycle
 // information without action payloads.
@@ -39,14 +51,12 @@ type Observer struct {
 	out       io.Writer
 	verbosity int
 
-	mu              sync.Mutex
-	records         []Record
-	actions         []string
-	droppedRecords  uint64
-	droppedActions  uint64
-	events          *observe.MemorySink
-	secretContracts *secretContractRegistry
-	secretScrubber  *secret.Scrubber
+	mu             sync.Mutex
+	records        []Record
+	actions        []string
+	droppedRecords uint64
+	droppedActions uint64
+	events         *observe.MemorySink
 }
 
 type Record struct {
@@ -78,20 +88,9 @@ func (o *Observer) Emit(ctx context.Context, event observe.Event) {
 	if o == nil {
 		return
 	}
-	if o.verbosity >= 3 {
-		// Live payload tracing prints request and response data, so the full
-		// sanitization pass is required before anything is rendered.
-		event = sanitizeObservedEvent(event, o.secretContracts, activeSecretScrubber(ctx, o.secretScrubber))
-	} else {
-		// Below verbosity 3 the sanitized payloads have no consumer: the
-		// memory sink stores metadata-only snapshots (metadataOnlyEvent strips
-		// request, response, error, and recovered values) and records keep only
-		// action, duration, and error data. Walking every payload would compute
-		// redactions that are then discarded, so only the error is sanitized.
-		// Secret capture still runs through the action hooks, keeping the
-		// scrubber able to redact these values from the execution result.
-		event.Error = activeSecretScrubber(ctx, o.secretScrubber).SanitizeError(event.Error)
-	}
+	// Intermediate action payloads and error messages are never exposed by the
+	// observer; errors are rendered only after Runner performs final sanitization.
+	failed := event.Kind == observe.KindError
 	if o.events != nil {
 		o.events.Emit(ctx, metadataOnlyEvent(event))
 	}
@@ -99,7 +98,9 @@ func (o *Observer) Emit(ctx context.Context, event observe.Event) {
 	case observe.KindSuccess:
 		o.record(event, nil)
 	case observe.KindError:
-		o.record(event, event.Error)
+		if failed {
+			o.record(event, errIntermediateActionFailed)
+		}
 	}
 }
 
@@ -154,38 +155,20 @@ func (o *Observer) record(event observe.Event, err error) {
 		}
 		fmt.Fprintf(o.out, "  %s %-30s %s\n", status, event.Action, FormatDuration(dur))
 	}
-	// -vvv prints live progress WITH data payloads
+	// -vvv prints lifecycle progress without intermediate payloads.
 	if o.verbosity >= 3 {
 		status := "✓"
 		if err != nil {
 			status = "✗"
 		}
 		fmt.Fprintf(o.out, "  %s %-30s %s\n", status, event.Action, FormatDuration(dur))
-		fmt.Fprintf(o.out, "      in:  %s\n", formatTracePayload(secret.SanitizeWithSources(event.Request, event.Request, event.Response)))
+		fmt.Fprintln(o.out, "      in:  <omitted; intermediate payload>")
 		if err != nil {
-			fmt.Fprintf(o.out, "      err: %s\n", formatErrorSummary(err))
+			fmt.Fprintln(o.out, "      err: <omitted; intermediate error>")
 		} else {
-			fmt.Fprintf(o.out, "      out: %s\n", formatTracePayload(secret.SanitizeWithSources(event.Response, event.Request, event.Response)))
+			fmt.Fprintln(o.out, "      out: <omitted; intermediate payload>")
 		}
 	}
-}
-
-func formatTracePayload(v any) string {
-	if v == nil {
-		return "nil"
-	}
-	if m, ok := v.(map[string]any); ok {
-		v = redact.Map(m)
-	}
-	b, err := json.Marshal(v)
-	if err != nil {
-		return fmt.Sprintf("%v", v)
-	}
-	s := string(b)
-	if len(s) > 256 {
-		return s[:253] + "..."
-	}
-	return s
 }
 
 func (o *Observer) Records() []Record {
@@ -272,195 +255,3 @@ func FormatDuration(d time.Duration) string {
 }
 
 var _ observe.Sink = (*Observer)(nil)
-
-type secretSanitizingSink struct {
-	next            observe.Sink
-	secretContracts *secretContractRegistry
-	secretScrubber  *secret.Scrubber
-}
-
-func (sink secretSanitizingSink) Emit(ctx context.Context, event observe.Event) {
-	if sink.next == nil {
-		return
-	}
-	sink.next.Emit(ctx, sanitizeObservedEvent(event, sink.secretContracts, activeSecretScrubber(ctx, sink.secretScrubber)))
-}
-
-var _ observe.Sink = secretSanitizingSink{}
-
-type secretContractRegistry struct {
-	mu        sync.RWMutex
-	contracts map[string]secretActionContract
-}
-
-type secretActionContract struct {
-	request  reflect.Type
-	response reflect.Type
-}
-
-func newSecretContractRegistry() *secretContractRegistry {
-	return &secretContractRegistry{contracts: make(map[string]secretActionContract)}
-}
-
-func (registry *secretContractRegistry) register(name string, request, response reflect.Type) {
-	if registry == nil || name == "" || !secret.TypeContains(request) && !secret.TypeContains(response) {
-		return
-	}
-	registry.mu.Lock()
-	registry.contracts[name] = secretActionContract{request: request, response: response}
-	registry.mu.Unlock()
-}
-
-func (registry *secretContractRegistry) contractTypes(name string) (secretActionContract, bool) {
-	if registry == nil {
-		return secretActionContract{}, false
-	}
-	registry.mu.RLock()
-	contract, ok := registry.contracts[name]
-	registry.mu.RUnlock()
-	return contract, ok
-}
-
-func sanitizeObservedEvent(event observe.Event, registry *secretContractRegistry, scrubber *secret.Scrubber) observe.Event {
-	var wireSecrets []string
-	contract, hasContract := registry.contractTypes(event.Action)
-	if scrubber != nil {
-		var requestType, responseType reflect.Type
-		if hasContract {
-			requestType, responseType = contract.request, contract.response
-		}
-		scrubber.Capture(event.Request, requestType)
-		scrubber.Capture(event.Response, responseType)
-		scrubber.Capture(event.Recovered, nil)
-	}
-	if hasContract {
-		var requestSecrets, responseSecrets []string
-		if contract.request != nil {
-			event.Request, requestSecrets = secret.SanitizeBoundary(event.Request, contract.request)
-		}
-		if contract.response != nil {
-			event.Response, responseSecrets = secret.SanitizeBoundary(event.Response, contract.response)
-		}
-		wireSecrets = append(wireSecrets, requestSecrets...)
-		wireSecrets = append(wireSecrets, responseSecrets...)
-		event.Response = secret.SanitizeWithSecretValues(event.Response, wireSecrets...)
-		event.Error = secret.SanitizeErrorWithSecretValues(event.Error, wireSecrets...)
-		event.Recovered = secret.SanitizeWithSecretValues(event.Recovered, wireSecrets...)
-	}
-	sources := []any{event.Request, event.Response, event.Recovered}
-	event.Request = secret.SanitizeWithSources(event.Request, sources...)
-	event.Response = secret.SanitizeWithSources(event.Response, sources...)
-	event.Error = secret.SanitizeError(event.Error, sources...)
-	if recoveredErr, ok := event.Recovered.(error); ok {
-		event.Recovered = secret.SanitizeError(recoveredErr, sources...)
-	} else {
-		event.Recovered = secret.SanitizeWithSources(event.Recovered, sources...)
-	}
-	if scrubber != nil {
-		event.Request = scrubber.Sanitize(event.Request)
-		event.Response = scrubber.Sanitize(event.Response)
-		event.Error = scrubber.SanitizeError(event.Error)
-		if recoveredErr, ok := event.Recovered.(error); ok {
-			event.Recovered = scrubber.SanitizeError(recoveredErr)
-		} else {
-			event.Recovered = scrubber.Sanitize(event.Recovered)
-		}
-	}
-	return event
-}
-
-func sanitizeHookEvent(ctx context.Context, event observe.Event, registry *secretContractRegistry, scrubber *secret.Scrubber) observe.Event {
-	return sanitizeObservedEvent(event, registry, activeSecretScrubber(ctx, scrubber))
-}
-
-func secretSanitizingHook(hook action.AnyHook, registry *secretContractRegistry, scrubber *secret.Scrubber) action.AnyHook {
-	safe := hook
-	if hook.Before != nil {
-		safe.Before = func(ctx context.Context, request any, meta *action.Meta) (context.Context, error) {
-			event := sanitizeHookEvent(ctx, observe.Event{Action: hookActionName(meta), Request: request}, registry, scrubber)
-			next, err := hook.Before(ctx, event.Request, meta)
-			if err != nil {
-				// The hook error is the only value returned to the caller, and
-				// the scrubber already captured the request's secret values when
-				// the event above was sanitized, so redacting the error alone is
-				// equivalent to re-sanitizing the full event.
-				err = activeSecretScrubber(ctx, scrubber).SanitizeError(err)
-			}
-			return next, err
-		}
-	}
-	if hook.After != nil {
-		safe.After = func(ctx context.Context, request, response any, err error, meta *action.Meta) {
-			event := sanitizeHookEvent(ctx, observe.Event{Action: hookActionName(meta), Request: request, Response: response, Error: err}, registry, scrubber)
-			hook.After(ctx, event.Request, event.Response, event.Error, meta)
-		}
-	}
-	if hook.OnSuccess != nil {
-		safe.OnSuccess = func(ctx context.Context, request, response any, meta *action.Meta) {
-			event := sanitizeHookEvent(ctx, observe.Event{Action: hookActionName(meta), Request: request, Response: response}, registry, scrubber)
-			hook.OnSuccess(ctx, event.Request, event.Response, meta)
-		}
-	}
-	if hook.OnTimeout != nil {
-		safe.OnTimeout = func(ctx context.Context, request any, meta *action.Meta) {
-			event := sanitizeHookEvent(ctx, observe.Event{Action: hookActionName(meta), Request: request}, registry, scrubber)
-			hook.OnTimeout(ctx, event.Request, meta)
-		}
-	}
-	if hook.OnError != nil {
-		safe.OnError = func(ctx context.Context, request any, err error, meta *action.Meta) {
-			event := sanitizeHookEvent(ctx, observe.Event{Action: hookActionName(meta), Request: request, Error: err}, registry, scrubber)
-			hook.OnError(ctx, event.Request, event.Error, meta)
-		}
-	}
-	if hook.OnRetry != nil {
-		safe.OnRetry = func(ctx context.Context, request any, attempt int, err error, meta *action.Meta) {
-			event := sanitizeHookEvent(ctx, observe.Event{Action: hookActionName(meta), Request: request, Error: err}, registry, scrubber)
-			hook.OnRetry(ctx, event.Request, attempt, event.Error, meta)
-		}
-	}
-	if hook.OnCacheHit != nil {
-		safe.OnCacheHit = func(ctx context.Context, request, response any, meta *action.Meta) {
-			event := sanitizeHookEvent(ctx, observe.Event{Action: hookActionName(meta), Request: request, Response: response}, registry, scrubber)
-			hook.OnCacheHit(ctx, event.Request, event.Response, meta)
-		}
-	}
-	if hook.OnCacheMiss != nil {
-		safe.OnCacheMiss = func(ctx context.Context, request any, meta *action.Meta) {
-			event := sanitizeHookEvent(ctx, observe.Event{Action: hookActionName(meta), Request: request}, registry, scrubber)
-			hook.OnCacheMiss(ctx, event.Request, meta)
-		}
-	}
-	if hook.OnCoalesced != nil {
-		safe.OnCoalesced = func(ctx context.Context, request any, meta *action.Meta) {
-			event := sanitizeHookEvent(ctx, observe.Event{Action: hookActionName(meta), Request: request}, registry, scrubber)
-			hook.OnCoalesced(ctx, event.Request, meta)
-		}
-	}
-	if hook.OnDeduplicated != nil {
-		safe.OnDeduplicated = func(ctx context.Context, request any, meta *action.Meta) {
-			event := sanitizeHookEvent(ctx, observe.Event{Action: hookActionName(meta), Request: request}, registry, scrubber)
-			hook.OnDeduplicated(ctx, event.Request, meta)
-		}
-	}
-	if hook.OnCancel != nil {
-		safe.OnCancel = func(ctx context.Context, request any, meta *action.Meta) {
-			event := sanitizeHookEvent(ctx, observe.Event{Action: hookActionName(meta), Request: request}, registry, scrubber)
-			hook.OnCancel(ctx, event.Request, meta)
-		}
-	}
-	if hook.OnPanic != nil {
-		safe.OnPanic = func(ctx context.Context, request, recovered any, meta *action.Meta) {
-			event := sanitizeHookEvent(ctx, observe.Event{Action: hookActionName(meta), Request: request, Recovered: recovered}, registry, scrubber)
-			hook.OnPanic(ctx, event.Request, event.Recovered, meta)
-		}
-	}
-	return safe
-}
-
-func hookActionName(meta *action.Meta) string {
-	if meta == nil {
-		return ""
-	}
-	return meta.Name
-}

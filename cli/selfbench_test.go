@@ -13,7 +13,7 @@ import (
 )
 
 func TestParseSelfBenchArgs(t *testing.T) {
-	parsed, err := parseSelfBenchArgs([]string{"API", "--iterations", "7", "parallel", "--warmup=0", "--json", "--profile", "--path", "some folder"}, io.Discard)
+	parsed, err := parseSelfBenchArgs([]string{"API", "--iterations", "7", "parallel", "--warmup=0", "--json", "--profile", "--cpu-profile", "scan.pprof", "--path", "some folder"}, io.Discard)
 	xtest.RequireNoError(t, err)
 	xtest.RequireEqual(t, parsed.filters, []string{"API", "parallel"})
 	xtest.RequireEqual(t, parsed.path, "some folder")
@@ -21,11 +21,16 @@ func TestParseSelfBenchArgs(t *testing.T) {
 	xtest.RequireEqual(t, parsed.options.Warmup, 0)
 	xtest.RequireEqual(t, parsed.options.JSON, true)
 	xtest.RequireEqual(t, parsed.options.Profile, true)
+	xtest.RequireEqual(t, parsed.options.CPUProfilePath, "scan.pprof")
 	defaults, err := parseSelfBenchArgs(nil, io.Discard)
 	xtest.RequireNoError(t, err)
 	xtest.RequireEqual(t, defaults.options.Iterations, 50)
 	xtest.RequireEqual(t, defaults.options.Warmup, 3)
-	for _, args := range [][]string{{"--iterations", "0"}, {"--iterations=-1"}, {"--iterations=1000001"}, {"--warmup=-1"}, {"--warmup=1000001"}, {"--iterations=bad"}, {"--path"}, {"--unknown"}} {
+	xtest.RequireEqual(t, defaults.options.CPUProfilePath, "")
+	cpuOnly, err := parseSelfBenchArgs([]string{"--cpu-profile", "scan.pprof"}, io.Discard)
+	xtest.RequireNoError(t, err)
+	xtest.RequireEqual(t, cpuOnly.options.Profile, false)
+	for _, args := range [][]string{{"--iterations", "0"}, {"--iterations=-1"}, {"--iterations=1000001"}, {"--warmup=-1"}, {"--warmup=1000001"}, {"--iterations=bad"}, {"--path"}, {"--cpu-profile"}, {"--unknown"}} {
 		_, err := parseSelfBenchArgs(args, io.Discard)
 		xtest.RequireCondition(t, err != nil, "invalid flags must fail")
 	}

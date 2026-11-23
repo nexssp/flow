@@ -120,11 +120,11 @@ func (p *composedProjection) Build(ctx context.Context, bCtx *compiler.BuildCont
 		if contextErr := callCtx.Err(); contextErr != nil {
 			return nil, contextErr
 		}
-		if conflictErr := rejectRuntimeProjectionBindingConflict(callCtx, p.raw, input, viewCache); conflictErr != nil {
+		pipelineInputNames := compiler.ExpressionPipelineInputBindingNames(callCtx)
+		env := normalizeExpressionEnvironmentForProjection(callCtx, compiler.MergeSymbolNamespaces(callCtx, buildEnv(input)), viewCache, p.raw, pipelineInputNames)
+		if conflictErr := rejectRuntimeProjectionBindingConflict(callCtx, p.raw, env[expressionRootName]); conflictErr != nil {
 			return nil, conflictErr
 		}
-		pipelineInputNames := compiler.ExpressionPipelineInputBindingNames(callCtx)
-		env := normalizeExpressionEnvironmentWithCache(compiler.MergeSymbolNamespaces(callCtx, buildEnv(input)), viewCache, pipelineInputNames)
 		if err := rejectUnavailableProjectionBindings(p.raw, compiler.ExpressionUnavailableBindingNames(callCtx), env); err != nil {
 			return nil, xerr.Validation(err.Error())
 		}

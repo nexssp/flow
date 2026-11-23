@@ -10,26 +10,7 @@ import (
 	"github.com/nexssp/flow/compiler/secret"
 )
 
-func TestValidateSecretDeliveryRequiresExplicitSecretParameter(t *testing.T) {
-	atom := &Atom{
-		Name:      "http.request",
-		ArgSchema: []ArgFieldSpec{{Name: "bearer", Kind: ArgSecret}},
-	}
-	if err := validateSecretDelivery(atom, map[string]any{"bearer": secret.New("sensitive-canary")}); err != nil {
-		t.Fatalf("typed bearer was rejected: %v", err)
-	}
-	if err := validateSecretDelivery(atom, map[string]any{"bearer": "sensitive-canary"}); err == nil {
-		t.Fatal("plain string was accepted for ArgSecret")
-	}
-	if err := validateSecretDelivery(atom, map[string]any{"headers": map[string]any{"Authorization": secret.New("sensitive-canary")}}); err == nil {
-		t.Fatal("nested Secret was accepted in an untyped argument")
-	}
-	if err := validateSecretDelivery(&Atom{Name: "probe.echo"}, map[string]any{"token": secret.New("sensitive-canary")}); err == nil {
-		t.Fatal("Secret was accepted by an action without an ArgSecret declaration")
-	}
-}
-
-func TestBuildValueExprPassesSecretsToReceiverValidation(t *testing.T) {
+func TestBuildValueExprRetainsTypedSecretForFinalOutput(t *testing.T) {
 	ctx := context.Background()
 	program, err := (&ValueExpr{Value: &Value{Kind: ValueRef}}).Build(ctx, &BuildContext{})
 	if err != nil {
@@ -41,17 +22,6 @@ func TestBuildValueExprPassesSecretsToReceiverValidation(t *testing.T) {
 	}
 	if !secret.IsValue(value) {
 		t.Fatalf("direct value result = %T, want secret.Value", value)
-	}
-	receiver := &Atom{
-		Name:              "pipeline.secret",
-		SecretBoundary:    true,
-		SecretRequestType: reflect.TypeFor[secret.Value](),
-	}
-	if err := validateSecretDelivery(receiver, value); err != nil {
-		t.Fatalf("typed secret receiver rejected direct value: %v", err)
-	}
-	if err := validateSecretDelivery(&Atom{Name: "probe.echo"}, value); err == nil {
-		t.Fatal("untyped receiver accepted the direct secret value")
 	}
 }
 
@@ -151,56 +121,24 @@ func TestAnalyzeTypedAtomValuesAllowsOnlyExactSecretPipelineDirectInput(t *testi
 	}
 }
 
-func TestValidateSecretDeliveryHonorsTypedPipelineBoundary(t *testing.T) {
-	// The schema's source representation is opaque even though JSON sends a
-	// string. A runtime action request must carry Secret.Value, not its wire form.
-	type typedRequest struct {
-		APIKey secret.Value `json:"api_key"`
-		Note   string       `json:"note"`
-	}
-	atom := &Atom{
-		Name:              "pipeline.child",
-		SecretBoundary:    true,
-		SecretRequestType: reflect.TypeFor[typedRequest](),
-	}
-	if err := validateSecretDelivery(atom, map[string]any{
-		"api_key": secret.New("sensitive-canary"), "note": "safe",
-	}); err != nil {
-		t.Fatalf("typed pipeline request was rejected: %v", err)
-	}
-	if err := validateSecretDelivery(atom, map[string]any{
-		"api_key": "sensitive-canary", "note": "safe",
-	}); err == nil {
-		t.Fatal("plain string unexpectedly crossed a typed Secret pipeline boundary")
-	}
-	if err := validateSecretDelivery(atom, map[string]any{
-		"wrong": secret.New("sensitive-canary"),
-	}); err == nil {
-		t.Fatal("Secret in an undeclared field crossed the pipeline boundary")
-	}
-	atom.SecretInputNormalizer = true
-	if err := validateSecretDelivery(atom, map[string]any{
-		"api_key": "sensitive-canary", "note": "safe",
-	}); err != nil {
-		t.Fatalf("wire string was rejected before its declared schema normalizer: %v", err)
-	}
-}
-
-func TestBuildPayloadDoesNotInheritSecretFields(t *testing.T) {
+func TestBuildPayloadPreservesSecretsForFinalOutputSanitization(t *testing.T) {
 	payload, err := buildPayload(context.Background(), map[string]any{
-		"api_key": secret.New("sensitive-canary"),
-		"visible": "safe",
+		"api_key":           secret.New("sensitive-canary"),
+		"sensitive_bundle":  map[string]any{"nested": []any{secret.New("nested-canary")}},
+		"visible":           "safe",
+		"visible_container": map[string]any{"label": "safe"},
 	}, &Atom{Name: "probe.echo"})
 	if err != nil {
 		t.Fatalf("buildPayload: %v", err)
 	}
-	if _, present := payload["api_key"]; present {
-		t.Fatalf("inherited secret field was forwarded: %#v", payload)
+	if _, ok := payload["api_key"].(secret.Value); !ok {
+		t.Fatalf("inherited Secret was not preserved: %#v", payload)
 	}
-	if payload["visible"] != "safe" {
-		t.Fatalf("non-secret inherited field was dropped: %#v", payload)
+	bundle, ok := payload["sensitive_bundle"].(map[string]any)
+	if !ok || !secret.Contains(bundle) {
+		t.Fatalf("field containing a nested Secret was not preserved: %#v", payload)
 	}
-	if secret.Contains(payload) {
-		t.Fatalf("constructed payload still contains a Secret: %#v", payload)
+	if payload["visible"] != "safe" || payload["visible_container"] == nil {
+		t.Fatalf("ordinary inherited fields were changed: %#v", payload)
 	}
 }

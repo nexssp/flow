@@ -73,8 +73,9 @@ func TestExpressionViewHandlesWideStructs(t *testing.T) {
 
 func TestNormalizeExpressionEnvironmentPreservesOriginalInputBinding(t *testing.T) {
 	input := map[string]any{"input": "payload value"}
-	environment := compiler.MergeSymbolNamespaces(compiler.WithExpressionScope(t.Context(), input), buildEnv(input))
-	normalized := normalizeExpressionEnvironmentWithCache(environment, newExpressionViewTypeCache())
+	ctx := compiler.WithExpressionScope(t.Context(), input)
+	environment := compiler.MergeSymbolNamespaces(ctx, buildEnv(input))
+	normalized := normalizeExpressionEnvironmentWithContext(ctx, environment, newExpressionViewTypeCache())
 	view, ok := normalized["input"].(map[string]any)
 	if !ok {
 		t.Fatalf("input binding = %T, want map[string]any", normalized["input"])
@@ -84,7 +85,20 @@ func TestNormalizeExpressionEnvironmentPreservesOriginalInputBinding(t *testing.
 	}
 	root, ok := normalized[expressionRootName].(map[string]any)
 	if !ok || root["input"] != "payload value" {
-		t.Fatalf("root input field = %#v, want payload value", root)
+		t.Fatalf("root input field = %#v, want payload value", root["input"])
+	}
+
+	childCtx := compiler.WithChildExpressionScope(ctx)
+	childInput := map[string]any{"step": "child payload"}
+	childEnvironment := compiler.MergeSymbolNamespaces(childCtx, buildEnv(childInput))
+	childNormalized := normalizeExpressionEnvironmentWithContext(childCtx, childEnvironment, newExpressionViewTypeCache())
+	childOriginal, ok := childNormalized[expressionInputName].(map[string]any)
+	if !ok || !reflect.DeepEqual(childOriginal, input) {
+		t.Fatalf("child original input = %#v, want original request %#v", childNormalized[expressionInputName], input)
+	}
+	childRoot, ok := childNormalized[expressionRootName].(map[string]any)
+	if !ok || childRoot["step"] != "child payload" {
+		t.Fatalf("child root payload = %#v, want current child payload", childNormalized[expressionRootName])
 	}
 }
 

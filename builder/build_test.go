@@ -134,11 +134,22 @@ func Bundle(opts map[string]string) compiler.Bundle {
 		t.Fatalf("--json unexpectedly printed the embedded version banner; stderr:\n%s", stderr)
 	}
 
-	for _, args := range [][]string{{"help"}, {"--help"}, {"-h"}, {"-vvvv"}} {
+	for _, args := range [][]string{{"help"}, {"--help"}, {"-h"}} {
 		stdout, stderr, err = run(args...)
 		if err != nil || !strings.Contains(stdout, `"value":"option:ok"`) || strings.Contains(stdout, "Nexss Flow standalone executable.") {
 			t.Fatalf("standalone did not forward %q to the embedded workflow: err=%v\nstdout:\n%s\nstderr:\n%s", args, err, stdout, stderr)
 		}
+	}
+	stdout, stderr, err = run("-vvvv")
+	if err != nil {
+		t.Fatalf("verbose standalone run failed: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+	var verboseOutput map[string]any
+	if err := json.Unmarshal([]byte(stdout), &verboseOutput); err != nil {
+		t.Fatalf("verbose standalone output was not clean JSON: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+	if verboseOutput["value"] != "option:ok" || !strings.Contains(stderr, "EXECUTION TRACE") {
+		t.Fatalf("verbose standalone output/trace mismatch: result=%#v\nstdout:\n%s\nstderr:\n%s", verboseOutput, stdout, stderr)
 	}
 
 	stdout, stderr, err = run("version")

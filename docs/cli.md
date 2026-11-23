@@ -307,7 +307,7 @@ Runtime options:
 | `--approval TOKEN` | Approve named `@approval` gates (comma-separated names or `all`). |
 | `--journal-dir DIR` | Persist durable step results in `DIR`. |
 | `--execution-id ID` | Resume the same run; requires a durable journal. |
-| `-v`, `-vv`, `-vvv`, `--verbose` | Increase execution verbosity. |
+| `-v`, `-vv`, `-vvv`, `--verbose` | Increase execution verbosity; diagnostics and traces go to stderr so stdout keeps the clean result. |
 | `--key VALUE` | Supply a CLI value to `@flag.key`. |
 | `--json` | Suppress the embedded version banner; run output is already JSON. |
 | `--suppress-output` | Suppress the runner's final result on stdout so a workflow transport can own the stream. Supported by `nflow run` and standalone binaries; output written directly by workflow actions remains visible. |
@@ -448,7 +448,7 @@ for their static lint gate.
 ## Benchmark built-in scenarios
 
 ```sh
-nflow self bench [filter...] [--path FILE_OR_DIR] [--iterations N] [--warmup N] [--profile] [--json] [--list]
+nflow self bench [filter...] [--path FILE_OR_DIR] [--iterations N] [--warmup N] [--profile] [--cpu-profile FILE] [--json] [--list]
 ```
 
 `self bench` measures whole `.nflow` scenarios, reusing the sampling and
@@ -480,7 +480,8 @@ them.
 | `--path FILE_OR_DIR` | Use one custom `.nflow` file or recursively discover `*.nflow` files below a directory instead of embedded scenarios. |
 | `--iterations N` | Number of measured warm iterations; default `50`, allowed range `1..1000000`. |
 | `--warmup N` | Number of unreported warmup iterations; default `3`, allowed range `0..1000000`. |
-| `--profile` | Add an action-level timing breakdown for measured warm runs. This installs lifecycle hooks, so the hook overhead is included in the reported timings. |
+| `--profile` | Add a nested action call tree for measured warm runs, including calls, final errors, retries, inclusive wall time and self wall time. Hook overhead is included in those timings. |
+| `--cpu-profile FILE` | Save a Go CPU pprof file for measured warm runs and print a readable `go tool pprof -top` summary without attaching the action-tree hook; select exactly one scenario. An existing file at `FILE` is replaced. |
 | `--json` | Emit the benchmark report as JSON. |
 | `--list` | List matching scenario paths and do not execute them. |
 
@@ -495,25 +496,44 @@ not live heap size or process
 RSS; phase counters are process-wide deltas and include a small amount of bench
 harness bookkeeping.
 
-With `--profile`, the report lists lifecycle actions observed during measured
-warm runs, ranked by accumulated inclusive time. Nested action durations overlap,
-so do not sum them as if they were disjoint. Allocation bytes are reported at
-phase level rather than attributed to individual actions: nested and concurrent
-actions make process-wide allocation deltas ambiguous at action granularity.
-The profile covers registered action lifecycle events, not every expression
-operator or internal compiler step. Each scenario is compiled once; repeated executions reuse its compiled
-program and any retained cache/state, but receive fresh payload maps and execution
-identities. Timed samples include the normal runner execution wrapper; they are
-not isolated action-call timings. `@assert:` directives are checked by scenario
-tests, not in the timed benchmark loop. A benchmark failure returns exit code **1**. Invalid flags or no
-matching scenarios return **2**; a successful run or `--list` returns **0**.
+With `--profile`, the report shows a nested tree of action and stream invocations.
+`total_ms` is inclusive wall time, including descendants. `self_ms` subtracts the
+union of direct child spans, so overlapping siblings are not double-subtracted;
+it is **exclusive wall time, not exclusive CPU time**. Calls count observed action
+starts; errors count invocations whose final completion callback reports failure,
+and retries count retry callbacks. Timing hooks add overhead, so compare profiled
+runs with other profiled runs rather than treating them as uninstrumented latency.
+
+`--cpu-profile FILE` starts Go's process-wide CPU profiler around measured warm
+iterations without enabling action-span hooks, writes a standard pprof artifact, then invokes `go tool pprof -top`
+for the text summary. The profile comes from the same process running the
+scenario, which lets it reveal CPU work inside composite actions. The summary can
+be unavailable if the Go tool or symbols are missing; the pprof file is still
+saved. CPU profiling adds overhead and profiles only the warm measured window,
+not process startup, compilation, or first-run setup. This profiling slice is
+CPU-only; it does not collect a heap profile.
+
+Allocation counts and bytes remain process-wide phase deltas (cumulative Go heap
+allocations, not live heap or RSS); they are not apportioned to individual actions.
+The profile covers registered actions and streams, not every expression operator
+or internal compiler step. Each scenario is compiled once; repeated executions
+reuse its compiled program and any retained cache/state, but receive fresh payload
+maps and execution identities. Timed samples include the normal runner execution
+wrapper; they are not isolated action-call timings. `@assert:` directives are
+checked by scenario tests, not in the timed benchmark loop. The JSON report schema
+is version `2`. Baseline comparisons and threshold gates are not part of this
+profiling slice. A benchmark failure returns exit code **1**. Invalid flags, an
+ambiguous CPU profile selection, or no matching scenarios return **2**; a
+successful run or `--list` returns **0**.
 
 Treat custom `.nflow` files as untrusted code: like `nflow run`, benchmarking a
-custom flow may cause arbitrary effects allowed by its actions. Use only flows
-you trust and account for any external side effects they may perform. Scenario
-file discovery rejects symlinks. Custom flows use the capabilities linked into
-the current binary; `self bench` does not build a new `@require` harness. In JSON
-mode, scenario stdout is redirected to stderr to keep the report parseable.
+custom flow may cause arbitrary effects allowed by its actions. Warmup and
+measured iterations repeat the scenario, so flows that call external services,
+write files, or trigger other side effects may do so many times; use only flows
+you trust and account for those effects. Scenario file discovery rejects
+symlinks. Custom flows use the capabilities linked into the current binary;
+`self bench` does not build a new `@require` harness. In JSON mode, scenario
+stdout is redirected to stderr to keep the report parseable.
 
 ---
 

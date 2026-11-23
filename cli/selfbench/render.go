@@ -20,7 +20,7 @@ func renderReport(report Report, w io.Writer) error {
 	fmt.Fprintf(&out, "  %s %s · %s/%s · %d CPUs · GOMAXPROCS=%d\n\n",
 		style.Bold("HOST"), report.GoVersion, report.OS, report.Arch, report.CPUs, report.GOMAXPROCS)
 	if report.Profiled {
-		out.WriteString(style.Dim("  action profile enabled; profiling hooks are included in measured timings\n\n"))
+		out.WriteString(style.Dim("  action spans enabled; hook overhead is included in measured timings; self time is wall time, not CPU time\n\n"))
 	}
 
 	passed, failed := 0, 0
@@ -45,7 +45,14 @@ func renderReport(report Report, w io.Writer) error {
 		fmt.Fprintf(&out, "  %s %d\n", reportLabel(style, "Sample errors"), result.Warm.Errors)
 		renderPhaseGraph(&out, *result)
 		if report.Profiled {
-			renderActionGraph(&out, result.Actions)
+			if err := renderActionGraph(&out, result.Actions); err != nil {
+				return err
+			}
+		}
+		if result.CPUProfile != nil {
+			if err := RenderCPUProfileSummary(&out, *result.CPUProfile); err != nil {
+				return err
+			}
 		}
 		if result.Error != "" {
 			fmt.Fprintf(&out, "  %s %s\n", reportLabel(style, "Error"), style.Red(result.Error))
@@ -120,26 +127,8 @@ type phaseGraphRow struct {
 	allocationRuns int
 }
 
-func renderActionGraph(out *strings.Builder, actions []ActionProfile) {
-	fmt.Fprintln(out, "  ACTION GRAPH  (total inclusive action time across measured warm runs; nested actions can overlap)")
-	maxTotal := 0.0
-	for _, action := range actions {
-		if action.TotalMs > maxTotal {
-			maxTotal = action.TotalMs
-		}
-	}
-	if len(actions) == 0 {
-		fmt.Fprintln(out, "    no action lifecycle events recorded")
-		return
-	}
-	for _, action := range actions {
-		fmt.Fprintf(out, "    %-14s %-35s %8.3f ms total · %8.3f ms/call · %d calls",
-			graphBar(action.TotalMs, maxTotal), action.Action, action.TotalMs, action.MeanMs, action.Calls)
-		if action.Errors > 0 {
-			fmt.Fprintf(out, " · %d errors", action.Errors)
-		}
-		fmt.Fprintln(out)
-	}
+func renderActionGraph(out *strings.Builder, actions []ActionProfile) error {
+	return RenderActionTree(out, actions)
 }
 
 func graphBar(value, maximum float64) string {

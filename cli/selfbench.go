@@ -27,7 +27,8 @@ func parseSelfBenchArgs(args []string, errorOutput io.Writer) (selfBenchArgs, er
 	flags.StringVar(&parsed.path, "path", "", "scenario .nflow file or directory (replaces built-in suite)")
 	flags.IntVar(&parsed.options.Iterations, "iterations", 50, "warm measured iterations (1..1000000)")
 	flags.IntVar(&parsed.options.Warmup, "warmup", 3, "unmeasured warmups after first run (0..1000000)")
-	flags.BoolVar(&parsed.options.Profile, "profile", false, "include per-action warm timing (adds hook overhead)")
+	flags.BoolVar(&parsed.options.Profile, "profile", false, "include action call tree and inclusive/self wall timing")
+	flags.StringVar(&parsed.options.CPUProfilePath, "cpu-profile", "", "save a Go CPU profile and summarize its top functions (one scenario only)")
 	flags.BoolVar(&parsed.options.JSON, "json", false, "JSON report")
 	flags.BoolVar(&parsed.options.List, "list", false, "list matching scenarios without running")
 	// Standard flag parsing stops at the first positional argument. Separate
@@ -45,7 +46,7 @@ func parseSelfBenchArgs(args []string, errorOutput io.Writer) (selfBenchArgs, er
 		}
 		options = append(options, arg)
 		name := strings.TrimLeft(strings.SplitN(arg, "=", 2)[0], "-")
-		if (name == "path" || name == "iterations" || name == "warmup") && !strings.Contains(arg, "=") {
+		if (name == "path" || name == "iterations" || name == "warmup" || name == "cpu-profile") && !strings.Contains(arg, "=") {
 			if i+1 < len(args) {
 				i++
 				options = append(options, args[i])
@@ -76,6 +77,10 @@ func runSelfBench(ctx context.Context, inv *invocation, args []string) int {
 	scenarios, err := selfbench.Discover(parsed.path, parsed.filters)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	if parsed.options.CPUProfilePath != "" && len(scenarios) != 1 {
+		fmt.Fprintln(os.Stderr, "self bench: --cpu-profile requires exactly one selected scenario; add a filter or use --list first")
 		return 2
 	}
 	parsed.options.Out = os.Stdout

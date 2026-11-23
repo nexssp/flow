@@ -47,7 +47,7 @@ func NewExprEvaluator() Evaluator {
 		}
 
 		pipelineInputNames := compiler.ExpressionPipelineInputBindingNames(ctx)
-		env := normalizeExpressionEnvironmentWithCache(compiler.MergeSymbolNamespaces(ctx, buildEnv(req.Input)), viewCache, pipelineInputNames)
+		env := normalizeExpressionEnvironmentForProjection(ctx, compiler.MergeSymbolNamespaces(ctx, buildEnv(req.Input)), viewCache, body, pipelineInputNames)
 		if err := rejectUnavailableProjectionBindings(body, compiler.ExpressionUnavailableBindingNames(ctx), env); err != nil {
 			return nil, xerr.Validation(err.Error())
 		}
@@ -59,7 +59,7 @@ func NewExprEvaluator() Evaluator {
 		if err != nil {
 			return nil, err
 		}
-		if conflictErr := rejectRuntimeProjectionBindingConflict(ctx, body, req.Input, viewCache); conflictErr != nil {
+		if conflictErr := rejectRuntimeProjectionBindingConflict(ctx, body, env[expressionRootName]); conflictErr != nil {
 			return nil, conflictErr
 		}
 
