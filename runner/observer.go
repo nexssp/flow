@@ -246,6 +246,9 @@ func (o *Observer) PrintSummary(w io.Writer) {
 }
 
 func appendObserverHistory[T any](history []T, value T, capacity int) ([]T, bool) {
+	if capacity <= 0 {
+		return history, true
+	}
 	if len(history) < capacity {
 		return append(history, value), false
 	}

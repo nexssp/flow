@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -84,12 +83,12 @@ func prepareStreamItem(item any, remaining uint64) (detached any, accounted uint
 		return nil, 0, fmt.Errorf("%w: stream item cannot be encoded as JSON: %w", errUnsupportedStreamValue, err)
 	}
 	if counter.written == 0 {
-		return nil, 0, errors.New("stream item encoder produced no output")
+		return nil, 0, fmt.Errorf("%w: stream item encoder produced no output", errUnsupportedStreamValue)
 	}
 	// Encoder.Encode appends one newline; account only for the JSON value itself.
 	encodedSize := counter.written - 1
 	if encodedSize > measure.jsonUpper {
-		return nil, 0, errors.New("stream item exceeded its checked JSON size bound")
+		return nil, 0, fmt.Errorf("%w: stream item exceeded its checked JSON size bound", errUnsupportedStreamValue)
 	}
 	accounted = measure.logical + measure.jsonUpper
 	return detached, accounted, nil
@@ -352,7 +351,7 @@ func (m *streamValueMeasure) measureMap(value reflect.Value, depth int) error {
 
 func (m *streamValueMeasure) measureStruct(value reflect.Value, includeInline bool, depth int) error {
 	typeOf := value.Type()
-	if hasUnexportedDynamicFields(typeOf, make(map[reflect.Type]bool)) {
+	if hasUnexportedDynamicFields(typeOf) {
 		return fmt.Errorf("%w: %s has unexported dynamic fields", errUnsupportedStreamValue, typeOf)
 	}
 	if includeInline {
@@ -469,38 +468,36 @@ func hasCustomJSONEncoding(typeOf reflect.Type) bool {
 	return typeOf.Kind() != reflect.Pointer && (reflect.PointerTo(typeOf).Implements(jsonMarshaler) || reflect.PointerTo(typeOf).Implements(textMarshaler))
 }
 
-func hasUnexportedDynamicFields(typeOf reflect.Type, seen map[reflect.Type]bool) bool {
-	if seen[typeOf] {
-		return false
-	}
-	seen[typeOf] = true
+func hasUnexportedDynamicFields(typeOf reflect.Type) bool {
 	if typeOf.Kind() != reflect.Struct {
 		return false
 	}
 	for field := range typeOf.Fields() {
-		if field.PkgPath != "" && typeContainsDynamicData(field.Type, make(map[reflect.Type]bool)) {
+		if field.PkgPath == "" {
+			continue
+		}
+		// encoding/json promotes exported fields from an unexported embedded
+		// struct, but measureStructField cannot account for them by reflection.
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if field.Anonymous && field.Type.Kind() == reflect.Struct && name != "-" {
 			return true
 		}
-		if field.PkgPath == "" && hasUnexportedDynamicFields(field.Type, seen) {
+		if typeContainsDynamicData(field.Type) {
 			return true
 		}
 	}
 	return false
 }
 
-func typeContainsDynamicData(typeOf reflect.Type, seen map[reflect.Type]bool) bool {
-	if seen[typeOf] {
-		return false
-	}
-	seen[typeOf] = true
+func typeContainsDynamicData(typeOf reflect.Type) bool {
 	switch typeOf.Kind() {
 	case reflect.String, reflect.Pointer, reflect.Map, reflect.Slice, reflect.Interface, reflect.Func, reflect.Chan, reflect.UnsafePointer:
 		return true
 	case reflect.Array:
-		return typeContainsDynamicData(typeOf.Elem(), seen)
+		return typeContainsDynamicData(typeOf.Elem())
 	case reflect.Struct:
 		for field := range typeOf.Fields() {
-			if typeContainsDynamicData(field.Type, seen) {
+			if typeContainsDynamicData(field.Type) {
 				return true
 			}
 		}
@@ -515,7 +512,12 @@ func typeContainsDynamicData(typeOf reflect.Type, seen map[reflect.Type]bool) bo
 }
 
 func hasOption(options, want string) bool {
-	return slices.Contains(strings.Split(options, ","), want)
+	for option := range strings.SplitSeq(options, ",") {
+		if option == want {
+			return true
+		}
+	}
+	return false
 }
 
 func isJSONEmpty(value reflect.Value) bool {
@@ -666,9 +668,7 @@ func detachMap(value reflect.Value, depth int) (reflect.Value, error) {
 
 func detachStruct(value reflect.Value, depth int) (reflect.Value, error) {
 	typeOf := value.Type()
-	if hasUnexportedDynamicFields(typeOf, make(map[reflect.Type]bool)) {
-		return reflect.Value{}, fmt.Errorf("%w: %s has unexported dynamic fields", errUnsupportedStreamValue, typeOf)
-	}
+	// prepareStreamItem measures the complete value graph before detaching it.
 	out := reflect.New(typeOf).Elem()
 	out.Set(value)
 	// json:"-" fields are still detached because the copied struct is passed

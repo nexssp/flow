@@ -17,6 +17,14 @@ type namedStreamByte uint8
 
 type customStreamByte uint8
 
+type unexportedScalarStreamFields struct {
+	ID int
+}
+
+type streamValueWithUnexportedScalarEmbed struct {
+	unexportedScalarStreamFields
+}
+
 func (marshaledStreamValue) MarshalJSON() ([]byte, error) {
 	return []byte(`"opaque"`), nil
 }
@@ -168,6 +176,19 @@ func TestPrepareStreamItemRejectsUnsupportedOrCyclicValues(t *testing.T) {
 				t.Fatalf("prepare unsupported item error = %v, want %v", err, errUnsupportedStreamValue)
 			}
 		})
+	}
+}
+
+func TestPrepareStreamItemRejectsUnexportedScalarEmbeddedStruct(t *testing.T) {
+	item := streamValueWithUnexportedScalarEmbed{
+		unexportedScalarStreamFields{ID: 123},
+	}
+	_, _, err := prepareStreamItem(item, uint64(maxStreamBufferBytes))
+	if !errors.Is(err, errUnsupportedStreamValue) {
+		t.Fatalf("prepare embedded scalar struct error = %v, want %v", err, errUnsupportedStreamValue)
+	}
+	if kind := xerr.KindFrom(streamBufferError("stream.collect", err)); kind != xerr.KindValidation {
+		t.Fatalf("embedded scalar stream error kind = %s, want %s", kind, xerr.KindValidation)
 	}
 }
 

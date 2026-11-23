@@ -265,25 +265,9 @@ func windowWithBudget(size, step int, maxBytes uint64) stream.StreamOp[any, []an
 					if !yield(window, nil) {
 						return
 					}
-					if step >= size {
-						clear(buffer)
-						clear(itemSizes)
-						buffer = buffer[:0]
-						itemSizes = itemSizes[:0]
-						used = uint64(cap(buffer))*anySlotSize + uint64(cap(itemSizes))*itemSizeSlotSize
-						skip = step - size
-					} else {
-						copy(buffer, buffer[step:])
-						clear(buffer[size-step:])
-						copy(itemSizes, itemSizes[step:])
-						clear(itemSizes[size-step:])
-						buffer = buffer[:size-step]
-						itemSizes = itemSizes[:size-step]
-						used = uint64(cap(buffer))*anySlotSize + uint64(cap(itemSizes))*itemSizeSlotSize
-						for _, itemSize := range itemSizes {
-							used += itemSize
-						}
-					}
+					buffer, itemSizes, used, skip = slideWindowBuffer(
+						buffer, itemSizes, size, step, anySlotSize, itemSizeSlotSize,
+					)
 				}
 			}
 			if len(buffer) > 0 {
@@ -291,6 +275,34 @@ func windowWithBudget(size, step int, maxBytes uint64) stream.StreamOp[any, []an
 			}
 		}
 	}
+}
+
+func slideWindowBuffer(
+	buffer []any,
+	itemSizes []uint64,
+	size, step int,
+	anySlotSize, itemSizeSlotSize uint64,
+) (slidBuffer []any, slidItemSizes []uint64, used uint64, skip int) {
+	if step >= size {
+		clear(buffer)
+		clear(itemSizes)
+		buffer = buffer[:0]
+		itemSizes = itemSizes[:0]
+		used = uint64(cap(buffer))*anySlotSize + uint64(cap(itemSizes))*itemSizeSlotSize
+		return buffer, itemSizes, used, step - size
+	}
+
+	copy(buffer, buffer[step:])
+	clear(buffer[size-step:])
+	copy(itemSizes, itemSizes[step:])
+	clear(itemSizes[size-step:])
+	buffer = buffer[:size-step]
+	itemSizes = itemSizes[:size-step]
+	used = uint64(cap(buffer))*anySlotSize + uint64(cap(itemSizes))*itemSizeSlotSize
+	for _, itemSize := range itemSizes {
+		used += itemSize
+	}
+	return buffer, itemSizes, used, 0
 }
 
 func streamBufferError(operator string, err error) error {
