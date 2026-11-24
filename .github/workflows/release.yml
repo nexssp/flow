@@ -61,7 +61,6 @@ jobs:
           printf 'tag_sha=%s\n' "$tag_sha" >> "$GITHUB_OUTPUT"
           echo "Verified ${RELEASE_TAG} at ${tag_sha}."
       - name: Wait for successful main CI on the exact tagged commit
-        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
