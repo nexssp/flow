@@ -141,6 +141,9 @@ func (h *Host) Run(ctx context.Context, fn func(context.Context) error) (result 
 			return
 		}
 		result = joinShutdownError(result, h.Shutdown(ctx))
+		if ctxErr := ctx.Err(); ctxErr != nil && !errors.Is(result, ctxErr) {
+			result = errors.Join(result, ctxErr)
+		}
 	}()
 
 	result = fn(ctx)
