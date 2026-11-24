@@ -742,11 +742,24 @@ func readRunInput(payload map[string]any, source string, flags []string) (input 
 	if hasFlag(flags, preserveStdinFlag) {
 		return payload, withoutFlag(flags, preserveStdinFlag), nil
 	}
-	if strings.Contains(source, "io.stdin") {
+	if sourceUsesStdinStream(source) {
 		return payload, flags, nil
 	}
 	input, err = readPipedStdin(payload)
 	return input, flags, err
+}
+
+func sourceUsesStdinStream(source string) bool {
+	lexer := compiler.NewLexer(source)
+	for {
+		token := lexer.Next()
+		if token.Type == compiler.TokEOF {
+			return false
+		}
+		if token.Type == compiler.TokIdent && token.Lit == "io.stdin" {
+			return true
+		}
+	}
 }
 
 func withoutFlag(args []string, flag string) []string {

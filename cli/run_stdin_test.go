@@ -170,6 +170,19 @@ func TestRunSource_NonStdinFlow_ConsumesStdinAsPayload(t *testing.T) {
 	ktest.RequireStringContains(t, out, `"who":"stdin"`)
 }
 
+func TestRunSource_StringContainingIoStdinStillConsumesPayload(t *testing.T) {
+	withStdin(t, `{"who":"stdin"}`)
+
+	src := `{ who: .who, marker: "io.stdin" }`
+	out := captureStdout(t, func() {
+		rc := runSourceInProcess(t.Context(), src, "test.nflow", []string{"--json"})
+		ktest.RequireEqual(t, rc, 0)
+	})
+
+	ktest.RequireStringContains(t, out, `"who":"stdin"`)
+	ktest.RequireStringContains(t, out, `"marker":"io.stdin"`)
+}
+
 // withOpenStdin replaces os.Stdin with a pipe whose writer stays open for the
 // duration of the test: stdin is non-terminal, delivers no data, and never
 // reaches EOF. This is the shape CI runners and containers provide.
