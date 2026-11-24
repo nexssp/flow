@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
@@ -195,5 +196,62 @@ func TestExecuteCompiledPropagatesCancellation(t *testing.T) {
 	}
 	if result.ExecutionID == "" {
 		t.Fatal("canceled execution has no execution identity")
+	}
+}
+
+func TestExecuteCompiledPropagatesCancellationAfterActionReturns(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{}, 1)
+	defer func() {
+		select {
+		case release <- struct{}{}:
+		default:
+		}
+	}()
+
+	lateSuccess := action.New("test.late_success", func(context.Context, any) (any, error) {
+		close(started)
+		<-release
+		return "success", nil
+	}).Build()
+	bundle := compiler.Bundle{
+		ID:        "execute-compiled-late-cancel-test",
+		Libraries: []action.Library{{Name: "test", Actions: []action.AnyAction{lateSuccess}}},
+	}
+	cfg, err := runner.BuildConfig(append(native.Bundles(), bundle))
+	if err != nil {
+		t.Fatalf("BuildConfig: %v", err)
+	}
+	const source = "test.late_success"
+	const name = "execute-compiled-late-cancel.nflow"
+	compiled, err := runner.Compile(t.Context(), cfg, source, name)
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	type executionOutcome struct {
+		result runner.Execution
+		err    error
+	}
+	done := make(chan executionOutcome, 1)
+	go func() {
+		result, runErr := runner.ExecuteCompiled(ctx, cfg, compiled, source, name, map[string]any{})
+		done <- executionOutcome{result: result, err: runErr}
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("action did not start")
+	}
+	cancel()
+	release <- struct{}{}
+	select {
+	case outcome := <-done:
+		if !errors.Is(outcome.err, context.Canceled) {
+			t.Fatalf("error = %v, want context.Canceled after action completed", outcome.err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("execution did not finish after action was released")
 	}
 }

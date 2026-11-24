@@ -506,7 +506,8 @@ func invokeWithRunScope(ctx context.Context, invoke func(context.Context) (any, 
 		}
 	}()
 	output, err = invoke(runCtx)
-	return output, errors.Join(err, scope.Close(runCtx))
+	closeErr := scope.Close(runCtx)
+	return output, errors.Join(err, ctx.Err(), closeErr)
 }
 
 func fillCompileAllocs(dst *Execution, enabled bool, before, after *runtime.MemStats) {
