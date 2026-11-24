@@ -30,6 +30,7 @@ func TestSelftest_RepositoryFixturesMatchEmbeddedFiles(t *testing.T) {
 		"config_runtime/nflows/load_json--settings.json": false,
 		"config_runtime/nflows/load_yaml.nflow":          false,
 		"config_runtime/nflows/load_yaml--settings.yml":  false,
+		"embed/nflows/directory_embed.nflow":             false,
 		"embed/nflows/host_root.nflow":                   false,
 		"embed/nflows/host_root--terms.txt":              false,
 		"embed/nflows/template_render--welcome.tmpl":     false,

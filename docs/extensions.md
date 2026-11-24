@@ -489,9 +489,10 @@ flows use the same convention and are staged for their parent rather than
 run as standalone fixtures.
 
 The `embed` extension requires an explicit host filesystem root, so its
-[`host_root.nflow`](../extensions/embed/nflows/host_root.nflow) fixture is
-embedded and executed by a dedicated Go test rather than the native CLI
-self-test. Run `go test ./extensions/embed -run '^TestHostRootNFlowFixture$' -count=1`.
+[`host_root.nflow`](../extensions/embed/nflows/host_root.nflow) and
+[`directory_embed.nflow`](../extensions/embed/nflows/directory_embed.nflow)
+fixtures are executed by dedicated Go tests rather than the native CLI
+self-test. Run `go test ./extensions/embed -run '^(TestHostRootNFlowFixture|TestDirectoryEmbedNFlowFixture)$' -count=1`.
 The shared `files` package is not a DSL bundle.
 
 

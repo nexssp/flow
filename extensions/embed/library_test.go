@@ -103,6 +103,32 @@ func TestEmbedDirectiveRejectsInvalidDeclarations(t *testing.T) {
 	}
 }
 
+func TestReadDirectoryEnforcesConfiguredBounds(t *testing.T) {
+	assets := fstest.MapFS{
+		"web/a.js": &fstest.MapFile{Data: []byte("aa")},
+		"web/b.js": &fstest.MapFile{Data: []byte("bb")},
+	}
+	cases := []struct {
+		name          string
+		maxFileBytes  int64
+		maxTotalBytes int64
+		maxFiles      int
+		wantError     string
+	}{
+		{name: "per-file", maxFileBytes: 1, maxTotalBytes: 16, maxFiles: 4, wantError: "size limit"},
+		{name: "total-bytes", maxFileBytes: 16, maxTotalBytes: 3, maxFiles: 4, wantError: "max_total_size"},
+		{name: "file-count", maxFileBytes: 16, maxTotalBytes: 16, maxFiles: 1, wantError: "max_files"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := readDirectory(assets, "web", tc.maxFileBytes, tc.maxTotalBytes, tc.maxFiles)
+			if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+				t.Fatalf("readDirectory error = %v, want %q", err, tc.wantError)
+			}
+		})
+	}
+}
+
 func TestEmbedRequiresDeclaredBundleRoot(t *testing.T) {
 	bundle := NewBundle(nil, "test.static", 32)
 	_, _, err := compiler.Preprocess(t.Context(), compiler.NewDirectiveTable(bundle.Directives...), "@embed item \"ok.txt\"", "test.nflow")

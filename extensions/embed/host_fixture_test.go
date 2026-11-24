@@ -84,3 +84,37 @@ func TestEmbeddedTemplateNFlowFixture(t *testing.T) {
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, result.Output, "Welcome Ada\n")
 }
+
+func TestDirectoryEmbedNFlowFixture(t *testing.T) {
+	fixtures, err := fs.Sub(hostFixtures, "nflows")
+	ktest.RequireNoError(t, err)
+	source, err := fs.ReadFile(fixtures, "directory_embed.nflow")
+	ktest.RequireNoError(t, err)
+
+	root := fstest.MapFS{
+		"web/index.html":     &fstest.MapFile{Data: []byte("<main>Mercury3</main>")},
+		"web/assets/app.js":  &fstest.MapFile{Data: []byte("console.log('ready')")},
+		"web/assets/app.css": &fstest.MapFile{Data: []byte("main { color: navy }")},
+	}
+	bundles := append(native.SelftestBundles(), NewBundle(root, "test.static", 1024))
+	cfg, err := runner.BuildConfig(bundles)
+	ktest.RequireNoError(t, err)
+	compiled, err := runner.Compile(t.Context(), cfg, string(source), "directory_embed.nflow")
+	ktest.RequireNoError(t, err)
+
+	output, err := compiled.Program.DoAny(t.Context(), nil)
+	ktest.RequireNoError(t, err)
+	payload, ok := output.(map[string]any)
+	ktest.RequireCondition(t, ok, "output = %#v, want an embedded directory payload", output)
+	files, ok := payload["files"].(map[string]any)
+	ktest.RequireCondition(t, ok, "files = %#v, want an embedded asset map", payload["files"])
+	for name, want := range map[string]string{
+		"index.html":     "<main>Mercury3</main>",
+		"assets/app.js":  "console.log('ready')",
+		"assets/app.css": "main { color: navy }",
+	} {
+		data, ok := files[name].([]byte)
+		ktest.RequireCondition(t, ok, "files[%q] = %#v, want embedded bytes", name, files[name])
+		ktest.RequireEqual(t, string(data), want)
+	}
+}

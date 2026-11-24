@@ -1,5 +1,5 @@
-// Package embed compiles static @embed declarations to typed xfile.Ref values.
-// It never puts asset bytes into Flow metadata or runtime state.
+// Package embed compiles static @embed declarations to typed file references or
+// bounded directory asset maps.
 package embed
 
 import (
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -26,10 +27,11 @@ import (
 )
 
 const (
-	ID              = "embed"
-	DefaultProvider = "flow.static"
-	DefaultMaxBytes = int64(16 << 20)
-	refsMetaKey     = "embeds"
+	ID                 = "embed"
+	DefaultProvider    = "flow.static"
+	DefaultMaxBytes    = int64(16 << 20)
+	refsMetaKey        = "embeds"
+	directoriesMetaKey = "embed_directories"
 )
 
 // Resolver serves only assets declared during preprocessing. References are
@@ -57,9 +59,9 @@ var declarationPattern = regexp.MustCompile(`^@embed\s+([A-Za-z_][A-Za-z0-9_]*)\
 func init() { compiler.Register(ID, Bundle) }
 
 // Bundle creates the standard extension bundle. The optional "root" setting
-// names a filesystem directory, "provider" selects the xfile provider label,
-// and "max_size" limits the maximum bytes read at compile time and runtime. No implicit
-// process working-directory root is used.
+// names a filesystem directory and "provider" selects the xfile provider label.
+// "max_size" bounds each file, while "max_total_size" and "max_files" bound
+// directory embeds. No implicit process working-directory root is used.
 func Bundle(opts map[string]string) compiler.Bundle {
 	root := strings.TrimSpace(opts["root"])
 	provider := strings.TrimSpace(opts["provider"])
@@ -67,11 +69,27 @@ func Bundle(opts map[string]string) compiler.Bundle {
 		provider = DefaultProvider
 	}
 	limit := DefaultMaxBytes
+	totalLimit := DefaultMaxTotalBytes
+	maxFiles := DefaultMaxFiles
 	if raw := strings.TrimSpace(opts["max_size"]); raw != "" {
 		if parsed, err := strconv.ParseInt(raw, 10, 64); err == nil && parsed > 0 {
 			limit = parsed
 		} else {
-			return bundleWithFileResolver(nil, provider, limit, errors.New("embed: max_size must be a positive integer"))
+			return bundleWithFileResolver(nil, provider, limit, totalLimit, maxFiles, errors.New("embed: max_size must be a positive integer"))
+		}
+	}
+	if raw := strings.TrimSpace(opts["max_total_size"]); raw != "" {
+		if parsed, err := strconv.ParseInt(raw, 10, 64); err == nil && parsed > 0 {
+			totalLimit = parsed
+		} else {
+			return bundleWithFileResolver(nil, provider, limit, totalLimit, maxFiles, errors.New("embed: max_total_size must be a positive integer"))
+		}
+	}
+	if raw := strings.TrimSpace(opts["max_files"]); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			maxFiles = parsed
+		} else {
+			return bundleWithFileResolver(nil, provider, limit, totalLimit, maxFiles, errors.New("embed: max_files must be a positive integer"))
 		}
 	}
 	var fsys fs.FS
@@ -79,7 +97,7 @@ func Bundle(opts map[string]string) compiler.Bundle {
 	if root != "" {
 		fsys, rootErr = newRootFS(root)
 	}
-	return bundleWithFileResolver(fsys, provider, limit, rootErr)
+	return bundleWithFileResolver(fsys, provider, limit, totalLimit, maxFiles, rootErr)
 }
 
 // NewBundle binds the directive to an explicitly declared fs.FS root. This is
@@ -95,7 +113,7 @@ func NewBundle(fsys fs.FS, provider string, maxBytes int64) compiler.Bundle {
 func BundleWithFileResolver(fsys fs.FS, provider string, maxBytes int64) (compiler.Bundle, *Resolver) {
 	provider, maxBytes = normalizeResolverConfig(provider, maxBytes)
 	resolver := newResolver(fsys, provider, maxBytes)
-	bundle := newBundle(fsys, provider, maxBytes, nil, resolver)
+	bundle := newBundle(fsys, provider, maxBytes, DefaultMaxTotalBytes, DefaultMaxFiles, nil, resolver)
 	return compiler.BundleWithFileResolver(bundle, xfile.Provider(provider), resolver), resolver
 }
 
@@ -120,17 +138,18 @@ func normalizeResolverConfig(provider string, maxBytes int64) (normalizedProvide
 	return provider, maxBytes
 }
 
-func bundleWithFileResolver(fsys fs.FS, provider string, maxBytes int64, rootErr error) compiler.Bundle {
+func bundleWithFileResolver(fsys fs.FS, provider string, maxBytes, maxTotalBytes int64, maxFiles int, rootErr error) compiler.Bundle {
 	provider, maxBytes = normalizeResolverConfig(provider, maxBytes)
 	resolver := newResolver(fsys, provider, maxBytes)
-	bundle := newBundle(fsys, provider, maxBytes, rootErr, resolver)
+	bundle := newBundle(fsys, provider, maxBytes, maxTotalBytes, maxFiles, rootErr, resolver)
 	return compiler.BundleWithFileResolver(bundle, xfile.Provider(provider), resolver)
 }
 
-func newBundle(fsys fs.FS, provider string, maxBytes int64, rootErr error, resolver *Resolver) compiler.Bundle {
+func newBundle(fsys fs.FS, provider string, maxBytes, maxTotalBytes int64, maxFiles int, rootErr error, resolver *Resolver) compiler.Bundle {
 	bundle := compiler.Bundle{
-		ID:         ID,
-		Directives: []compiler.Directive{directive(fsys, provider, maxBytes, rootErr, resolver)},
+		ID:           ID,
+		Directives:   []compiler.Directive{directive(fsys, provider, maxBytes, maxTotalBytes, maxFiles, rootErr, resolver)},
+		InheritScope: inheritScope,
 		OnPreprocess: func(_ map[string]any) compiler.PreprocessContributions {
 			return compiler.PreprocessContributions{CompileOpts: []compiler.CompileOption{
 				compiler.WithASTValidators(validateRefs),
@@ -143,10 +162,52 @@ func newBundle(fsys fs.FS, provider string, maxBytes int64, rootErr error, resol
 	return bundle
 }
 
-func directive(fsys fs.FS, provider string, maxBytes int64, rootErr error, resolver *Resolver) compiler.Directive {
+func inheritScope(parentMeta, childMeta map[string]any) error {
+	if parentMeta == nil || childMeta == nil {
+		return nil
+	}
+	if refs, ok := parentMeta[refsMetaKey].(map[string]xfile.Ref); ok {
+		inherited := make(map[string]xfile.Ref, len(refs))
+		maps.Copy(inherited, refs)
+		if current, ok := childMeta[refsMetaKey].(map[string]xfile.Ref); ok {
+			maps.Copy(inherited, current)
+		}
+		childMeta[refsMetaKey] = inherited
+	}
+	if directories, ok := parentMeta[directoriesMetaKey].(map[string]map[string][]byte); ok {
+		inherited := make(map[string]map[string][]byte, len(directories))
+		for name, files := range directories {
+			copiedFiles := make(map[string][]byte, len(files))
+			for path, data := range files {
+				copiedFiles[path] = append([]byte(nil), data...)
+			}
+			inherited[name] = copiedFiles
+		}
+		if current, ok := childMeta[directoriesMetaKey].(map[string]map[string][]byte); ok {
+			maps.Copy(inherited, current)
+		}
+		childMeta[directoriesMetaKey] = inherited
+	}
+	if namespace, ok := compiler.SymbolsFromMeta(parentMeta)[ID]; ok {
+		namespaces, _ := childMeta["symbols"].(map[string]compiler.SymbolNamespace)
+		if namespaces == nil {
+			namespaces = make(map[string]compiler.SymbolNamespace)
+		}
+		inherited := make(map[string]any, len(namespace.Symbols))
+		maps.Copy(inherited, namespace.Symbols)
+		if current, exists := namespaces[ID]; exists {
+			maps.Copy(inherited, current.Symbols)
+		}
+		namespaces[ID] = compiler.SymbolNamespace{Name: ID, Symbols: inherited}
+		childMeta["symbols"] = namespaces
+	}
+	return nil
+}
+
+func directive(fsys fs.FS, provider string, maxBytes, maxTotalBytes int64, maxFiles int, rootErr error, resolver *Resolver) compiler.Directive {
 	return compiler.Directive{
 		Name:    "embed",
-		Example: `@embed logo "assets/logo.svg"`,
+		Example: `@embed site "web/dist"`,
 		Handler: func(_ context.Context, req compiler.DirectiveReq) (compiler.DirectiveRes, error) {
 			pos := compiler.Position{File: req.File, Line: req.I + 1}
 			line := strings.TrimSpace(req.Lines[req.I])
@@ -169,21 +230,47 @@ func directive(fsys fs.FS, provider string, maxBytes int64, rootErr error, resol
 				return compiler.DirectiveRes{}, compiler.SourceError(pos, "@embed requires a declared Bundle fs.FS/root")
 			}
 			refs, _ := req.Out[refsMetaKey].(map[string]xfile.Ref)
+			directories, _ := req.Out[directoriesMetaKey].(map[string]map[string][]byte)
 			if _, duplicate := refs[name]; duplicate {
 				return compiler.DirectiveRes{}, compiler.SourceError(pos, "duplicate @embed name %q", name)
 			}
-			ref, err := makeRef(fsys, provider, assetPath, maxBytes)
+			if _, duplicate := directories[name]; duplicate {
+				return compiler.DirectiveRes{}, compiler.SourceError(pos, "duplicate @embed name %q", name)
+			}
+			info, err := fs.Stat(fsys, assetPath)
 			if err != nil {
 				return compiler.DirectiveRes{}, compiler.SourceError(pos, "@embed %s: %v", name, err)
 			}
-			if err := resolver.register(ref, assetPath); err != nil {
-				return compiler.DirectiveRes{}, compiler.SourceError(pos, "@embed %s: %v", name, err)
+			var symbol any
+			switch {
+			case info.IsDir():
+				files, err := readDirectory(fsys, assetPath, maxBytes, maxTotalBytes, maxFiles)
+				if err != nil {
+					return compiler.DirectiveRes{}, compiler.SourceError(pos, "@embed %s: %v", name, err)
+				}
+				if directories == nil {
+					directories = make(map[string]map[string][]byte)
+				}
+				directories[name] = files
+				req.Out[directoriesMetaKey] = directories
+				symbol = files
+			case info.Mode().IsRegular():
+				ref, err := makeRef(fsys, provider, assetPath, maxBytes)
+				if err != nil {
+					return compiler.DirectiveRes{}, compiler.SourceError(pos, "@embed %s: %v", name, err)
+				}
+				if err := resolver.register(ref, assetPath); err != nil {
+					return compiler.DirectiveRes{}, compiler.SourceError(pos, "@embed %s: %v", name, err)
+				}
+				if refs == nil {
+					refs = make(map[string]xfile.Ref)
+				}
+				refs[name] = ref
+				req.Out[refsMetaKey] = refs
+				symbol = ref
+			default:
+				return compiler.DirectiveRes{}, compiler.SourceError(pos, "@embed %s: path is not a regular file or directory", name)
 			}
-			if refs == nil {
-				refs = make(map[string]xfile.Ref)
-			}
-			refs[name] = ref
-			req.Out[refsMetaKey] = refs
 
 			symbols, _ := req.Out["symbols"].(map[string]compiler.SymbolNamespace)
 			if symbols == nil {
@@ -196,7 +283,7 @@ func directive(fsys fs.FS, provider string, maxBytes int64, rootErr error, resol
 			if namespace.Symbols == nil {
 				namespace.Symbols = make(map[string]any)
 			}
-			namespace.Symbols[name] = ref
+			namespace.Symbols[name] = symbol
 			symbols["embed"] = namespace
 			req.Out["symbols"] = symbols
 			return compiler.DirectiveRes{Next: req.I + 1}, nil
@@ -444,7 +531,24 @@ func (r *Resolver) openAsset(ctx context.Context, ref xfile.Ref, asset assetRefe
 
 func validateRefs(ast compiler.Expr, meta map[string]any) error {
 	refs, _ := meta[refsMetaKey].(map[string]xfile.Ref)
-	validator := refValidator{refs: refs}
+	directories, _ := meta[directoriesMetaKey].(map[string]map[string][]byte)
+	if namespace, ok := compiler.SymbolsFromMeta(meta)["embed"]; ok {
+		for name, value := range namespace.Symbols {
+			switch asset := value.(type) {
+			case xfile.Ref:
+				if refs == nil {
+					refs = make(map[string]xfile.Ref)
+				}
+				refs[name] = asset
+			case map[string][]byte:
+				if directories == nil {
+					directories = make(map[string]map[string][]byte)
+				}
+				directories[name] = asset
+			}
+		}
+	}
+	validator := refValidator{refs: refs, directories: directories}
 	if err := validator.walk(ast); err != nil {
 		return err
 	}
@@ -461,17 +565,24 @@ func validateRefs(ast compiler.Expr, meta map[string]any) error {
 }
 
 type refValidator struct {
-	refs map[string]xfile.Ref
+	refs        map[string]xfile.Ref
+	directories map[string]map[string][]byte
 }
 
 func (v refValidator) validateRef(name string) error {
-	if _, ok := v.refs[name]; !ok {
-		return xerr.Validation(fmt.Sprintf("unknown embed.%s reference", name))
+	if _, ok := v.refs[name]; ok {
+		return nil
 	}
-	return nil
+	if _, ok := v.directories[name]; ok {
+		return nil
+	}
+	return xerr.Validation(fmt.Sprintf("unknown embed.%s reference", name))
 }
 
 func (v refValidator) validateExpressionRef(name string) error {
+	if _, isDirectory := v.directories[name]; isDirectory {
+		return nil
+	}
 	if err := v.validateRef(name); err != nil {
 		return err
 	}

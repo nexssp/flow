@@ -1,0 +1,8 @@
+@description "Return a bounded embedded web directory from a named pipeline"
+@embed web "web"
+
+@pipeline return_embed_directory
+  { files: embed.web }
+@end
+
+pipeline.return_embed_directory
