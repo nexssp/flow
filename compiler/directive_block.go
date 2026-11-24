@@ -119,8 +119,10 @@ func ReadBlockWithSpans(lines []string, start int) (BlockRead, error) {
 	return block, errors.New("unclosed '{'")
 }
 
+//nolint:gocyclo // A single pass keeps quote, comment, parenthesis, and brace state aligned to source offsets.
 func scanBlockLine(line string, depth int) (nextDepth, closeAt, comment int) {
 	var quote byte
+	parenDepth := 0
 	for i := 0; i < len(line); i++ {
 		c := line[i]
 		if quote != 0 {
@@ -140,10 +142,17 @@ func scanBlockLine(line string, depth int) (nextDepth, closeAt, comment int) {
 		if c == '/' && i+1 < len(line) && line[i+1] == '/' {
 			return depth, -1, i
 		}
-		if c == '#' && (i == 0 || line[i-1] == ' ' || line[i-1] == '\t' || line[i-1] == '\r') {
+		if c == '#' && (i == 0 || line[i-1] == ' ' || line[i-1] == '\t' || line[i-1] == '\r') &&
+			(parenDepth <= 0 || !lexical.HashStartsIteratorExpression(line, i)) {
 			return depth, -1, i
 		}
 		switch c {
+		case '(':
+			parenDepth++
+		case ')':
+			if parenDepth > 0 {
+				parenDepth--
+			}
 		case '{':
 			depth++
 		case '}':

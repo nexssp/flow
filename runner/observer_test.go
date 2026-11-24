@@ -145,6 +145,43 @@ func TestObserverEventSnapshotIsBoundedAndConcurrencySafe(t *testing.T) {
 	}
 }
 
+func TestObserverSerializesCompleteVerboseEventOutput(t *testing.T) {
+	var live bytes.Buffer
+	observer := runner.NewObserver(&live, 3)
+	const callers = 8
+	const each = 64
+	var wg sync.WaitGroup
+	for caller := range callers {
+		wg.Add(1)
+		go func(caller int) {
+			defer wg.Done()
+			for i := range each {
+				observer.Emit(context.Background(), observe.Event{
+					Kind:     observe.KindSuccess,
+					Action:   fmt.Sprintf("worker-%d-event-%d", caller, i),
+					Duration: time.Millisecond,
+				})
+			}
+		}(caller)
+	}
+	wg.Wait()
+
+	lines := strings.Split(strings.TrimSuffix(live.String(), "\n"), "\n")
+	if want := callers * each * 3; len(lines) != want {
+		t.Fatalf("verbose output has %d lines, want %d; output starts %q", len(lines), want, strings.Join(lines[:min(len(lines), 12)], "\n"))
+	}
+	seen := make(map[string]struct{}, callers*each)
+	for i := 0; i < len(lines); i += 3 {
+		if !strings.HasPrefix(lines[i], "  ✓ worker-") || lines[i+1] != "      in:  <omitted; intermediate payload>" || lines[i+2] != "      out: <omitted; intermediate payload>" {
+			t.Fatalf("event output block at lines %d-%d is interleaved or incomplete: %q", i+1, i+3, lines[i:min(i+3, len(lines))])
+		}
+		seen[strings.TrimSpace(strings.TrimPrefix(lines[i], "  ✓ "))] = struct{}{}
+	}
+	if want := callers * each; len(seen) != want {
+		t.Fatalf("received %d distinct event blocks, want %d", len(seen), want)
+	}
+}
+
 func TestObserverRecordAndActionHistoryAreBounded(t *testing.T) {
 	observer := runner.NewObserver(nil, 0)
 	const capacity = 256

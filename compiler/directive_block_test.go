@@ -110,6 +110,25 @@ func TestReadBlockWithSpansTreatsBackticksAsRawInExpressionClauses(t *testing.T)
 	}
 }
 
+func TestReadBlockWithSpansPreservesHashIteratorOperator(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{
+		`@on_error {`,
+		`  # endsWith is a comment here`,
+		`  when all(["x"], # endsWith "x") -> true`,
+		`}`,
+	}
+	block, err := ReadBlockWithSpans(lines, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `when all(["x"], # endsWith "x") -> true`
+	if len(block.Body) != 1 || block.Body[0] != want {
+		t.Fatalf("body = %#v, want complete iterator expression %q", block.Body, want)
+	}
+}
+
 func TestParseList(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

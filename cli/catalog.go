@@ -17,10 +17,10 @@ func runCatalog(ctx context.Context, inv *invocation, args []string) int {
 func extractCatalogFlowPath(args []string) string {
 	for i := range args {
 		switch {
-		case args[i] == "--flow" && i+1 < len(args):
+		case args[i] == flowPathFlag && i+1 < len(args):
 			return args[i+1]
-		case len(args[i]) > 7 && args[i][:7] == "--flow=":
-			return args[i][7:]
+		case len(args[i]) > len(flowPathFlagPrefix) && args[i][:len(flowPathFlagPrefix)] == flowPathFlagPrefix:
+			return args[i][len(flowPathFlagPrefix):]
 		}
 	}
 	return ""

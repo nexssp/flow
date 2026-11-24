@@ -35,6 +35,62 @@ func TestAdvise_ConsumesRetryModifier(t *testing.T) {
 	ktest.RequireEqual(t, builder.Describe().RetryMax, 3)
 }
 
+func TestAdvise_ConsumesParallelModifierMetadataBySourceIndex(t *testing.T) {
+	t.Parallel()
+	cfg := Config{DefaultMax: 5, MinBackoff: time.Millisecond, MaxBackoff: 10 * time.Millisecond}
+	atom := &compiler.Atom{
+		Name:           "probe",
+		Modifiers:      []string{"retry=1", "timeout=1s", "retry=0", "cache=1m"},
+		ModifierValues: []compiler.ModifierValue{{Raw: "retry=1", Quoted: true}, {Raw: "timeout=1s"}, {Raw: "retry=0"}, {Raw: "cache=1m", Typed: true}},
+		ModifierSources: []compiler.ModifierSource{
+			{Kind: "atom", Label: "retry-1"},
+			{Kind: "scope", Label: "timeouts"},
+			{Kind: "atom", Label: "retry-0"},
+			{Kind: "profile", Label: "cache"},
+		},
+	}
+
+	ktest.RequireNoError(t, advise(cfg, atom, newBuilder()))
+	ktest.RequireEqual(t, atom.Modifiers, []string{"timeout=1s", "cache=1m"})
+	ktest.RequireEqual(t, atom.ModifierValues, []compiler.ModifierValue{{Raw: "timeout=1s"}, {Raw: "cache=1m", Typed: true}})
+	ktest.RequireEqual(t, atom.ModifierSources, []compiler.ModifierSource{{Kind: "scope", Label: "timeouts"}, {Kind: "profile", Label: "cache"}})
+}
+
+func TestCompiledRetryWithAnotherModifierRunsExactlyTwoAttempts(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	worker := action.New[any, any]("probe.flaky", func(_ context.Context, _ any) (any, error) {
+		calls.Add(1)
+		return nil, xerr.Unavailable("temporary failure")
+	}).Build()
+	resolver, err := compiler.NewDynamicResolver(action.Library{Name: "probe", Actions: []action.AnyAction{worker}})
+	ktest.RequireNoError(t, err)
+
+	scopeBundle := scope.Bundle(nil)
+	syntaxBundle := syntax.Bundle(nil)
+	retryBundle := BundleWithConfig(Config{
+		DefaultMax: 1,
+		Backoff:    BackoffConstant,
+		MinBackoff: time.Nanosecond,
+		MaxBackoff: time.Nanosecond,
+	})
+	compiled, err := compiler.CompileAction(
+		resolver,
+		compiler.NewDirectiveTable(scopeBundle.Directives...),
+		compiler.NewModifierTable(modifiers_core.Modifiers()...),
+		compiler.NewOperatorTable(syntaxBundle.Operators...),
+		compiler.DefaultPrimaryExtensions(),
+		compiler.BundleConfig(scopeBundle, retryBundle)...,
+	).Do(t.Context(), compiler.CompileReq{
+		Source: `probe.flaky:retry=1:timeout=1s`,
+		Name:   "retry-one-with-timeout.nflow",
+	})
+	ktest.RequireNoError(t, err)
+	_, err = compiled.Program.DoAny(t.Context(), nil)
+	ktest.RequireCondition(t, err != nil, "expected the transient action error")
+	ktest.RequireEqual(t, calls.Load(), int32(2))
+}
+
 func TestAdvise_DefaultMaxWhenNoValue(t *testing.T) {
 	t.Parallel()
 	cfg := Config{DefaultMax: 7, MinBackoff: 5 * time.Millisecond, MaxBackoff: 50 * time.Millisecond}

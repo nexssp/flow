@@ -112,6 +112,71 @@ func TestExecuteApprovalPausePersistsAndResumesDurableSteps(t *testing.T) {
 	}
 }
 
+func TestFreshApprovedWorkflowAcceptsChannelPayload(t *testing.T) {
+	signal := make(chan struct{})
+	var afterCalls atomic.Int32
+	before := action.New("test.before", func(_ context.Context, input any) (any, error) {
+		return input, nil
+	}).Build()
+	after := action.New("test.after", func(_ context.Context, input any) (any, error) {
+		values, ok := input.(map[string]any)
+		if !ok || values["signal"] != signal {
+			t.Errorf("test.after input = %#v, want original channel-valued payload", input)
+		}
+		afterCalls.Add(1)
+		return input, nil
+	}).Build()
+	cfg, err := BuildConfig([]compiler.Bundle{
+		{ID: "approval-channel-payload-test-actions", Libraries: []action.Library{{Name: "test", Actions: []action.AnyAction{before, after}}}},
+		approval.Bundle(nil),
+		runtime.Bundle(nil),
+		syntax.Bundle(nil),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := xctx.WithApprovalToken(t.Context(), "finance_review")
+	_, err = Execute(ctx, cfg, approvalSource, "approval-channel-payload.nflow", map[string]any{"signal": signal})
+	if err != nil {
+		t.Fatalf("approved execution with channel-valued payload: %v", err)
+	}
+	if got := afterCalls.Load(); got != 1 {
+		t.Fatalf("test.after called %d times, want once", got)
+	}
+}
+
+func TestFreshUnapprovedWorkflowRejectsChannelPayloadBeforeSideEffects(t *testing.T) {
+	signal := make(chan struct{})
+	var beforeCalls atomic.Int32
+	before := action.New("test.before", func(_ context.Context, input any) (any, error) {
+		beforeCalls.Add(1)
+		return input, nil
+	}).Build()
+	after := action.New("test.after", func(_ context.Context, input any) (any, error) {
+		return input, nil
+	}).Build()
+	cfg, err := BuildConfig([]compiler.Bundle{
+		{ID: "approval-unapproved-channel-payload-test-actions", Libraries: []action.Library{{Name: "test", Actions: []action.AnyAction{before, after}}}},
+		approval.Bundle(nil),
+		runtime.Bundle(nil),
+		syntax.Bundle(nil),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = Execute(t.Context(), cfg, approvalSource, "approval-unapproved-channel-payload.nflow", map[string]any{"signal": signal})
+	if err == nil {
+		t.Fatal("unapproved execution with channel-valued payload succeeded; want fingerprint error")
+	}
+	if xerr.KindFrom(err) != xerr.KindBadRequest {
+		t.Fatalf("unapproved execution error = %v, want bad request fingerprint error", err)
+	}
+	if got := beforeCalls.Load(); got != 0 {
+		t.Fatalf("test.before called %d times, want zero before fingerprint failure", got)
+	}
+}
+
 func TestPendingApprovalRejectsChangedSourceOrInput(t *testing.T) {
 	var calls atomic.Int32
 	before := action.New("test.before", func(_ context.Context, input any) (any, error) {

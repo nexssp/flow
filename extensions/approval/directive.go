@@ -95,7 +95,7 @@ func parseApprovalBody(req compiler.DirectiveReq, header approvalHeader) (Declar
 
 	// A field may follow the opening brace on the declaration line.
 	remainder := header.rest[header.open+1:]
-	closeAt := strings.IndexByte(remainder, '}')
+	closeAt := firstUnquotedClosingBrace(remainder)
 	next := req.I + 1
 	if closeAt >= 0 {
 		if hasUnexpectedTrailingText(remainder[closeAt+1:]) {
@@ -113,7 +113,7 @@ func parseApprovalBody(req compiler.DirectiveReq, header approvalHeader) (Declar
 	closed := false
 	for i := req.I + 1; i < len(req.Lines); i++ {
 		current := req.Lines[i]
-		closeAt = strings.IndexByte(current, '}')
+		closeAt = firstUnquotedClosingBrace(current)
 		if closeAt >= 0 {
 			if hasUnexpectedTrailingText(current[closeAt+1:]) {
 				position := compiler.Position{File: req.File, Line: i + 1}
@@ -174,6 +174,31 @@ func addApprovalField(file, name string, decl *Declaration, seen map[string]bool
 		return compiler.SourceError(position, "@approval %s: unknown field %q (role|reason|expires)", name, key)
 	}
 	return nil
+}
+
+func firstUnquotedClosingBrace(text string) int {
+	var quote byte
+	for i := 0; i < len(text); i++ {
+		current := text[i]
+		if quote != 0 {
+			if lexical.BackslashEscapesNext(quote, current, i+1 < len(text)) {
+				i++
+				continue
+			}
+			if current == quote {
+				quote = 0
+			}
+			continue
+		}
+		if (current == '"' || current == '\'') && lexical.CanStartQuote(text, i, 0) {
+			quote = current
+			continue
+		}
+		if current == '}' {
+			return i
+		}
+	}
+	return -1
 }
 
 func hasUnexpectedTrailingText(value string) bool {

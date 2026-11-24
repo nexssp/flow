@@ -378,3 +378,28 @@ func TestFuncRejectsDuplicateDeclarationsAndCrossSourceShadowing(t *testing.T) {
 		t.Fatalf("inherited duplicate function error = %v, want duplicate", err)
 	}
 }
+
+func TestFuncBracedBodyIgnoresBracesInsideComments(t *testing.T) {
+	t.Parallel()
+	cfg := nativeConfig(t)
+	source := `@func math.lineComment() int {
+  40 + 2 // } this brace is part of a comment
+}
+@func math.blockComment() int {
+  40 /* } this brace is part of a comment */ + 2
+}
+{ line: math.lineComment(), block: math.blockComment() }`
+	execution, err := runner.Execute(t.Context(), cfg, source, "function-comment-braces.nflow", nil)
+	if err != nil {
+		t.Fatalf("execute functions with comment braces: %v", err)
+	}
+	result, ok := execution.Output.(map[string]any)
+	if !ok {
+		t.Fatalf("output = %T (%#v), want map[string]any", execution.Output, execution.Output)
+	}
+	for key, want := range map[string]any{"line": 42, "block": 42} {
+		if got := result[key]; got != want {
+			t.Errorf("%s = %#v, want %#v", key, got, want)
+		}
+	}
+}

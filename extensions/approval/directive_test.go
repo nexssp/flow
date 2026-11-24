@@ -61,6 +61,38 @@ func TestDirectiveRejectsInvalidAndDuplicateDeclarations(t *testing.T) {
 	}
 }
 
+func TestDirectivePreservesClosingBraceInsideQuotedReason(t *testing.T) {
+	t.Parallel()
+	source := `@approval review {
+  role: reviewer
+  reason: "verify } transfer"
+}`
+	_, meta, err := compiler.Preprocess(t.Context(), compiler.NewDirectiveTable(Directive), source, "approval-quoted-brace.nflow")
+	if err != nil {
+		t.Fatalf("preprocess: %v", err)
+	}
+	declarations := DeclarationsFromMeta(meta)
+	if len(declarations) != 1 {
+		t.Fatalf("declarations = %#v, want one declaration", declarations)
+	}
+	if got, want := declarations[0].Reason, "verify } transfer"; got != want {
+		t.Fatalf("reason = %q, want %q", got, want)
+	}
+
+	apostropheSource := `@approval review {
+  role: reviewer
+  reason: don't transfer yet
+}`
+	_, apostropheMeta, err := compiler.Preprocess(t.Context(), compiler.NewDirectiveTable(Directive), apostropheSource, "approval-apostrophe.nflow")
+	if err != nil {
+		t.Fatalf("preprocess unquoted apostrophe reason: %v", err)
+	}
+	apostropheDeclarations := DeclarationsFromMeta(apostropheMeta)
+	if len(apostropheDeclarations) != 1 || apostropheDeclarations[0].Reason != "don't transfer yet" {
+		t.Fatalf("unquoted apostrophe declaration = %#v", apostropheDeclarations)
+	}
+}
+
 func TestTokenCovers(t *testing.T) {
 	for _, test := range []struct {
 		token string

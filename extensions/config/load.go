@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -66,7 +67,9 @@ func handleConfigLoad(_ context.Context, req compiler.DirectiveReq) (compiler.Di
 		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@config.load: parse %q: %v", spec.Path, err)
 	}
 
-	flattenConfig(spec.Prefix, raw, metaConfig(req.Out))
+	if err := flattenConfig(spec.Prefix, raw, metaConfig(req.Out)); err != nil {
+		return compiler.DirectiveRes{}, compiler.SourceError(pos, "@config.load: %v", err)
+	}
 	return compiler.DirectiveRes{Next: req.I + 1}, nil
 }
 
@@ -207,6 +210,9 @@ func decodeConfigFile(data []byte, ext string) (map[string]any, error) {
 		if err := json.Unmarshal(data, &out); err != nil {
 			return nil, err
 		}
+		if out == nil {
+			return nil, errors.New("configuration document must be an object")
+		}
 		return out, nil
 	case ".toml":
 		return parseSimpleTOML(data)
@@ -215,7 +221,14 @@ func decodeConfigFile(data []byte, ext string) (map[string]any, error) {
 		if loader == nil {
 			return nil, errors.New("@config.load: YAML requires @require config_yaml")
 		}
-		return (*loader)(data)
+		out, err := (*loader)(data)
+		if err != nil {
+			return nil, err
+		}
+		if out == nil {
+			return nil, errors.New("configuration document must be an object")
+		}
+		return out, nil
 	default:
 		return nil, fmt.Errorf("unsupported config extension: %s", ext)
 	}
@@ -223,27 +236,75 @@ func decodeConfigFile(data []byte, ext string) (map[string]any, error) {
 
 // flattenConfig writes nested maps into out using dot-joined keys.
 // Arrays are JSON-encoded into a single string. Scalars are fmt.Sprint-ed.
-func flattenConfig(prefix string, value any, out map[string]string) {
+// Collisions are rejected before any values are merged into out.
+func flattenConfig(prefix string, value any, out map[string]string) error {
+	flattened := make(map[string]string)
+	if err := flattenConfigInto(prefix, value, flattened); err != nil {
+		return err
+	}
+	for key := range flattened {
+		if _, exists := out[key]; exists {
+			return fmt.Errorf("flattened config key collision %q", key)
+		}
+	}
+	maps.Copy(out, flattened)
+	return nil
+}
+
+func flattenConfigInto(prefix string, value any, out map[string]string) error {
 	switch v := value.(type) {
 	case map[string]any:
 		for key, sub := range v {
-			flattenConfig(joinPrefix(prefix, key), sub, out)
+			if err := validateConfigKey(key); err != nil {
+				return err
+			}
+			if err := flattenConfigInto(joinPrefix(prefix, key), sub, out); err != nil {
+				return err
+			}
 		}
 	case map[any]any:
 		for key, sub := range v {
-			flattenConfig(joinPrefix(prefix, fmt.Sprint(key)), sub, out)
+			key := fmt.Sprint(key)
+			if err := validateConfigKey(key); err != nil {
+				return err
+			}
+			if err := flattenConfigInto(joinPrefix(prefix, key), sub, out); err != nil {
+				return err
+			}
 		}
 	case []any:
 		if prefix != "" {
 			if encoded, err := json.Marshal(v); err == nil {
-				out[prefix] = string(encoded)
+				if err := setFlattenedConfigValue(prefix, string(encoded), out); err != nil {
+					return err
+				}
 			}
 		}
 	default:
 		if prefix != "" {
-			out[prefix] = fmt.Sprint(v)
+			if err := setFlattenedConfigValue(prefix, fmt.Sprint(v), out); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
+}
+
+func validateConfigKey(key string) error {
+	for part := range strings.SplitSeq(key, ".") {
+		if part == "" {
+			return fmt.Errorf("flattened config key %q contains an empty component", key)
+		}
+	}
+	return nil
+}
+
+func setFlattenedConfigValue(key, value string, out map[string]string) error {
+	if _, exists := out[key]; exists {
+		return fmt.Errorf("flattened config key collision %q", key)
+	}
+	out[key] = value
+	return nil
 }
 
 func joinPrefix(prefix, key string) string {

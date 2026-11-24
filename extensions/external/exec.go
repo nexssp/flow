@@ -13,6 +13,31 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
+// outputCaptureMaxBytes bounds each captured output stream independently.
+// Writers continue accepting bytes after the cap so child processes keep draining.
+const outputCaptureMaxBytes = 1 << 20
+
+// outputCapture stores at most outputCaptureMaxBytes while reporting every byte
+// as consumed, preventing a verbose child from blocking on a full pipe.
+type outputCapture struct {
+	buffer    bytes.Buffer
+	truncated bool
+}
+
+func (c *outputCapture) Write(p []byte) (int, error) {
+	remaining := outputCaptureMaxBytes - c.buffer.Len()
+	if remaining > 0 {
+		if remaining > len(p) {
+			remaining = len(p)
+		}
+		_, _ = c.buffer.Write(p[:remaining])
+	}
+	if remaining < len(p) {
+		c.truncated = true
+	}
+	return len(p), nil
+}
+
 // Exec runs cmd through the platform shell, or executes cmd directly with args
 // when an argument array is supplied.
 var Exec = action.New("external.exec", func(ctx context.Context, in map[string]any) (ExecResult, error) {
@@ -36,20 +61,23 @@ var Exec = action.New("external.exec", func(ctx context.Context, in map[string]a
 		cmd.Stdin = bytes.NewReader(inputBytes(input))
 	}
 
-	var stdout, stderr bytes.Buffer
+	var stdout, stderr outputCapture
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	runErr := cmd.Run()
 	result := ExecResult{
-		Stdout:   stdout.String(),
-		Stderr:   stderr.String(),
+		Stdout:   stdout.buffer.String(),
+		Stderr:   stderr.buffer.String(),
 		ExitCode: 0,
 		OK:       runErr == nil,
-		Output:   decodeJSON(stdout.String()),
+		Output:   decodeJSON(stdout.buffer.String()),
 	}
 
 	if runErr == nil {
+		if stdout.truncated || stderr.truncated {
+			return result, outputTruncatedError("exec", stdout.truncated, stderr.truncated)
+		}
 		return result, nil
 	}
 
@@ -65,13 +93,28 @@ var Exec = action.New("external.exec", func(ctx context.Context, in map[string]a
 		return result, xerr.Internal("exec " + command + ": " + runErr.Error())
 	}
 
+	truncation := ""
+	if stdout.truncated || stderr.truncated {
+		truncation = "; " + outputTruncatedError("exec", stdout.truncated, stderr.truncated).Error()
+	}
 	return result, xerr.Internal(fmt.Sprintf(
-		"exec %q failed with exit code %d: %s",
-		command, result.ExitCode, strings.TrimSpace(result.Stderr)))
+		"exec %q failed with exit code %d: %s%s",
+		command, result.ExitCode, strings.TrimSpace(result.Stderr), truncation))
 }).
 	Description("Execute external shell/CLI command").
 	Tag("external", "exec", "os").
 	Build()
+
+func outputTruncatedError(kind string, stdout, stderr bool) error {
+	streams := make([]string, 0, 2)
+	if stdout {
+		streams = append(streams, "stdout")
+	}
+	if stderr {
+		streams = append(streams, "stderr")
+	}
+	return xerr.Internal(fmt.Sprintf("%s output truncated: %s capped at %d bytes each", kind, strings.Join(streams, " and "), outputCaptureMaxBytes))
+}
 
 func inputBytes(input any) []byte {
 	switch v := input.(type) {

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -163,6 +164,56 @@ func TestExec_NonJSONStdout(t *testing.T) {
 	result, err := runExec(t, map[string]any{"cmd": "echo plain"})
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, result.Output, nil)
+}
+
+func TestExec_OutputCaptureLimit(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	for _, stream := range []string{"stdout", "stderr"} {
+		t.Run(stream, func(t *testing.T) {
+			result, execErr := runExec(t, map[string]any{
+				"cmd": executable,
+				"args": []string{
+					"-test.run=^TestExecOutputLimitHelper$", "--", "external-exec-output-limit-helper", stream,
+				},
+			})
+			if execErr == nil {
+				t.Fatal("expected truncation error")
+			}
+			if !strings.Contains(execErr.Error(), stream) || !strings.Contains(execErr.Error(), "output truncated") {
+				t.Fatalf("error = %v, want stream-specific truncation message", execErr)
+			}
+			if stream == "stdout" {
+				if len(result.Stdout) != outputCaptureMaxBytes || result.Stderr != "" {
+					t.Fatalf("captured stdout/stderr lengths = %d/%d, want %d/0", len(result.Stdout), len(result.Stderr), outputCaptureMaxBytes)
+				}
+			} else if len(result.Stderr) != outputCaptureMaxBytes || result.Stdout != "" {
+				t.Fatalf("captured stdout/stderr lengths = %d/%d, want 0/%d", len(result.Stdout), len(result.Stderr), outputCaptureMaxBytes)
+			}
+		})
+	}
+}
+
+func TestExecOutputLimitHelper(t *testing.T) {
+	marker := slices.Index(os.Args, "external-exec-output-limit-helper")
+	if marker < 0 {
+		return
+	}
+	if marker+1 >= len(os.Args) {
+		t.Fatal("missing output stream")
+	}
+	payload := strings.Repeat("x", outputCaptureMaxBytes+1)
+	switch os.Args[marker+1] {
+	case "stdout":
+		_, _ = os.Stdout.WriteString(payload)
+	case "stderr":
+		_, _ = os.Stderr.WriteString(payload)
+	default:
+		t.Fatalf("unexpected output stream %q", os.Args[marker+1])
+	}
+	os.Exit(0)
 }
 
 func TestExec_InputViaStdin(t *testing.T) {

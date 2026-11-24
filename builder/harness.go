@@ -1,7 +1,6 @@
 package builder
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -800,8 +799,14 @@ func unversionedPackageProvider(packagePath, driverRoot, goworkPath, sourceDir s
 			add(modulePath)
 		}
 	}
-	for modulePath := range parseGoWork(goworkPath).replaces {
+	gowork := parseGoWork(goworkPath)
+	for modulePath := range gowork.useModules {
 		add(modulePath)
+	}
+	for _, replacement := range gowork.replacementDirectives {
+		if replacement.oldVersion == "" {
+			add(replacement.oldPath)
+		}
 	}
 	if sourceDir != "" {
 		if abs, err := filepath.Abs(sourceDir); err == nil {
@@ -1010,6 +1015,7 @@ func goCommandTimeout() time.Duration {
 }
 
 type tailBuffer struct {
+	mu      sync.Mutex
 	buf     []byte
 	max     int
 	dropped bool
@@ -1020,6 +1026,9 @@ func newTailBuffer(maxBytes int) *tailBuffer {
 }
 
 func (b *tailBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	n := len(p)
 	if len(p) >= b.max {
 		if len(p) > b.max || len(b.buf) > 0 {
@@ -1039,6 +1048,9 @@ func (b *tailBuffer) Write(p []byte) (int, error) {
 }
 
 func (b *tailBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	if !b.dropped {
 		return string(b.buf)
 	}
@@ -1546,7 +1558,7 @@ func harnessGoMod(driverRoot, driverVersion, goworkPath string, reqs []require.R
 	b.WriteString(goVersion + "\n\n")
 
 	writeRequires(&b, reqs, driverVersion, driverRoot)
-	replacedModules := writeReplaces(&b, driverRoot, reqs)
+	replacedModules := writeReplaces(&b, driverRoot, reqs, workspaceReplacementSelectors(goworkPath))
 	writeWorkspaceReplaces(&b, goworkPath, replacedModules)
 	if len(sourceDirs) > 0 {
 		writeCurrentModuleReplace(&b, sourceDirs[0], driverRoot, goworkPath, reqs)
@@ -1561,11 +1573,11 @@ func writeRequires(b *strings.Builder, reqs []require.Requirement, driverVersion
 		flowVersion = "v0.0.0"
 	}
 
-	versions := map[string]string{"github.com/nexssp/flow": flowVersion}
+	versions := map[string]string{flowRootModulePath: flowVersion}
 	if driverRoot != "" {
 		if dependencies, err := readModuleRequirements(filepath.Join(driverRoot, "go.mod")); err == nil {
 			for _, dependency := range dependencies {
-				if dependency.path != "github.com/nexssp/flow" {
+				if dependency.path != flowRootModulePath {
 					versions[dependency.path] = dependency.version
 				}
 			}
@@ -1600,7 +1612,7 @@ func addRequiredModuleVersion(versions map[string]string, r *require.Requirement
 		return
 	}
 	mod := modulePathForRequirement(*r)
-	if mod == "" || mod == "github.com/nexssp/flow" || mod == "nflow-harness" {
+	if mod == "" || mod == flowRootModulePath || mod == "nflow-harness" {
 		return
 	}
 	firstSegment, _, _ := strings.Cut(mod, "/")
@@ -1619,18 +1631,26 @@ func addRequiredModuleVersion(versions map[string]string, r *require.Requirement
 	}
 }
 
-func writeReplaces(b *strings.Builder, driverRoot string, reqs []require.Requirement) map[string]bool {
-	replacedModules := make(map[string]bool)
+type replacementSelector struct {
+	path    string
+	version string
+}
+
+func writeReplaces(b *strings.Builder, driverRoot string, reqs []require.Requirement, workspaceReplaces map[replacementSelector]bool) map[replacementSelector]bool {
+	replacedModules := make(map[replacementSelector]bool)
 
 	if driverRoot != "" {
-		fmt.Fprintf(b, "replace github.com/nexssp/flow => %s\n", driverRoot)
-		replacedModules["github.com/nexssp/flow"] = true
+		fmt.Fprintf(b, "replace %s => %s\n", flowRootModulePath, driverRoot)
+		replacedModules[replacementSelector{path: flowRootModulePath}] = true
 
 		if driverMod, err := os.ReadFile(filepath.Join(driverRoot, "go.mod")); err == nil {
 			for _, directive := range goModReplaceDirectives(string(driverMod)) {
-				parts := strings.Fields(directive)
-				if len(parts) >= 2 {
-					replacedModules[parts[1]] = true
+				selector, ok := replacementSelectorFromDirective(directive)
+				if ok && workspaceReplaces[selector] {
+					continue
+				}
+				if ok {
+					replacedModules[selector] = true
 				}
 				b.WriteString(absolutizeReplace(driverRoot, directive))
 				b.WriteString("\n")
@@ -1644,32 +1664,72 @@ func writeReplaces(b *strings.Builder, driverRoot string, reqs []require.Require
 			continue
 		}
 		mod := modulePathForRequirement(*r)
-		if !replacedModules[mod] {
-			replacedModules[mod] = true
+		selector := replacementSelector{path: mod}
+		if !workspaceReplaces[selector] && !replacedModules[selector] {
+			replacedModules[selector] = true
 			fmt.Fprintf(b, "replace %s => %s\n", mod, r.ModuleRoot)
 		}
 	}
 	return replacedModules
 }
 
-func writeWorkspaceReplaces(b *strings.Builder, goworkPath string, replacedModules map[string]bool) {
-	replacesFromWork := parseGoWorkReplaces(goworkPath)
+func workspaceReplacementSelectors(goworkPath string) map[replacementSelector]bool {
+	selectors := make(map[replacementSelector]bool)
+	for _, replacement := range parseGoWork(goworkPath).replacementDirectives {
+		selectors[replacementSelector{path: replacement.oldPath, version: replacement.oldVersion}] = true
+	}
+	return selectors
+}
+
+func writeWorkspaceReplaces(b *strings.Builder, goworkPath string, replacedModules map[replacementSelector]bool) {
+	replacesFromWork := parseGoWork(goworkPath).replacementDirectives
 	if len(replacesFromWork) == 0 {
 		return
 	}
 
-	workKeys := make([]string, 0, len(replacesFromWork))
-	for k := range replacesFromWork {
-		workKeys = append(workKeys, k)
-	}
-	sort.Strings(workKeys)
+	sort.Slice(replacesFromWork, func(i, j int) bool {
+		left, right := replacesFromWork[i], replacesFromWork[j]
+		if left.oldPath != right.oldPath {
+			return left.oldPath < right.oldPath
+		}
+		return left.oldVersion < right.oldVersion
+	})
 
-	for _, mod := range workKeys {
-		if replacedModules[mod] {
+	for _, replacement := range replacesFromWork {
+		selector := replacementSelector{path: replacement.oldPath, version: replacement.oldVersion}
+		if replacedModules[selector] {
 			continue
 		}
-		fmt.Fprintf(b, "replace %s => %s\n", mod, replacesFromWork[mod])
+		fmt.Fprintf(b, "replace %s", replacement.oldPath)
+		if replacement.oldVersion != "" {
+			fmt.Fprintf(b, " %s", replacement.oldVersion)
+		}
+		fmt.Fprintf(b, " => %s", formatGoModPath(replacement.newPath))
+		if replacement.newVersion != "" {
+			fmt.Fprintf(b, " %s", replacement.newVersion)
+		}
+		b.WriteByte('\n')
+		replacedModules[selector] = true
 	}
+}
+
+func formatGoModPath(path string) string {
+	if strings.ContainsAny(path, " \t\r\n\"") {
+		return strconv.Quote(path)
+	}
+	return path
+}
+
+func replacementSelectorFromDirective(directive string) (replacementSelector, bool) {
+	parts := strings.Fields(directive)
+	if len(parts) < 4 || parts[0] != "replace" {
+		return replacementSelector{}, false
+	}
+	selector := replacementSelector{path: parts[1]}
+	if parts[2] != "=>" {
+		selector.version = parts[2]
+	}
+	return selector, selector.path != ""
 }
 
 func writeCurrentModuleReplace(b *strings.Builder, sourceDir, driverRoot, goworkPath string, reqs []require.Requirement) {
@@ -1720,8 +1780,16 @@ func moduleReplacementExists(modulePath, driverRoot, goworkPath string, reqs []r
 			return true
 		}
 	}
-	_, exists := parseGoWork(goworkPath).replaces[modulePath]
-	return exists
+	gowork := parseGoWork(goworkPath)
+	if gowork.useModules[modulePath] {
+		return true
+	}
+	for _, replacement := range gowork.replacementDirectives {
+		if replacement.oldPath == modulePath && replacement.oldVersion == "" {
+			return true
+		}
+	}
+	return false
 }
 
 func driverModuleReplaces(driverRoot, modulePath string) bool {
@@ -1730,8 +1798,8 @@ func driverModuleReplaces(driverRoot, modulePath string) bool {
 		return false
 	}
 	for _, directive := range goModReplaceDirectives(string(data)) {
-		parts := strings.Fields(directive)
-		if len(parts) >= 2 && parts[1] == modulePath {
+		selector, ok := replacementSelectorFromDirective(directive)
+		if ok && selector.path == modulePath && selector.version == "" {
 			return true
 		}
 	}
@@ -1739,106 +1807,64 @@ func driverModuleReplaces(driverRoot, modulePath string) bool {
 }
 
 type goWorkInfo struct {
-	useDirs          []string
-	replaces         map[string]string
-	localReplaceDirs []string
+	useDirs               []string
+	useModules            map[string]bool
+	localReplaceDirs      []string
+	replacementDirectives []goWorkReplace
+}
+
+type goWorkReplace struct {
+	oldPath    string
+	oldVersion string
+	newPath    string
+	newVersion string
 }
 
 func parseGoWork(goworkPath string) goWorkInfo {
-	info := goWorkInfo{replaces: make(map[string]string)}
+	info := goWorkInfo{useModules: make(map[string]bool)}
 	if goworkPath == "" {
 		return info
 	}
 
-	file, err := os.Open(goworkPath)
+	data, err := os.ReadFile(goworkPath)
 	if err != nil {
 		return info
 	}
-	defer func() { _ = file.Close() }()
-
 	baseDir := filepath.Dir(goworkPath)
-	scanner := bufio.NewScanner(file)
-
-	inUse := false
-	inReplace := false
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if idx := strings.Index(line, "//"); idx >= 0 {
-			line = line[:idx]
+	work, err := modfile.ParseWork(goworkPath, data, nil)
+	if err != nil {
+		return info
+	}
+	for _, use := range work.Use {
+		if use.Path != "" {
+			info.useDirs = append(info.useDirs, absolutizeDir(baseDir, use.Path))
 		}
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		if line == ")" {
-			inUse = false
-			inReplace = false
+	}
+	for _, replacement := range work.Replace {
+		oldPath := replacement.Old.Path
+		newPath := replacement.New.Path
+		if oldPath == "" || newPath == "" {
 			continue
 		}
-
-		switch {
-		case line == "use (" || strings.HasPrefix(line, "use ("):
-			inUse = true
-			continue
-		case line == "replace (" || strings.HasPrefix(line, "replace ("):
-			inReplace = true
-			continue
-		case strings.HasPrefix(line, "use "):
-			rawDir := strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "use")), `"'`)
-			if rawDir != "" {
-				info.useDirs = append(info.useDirs, absolutizeDir(baseDir, rawDir))
-			}
-			continue
-		case strings.HasPrefix(line, "replace "):
-			parseReplaceLine(baseDir, strings.TrimPrefix(line, "replace"), &info)
-			continue
+		resolvedNewPath := newPath
+		if modfile.IsDirectoryPath(newPath) {
+			resolvedNewPath = absolutizeDir(baseDir, newPath)
+			info.localReplaceDirs = append(info.localReplaceDirs, resolvedNewPath)
 		}
-
-		if inUse {
-			rawDir := strings.Trim(line, `"'`)
-			if rawDir != "" {
-				info.useDirs = append(info.useDirs, absolutizeDir(baseDir, rawDir))
-			}
-		} else if inReplace {
-			parseReplaceLine(baseDir, line, &info)
-		}
+		info.replacementDirectives = append(info.replacementDirectives, goWorkReplace{
+			oldPath: oldPath, oldVersion: replacement.Old.Version,
+			newPath: resolvedNewPath, newVersion: replacement.New.Version,
+		})
 	}
 
 	for _, dir := range info.useDirs {
 		goModPath := filepath.Join(dir, "go.mod")
 		if modName, err := require.ReadModuleLine(goModPath); err == nil && modName != "" {
-			info.replaces[modName] = dir
+			info.useModules[modName] = true
 		}
 	}
 
 	return info
-}
-
-func parseReplaceLine(baseDir, line string, info *goWorkInfo) {
-	parts := strings.Fields(line)
-	var oldMod, newTarget string
-	switch {
-	case len(parts) == 3 && parts[1] == "=>":
-		oldMod = strings.Trim(parts[0], `"'`)
-		newTarget = strings.Trim(parts[2], `"'`)
-	case len(parts) == 4 && parts[2] == "=>":
-		oldMod = strings.Trim(parts[0], `"'`)
-		newTarget = strings.Trim(parts[3], `"'`)
-	case len(parts) == 5 && parts[2] == "=>":
-		oldMod = strings.Trim(parts[0], `"'`)
-		newTarget = strings.Trim(parts[4], `"'`)
-	}
-
-	if oldMod != "" && newTarget != "" {
-		target := absolutizeDir(baseDir, newTarget)
-		info.replaces[oldMod] = target
-		// Preserve replacement resolution, but only fingerprint local sources.
-		if modfile.IsDirectoryPath(newTarget) {
-			info.localReplaceDirs = append(info.localReplaceDirs, target)
-		}
-	}
 }
 
 func absolutizeDir(base, p string) string {
@@ -1850,14 +1876,6 @@ func absolutizeDir(base, p string) string {
 		return filepath.Clean(p)
 	}
 	return abs
-}
-
-func parseGoWorkReplaces(goworkPath string) map[string]string {
-	if goworkPath == "" {
-		return nil
-	}
-	gw := parseGoWork(goworkPath)
-	return gw.replaces
 }
 
 func findGoWork(start string) string {

@@ -18,9 +18,10 @@ type Reporter struct {
 	out io.Writer
 	tty bool
 
-	mu     sync.Mutex
-	active *activeStep
-	closed bool
+	mu      sync.Mutex
+	writeMu sync.Mutex
+	active  *activeStep
+	closed  bool
 }
 
 type activeStep struct {
@@ -28,6 +29,7 @@ type activeStep struct {
 	start   time.Time
 	stop    chan struct{}
 	done    chan struct{}
+	frame   rune // guarded by Reporter.writeMu
 }
 
 // NewReporter returns a Reporter writing to out. A nil writer falls
@@ -36,7 +38,14 @@ func NewReporter(out io.Writer) *Reporter {
 	if out == nil {
 		out = os.Stderr
 	}
-	return &Reporter{out: out, tty: terminal.IsTerminal(out)}
+	return newReporter(out, terminal.IsTerminal(out))
+}
+
+func newReporter(out io.Writer, tty bool) *Reporter {
+	if out == nil {
+		out = os.Stderr
+	}
+	return &Reporter{out: out, tty: tty}
 }
 
 // Report implements xctx.ProgressReporter.
@@ -79,11 +88,19 @@ func (r *Reporter) Shutdown() {
 }
 
 func (r *Reporter) printStepLocked(message string) {
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
 	if !r.tty {
 		fmt.Fprintf(r.out, "✓ %s\n", message)
 		return
 	}
+	if r.active != nil {
+		fmt.Fprint(r.out, "\r\x1b[K")
+	}
 	fmt.Fprintf(r.out, "\x1b[32m✓\x1b[0m %s\n", message)
+	if r.active != nil {
+		r.renderSpinnerLocked(r.active, r.active.frame)
+	}
 }
 
 func (r *Reporter) handleWrapLocked(p xctx.Progress) {
@@ -105,7 +122,9 @@ func (r *Reporter) handleWrapLocked(p xctx.Progress) {
 
 func (r *Reporter) startSpinnerLocked(message string) {
 	if !r.tty {
+		r.writeMu.Lock()
 		fmt.Fprintf(r.out, "▶ %s\n", message)
+		r.writeMu.Unlock()
 		return
 	}
 	s := &activeStep{
@@ -113,6 +132,7 @@ func (r *Reporter) startSpinnerLocked(message string) {
 		start:   time.Now(),
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
+		frame:   '⠋',
 	}
 	r.active = s
 	go r.spin(s)
@@ -136,7 +156,9 @@ func (r *Reporter) finishSpinnerLocked(message string, failed bool) {
 		if failed {
 			marker = "✗"
 		}
+		r.writeMu.Lock()
 		fmt.Fprintf(r.out, "%s %s  (%s)\n", marker, message, elapsed)
+		r.writeMu.Unlock()
 		return
 	}
 
@@ -144,10 +166,14 @@ func (r *Reporter) finishSpinnerLocked(message string, failed bool) {
 	if failed {
 		marker = "\x1b[31m✗\x1b[0m"
 	}
+	r.writeMu.Lock()
 	fmt.Fprintf(r.out, "\r\x1b[K%s %s  \x1b[2m(%s)\x1b[0m\n", marker, message, elapsed)
+	r.writeMu.Unlock()
 }
 
 func (r *Reporter) printStepLockedWithStatus(message string, failed bool) {
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
 	if !r.tty {
 		marker := "✓"
 		if failed {
@@ -180,21 +206,30 @@ func (r *Reporter) spin(s *activeStep) {
 	defer ticker.Stop()
 
 	i := 0
-	render := func() {
-		elapsed := time.Since(s.start).Round(time.Millisecond)
-		fmt.Fprintf(r.out, "\r\x1b[K%s  %c  \x1b[2m%s\x1b[0m",
-			s.message, frames[i%len(frames)], elapsed)
-		i++
-	}
-	render()
+	r.writeMu.Lock()
+	r.renderSpinnerLocked(s, frames[i%len(frames)])
+	r.writeMu.Unlock()
+	i++
 
 	for {
 		select {
 		case <-s.stop:
+			r.writeMu.Lock()
 			fmt.Fprint(r.out, "\r\x1b[K")
+			r.writeMu.Unlock()
 			return
 		case <-ticker.C:
-			render()
+			r.writeMu.Lock()
+			r.renderSpinnerLocked(s, frames[i%len(frames)])
+			r.writeMu.Unlock()
+			i++
 		}
 	}
+}
+
+// renderSpinnerLocked redraws one spinner frame while writeMu is held.
+func (r *Reporter) renderSpinnerLocked(s *activeStep, frame rune) {
+	elapsed := time.Since(s.start).Round(time.Millisecond)
+	fmt.Fprintf(r.out, "\r\x1b[K%s  %c  \x1b[2m%s\x1b[0m", s.message, frame, elapsed)
+	s.frame = frame
 }

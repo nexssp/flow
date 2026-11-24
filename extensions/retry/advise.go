@@ -19,11 +19,25 @@ func advise(cfg Config, atom *compiler.Atom, builder *action.Builder[any, any]) 
 	if atom == nil || builder == nil {
 		return nil
 	}
-	remaining := atom.Modifiers[:0]
-	for _, raw := range atom.Modifiers {
+	remaining := make([]string, 0, len(atom.Modifiers))
+	var remainingValues []compiler.ModifierValue
+	if atom.ModifierValues != nil {
+		remainingValues = make([]compiler.ModifierValue, 0, len(atom.ModifierValues))
+	}
+	var remainingSources []compiler.ModifierSource
+	if atom.ModifierSources != nil {
+		remainingSources = make([]compiler.ModifierSource, 0, len(atom.ModifierSources))
+	}
+	for i, raw := range atom.Modifiers {
 		name, value := splitModifier(raw)
 		if name != "retry" {
 			remaining = append(remaining, raw)
+			if i < len(atom.ModifierValues) && remainingValues != nil {
+				remainingValues = append(remainingValues, atom.ModifierValues[i])
+			}
+			if i < len(atom.ModifierSources) && remainingSources != nil {
+				remainingSources = append(remainingSources, atom.ModifierSources[i])
+			}
 			continue
 		}
 
@@ -50,6 +64,8 @@ func advise(cfg Config, atom *compiler.Atom, builder *action.Builder[any, any]) 
 		}
 	}
 	atom.Modifiers = remaining
+	atom.ModifierValues = remainingValues
+	atom.ModifierSources = remainingSources
 	return nil
 }
 

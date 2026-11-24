@@ -87,11 +87,24 @@ func runApprovalAware(
 			return nil, nil, xerr.Unavailable("load pending approval suspension", err)
 		}
 	}
-	if len(declarations) > 0 || found {
+	if found {
 		var err error
 		fingerprint, err = fingerprintApprovalRun(source, name, payload)
 		if err != nil {
 			return nil, nil, err
+		}
+	}
+	if !found {
+		token := xctx.ApprovalTokenFrom(ctx)
+		for _, declaration := range declarations {
+			if !flowapproval.TokenCovers(token, declaration.Name) {
+				var err error
+				fingerprint, err = fingerprintApprovalRun(source, name, payload)
+				if err != nil {
+					return nil, nil, err
+				}
+				break
+			}
 		}
 	}
 	if found {

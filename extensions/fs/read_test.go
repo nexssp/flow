@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"iter"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,6 +70,47 @@ func TestRead_WholeFile(t *testing.T) {
 	got, err := readFileContent(path, nil, scratch)
 	ktest.RequireNoError(t, err)
 	ktest.RequireEqual(t, string(got), "line1\nline2\nline3\n")
+}
+
+func TestRead_YieldsOwnedContentAcrossItemsAndInvocations(t *testing.T) {
+	dir := t.TempDir()
+	paths := []string{
+		filepath.Join(dir, "one.txt"),
+		filepath.Join(dir, "two.txt"),
+		filepath.Join(dir, "three.txt"),
+	}
+	wants := []string{"first file content", "second file content", "later invocation content"}
+	for i, path := range paths {
+		ktest.RequireNoError(t, os.WriteFile(path, []byte(wants[i]), 0o600))
+	}
+
+	first := collectRead(t, paths[:2]...)
+	ktest.RequireEqual(t, len(first), 2)
+	ktest.RequireEqual(t, string(first[0].Content), wants[0])
+	ktest.RequireEqual(t, string(first[1].Content), wants[1])
+
+	later := collectRead(t, paths[2])
+	ktest.RequireEqual(t, len(later), 1)
+	ktest.RequireEqual(t, string(later[0].Content), wants[2])
+	ktest.RequireEqual(t, string(first[0].Content), wants[0])
+	ktest.RequireEqual(t, string(first[1].Content), wants[1])
+}
+
+func collectRead(tb testing.TB, paths ...string) []FileContent {
+	tb.Helper()
+	upstream := iter.Seq2[FileMeta, error](func(yield func(FileMeta, error) bool) {
+		for _, path := range paths {
+			if !yield(FileMeta{Path: path}, nil) {
+				return
+			}
+		}
+	})
+	var got []FileContent
+	for item, err := range Read(ReadConfig{})(upstream) {
+		ktest.RequireNoError(tb, err)
+		got = append(got, item)
+	}
+	return got
 }
 
 func TestRead_LineRanges(t *testing.T) {

@@ -2,6 +2,7 @@ package builder
 
 import (
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -35,5 +36,45 @@ func TestTailBufferMarksOnlyDiscardedBytesAsTruncated(t *testing.T) {
 				t.Fatalf("dropped = %t, want %t", buffer.dropped, strings.Contains(tc.want, marker))
 			}
 		})
+	}
+}
+
+func TestTailBufferConcurrentWritersAndReaders(t *testing.T) {
+	buffer := newTailBuffer(256)
+	var writers sync.WaitGroup
+	for _, value := range []byte{'a', 'b'} {
+		writers.Add(1)
+		go func(value byte) {
+			defer writers.Done()
+			chunk := strings.Repeat(string(value), 17)
+			for range 1000 {
+				if n, err := buffer.Write([]byte(chunk)); err != nil || n != len(chunk) {
+					t.Errorf("Write() = (%d, %v), want (%d, nil)", n, err, len(chunk))
+					return
+				}
+			}
+		}(value)
+	}
+
+	var readers sync.WaitGroup
+	for range 2 {
+		readers.Go(func() {
+			for range 1000 {
+				_ = buffer.String()
+			}
+		})
+	}
+	writers.Wait()
+	readers.Wait()
+
+	got := buffer.String()
+	const marker = "… (earlier output truncated)\n"
+	if !strings.HasPrefix(got, marker) || len(got)-len(marker) != buffer.max {
+		t.Fatalf("final tail has unexpected truncation or length: %q", got)
+	}
+	for _, value := range got[len(marker):] {
+		if value != 'a' && value != 'b' {
+			t.Fatalf("final tail contains unexpected byte %q", value)
+		}
 	}
 }

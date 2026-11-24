@@ -12,6 +12,11 @@ import (
 	"github.com/nexssp/kernel/xerr"
 )
 
+const (
+	responseBodyMaxBytes      = 16 << 20
+	responseErrorBodyMaxBytes = 1 << 10
+)
+
 // httpBackend is the default HTTP-backed decision source.
 type httpBackend struct {
 	configuration HTTPConfig
@@ -73,9 +78,15 @@ func (b *httpBackend) Decide(ctx context.Context, state, questions map[string]an
 	}
 	defer func() { _ = response.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(response.Body, 16<<20))
+	body, err := io.ReadAll(io.LimitReader(response.Body, responseBodyMaxBytes+1))
 	if err != nil {
 		return Result{}, xerr.Unavailable("decide/http: read response", err)
+	}
+	if len(body) > responseBodyMaxBytes {
+		if response.StatusCode < 200 || response.StatusCode >= 300 {
+			return Result{}, errorFromStatus(response.StatusCode, b.configuration.Endpoint, body[:responseErrorBodyMaxBytes])
+		}
+		return Result{}, xerr.Internal(fmt.Sprintf("decide/http: response body exceeds %d-byte limit", responseBodyMaxBytes))
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return Result{}, errorFromStatus(response.StatusCode, b.configuration.Endpoint, body)

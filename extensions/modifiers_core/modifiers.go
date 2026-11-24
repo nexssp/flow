@@ -1,12 +1,43 @@
 package modifiers_core
 
 import (
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/nexssp/kernel/action"
 
 	compiler "github.com/nexssp/flow/compiler"
 )
+
+func rateLimitModifier() compiler.Modifier {
+	modifier := compiler.Int("rate_limit", func(b *action.Builder[any, any], n int) *action.Builder[any, any] {
+		return b.RateLimit(float64(n), n)
+	})
+	apply := modifier.Apply
+	modifier.Apply = func(b *action.Builder[any, any], raw string) error {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			return err
+		}
+		if n <= 0 {
+			return fmt.Errorf("must be positive, got %d", n)
+		}
+		return apply(b, raw)
+	}
+	applyNative := modifier.ApplyNative
+	modifier.ApplyNative = func(b *action.Builder[any, any], value any) error {
+		n, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("expected int typed value, got %T", value)
+		}
+		if n <= 0 {
+			return fmt.Errorf("must be positive, got %d", n)
+		}
+		return applyNative(b, value)
+	}
+	return modifier
+}
 
 // Modifiers returns the Kernel-owned policy modifiers. Every entry is
 // tagged OwnerKernel so NewModifierTable permits registration only from
@@ -49,11 +80,7 @@ func Modifiers() []compiler.Modifier {
 			compiler.Flag("idempotent", (*action.Builder[any, any]).Idempotent),
 		)),
 
-		kernel(compiler.WithInheritable(compiler.WithUnique(
-			compiler.Int("rate_limit", func(b *action.Builder[any, any], n int) *action.Builder[any, any] {
-				return b.RateLimit(float64(n), n)
-			}),
-		))),
+		kernel(compiler.WithInheritable(compiler.WithUnique(rateLimitModifier()))),
 	}
 }
 

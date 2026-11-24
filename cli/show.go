@@ -15,12 +15,16 @@ import (
 
 func runShow(ctx context.Context, inv *invocation, args []string) int {
 	flowPath := ""
-	for i := range args {
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--" {
+			break
+		}
 		switch {
-		case args[i] == "--flow" && i+1 < len(args):
+		case args[i] == flowPathFlag && i+1 < len(args):
 			flowPath = args[i+1]
-		case strings.HasPrefix(args[i], "--flow="):
-			flowPath = strings.TrimPrefix(args[i], "--flow=")
+			i++
+		case strings.HasPrefix(args[i], flowPathFlagPrefix):
+			flowPath = strings.TrimPrefix(args[i], flowPathFlagPrefix)
 		}
 	}
 	return withHarness(ctx, inv, "show", flowPath, args, runShowInProcess)
@@ -32,13 +36,13 @@ func runShowInProcess(ctx context.Context, inv *invocation, args []string) int {
 	flowPath := fs.String("flow", "", "load @require bundles from this .nflow first")
 	noColor := fs.Bool("no-color", false, "disable ANSI colors")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(optionsBeforePositionals(args)); err != nil {
 		return 2
 	}
-	target := strings.TrimSpace(fs.Arg(0))
-	if target == "" {
+	if len(fs.Args()) != 1 || strings.TrimSpace(fs.Arg(0)) == "" {
 		return fatalf("usage: nflow show <name>")
 	}
+	target := strings.TrimSpace(fs.Arg(0))
 
 	loaded, err := sourceRequiresFromOptional(ctx, inv, *flowPath)
 	if err != nil {

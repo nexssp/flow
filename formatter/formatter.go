@@ -111,10 +111,11 @@ func (f *Formatter) Format(ctx context.Context, source, file string) (string, er
 func (f *Formatter) opaqueDirectiveLines(lines []string) map[int]bool {
 	protected := make(map[int]bool)
 	depth := 0
+	inBlockComment := false
 	for index, line := range lines {
 		if depth > 0 {
 			protected[index] = true
-			depth += braceDelta(line)
+			depth += braceDeltaWithCommentState(line, &inBlockComment)
 			if depth <= 0 {
 				depth = 0
 			}
@@ -122,14 +123,15 @@ func (f *Formatter) opaqueDirectiveLines(lines []string) map[int]bool {
 		}
 		if f.isRawBlockDirective(strings.TrimSpace(line)) {
 			protected[index] = true
-			depth = max(braceDelta(line), 0)
+			depth = max(braceDeltaWithCommentState(line, &inBlockComment), 0)
 		}
 	}
 	return protected
 }
 
 type formatState struct {
-	rawDepth int
+	rawDepth       int
+	inBlockComment bool
 }
 
 func (f *Formatter) formatLines(lines []string, file string, opaqueLines map[int]bool) ([]string, error) {
@@ -151,7 +153,7 @@ func (f *Formatter) formatLine(lines []string, index int, file string, opaqueLin
 	trimmed := strings.TrimSpace(line)
 	indent := leadingWhitespace(line)
 	if state.rawDepth > 0 {
-		state.rawDepth += braceDelta(line)
+		state.rawDepth += braceDeltaWithCommentState(line, &state.inBlockComment)
 		if state.rawDepth <= 0 {
 			state.rawDepth = 0
 		}
@@ -212,7 +214,7 @@ func (f *Formatter) formatDirectiveLine(lines []string, index int, file, trimmed
 		return f.formatRequireDirective(lines, index, file)
 	}
 	if f.isRawBlockDirective(trimmed) {
-		state.rawDepth = max(braceDelta(line), 0)
+		state.rawDepth = max(braceDeltaWithCommentState(line, &state.inBlockComment), 0)
 	}
 	return []string{line}, index + 1, nil
 }
@@ -335,6 +337,7 @@ type validationState struct {
 	pipelineScopeDepth int
 	rawDepth           int
 	rawDirective       string
+	inBlockComment     bool
 }
 
 func (state *validationState) flush(ctx context.Context, operators *compiler.OperatorTable, primaries *compiler.PrimaryExtensionTable, file string) error {
@@ -466,7 +469,7 @@ func (f *Formatter) validateEndLine(ctx context.Context, index int, file string,
 }
 
 func (f *Formatter) validateRawBlockLine(index int, line string, state *validationState) (int, error) {
-	state.rawDepth += braceDelta(line)
+	state.rawDepth += braceDeltaWithCommentState(line, &state.inBlockComment)
 	if state.rawDepth <= 0 {
 		state.rawDepth = 0
 		state.rawDirective = ""
@@ -513,7 +516,18 @@ func (f *Formatter) validateDirective(ctx context.Context, lines []string, index
 	}
 	if f.requireEnabled && directiveName(trimmed) == "require" {
 		_, next, err := requireext.ParseDirectiveOptions(lines, index, file)
-		return next, err
+		if err != nil {
+			return next, err
+		}
+		if openLine, openOffset := requireOptionsBlockPosition(lines, index); openLine >= 0 {
+			_, _, blockNext, blockErr := requireOptionsText(lines, openLine, openOffset)
+			if blockErr != nil {
+				return index + 1, compiler.SourceError(
+					compiler.Position{File: file, Line: index + 1}, "@require options: %v", blockErr)
+			}
+			next = blockNext
+		}
+		return next, nil
 	}
 	assertion, hasAssertion := strings.CutPrefix(trimmed, "@assert:")
 	if hasAssertion {
@@ -522,7 +536,7 @@ func (f *Formatter) validateDirective(ctx context.Context, lines []string, index
 		}
 	}
 	if f.isRawBlockDirective(trimmed) {
-		state.rawDepth = braceDelta(line)
+		state.rawDepth = braceDeltaWithCommentState(line, &state.inBlockComment)
 		if state.rawDepth > 0 {
 			state.rawDirective = directiveName(trimmed)
 		}
@@ -579,11 +593,11 @@ func (f *Formatter) formatRequireDirective(lines []string, index int, file strin
 		return []string{header}, index + 1, nil
 	}
 
-	_, next, err := requireext.ParseDirectiveOptions(lines, index, file)
+	_, _, err = requireext.ParseDirectiveOptions(lines, index, file)
 	if err != nil {
 		return nil, index + 1, err
 	}
-	options, blockComment, err := requireOptionsText(lines, openLine, openOffset, next)
+	options, blockComment, next, err := requireOptionsText(lines, openLine, openOffset)
 	if err != nil {
 		return nil, index + 1, compiler.SourceError(
 			compiler.Position{File: file, Line: index + 1}, "@require options: %v", err)
@@ -668,32 +682,46 @@ func firstUnquotedRequireBrace(text string) int {
 	return -1
 }
 
-func requireOptionsText(lines []string, openLine, openOffset, next int) (optionsText, trailingComment string, parseErr error) {
-	var content strings.Builder
-	for lineIndex := openLine; lineIndex < next; lineIndex++ {
-		line := lines[lineIndex]
-		start := 0
-		if lineIndex == openLine {
-			start = openOffset + 1
-		}
-		if start < 0 || start > len(line) {
-			return "", "", errors.New("invalid options block position")
-		}
-		remaining := line[start:]
-		beforeClose, afterClose, hasClose := strings.Cut(remaining, "}")
-		if hasClose {
-			if content.Len() > 0 {
-				content.WriteByte('\n')
-			}
-			content.WriteString(beforeClose)
-			return content.String(), strings.TrimSpace(afterClose), nil
-		}
-		if content.Len() > 0 {
-			content.WriteByte('\n')
-		}
-		content.WriteString(remaining)
+func requireOptionsBlockPosition(lines []string, index int) (openLine, openOffset int) {
+	if index < 0 || index >= len(lines) {
+		return -1, -1
 	}
-	return "", "", errors.New("unclosed `{`")
+	line := lines[index]
+	prefixEnd := len(leadingWhitespace(line)) + len("@require")
+	if prefixEnd > len(line) {
+		return -1, -1
+	}
+	tailRaw := line[prefixEnd:]
+	tailLeading := len(tailRaw) - len(strings.TrimLeft(tailRaw, " \t"))
+	body, _ := splitRequireComment(strings.TrimSpace(tailRaw))
+	if openInTail := firstUnquotedRequireBrace(body); openInTail >= 0 {
+		return index, prefixEnd + tailLeading + openInTail
+	}
+	if index+1 < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[index+1]), "{") {
+		return index + 1, strings.IndexByte(lines[index+1], '{')
+	}
+	return -1, -1
+}
+
+func requireOptionsText(lines []string, openLine, openOffset int) (optionsText, trailingComment string, next int, parseErr error) {
+	if openLine < 0 || openLine >= len(lines) || openOffset < 0 || openOffset >= len(lines[openLine]) || lines[openLine][openOffset] != '{' {
+		return "", "", 0, errors.New("invalid options block position")
+	}
+	blockLines := make([]string, 0, len(lines)-openLine)
+	blockLines = append(blockLines, lines[openLine][openOffset:])
+	blockLines = append(blockLines, lines[openLine+1:]...)
+	block, err := compiler.ReadBlockWithSpans(blockLines, 0)
+	if err != nil {
+		return "", "", 0, err
+	}
+	source := strings.Join(blockLines, "\n")
+	optionsText = source[block.BodySpan.Start:block.BodySpan.End]
+	trailing := source[block.Span.End:]
+	if lineEnd := strings.IndexAny(trailing, "\r\n"); lineEnd >= 0 {
+		trailing = trailing[:lineEnd]
+	}
+	trailingComment = strings.TrimSpace(trailing)
+	return optionsText, trailingComment, openLine + block.Next, nil
 }
 
 func canonicalRequireOptionEntries(options string) []string {
@@ -1091,11 +1119,27 @@ func (f *Formatter) isRawBlockDirective(line string) bool {
 }
 
 func braceDelta(line string) int {
+	inBlockComment := false
+	return braceDeltaWithCommentState(line, &inBlockComment)
+}
+
+// braceDeltaWithCommentState counts braces outside quoted strings and comments.
+// The comment state is retained across lines while scanning opaque raw blocks.
+//
+//nolint:gocyclo // The scanner must keep all delimiter and comment states synchronized in one pass.
+func braceDeltaWithCommentState(line string, inBlockComment *bool) int {
 	delta := 0
 	parenDepth := 0
 	var quote byte
 	for i := 0; i < len(line); i++ {
 		c := line[i]
+		if *inBlockComment {
+			if c == '*' && i+1 < len(line) && line[i+1] == '/' {
+				i++
+				*inBlockComment = false
+			}
+			continue
+		}
 		if quote != 0 {
 			if c == '\\' && quote != '`' && i+1 < len(line) {
 				i++
@@ -1108,6 +1152,11 @@ func braceDelta(line string) int {
 		}
 		if c == '\'' || c == '"' || c == '`' {
 			quote = c
+			continue
+		}
+		if c == '/' && i+1 < len(line) && line[i+1] == '*' {
+			*inBlockComment = true
+			i++
 			continue
 		}
 		if c == '#' && parenDepth == 0 || c == '/' && i+1 < len(line) && line[i+1] == '/' {

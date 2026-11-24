@@ -2,6 +2,7 @@ package external
 
 import (
 	"bytes"
+	"container/list"
 	"context"
 	"errors"
 	"fmt"
@@ -17,13 +18,22 @@ import (
 )
 
 type wasmEntry struct {
+	path     string
 	runtime  wazero.Runtime
 	compiled wazero.CompiledModule
+	active   int
+	retired  bool
+	lru      *list.Element
 }
 
+// wasmCacheMaxEntries bounds retained runtimes. Active entries evicted from the
+// lookup cache are closed only after their last module invocation releases them.
+const wasmCacheMaxEntries = 32
+
 var (
-	wasmMu    sync.RWMutex
+	wasmMu    sync.Mutex
 	wasmCache = make(map[string]*wasmEntry)
+	wasmLRU   list.List
 )
 
 // WASM executes a WebAssembly module compiled with WASI. The first
@@ -35,17 +45,18 @@ var WASM = action.New("external.wasm", func(ctx context.Context, in map[string]a
 		return ExecResult{}, xerr.BadRequest("wasm: 'path' parameter is required")
 	}
 
-	entry, err := getOrCompileWASM(ctx, path)
+	entry, err := acquireWASM(ctx, path)
 	if err != nil {
 		return ExecResult{}, err
 	}
+	defer releaseWASM(ctx, entry)
 
 	var stdin []byte
 	if input, ok := in["input"]; ok && input != nil {
 		stdin = inputBytes(input)
 	}
 
-	var stdout, stderr bytes.Buffer
+	var stdout, stderr outputCapture
 	moduleConfig := wazero.NewModuleConfig().
 		WithStdin(bytes.NewReader(stdin)).
 		WithStdout(&stdout).
@@ -58,61 +69,106 @@ var WASM = action.New("external.wasm", func(ctx context.Context, in map[string]a
 	}
 
 	result := ExecResult{
-		Stdout: stdout.String(),
-		Stderr: stderr.String(),
+		Stdout: stdout.buffer.String(),
+		Stderr: stderr.buffer.String(),
 		OK:     runErr == nil,
-		Output: decodeJSON(stdout.String()),
+		Output: decodeJSON(stdout.buffer.String()),
 	}
 
 	if runErr == nil {
+		if stdout.truncated || stderr.truncated {
+			return result, outputTruncatedError("wasm", stdout.truncated, stderr.truncated)
+		}
 		return result, nil
 	}
 
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return result, ctxErr
+	}
 	exitErr := &sys.ExitError{}
 	if errors.As(runErr, &exitErr) {
 		result.ExitCode = int(exitErr.ExitCode())
 		result.OK = false
+		truncation := ""
+		if stdout.truncated || stderr.truncated {
+			truncation = "; " + outputTruncatedError("wasm", stdout.truncated, stderr.truncated).Error()
+		}
 		return result, xerr.Internal(fmt.Sprintf(
-			"wasm %q exited with code %d: %s",
-			path, result.ExitCode, strings.TrimSpace(result.Stderr)))
+			"wasm %q exited with code %d: %s%s",
+			path, result.ExitCode, strings.TrimSpace(result.Stderr), truncation))
 	}
 
+	if stdout.truncated || stderr.truncated {
+		return result, xerr.Internal(fmt.Sprintf("wasm %q: %v; %v", path, runErr,
+			outputTruncatedError("wasm", stdout.truncated, stderr.truncated)))
+	}
 	return result, xerr.Internal(fmt.Sprintf("wasm %q: %v", path, runErr))
 }).
 	Description("Execute sandboxed WebAssembly module with stdin/stdout JSON bridging").
 	Tag("external", "wasm", "sandbox").
 	Build()
 
-func getOrCompileWASM(ctx context.Context, path string) (*wasmEntry, error) {
-	wasmMu.RLock()
-	if entry, ok := wasmCache[path]; ok {
-		wasmMu.RUnlock()
-		return entry, nil
-	}
-	wasmMu.RUnlock()
-
+func acquireWASM(ctx context.Context, path string) (*wasmEntry, error) {
 	wasmMu.Lock()
-	defer wasmMu.Unlock()
-
 	if entry, ok := wasmCache[path]; ok {
+		entry.active++
+		wasmLRU.MoveToFront(entry.lru)
+		wasmMu.Unlock()
 		return entry, nil
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
+		wasmMu.Unlock()
 		return nil, xerr.NotFound(fmt.Sprintf("wasm: read %q: %v", path, err))
 	}
 
-	runtimeInstance := wazero.NewRuntime(ctx)
+	runtimeConfig := wazero.NewRuntimeConfig().WithCloseOnContextDone(true)
+	runtimeInstance := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 	wasi_snapshot_preview1.MustInstantiate(ctx, runtimeInstance)
 
 	compiled, err := runtimeInstance.CompileModule(ctx, data)
 	if err != nil {
 		_ = runtimeInstance.Close(ctx)
+		wasmMu.Unlock()
 		return nil, xerr.Internal(fmt.Sprintf("wasm: compile %q: %v", path, err))
 	}
 
-	entry := &wasmEntry{runtime: runtimeInstance, compiled: compiled}
+	entry := &wasmEntry{path: path, runtime: runtimeInstance, compiled: compiled, active: 1}
+	entry.lru = wasmLRU.PushFront(entry)
 	wasmCache[path] = entry
+	var closeNow []*wasmEntry
+	for len(wasmCache) > wasmCacheMaxEntries {
+		oldest := wasmLRU.Back()
+		if oldest == nil {
+			break
+		}
+		old, ok := oldest.Value.(*wasmEntry)
+		if !ok {
+			wasmLRU.Remove(oldest)
+			continue
+		}
+		delete(wasmCache, old.path)
+		wasmLRU.Remove(oldest)
+		old.lru = nil
+		old.retired = true
+		if old.active == 0 {
+			closeNow = append(closeNow, old)
+		}
+	}
+	wasmMu.Unlock()
+	for _, old := range closeNow {
+		_ = old.runtime.Close(context.WithoutCancel(ctx))
+	}
 	return entry, nil
+}
+
+func releaseWASM(ctx context.Context, entry *wasmEntry) {
+	wasmMu.Lock()
+	entry.active--
+	closeNow := entry.retired && entry.active == 0
+	wasmMu.Unlock()
+	if closeNow {
+		_ = entry.runtime.Close(context.WithoutCancel(ctx))
+	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/projection"
 	"github.com/nexssp/flow/internal/identifier"
+	"github.com/nexssp/flow/internal/lexical"
 )
 
 const functionMetadataKey = "nflow_functions"
@@ -148,10 +149,12 @@ func parseDeclarationHeader(raw string) (FunctionDeclaration, string, error) {
 	return FunctionDeclaration{Name: name, Parameters: parameters}, strings.TrimSpace(raw[closeIndex+1:]), nil
 }
 
+//nolint:gocyclo // Quote, comment, parenthesis, and brace state must be tracked in one source-preserving pass.
 func readFunctionBody(lines []string, startLine, openColumn int) (body string, next, closeLine, closeColumn int, err error) {
 	var output strings.Builder
 	depth, parentheses := 1, 0
 	var quote byte
+	inBlockComment := false
 	for line := startLine; line < len(lines); line++ {
 		column := 0
 		if line == startLine {
@@ -161,9 +164,20 @@ func readFunctionBody(lines []string, startLine, openColumn int) (body string, n
 		}
 		for column < len(lines[line]) {
 			current := lines[line][column]
+			if inBlockComment {
+				output.WriteByte(current)
+				if current == '*' && column+1 < len(lines[line]) && lines[line][column+1] == '/' {
+					output.WriteByte('/')
+					column += 2
+					inBlockComment = false
+				} else {
+					column++
+				}
+				continue
+			}
 			if quote != 0 {
 				output.WriteByte(current)
-				if current == '\\' && quote != '`' && column+1 < len(lines[line]) {
+				if lexical.BackslashEscapesNext(quote, current, column+1 < len(lines[line])) {
 					column++
 					output.WriteByte(lines[line][column])
 				} else if current == quote {
@@ -175,6 +189,18 @@ func readFunctionBody(lines []string, startLine, openColumn int) (body string, n
 			if current == '#' && parentheses == 0 {
 				output.WriteString(lines[line][column:])
 				break
+			}
+			if current == '/' && column+1 < len(lines[line]) {
+				if lines[line][column+1] == '/' {
+					output.WriteString(lines[line][column:])
+					break
+				}
+				if lines[line][column+1] == '*' {
+					output.WriteString("/*")
+					column += 2
+					inBlockComment = true
+					continue
+				}
 			}
 			switch current {
 			case '"', '\'', '`':

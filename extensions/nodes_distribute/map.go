@@ -174,6 +174,12 @@ var DistributeMap = action.New("distribute.map", func(ctx context.Context, req D
 	if req.Action == "" {
 		return DistributeMapRes{}, xerr.BadRequest("distribute.map: action is required")
 	}
+	if req.Retries < 0 {
+		return DistributeMapRes{}, xerr.BadRequest("distribute.map: retries must be zero or positive")
+	}
+	if req.RateLimit < 0 {
+		return DistributeMapRes{}, xerr.BadRequest("distribute.map: rate_limit must be zero or positive")
+	}
 	timeout, err := mapTimeoutDuration(req.TimeoutMs)
 	if err != nil {
 		return DistributeMapRes{}, err

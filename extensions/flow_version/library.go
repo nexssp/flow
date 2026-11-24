@@ -189,12 +189,32 @@ func (v semver) compare(other semver) int {
 
 func parseSemver(raw string) (semver, error) {
 	trimmed := strings.TrimPrefix(strings.TrimSpace(raw), "v")
-	if i := strings.IndexAny(trimmed, "-+"); i >= 0 {
-		trimmed = trimmed[:i]
+	core := trimmed
+	if before, after, ok := strings.Cut(trimmed, "+"); ok {
+		if strings.Contains(after, "+") || !validSemverIdentifiers(after, false) {
+			return semver{}, fmt.Errorf("invalid build metadata suffix in %q", raw)
+		}
+		core = before
 	}
-	parts := strings.Split(trimmed, ".")
+	if before, after, ok := strings.Cut(core, "-"); ok {
+		if !validSemverIdentifiers(after, true) {
+			return semver{}, fmt.Errorf("invalid pre-release suffix in %q", raw)
+		}
+		core = before
+	}
+	parts := strings.Split(core, ".")
 	if len(parts) != 3 {
 		return semver{}, fmt.Errorf("expected MAJOR.MINOR.PATCH, got %q", raw)
+	}
+	for _, part := range parts {
+		if part == "" || (len(part) > 1 && part[0] == '0') {
+			return semver{}, fmt.Errorf("invalid numeric core component %q in %q", part, raw)
+		}
+		for _, ch := range part {
+			if ch < '0' || ch > '9' {
+				return semver{}, fmt.Errorf("invalid numeric core component %q in %q", part, raw)
+			}
+		}
 	}
 	var v semver
 	var err error
@@ -208,4 +228,29 @@ func parseSemver(raw string) (semver, error) {
 		return semver{}, fmt.Errorf("patch: %w", err)
 	}
 	return v, nil
+}
+
+func validSemverIdentifiers(suffix string, prerelease bool) bool {
+	if suffix == "" {
+		return false
+	}
+	for identifier := range strings.SplitSeq(suffix, ".") {
+		if identifier == "" {
+			return false
+		}
+		allDigits := true
+		for _, ch := range identifier {
+			switch {
+			case ch >= '0' && ch <= '9':
+			case ch >= 'A' && ch <= 'Z', ch >= 'a' && ch <= 'z', ch == '-':
+				allDigits = false
+			default:
+				return false
+			}
+		}
+		if prerelease && allDigits && len(identifier) > 1 && identifier[0] == '0' {
+			return false
+		}
+	}
+	return true
 }

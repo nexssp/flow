@@ -121,6 +121,8 @@ func TestModifiers_RejectInvalidValue(t *testing.T) {
 		{"concurrency overflow", "concurrency", "99999999999999"},
 		{"cache non-duration", "cache", "forever"},
 		{"rate_limit non-int", "rate_limit", "many"},
+		{"rate_limit zero", "rate_limit", "0"},
+		{"rate_limit negative", "rate_limit", "-1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -134,5 +136,18 @@ func TestModifiers_RejectInvalidValue(t *testing.T) {
 			err := modifier.Apply(builder, tc.raw)
 			ktest.RequireCondition(t, err != nil, "expected parse error for :%s=%q", tc.modifier, tc.raw)
 		})
+	}
+}
+
+func TestRateLimitModifierRejectsNonpositiveNativeValues(t *testing.T) {
+	t.Parallel()
+	modifier, ok := compiler.NewModifierTable(Modifiers()...).ByName("rate_limit")
+	ktest.RequireCondition(t, ok, "rate_limit modifier is not registered")
+	for _, value := range []any{0, -1} {
+		builder := action.New[any, any]("probe", func(_ context.Context, in any) (any, error) {
+			return in, nil
+		})
+		err := modifier.ApplyNative(builder, value)
+		ktest.RequireCondition(t, err != nil, "expected native rate_limit value %v to be rejected", value)
 	}
 }

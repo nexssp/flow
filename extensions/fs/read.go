@@ -118,7 +118,7 @@ func readFileContent(path string, ranges []lineRange, scratch []byte) ([]byte, e
 		if info, statErr := file.Stat(); statErr == nil && info.Size() <= int64(len(scratch)) {
 			n, readErr := file.Read(scratch)
 			if readErr == nil || n > 0 {
-				return scratch[:n], nil
+				return bytes.Clone(scratch[:n]), nil
 			}
 		}
 		return os.ReadFile(path)

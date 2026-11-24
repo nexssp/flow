@@ -371,6 +371,27 @@ func TestFormatCanonicalizesRequireSelectorsAndOptions(t *testing.T) {
 	}
 }
 
+func TestFormatRequirePreservesClosingBraceInsideQuotedValue(t *testing.T) {
+	t.Parallel()
+
+	input := "@require example.com/foo as foo { message: \"left } right\" }\n"
+	want := "@require example.com/foo as foo {\n  message: \"left } right\"\n}\n"
+	got, err := testFormatter().Format(t.Context(), input, "require-quoted-brace.nflow")
+	if err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+	if got != want {
+		t.Fatalf("Format() =\n%s\nwant\n%s", got, want)
+	}
+	second, err := testFormatter().Format(t.Context(), got, "require-quoted-brace.nflow")
+	if err != nil {
+		t.Fatalf("Format() rejected its output: %v", err)
+	}
+	if second != got {
+		t.Fatalf("format is not idempotent:\n%s\n!=\n%s", second, got)
+	}
+}
+
 func TestFormatPastedTaskAPIExampleAfterSchemaMigration(t *testing.T) {
 	source, err := os.ReadFile("testdata/taskapi_http_nats.nflow")
 	if err != nil {
@@ -412,6 +433,48 @@ func TestFormatPreservesOpaqueDirectiveBody(t *testing.T) {
 	}
 	if got != input {
 		t.Fatalf("opaque directive body changed:\n got %q\nwant %q", got, input)
+	}
+}
+
+func TestFormatBracedFuncIgnoresBlockCommentBraces(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name   string
+		source string
+	}{
+		{
+			name: "single-line comment",
+			source: "@func math.answer() int {\n" +
+				"  40 /* } is not the closing brace */ + 2\n" +
+				"}\nservice.call:timeout=1s\n",
+		},
+		{
+			name: "multiline comment",
+			source: "@func math.answer() int {\n" +
+				"  40 /* comment starts\n" +
+				"  } is inside the comment\n" +
+				"  comment ends */ + 2\n" +
+				"}\nservice.call:timeout=1s\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			want := strings.Replace(tc.source, "service.call:timeout=1s", "service.call :timeout=1s", 1)
+			got, err := testFormatter().Format(t.Context(), tc.source, "func-comment-braces.nflow")
+			if err != nil {
+				t.Fatalf("Format() error = %v", err)
+			}
+			if got != want {
+				t.Fatalf("Format() =\n%s\nwant\n%s", got, want)
+			}
+			second, err := testFormatter().Format(t.Context(), got, "func-comment-braces.nflow")
+			if err != nil {
+				t.Fatalf("Format() rejected its output: %v", err)
+			}
+			if second != got {
+				t.Fatalf("format is not idempotent:\n%s\n!=\n%s", second, got)
+			}
+		})
 	}
 }
 

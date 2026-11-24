@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,6 +53,7 @@ type Observer struct {
 	verbosity int
 
 	mu             sync.Mutex
+	outputMu       sync.Mutex
 	records        []Record
 	actions        []string
 	droppedRecords uint64
@@ -147,13 +149,14 @@ func (o *Observer) record(event observe.Event, err error) {
 	}
 	o.mu.Unlock()
 
+	var output strings.Builder
 	// -vv prints live progress
 	if o.verbosity == 2 {
 		status := "✓"
 		if err != nil {
 			status = "✗"
 		}
-		fmt.Fprintf(o.out, "  %s %-30s %s\n", status, event.Action, FormatDuration(dur))
+		fmt.Fprintf(&output, "  %s %-30s %s\n", status, event.Action, FormatDuration(dur))
 	}
 	// -vvv prints lifecycle progress without intermediate payloads.
 	if o.verbosity >= 3 {
@@ -161,13 +164,18 @@ func (o *Observer) record(event observe.Event, err error) {
 		if err != nil {
 			status = "✗"
 		}
-		fmt.Fprintf(o.out, "  %s %-30s %s\n", status, event.Action, FormatDuration(dur))
-		fmt.Fprintln(o.out, "      in:  <omitted; intermediate payload>")
+		fmt.Fprintf(&output, "  %s %-30s %s\n", status, event.Action, FormatDuration(dur))
+		fmt.Fprintln(&output, "      in:  <omitted; intermediate payload>")
 		if err != nil {
-			fmt.Fprintln(o.out, "      err: <omitted; intermediate error>")
+			fmt.Fprintln(&output, "      err: <omitted; intermediate error>")
 		} else {
-			fmt.Fprintln(o.out, "      out: <omitted; intermediate payload>")
+			fmt.Fprintln(&output, "      out: <omitted; intermediate payload>")
 		}
+	}
+	if output.Len() > 0 {
+		o.outputMu.Lock()
+		fmt.Fprint(o.out, output.String())
+		o.outputMu.Unlock()
 	}
 }
 

@@ -18,9 +18,13 @@ import (
 
 type mapTestResolver struct {
 	target action.AnyAction
+	calls  *atomic.Int32
 }
 
 func (r mapTestResolver) Action(name string) (action.AnyAction, bool) {
+	if r.calls != nil {
+		r.calls.Add(1)
+	}
 	if name != "test.worker" {
 		return nil, false
 	}
@@ -162,6 +166,61 @@ func TestDistributeMapRejectsInvalidTimeoutBeforeEmptyResult(t *testing.T) {
 		if got := xerr.KindFrom(err); got != xerr.KindBadRequest {
 			t.Fatalf("timeout %d error kind = %s, want %s: %v", timeout, got, xerr.KindBadRequest, err)
 		}
+	}
+}
+
+func TestDistributeMapRejectsNegativeRetryAndRateLimitBeforeResolution(t *testing.T) {
+	cases := []struct {
+		name string
+		req  DistributeMapReq
+	}{
+		{name: "retries", req: DistributeMapReq{Action: "test.worker", Items: []any{1}, Retries: -1}},
+		{name: "rate_limit", req: DistributeMapReq{Action: "test.worker", Items: []any{1}, RateLimit: -1}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var resolutions, calls atomic.Int32
+			target := action.New("test.worker", func(context.Context, any) (any, error) {
+				calls.Add(1)
+				return nil, nil
+			}).Build()
+			ctx := contracts.WithActionResolver(t.Context(), mapTestResolver{target: target, calls: &resolutions})
+
+			_, err := DistributeMap.Do(ctx, tc.req)
+			if got := xerr.KindFrom(err); got != xerr.KindBadRequest {
+				t.Fatalf("error kind = %s, want %s: %v", got, xerr.KindBadRequest, err)
+			}
+			if resolutions.Load() != 0 {
+				t.Fatalf("resolver calls = %d, want 0", resolutions.Load())
+			}
+			if calls.Load() != 0 {
+				t.Fatalf("worker calls = %d, want 0", calls.Load())
+			}
+		})
+	}
+}
+
+func TestDistributeMapZeroRetriesAndRateLimitKeepDefaults(t *testing.T) {
+	var calls atomic.Int32
+	target := action.New("test.worker", func(context.Context, any) (any, error) {
+		calls.Add(1)
+		return nil, errors.New("one attempt only")
+	}).Build()
+	ctx := contracts.WithActionResolver(t.Context(), mapTestResolver{target: target})
+	got, err := DistributeMap.Do(ctx, DistributeMapReq{
+		Action:    "test.worker",
+		Items:     []any{1},
+		Retries:   0,
+		RateLimit: 0,
+	})
+	if err != nil {
+		t.Fatalf("DistributeMap.Do: %v", err)
+	}
+	if len(got.Items) != 1 || got.Items[0].OK {
+		t.Fatalf("result items = %#v, want one failed item", got.Items)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("worker calls = %d, want 1 with zero retries", calls.Load())
 	}
 }
 

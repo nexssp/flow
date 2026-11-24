@@ -10,28 +10,70 @@ import (
 	"github.com/nexssp/flow/compiler"
 )
 
-func runList(ctx context.Context, inv *invocation, args []string) int {
-	flowPath := ""
-	var cleanArgs []string
+const (
+	flowPathFlag       = "--flow"
+	flowPathFlagPrefix = flowPathFlag + "="
+)
 
+func runList(ctx context.Context, inv *invocation, args []string) int {
+	return withHarness(ctx, inv, "list", listFlowPath(args), args, runListInProcess)
+}
+
+func listFlowPath(args []string) string {
+	flowPath := ""
+	positionalPath := ""
 	for i := 0; i < len(args); i++ {
 		switch {
-		case args[i] == "--flow" && i+1 < len(args):
+		case args[i] == flowPathFlag && i+1 < len(args):
 			flowPath = args[i+1]
 			i++
-		case strings.HasPrefix(args[i], "--flow="):
-			flowPath = strings.TrimPrefix(args[i], "--flow=")
-		case strings.HasSuffix(args[i], ".nflow"):
-			if flowPath == "" {
-				flowPath = args[i]
-			} else {
-				cleanArgs = append(cleanArgs, args[i])
+		case strings.HasPrefix(args[i], flowPathFlagPrefix):
+			flowPath = strings.TrimPrefix(args[i], flowPathFlagPrefix)
+		case args[i] == "--":
+			for _, arg := range args[i+1:] {
+				if positionalPath == "" && strings.HasSuffix(arg, ".nflow") {
+					positionalPath = arg
+				}
 			}
-		default:
-			cleanArgs = append(cleanArgs, args[i])
+			return firstNonEmpty(flowPath, positionalPath)
+		case strings.HasSuffix(args[i], ".nflow") && positionalPath == "":
+			positionalPath = args[i]
 		}
 	}
-	return withHarness(ctx, inv, "list", flowPath, cleanArgs, runListInProcess)
+	return firstNonEmpty(flowPath, positionalPath)
+}
+
+func optionsBeforePositionals(args []string) []string {
+	options := make([]string, 0, len(args))
+	positionals := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			options = append(options, arg)
+			positionals = append(positionals, args[i+1:]...)
+			break
+		}
+		if arg == flowPathFlag && i+1 < len(args) {
+			options = append(options, arg, args[i+1])
+			i++
+			continue
+		}
+		if strings.HasPrefix(arg, "-") {
+			options = append(options, arg)
+		} else {
+			positionals = append(positionals, arg)
+		}
+	}
+	return append(options, positionals...)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func runListInProcess(ctx context.Context, inv *invocation, args []string) int {
@@ -41,7 +83,7 @@ func runListInProcess(ctx context.Context, inv *invocation, args []string) int {
 	jsonOut := fs.Bool("json", false, "output as JSON instead of a rendered list")
 	noColor := fs.Bool("no-color", false, "disable ANSI colors")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(optionsBeforePositionals(args)); err != nil {
 		return 2
 	}
 
@@ -55,9 +97,12 @@ func runListInProcess(ctx context.Context, inv *invocation, args []string) int {
 		}
 	}
 
-	pattern := strings.ToLower(strings.TrimSpace(fs.Arg(0)))
-	if strings.HasSuffix(pattern, ".nflow") {
-		pattern = "" // Do not search for the filename as a pattern
+	pattern := ""
+	for _, arg := range fs.Args() {
+		if !strings.HasSuffix(arg, ".nflow") {
+			pattern = strings.ToLower(strings.TrimSpace(arg))
+			break
+		}
 	}
 
 	var cfg compiler.Catalog

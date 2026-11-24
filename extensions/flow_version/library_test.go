@@ -129,6 +129,23 @@ func TestSatisfiesConstraintUsesDirectiveRangeGrammar(t *testing.T) {
 	}
 }
 
+func TestSatisfiesConstraintRejectsInvalidSemverCore(t *testing.T) {
+	for _, value := range []string{
+		"01.2.3", "1.02.3", "1.2.03", "+1.2.3", "1.2.-3", "1.x.3",
+	} {
+		t.Run("constraint_"+value, func(t *testing.T) {
+			if _, err := SatisfiesConstraint("="+value, "1.2.3"); err == nil {
+				t.Fatalf("SatisfiesConstraint accepted invalid constraint version %q", value)
+			}
+		})
+		t.Run("release_"+value, func(t *testing.T) {
+			if _, err := SatisfiesConstraint("=1.2.3", value); err == nil {
+				t.Fatalf("SatisfiesConstraint accepted invalid release version %q", value)
+			}
+		})
+	}
+}
+
 func TestDeferredCompatibilityCheckValidatesButDoesNotSelectEngine(t *testing.T) {
 	withCompilerVersion(t, "v0.7.0")
 	req := compiler.DirectiveReq{
@@ -179,6 +196,14 @@ func TestNFlowVersion_MalformedConstraintRejected(t *testing.T) {
 		`@nflow_version "^0.7.0"`,
 		`@nflow_version "~0.7.0"`,
 		`@nflow_version "0.7.*"`,
+		`@nflow_version ">=0.7.0-alpha..broken"`,
+		`@nflow_version ">=0.7.0+build+extra"`,
+		`@nflow_version "01.2.3"`,
+		`@nflow_version "1.02.3"`,
+		`@nflow_version "1.2.03"`,
+		`@nflow_version "+1.2.3"`,
+		`@nflow_version "1.2.-3"`,
+		`@nflow_version "1.x.3"`,
 	} {
 		t.Run(line, func(t *testing.T) {
 			ktest.RequireErrorContains(t, runDirective(t, line), "invalid constraint")
@@ -212,6 +237,9 @@ func TestParseSemver(t *testing.T) {
 		{"1.2.3-alpha", 1, 2, 3},
 		{"1.2.3+build", 1, 2, 3},
 		{"1.2.3-alpha+build", 1, 2, 3},
+		{"1.2.3-alpha.1+build.5", 1, 2, 3},
+		{"1.2.3-0", 1, 2, 3},
+		{"1.2.3+001", 1, 2, 3},
 		{"0.0.0", 0, 0, 0},
 	} {
 		t.Run(c.raw, func(t *testing.T) {
@@ -225,7 +253,12 @@ func TestParseSemver(t *testing.T) {
 }
 
 func TestParseSemver_Errors(t *testing.T) {
-	for _, raw := range []string{"", "1.2", "1.2.3.4", "abc", "1.x.3"} {
+	for _, raw := range []string{
+		"", "1.2", "1.2.3.4", "abc", "1.x.3",
+		"01.2.3", "1.02.3", "1.2.03", "+1.2.3", "1.+2.3", "1.-2.3", "1.2.+3", "1.2.-3",
+		"1.2.3-", "1.2.3+", "1.2.3-alpha..beta", "1.2.3+build..meta",
+		"1.2.3-alpha+", "1.2.3+build+extra", "1.2.3-01", "1.2.3-a_b",
+	} {
 		t.Run(raw, func(t *testing.T) {
 			_, err := parseSemver(raw)
 			ktest.RequireNotNil(t, err)
