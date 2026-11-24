@@ -348,6 +348,12 @@ stop the build. It defaults to the host platform; for cross-compilation,
 set `GOOS` and `GOARCH` when invoking `nflow build`. The temporary build
 directory is removed when the command returns.
 
+For reproducible release-mode binaries, set `SOURCE_DATE_EPOCH` to the same
+non-negative Unix timestamp (whole seconds) for each build. This overrides
+inherited build-time metadata. Reproducibility also requires the same source,
+Go toolchain and target settings, and pinned versions for remote `@require`
+modules; an unpinned branch or moving selector can resolve to different code.
+
 ---
 
 ## List and show capabilities

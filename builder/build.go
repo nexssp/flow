@@ -3,10 +3,12 @@ package builder
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -357,7 +359,10 @@ func embeddedRequireQuote(rawTarget string) byte {
 }
 
 func linkBinary(ctx context.Context, buildDir, nflowPath, binName string, opts buildOptions) error {
-	version, commit, builtAt := resolveBuildVersion(ctx, filepath.Dir(nflowPath))
+	version, commit, builtAt, err := resolveBuildVersion(ctx, filepath.Dir(nflowPath))
+	if err != nil {
+		return fmt.Errorf("resolve build metadata: %w", err)
+	}
 	ldflags := linkerFlags(opts, version, commit, builtAt)
 
 	fmt.Fprintf(os.Stderr, "🔨 nflow: linking %s%s\n",
@@ -407,11 +412,16 @@ func buildModeDescription(opts buildOptions) string {
 	}
 }
 
-func resolveBuildVersion(ctx context.Context, flowDir string) (version, commit, builtAt string) {
+func resolveBuildVersion(ctx context.Context, flowDir string) (version, commit, builtAt string, err error) {
 	version, commit, builtAt = ResolvedBuildInfo()
+	if epochTime, set, epochErr := sourceDateEpochTime(); epochErr != nil {
+		return "", "", "", epochErr
+	} else if set {
+		builtAt = epochTime
+	}
 
 	if flowDir == "" {
-		return version, commit, builtAt
+		return version, commit, builtAt, nil
 	}
 
 	if version == "" || version == "dev" || version == "unknown" {
@@ -434,7 +444,31 @@ func resolveBuildVersion(ctx context.Context, flowDir string) (version, commit, 
 		builtAt = time.Now().UTC().Format(time.RFC3339)
 	}
 
-	return version, commit, builtAt
+	return version, commit, builtAt, nil
+}
+
+func sourceDateEpochTime() (timestamp string, set bool, err error) {
+	value, set := os.LookupEnv("SOURCE_DATE_EPOCH")
+	if !set {
+		return "", false, nil
+	}
+	if value == "" {
+		return "", true, errors.New("SOURCE_DATE_EPOCH must be a non-negative base-10 integer number of seconds")
+	}
+	for _, char := range value {
+		if char < '0' || char > '9' {
+			return "", true, errors.New("SOURCE_DATE_EPOCH must be a non-negative base-10 integer number of seconds")
+		}
+	}
+	seconds, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return "", true, fmt.Errorf("SOURCE_DATE_EPOCH is outside the supported Unix timestamp range: %w", err)
+	}
+	date := time.Unix(seconds, 0).UTC()
+	if date.Year() < 1 || date.Year() > 9999 {
+		return "", true, errors.New("SOURCE_DATE_EPOCH must represent a year from 0001 through 9999")
+	}
+	return date.Format(time.RFC3339), true, nil
 }
 
 func ensureExeSuffix(path string) string {
