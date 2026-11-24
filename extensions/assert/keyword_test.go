@@ -51,6 +51,21 @@ func TestParse_ConditionAndMessage(t *testing.T) {
 	}
 	ktest.RequireEqual(t, a.Condition, ".score >= 50")
 	ktest.RequireEqual(t, a.Message, "score too low")
+	ktest.RequireEqual(t, a.MessageExpression, "")
+}
+
+func TestParse_RuntimeMessageExpression(t *testing.T) {
+	t.Parallel()
+	expr, err := newTestParser(t, `assert(.score == 100, "expected 100, got " + string(.score))`).Parse()
+	ktest.RequireNoError(t, err)
+
+	a, ok := expr.(*compiler.AssertExpr)
+	if !ok {
+		t.Fatalf("got %T, want *compiler.AssertExpr", expr)
+	}
+	ktest.RequireEqual(t, a.Condition, ".score == 100")
+	ktest.RequireEqual(t, a.Message, "")
+	ktest.RequireEqual(t, a.MessageExpression, `"expected 100, got " + string(.score)`)
 }
 
 func TestParse_CommaInsideFunctionCallPreserved(t *testing.T) {

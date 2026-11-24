@@ -498,7 +498,13 @@ func (v refValidator) validateNode(node compiler.Expr) error {
 	case *compiler.Atom:
 		return v.validateAtom(current)
 	case *compiler.AssertExpr:
-		return validateExpression(current.Condition, v.validateExpressionRef)
+		if err := validateExpression(current.Condition, v.validateExpressionRef); err != nil {
+			return err
+		}
+		if current.MessageExpression != "" {
+			return validateExpression(current.MessageExpression, v.validateExpressionRef)
+		}
+		return nil
 	case *compiler.LoopExpr:
 		return validateExpression(current.Until, v.validateExpressionRef)
 	case *compiler.ProjectionExpr:

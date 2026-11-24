@@ -412,6 +412,15 @@ func analyzeTypedAssert(ctx TypeAnalysisContext, assertion *AssertExpr) (TypeDes
 		if condition.Type != nil && condition.Type.Kind() != reflect.Bool && condition.Type.Kind() != reflect.Interface {
 			return TypeDescriptor{}, xerr.Validation("invalid assertion condition", SourceError(assertion.Pos, "assert: condition must be bool, got %s", condition.Type))
 		}
+		if assertion.MessageExpression != "" {
+			message, err := ctx.CheckExpression(assertion.MessageExpression, ctx, assertion.Pos)
+			if err != nil {
+				return TypeDescriptor{}, err
+			}
+			if message.Type != nil && message.Type.Kind() != reflect.String && message.Type.Kind() != reflect.Interface {
+				return TypeDescriptor{}, xerr.Validation("invalid assertion message", SourceError(assertion.Pos, "assert: message expression must return string, got %s", message.Type))
+			}
+		}
 	}
 	return ctx.Input, nil
 }

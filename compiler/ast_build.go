@@ -942,17 +942,50 @@ func (a *AssertExpr) Build(_ context.Context, bCtx *BuildContext) (action.AnyAct
 	if err != nil {
 		return nil, xerr.Validation("assert: invalid expression "+a.Condition, err)
 	}
+	var messageProgram ExpressionProgram
+	if a.MessageExpression != "" {
+		messageProgram, err = bCtx.CompileExpression(a.MessageExpression, a.Pos)
+		if err != nil {
+			return nil, xerr.Validation("assert: invalid message expression "+a.MessageExpression, err)
+		}
+	}
 	program := action.New("assert", func(runCtx context.Context, input any) (any, error) {
 		value, evalErr := prog.Evaluate(runCtx, input)
 		passed, ok := value.(bool)
-		if evalErr != nil || !ok || !passed {
-			message := a.Message
-			if message == "" {
-				message = "assertion [assert] failed"
-			}
-			return nil, xerr.Validation(message)
+		if evalErr == nil && ok && passed {
+			return input, nil
 		}
-		return input, nil
+
+		var failure string
+		switch {
+		case evalErr != nil:
+			failure = fmt.Sprintf("condition %q could not be evaluated: %v", a.Condition, evalErr)
+		case !ok:
+			failure = fmt.Sprintf("condition %q returned %T, want bool", a.Condition, value)
+		default:
+			failure = fmt.Sprintf("condition %q evaluated false", a.Condition)
+		}
+		if a.Message != "" {
+			return nil, xerr.Validation(a.Message)
+		}
+		if messageProgram != nil {
+			messageValue, messageErr := messageProgram.Evaluate(runCtx, input)
+			if messageErr != nil {
+				return nil, xerr.Validation(fmt.Sprintf(
+					"assert: %s; message expression %q could not be evaluated: %v",
+					failure, a.MessageExpression, messageErr), messageErr)
+			}
+			message, isString := messageValue.(string)
+			if !isString {
+				return nil, xerr.Validation(fmt.Sprintf(
+					"assert: %s; message expression %q returned %T, want string",
+					failure, a.MessageExpression, messageValue))
+			}
+			if message != "" {
+				return nil, xerr.Validation(message)
+			}
+		}
+		return nil, xerr.Validation("assert: " + failure)
 	}).Tag("guard", "assert").Build()
 	return inspectBuiltComposition(bCtx, program,
 		action.IntrospectionComposition{

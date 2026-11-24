@@ -77,6 +77,9 @@ func resolveConfigRefsInExpressions(ast Expr, cfg map[string]string) error {
 			current.Until, firstErr = rewrite(current.Until, current.Pos)
 		case *AssertExpr:
 			current.Condition, firstErr = rewrite(current.Condition, current.Pos)
+			if firstErr == nil {
+				current.MessageExpression, firstErr = rewrite(current.MessageExpression, current.Pos)
+			}
 		}
 		if firstErr != nil {
 			return

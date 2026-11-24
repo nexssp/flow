@@ -170,9 +170,10 @@ func (l *LoopExpr) Children() []Expr { return []Expr{l.Body} }
 
 // AssertExpr: assert(condition, message).
 type AssertExpr struct {
-	Condition string
-	Message   string
-	Pos       Position
+	Condition         string
+	Message           string
+	MessageExpression string
+	Pos               Position
 }
 
 func (*AssertExpr) Node()              {}

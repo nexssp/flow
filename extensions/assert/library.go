@@ -1,10 +1,11 @@
 // Package assert provides the `assert(cond, msg)` keyword and the
 // `@assert` directive. The keyword yields a compiler.AssertExpr
-// (evaluated later by the runtime with expr-lang); the directive
-// appends expressions to meta["asserts"] and their source positions to
-// `asserts.positions`. Core does not know what an assertion is: the
-// parser dispatches the keyword through the bundle's Primaries, and the
-// directive is handled by the bundle's Directive table.
+// (evaluated later by the runtime with expr-lang, including optional
+// failure-message expressions); the directive appends expressions to
+// meta["asserts"] and their source positions to `asserts.positions`. Core does
+// not know what an assertion is: the parser dispatches the keyword through
+// the bundle's Primaries, and the directive is handled by the bundle's
+// Directive table.
 //
 // Typical use:
 //

@@ -7,9 +7,8 @@ import (
 	"github.com/nexssp/flow/extensions/internal/exprsyntax"
 )
 
-// assertKeyword parses `assert(cond)` or `assert(cond, "msg")` and
-// returns a compiler.AssertExpr. The condition is preserved as raw text and
-// compiled later by the runtime with expr-lang.
+// assertKeyword parses `assert(cond)` and optional literal or expression messages.
+// Expressions are preserved as raw text and compiled later by the runtime.
 type assertKeyword struct{}
 
 func (assertKeyword) Name() string    { return "assert" }
@@ -60,25 +59,50 @@ scan:
 	raw := strings.TrimSpace(p.Src()[conditionStart:p.Current().Offset])
 	p.Advance() // consume closing ')'
 
-	condition, message := splitConditionMessage(raw)
+	condition, message, messageExpression := splitConditionMessage(raw)
 	return &compiler.AssertExpr{
-		Condition: condition,
-		Message:   message,
-		Pos:       startPos,
+		Condition:         condition,
+		Message:           message,
+		MessageExpression: messageExpression,
+		Pos:               startPos,
 	}, nil
 }
 
 // splitConditionMessage splits at the first top-level comma so commas
-// inside function calls, arrays, or quoted strings are preserved:
+// inside function calls, arrays, or quoted strings are preserved. A wholly
+// quoted second argument remains a static message; other arguments are expressions:
 //
-//	assert(contains([1,2], x), "msg")  →  "contains([1,2], x)", "msg"
-//	assert(.score >= 50)               →  ".score >= 50", ""
-func splitConditionMessage(raw string) (condition, message string) {
+//	assert(contains([1,2], x), "msg")  →  "contains([1,2], x)", "msg", ""
+//	assert(.score >= 50)               →  ".score >= 50", "", ""
+func splitConditionMessage(raw string) (condition, message, messageExpression string) {
 	commaIndex := compiler.IndexTopLevel(raw, ',')
 	if commaIndex < 0 {
-		return strings.TrimSpace(raw), ""
+		return strings.TrimSpace(raw), "", ""
 	}
 	condition = strings.TrimSpace(raw[:commaIndex])
-	message = strings.Trim(strings.TrimSpace(raw[commaIndex+1:]), `"'`+"`")
-	return condition, message
+	messageSource := strings.TrimSpace(raw[commaIndex+1:])
+	if message, ok := quotedMessage(messageSource); ok {
+		return condition, message, ""
+	}
+	return condition, "", messageSource
+}
+
+func quotedMessage(source string) (string, bool) {
+	if len(source) < 2 || (source[0] != '"' && source[0] != '\'' && source[0] != '`') {
+		return "", false
+	}
+	quote := source[0]
+	for i := 1; i < len(source); i++ {
+		if quote != '`' && source[i] == '\\' && i+1 < len(source) {
+			i++
+			continue
+		}
+		if source[i] == quote {
+			if i != len(source)-1 {
+				return "", false
+			}
+			return source[1:i], true
+		}
+	}
+	return "", false
 }

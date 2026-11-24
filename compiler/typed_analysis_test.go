@@ -3,6 +3,7 @@ package compiler
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -143,5 +144,50 @@ func TestAnalyzeTypedSharedValueUsesCurrentContext(t *testing.T) {
 	}
 	if checkerCalls != 2 {
 		t.Fatalf("expression checker calls = %d, want 2", checkerCalls)
+	}
+}
+
+func TestAnalyzeTypedAssertChecksMessageExpression(t *testing.T) {
+	resolver, err := NewDynamicResolver()
+	if err != nil {
+		t.Fatalf("create resolver: %v", err)
+	}
+	var checked []string
+	ctx := TypeAnalysisContext{
+		Resolver: resolver,
+		CheckExpression: func(source string, _ TypeAnalysisContext, _ Position) (TypeDescriptor, error) {
+			checked = append(checked, source)
+			if source == "condition" {
+				return TypeDescriptor{Type: reflect.TypeFor[bool]()}, nil
+			}
+			return TypeDescriptor{Type: reflect.TypeFor[string]()}, nil
+		},
+	}
+	assertion := &AssertExpr{Condition: "condition", MessageExpression: "message"}
+	if _, err := AnalyzeTypedExpression(ctx, assertion); err != nil {
+		t.Fatalf("analyze assertion: %v", err)
+	}
+	if !reflect.DeepEqual(checked, []string{"condition", "message"}) {
+		t.Fatalf("checked expressions = %v, want condition then message", checked)
+	}
+}
+
+func TestAnalyzeTypedAssertRejectsKnownNonStringMessage(t *testing.T) {
+	resolver, err := NewDynamicResolver()
+	if err != nil {
+		t.Fatalf("create resolver: %v", err)
+	}
+	ctx := TypeAnalysisContext{
+		Resolver: resolver,
+		CheckExpression: func(source string, _ TypeAnalysisContext, _ Position) (TypeDescriptor, error) {
+			if source == "condition" {
+				return TypeDescriptor{Type: reflect.TypeFor[bool]()}, nil
+			}
+			return TypeDescriptor{Type: reflect.TypeFor[int]()}, nil
+		},
+	}
+	assertion := &AssertExpr{Condition: "condition", MessageExpression: "message"}
+	if _, err := AnalyzeTypedExpression(ctx, assertion); err == nil || !strings.Contains(err.Error(), "message expression must return string") {
+		t.Fatalf("analysis error = %v, want non-string message validation", err)
 	}
 }

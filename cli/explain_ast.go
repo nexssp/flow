@@ -170,7 +170,9 @@ func renderASTNode(w io.Writer, expr compiler.Expr, indent string, useColor bool
 
 	case *compiler.AssertExpr:
 		msg := ""
-		if n.Message != "" {
+		if n.MessageExpression != "" {
+			msg = " " + dim("message expression: "+n.MessageExpression, useColor)
+		} else if n.Message != "" {
 			msg = " " + dim(`"`+n.Message+`"`, useColor)
 		}
 		fmt.Fprintf(w, "%s%-12s %s%s\n",
@@ -267,10 +269,11 @@ type ASTNode struct {
 	Args    map[string]any `json:"args,omitempty"`
 	Spreads []any          `json:"spreads,omitempty"`
 
-	Raw       string `json:"raw,omitempty"`
-	Condition string `json:"condition,omitempty"`
-	Message   string `json:"message,omitempty"`
-	Until     string `json:"until,omitempty"`
+	Raw               string `json:"raw,omitempty"`
+	Condition         string `json:"condition,omitempty"`
+	Message           string `json:"message,omitempty"`
+	MessageExpression string `json:"message_expression,omitempty"`
+	Until             string `json:"until,omitempty"`
 
 	L        *ASTNode   `json:"l,omitempty"`
 	R        *ASTNode   `json:"r,omitempty"`
@@ -380,7 +383,12 @@ func buildASTNode(expr compiler.Expr) *ASTNode {
 		return &ASTNode{Kind: "Loop", Body: astNodeOf(n.Body), Until: n.Until}
 
 	case *compiler.AssertExpr:
-		return &ASTNode{Kind: "Assert", Condition: n.Condition, Message: n.Message}
+		return &ASTNode{
+			Kind:              "Assert",
+			Condition:         n.Condition,
+			Message:           n.Message,
+			MessageExpression: n.MessageExpression,
+		}
 	}
 	return &ASTNode{Kind: fmt.Sprintf("Unknown(%T)", expr)}
 }

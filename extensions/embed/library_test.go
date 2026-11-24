@@ -264,6 +264,12 @@ func TestExpressionValidatorIgnoresQuotedTextButRejectsUnknown(t *testing.T) {
 	if err := validateRefs(&compiler.LoopExpr{Until: "embed.known == true"}, meta); err == nil || !strings.Contains(err.Error(), "typed ( ... ) value") {
 		t.Fatalf("known loop-condition ref error = %v, want typed-value guidance", err)
 	}
+	if err := validateRefs(&compiler.AssertExpr{Condition: "true", MessageExpression: "embed.message_missing"}, meta); err == nil || !strings.Contains(err.Error(), "unknown embed.message_missing") {
+		t.Fatalf("unknown assertion-message ref error = %v", err)
+	}
+	if err := validateRefs(&compiler.AssertExpr{Condition: "true", MessageExpression: "embed.known"}, meta); err == nil || !strings.Contains(err.Error(), "typed ( ... ) value") {
+		t.Fatalf("known assertion-message ref error = %v, want typed-value guidance", err)
+	}
 }
 
 func TestValidateValueIgnoresNonReferenceKinds(t *testing.T) {
