@@ -57,6 +57,8 @@ curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh
 
 To install a specific tag, pass it to the script. The `v1.2.3` tag below is an illustrative version-format example; use a tag listed on the Releases page. Set `NFLOW_INSTALL_DIR` or pass a second argument to choose a different destination:
 
+Specific versions must be full SemVer values (`MAJOR.MINOR.PATCH`); optional prerelease or build metadata is supported, and a leading `v` or `V` is optional.
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh -s -- v1.2.3
 # Or: curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh -s -- v1.2.3 "$HOME/bin"

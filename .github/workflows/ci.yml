@@ -275,6 +275,121 @@ jobs:
           -bench='^(BenchmarkResilienceWorkflow|BenchmarkExpressionValueViewTypedProjectionOutput|BenchmarkExprEvaluatorTypedProjectionOutput|BenchmarkProjectionActionInjectedRoot)$'
           -benchmem ./...
 
+  installers:
+    name: Installer validation (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Test POSIX installer and release tags
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_dir=$(mktemp -d)
+          trap 'rm -rf "$test_dir"' EXIT
+          for tag in v1.2.3 v1.2.3-rc.1+build.5; do bash validate-release-tag.sh "$tag"; done
+          for tag in v1.2 v01.2.3 v1.2.3-01 v1.2.3+; do
+            if bash validate-release-tag.sh "$tag" >/dev/null 2>&1; then
+              echo "::error::Accepted invalid release tag: $tag"
+              exit 1
+            fi
+          done
+          mkdir "$test_dir/bin"
+          calls="$test_dir/calls"
+          : > "$calls"
+          export NFLOW_TEST_CALLS="$calls" NFLOW_TEST_TAG=v1.2
+          cat > "$test_dir/bin/curl" <<'EOF'
+          #!/bin/sh
+          set -eu
+          url= output=
+          while [ "$#" -gt 0 ]; do
+            case "$1" in
+              -o) output=$2; shift 2 ;;
+              --retry|--retry-delay) shift 2 ;;
+              -*) shift ;;
+              *) url=$1; shift ;;
+            esac
+          done
+          printf '%s\n' "$url" >> "$NFLOW_TEST_CALLS"
+          case "$url" in
+            */releases/latest) printf '{\n  "tag_name": "%s"\n}\n' "$NFLOW_TEST_TAG" > "$output" ;;
+            *) exit 1 ;;
+          esac
+          EOF
+          chmod +x "$test_dir/bin/curl"
+          for version in garbage 1.2 01.2.3 1.2.3-01 1.2.3+; do
+            before=$(wc -l < "$calls")
+            if PATH="$test_dir/bin:$PATH" sh install.sh "$version" "$test_dir/invalid" >"$test_dir/out" 2>&1; then
+              echo "::error::Accepted invalid installer version: $version"
+              exit 1
+            fi
+            grep -F "invalid release version: $version" "$test_dir/out" >/dev/null
+            [ "$(wc -l < "$calls")" -eq "$before" ] || { echo "::error::Downloaded assets for invalid version: $version"; exit 1; }
+          done
+          if PATH="$test_dir/bin:$PATH" sh install.sh latest "$test_dir/latest" >"$test_dir/out" 2>&1; then
+            echo '::error::Accepted invalid latest-release tag'
+            exit 1
+          fi
+          grep -F 'invalid release version: 1.2' "$test_dir/out" >/dev/null
+          [ "$(wc -l < "$calls")" -eq 1 ] || { echo '::error::Invalid latest tag triggered asset downloads'; exit 1; }
+          if PATH="$test_dir/bin:$PATH" sh install.sh '1.2.3-rc.1+build.5' "$test_dir/valid" >"$test_dir/out" 2>&1; then
+            echo '::error::Expected the offline download stub to stop installation'
+            exit 1
+          fi
+          grep -F 'could not download checksums for v1.2.3-rc.1+build.5.' "$test_dir/out" >/dev/null
+          grep -F 'https://github.com/nexssp/flow/releases/download/v1.2.3-rc.1+build.5/nflow_1.2.3-rc.1+build.5_checksums.txt' "$calls" >/dev/null
+
+      - name: Test Windows installer version validation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $global:releaseLookups = 0
+          $global:downloads = 0
+          function Invoke-RestMethod {
+            param([string]$Uri, [hashtable]$Headers, [string]$UserAgent)
+            $global:releaseLookups++
+            return [pscustomobject]@{ tag_name = 'v1.2' }
+          }
+          function Invoke-WebRequest {
+            param([string]$Uri, [string]$OutFile, [hashtable]$Headers, [string]$UserAgent, [switch]$UseBasicParsing)
+            $global:downloads++
+            throw 'offline installer test stub'
+          }
+          foreach ($version in @('garbage', '1.2', '01.2.3', '1.2.3-01', '1.2.3+')) {
+            try {
+              & ./install.ps1 -Version $version -InstallDir "$env:RUNNER_TEMP/nflow-test" -NoPathUpdate
+              throw "Accepted invalid installer version: $version"
+            }
+            catch {
+              if ($_.Exception.Message -notlike 'Invalid release version:*') { throw }
+            }
+            if ($global:downloads -ne 0) { throw "Downloaded assets for invalid version: $version" }
+          }
+          try {
+            & ./install.ps1 -Version latest -InstallDir "$env:RUNNER_TEMP/nflow-test" -NoPathUpdate
+            throw 'Accepted invalid latest-release tag'
+          }
+          catch {
+            if ($_.Exception.Message -notlike 'Invalid release version:*') { throw }
+          }
+          if ($global:releaseLookups -ne 1 -or $global:downloads -ne 0) { throw 'Invalid latest tag triggered asset downloads' }
+          try {
+            & ./install.ps1 -Version '1.2.3-rc.1+build.5' -InstallDir "$env:RUNNER_TEMP/nflow-test" -NoPathUpdate
+            throw 'Expected the offline download stub to stop installation'
+          }
+          catch {
+            if ($_.Exception.Message -notlike 'Could not download the 1.2.3-rc.1+build.5 release assets:*') { throw }
+          }
+          if ($global:downloads -ne 1) { throw 'Valid SemVer did not reach the asset download step' }
+
   # This is the stable branch-protection gate; keep its identity unchanged.
   verify:
     name: build · lint · test
@@ -292,6 +407,7 @@ jobs:
       - harness-cli
       - vulnerability
       - benchmark
+      - installers
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -310,6 +426,7 @@ jobs:
           HARNESS_CLI_RESULT: ${{ needs.harness-cli.result }}
           VULNERABILITY_RESULT: ${{ needs.vulnerability.result }}
           BENCHMARK_RESULT: ${{ needs.benchmark.result }}
+          INSTALLERS_RESULT: ${{ needs.installers.result }}
         run: |
           set -Eeuo pipefail
           failed=0
@@ -333,4 +450,5 @@ jobs:
           check_result harness-cli "$HARNESS_CLI_RESULT"
           check_result vulnerability "$VULNERABILITY_RESULT"
           check_result benchmark "$BENCHMARK_RESULT"
+          check_result installers "$INSTALLERS_RESULT"
           exit "$failed"

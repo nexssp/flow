@@ -31,7 +31,9 @@ if ($Version -eq 'latest') {
 }
 
 $Version = $Version -replace '^[vV]', ''
-if ($Version -notmatch '^[0-9A-Za-z][0-9A-Za-z._+-]*$') {
+$semverIdentifier = '(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
+$semverPattern = '\A(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-' + $semverIdentifier + '(\.' + $semverIdentifier + ')*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?\z'
+if ($Version -cnotmatch $semverPattern) {
     throw "Invalid release version: $Version"
 }
 

@@ -67,6 +67,31 @@ type versionTransport func(*http.Request) (*http.Response, error)
 
 func (f versionTransport) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
 
+func TestReleaseVersion(t *testing.T) {
+	for _, tc := range []struct {
+		name, raw, want string
+	}{
+		{"prefixed", "v1.2.3", "v1.2.3"},
+		{"unprefixed", "1.2.3", "v1.2.3"},
+		{"prerelease and build metadata", "v1.2.3-rc.1+build.5", "v1.2.3-rc.1+build.5"},
+		{"build numeric leading zeros", "v1.2.3+build.01", "v1.2.3+build.01"},
+		{"zero version", "v0.0.0", "v0.0.0"},
+		{"empty", "", ""},
+		{"uppercase prefix", "V1.2.3", ""},
+		{"missing patch", "v1.2", ""},
+		{"leading zero major", "v01.2.3", ""},
+		{"leading zero minor", "v1.02.3", ""},
+		{"leading zero patch", "v1.2.03", ""},
+		{"leading zero prerelease number", "v1.2.3-rc.01", ""},
+		{"empty prerelease", "v1.2.3-", ""},
+		{"empty build metadata", "v1.2.3+", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ktest.RequireEqual(t, tc.want, releaseVersion(tc.raw))
+		})
+	}
+}
+
 func TestFetchLatestRelease(t *testing.T) {
 	for _, tc := range []struct {
 		name, body, want string
@@ -74,6 +99,7 @@ func TestFetchLatestRelease(t *testing.T) {
 	}{
 		{"stable", `{"tag_name":"v0.39.0","draft":false,"prerelease":false}`, "v0.39.0", 200},
 		{"without prefix", `{"tag_name":"0.39.0"}`, "v0.39.0", 200},
+		{"build metadata", `{"tag_name":"v0.39.0+build.1"}`, "v0.39.0+build.1", 200},
 		{"rate limit", `{}`, "", 403},
 		{"no release", `{}`, "", 404},
 		{"server error", `{}`, "", 500},
@@ -84,6 +110,8 @@ func TestFetchLatestRelease(t *testing.T) {
 		{"prerelease tag", `{"tag_name":"v0.39.0-rc.1"}`, "", 200},
 		{"injection", `{"tag_name":"v0.39.0;echo bad"}`, "", 200},
 		{"short version", `{"tag_name":"v0.39"}`, "", 200},
+		{"leading zero", `{"tag_name":"v0.39.00"}`, "", 200},
+		{"invalid prerelease number", `{"tag_name":"v0.39.0-rc.01"}`, "", 200},
 		{"wrong field type", `{"tag_name":39}`, "", 200},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

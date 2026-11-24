@@ -38,8 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$RELEASE_TAG" == v* ]] || { echo 'Tag must start with v'; exit 1; }
-          git check-ref-format "refs/tags/$RELEASE_TAG"
+          bash release-automation/validate-release-tag.sh "$RELEASE_TAG"
       - name: Checkout tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

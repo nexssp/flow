@@ -29,12 +29,11 @@ fetch() {
 
 validate_version() {
   case "$1" in
-    ''|*[!0-9A-Za-z._+-]*) fail "invalid release version: $1" ;;
+    ''|*[!0-9A-Za-z.+-]*) fail "invalid release version: $1" ;;
   esac
-  case "$1" in
-    [0-9A-Za-z]*) ;;
-    *) fail "invalid release version: $1" ;;
-  esac
+  semver_identifier='(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
+  semver_version="(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(-${semver_identifier}([.]${semver_identifier})*)?([+][0-9A-Za-z-]+([.][0-9A-Za-z-]+)*)?"
+  printf '%s\n' "$1" | grep -Eq "^${semver_version}$" || fail "invalid release version: $1"
 }
 
 checksum_file() {
