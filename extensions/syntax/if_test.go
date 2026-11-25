@@ -34,6 +34,19 @@ func TestIfKeywordParsesElseIfInOrder(t *testing.T) {
 	}
 }
 
+func TestIfBranchArithmeticOffersProjectionTernaryHint(t *testing.T) {
+	t.Parallel()
+
+	_, err := newStructuredKeywordParser(
+		`if (.out != null) { .out } else { .mod + ".mp4" }`, false,
+	).Parse()
+	if err == nil ||
+		!strings.Contains(err.Error(), `unexpected character "+" in else branch`) ||
+		!strings.Contains(err.Error(), `out: .out ?? (.mod + ".mp4")`) {
+		t.Fatalf("parse error = %v, want actionable projection ternary hint", err)
+	}
+}
+
 func TestIfActionGraphDescribesTrueAndFalseRoutes(t *testing.T) {
 	t.Parallel()
 

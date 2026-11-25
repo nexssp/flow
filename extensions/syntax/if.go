@@ -124,6 +124,11 @@ func parseIfBlock(p *compiler.Parser, clause string) (compiler.Expr, error) {
 	}
 	if p.Current().Type != compiler.TokRBrace {
 		if p.Current().Type == compiler.TokInvalid {
+			if p.Current().Lit == "+" {
+				return nil, p.Fail(p.Current().Line,
+					"if: unexpected character %q in %s branch; Flow if branches accept Flow expressions, not inline calculations. For a calculated projection value, use a ternary such as `out: .out ?? (.mod + \".mp4\")`",
+					p.Current().Lit, clause)
+			}
 			return nil, p.Fail(p.Current().Line, "unexpected character %q", p.Current().Lit)
 		}
 		return nil, p.Fail(p.Current().Line, "if: expected '}' closing %s block", clause)
