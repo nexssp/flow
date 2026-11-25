@@ -164,60 +164,68 @@ func projectExpressionValue(value reflect.Value, plan *expressionProjectionPlan,
 	if !value.IsValid() {
 		return nil, nil
 	}
-	if plan.kind == reflect.Pointer && value.IsNil() {
+	if (plan.kind == reflect.Pointer || plan.kind == reflect.Map || plan.kind == reflect.Slice) && value.IsNil() {
 		return nil, nil
 	}
 	if !plan.projectable {
-		if !value.CanInterface() {
-			return nil, fmt.Errorf("expression payload field of type %s is not accessible", value.Type())
-		}
-		return value.Interface(), nil
+		return projectExpressionLeaf(value)
 	}
+	return projectExpressionContainer(value, plan, depth)
+}
 
-	//nolint:exhaustive // Only projected container kinds are traversed; opaque leaves return above.
-	switch plan.kind {
-	case reflect.Pointer:
+//nolint:nilnil // A nil projected value is the expression view's explicit JSON-like null.
+func projectExpressionLeaf(value reflect.Value) (any, error) {
+	for value.Kind() == reflect.Pointer {
 		if value.IsNil() {
 			return nil, nil
 		}
+		value = value.Elem()
+	}
+	if !value.CanInterface() {
+		return nil, fmt.Errorf("expression payload field of type %s is not accessible", value.Type())
+	}
+	return value.Interface(), nil
+}
+
+func projectExpressionContainer(value reflect.Value, plan *expressionProjectionPlan, depth int) (any, error) {
+	//nolint:exhaustive // Only projected container kinds are traversed; opaque leaves return above.
+	switch plan.kind {
+	case reflect.Pointer:
 		return projectExpressionValue(value.Elem(), plan.elem, depth+1)
 	case reflect.Struct:
 		return projectExpressionStruct(value, plan, depth+1)
 	case reflect.Array, reflect.Slice:
-		if plan.kind == reflect.Slice && value.IsNil() {
-			return nil, nil
-		}
-		items := make([]any, value.Len())
-		for index := range value.Len() {
-			item, err := projectExpressionValue(value.Index(index), plan.elem, depth+1)
-			if err != nil {
-				return nil, fmt.Errorf("expression payload item %d: %w", index, err)
-			}
-			items[index] = item
-		}
-		return items, nil
+		return projectExpressionSequence(value, plan, depth)
 	case reflect.Map:
-		if value.IsNil() {
-			return nil, nil
-		}
-		anyType := reflect.TypeFor[any]()
-		projected := reflect.MakeMapWithSize(reflect.MapOf(reflect.TypeFor[string](), anyType), value.Len())
-		iterator := value.MapRange()
-		for iterator.Next() {
-			item, err := projectExpressionValue(iterator.Value(), plan.elem, depth+1)
-			if err != nil {
-				return nil, fmt.Errorf("expression payload map value: %w", err)
-			}
-			projectedItem := reflect.New(anyType).Elem()
-			if item != nil {
-				projectedItem.Set(reflect.ValueOf(item))
-			}
-			projected.SetMapIndex(reflect.ValueOf(iterator.Key().String()), projectedItem)
-		}
-		return projected.Interface(), nil
+		return projectExpressionMap(value, plan, depth)
 	default:
 		return nil, fmt.Errorf("unsupported expression projection kind %s", plan.kind)
 	}
+}
+
+func projectExpressionSequence(value reflect.Value, plan *expressionProjectionPlan, depth int) ([]any, error) {
+	items := make([]any, value.Len())
+	for index := range value.Len() {
+		item, err := projectExpressionValue(value.Index(index), plan.elem, depth+1)
+		if err != nil {
+			return nil, fmt.Errorf("expression payload item %d: %w", index, err)
+		}
+		items[index] = item
+	}
+	return items, nil
+}
+
+func projectExpressionMap(value reflect.Value, plan *expressionProjectionPlan, depth int) (map[string]any, error) {
+	projected := make(map[string]any, value.Len())
+	iterator := value.MapRange()
+	for iterator.Next() {
+		item, err := projectExpressionValue(iterator.Value(), plan.elem, depth+1)
+		if err != nil {
+			return nil, fmt.Errorf("expression payload map value: %w", err)
+		}
+		projected[iterator.Key().String()] = item
+	}
+	return projected, nil
 }
 
 func projectExpressionStruct(value reflect.Value, plan *expressionProjectionPlan, depth int) (map[string]any, error) {

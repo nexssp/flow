@@ -19,10 +19,11 @@ type Route struct {
 	SinkPosition compiler.Position
 }
 
-// Directive parses newline-separated routes to direct typed event sinks.
+// Directive parses newline-separated routes to direct typed event sinks or
+// declared NFlow pipeline handlers.
 var Directive = compiler.Directive{
 	Name:        "events",
-	Example:     "@events {\n  observe thttp.events.listener_ready -> thttp.listener_ready_sink\n}",
+	Example:     "@events {\n  observe thttp.events.listener_ready -> pipeline.report_listener_ready\n}",
 	Handler:     handleDirective,
 	OpaqueBlock: true,
 }
@@ -106,11 +107,11 @@ func parseRoutes(source string, sourceOffset int, req compiler.DirectiveReq) ([]
 func parseRoute(source string) (Route, int, error) {
 	arrow := strings.Index(source, "->")
 	if arrow < 0 {
-		return Route{}, 0, errors.New("expected `observe <event> -> <typed-sink>`")
+		return Route{}, 0, errors.New("expected `observe <event> -> <typed-sink-or-pipeline>`")
 	}
 	header := strings.Fields(strings.TrimSpace(source[:arrow]))
 	if len(header) != 2 || header[0] != "observe" {
-		return Route{}, 0, errors.New("expected `observe <event> -> <typed-sink>`")
+		return Route{}, 0, errors.New("expected `observe <event> -> <typed-sink-or-pipeline>`")
 	}
 	if !validEventSymbol(header[1]) {
 		return Route{}, 0, fmt.Errorf("invalid event source symbol %q", header[1])
@@ -119,10 +120,10 @@ func parseRoute(source string) (Route, int, error) {
 	leading := len(tail) - len(strings.TrimLeft(tail, " \t\r\n"))
 	sinkName := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(tail), ","))
 	if sinkName == "" {
-		return Route{}, 0, errors.New("event route typed sink is required")
+		return Route{}, 0, errors.New("event route destination is required")
 	}
 	if !validEventSymbol(sinkName) {
-		return Route{}, 0, errors.New("event route sink must be a direct action symbol; expressions and arguments are not supported")
+		return Route{}, 0, errors.New("event route destination must be a direct action or pipeline symbol; expressions and arguments are not supported")
 	}
 	return Route{EventName: header[1], SinkName: sinkName}, arrow + 2 + leading, nil
 }

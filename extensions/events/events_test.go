@@ -10,9 +10,11 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xctx"
+	"github.com/nexssp/kernel/xerr"
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/extensions/events"
@@ -99,6 +101,17 @@ func TestDirectiveParsesDirectSinkSymbolAndPositions(t *testing.T) {
 	}
 	if routes[0].SinkPosition.Line != 2 {
 		t.Fatalf("sink position = %#v", routes[0].SinkPosition)
+	}
+}
+
+func TestDirectiveRejectsExactExpressionRouteProposal(t *testing.T) {
+	source := `@events {
+  observe thttp.events.listener_ready as listener_ready -> console.stderr(message: listener_ready.service_id + " listening at " + listener_ready.advertised_url + " (bound " + listener_ready.bind_address + ")")
+}
+`
+	_, _, err := compiler.Preprocess(t.Context(), compiler.NewDirectiveTable(events.Directive), source, "expression-route.nflow")
+	if err == nil || !strings.Contains(err.Error(), "expected `observe <event> -> <typed-sink-or-pipeline>`") {
+		t.Fatalf("preprocess error = %v, want direct-expression route rejection", err)
 	}
 }
 
@@ -295,6 +308,167 @@ func TestRoutePublishesTypedPayloadAndComposesHostPublisherWithoutJournalStep(t 
 		if strings.Contains(step, "<events ") || strings.Contains(step, "sample.sink") {
 			t.Fatalf("journal steps = %#v; event sink must not add a step", steps)
 		}
+	}
+}
+
+func TestPipelineRouteRunsTypedHandlerAndIsolatesHostPayload(t *testing.T) {
+	var projected map[string]any
+	mutate := action.New("pipeline_test.mutate", func(_ context.Context, input map[string]any) (any, error) {
+		ready, ok := input["ready"].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("ready input = %T, want map[string]any", input["ready"])
+		}
+		projected = ready
+		projected["bind_address"] = "changed-by-handler"
+		return nil, nil
+	}).Build()
+	capability := compiler.Bundle{
+		ID:        "pipeline_test",
+		Libraries: []action.Library{{Name: "pipeline_test", Actions: []action.AnyAction{mutate}}},
+	}
+	cfg := testConfig(t, capability)
+	journal := &memoryJournal{}
+	cfg.Journal = journal
+	publisher := &recordingPublisher{}
+	source := `@schema ListenerReady {
+  bind_address! string
+}
+@pipeline handle_listener_ready(listener_ready: !ListenerReady)
+  pipeline_test.mutate(ready: listener_ready)
+@end
+@events {
+  observe edge.events.ready -> pipeline.handle_listener_ready
+}
+{bind_address: "127.0.0.1:4312"} -> edge.publish
+`
+	var stderr strings.Builder
+	code := runner.RunSource(xctx.WithEventPublisher(t.Context(), publisher), cfg, source, "pipeline-event.nflow", nil, runner.Opts{
+		Stdout: io.Discard,
+		Stderr: &stderr,
+	})
+	if code != 0 {
+		t.Fatalf("RunSource exit code = %d; stderr: %s", code, stderr.String())
+	}
+	if got := projected["bind_address"]; got != "changed-by-handler" {
+		t.Fatalf("pipeline input = %#v, want handler mutation", projected)
+	}
+	publisher.mu.Lock()
+	defer publisher.mu.Unlock()
+	if len(publisher.payloads) != 1 {
+		t.Fatalf("host publisher payloads = %#v, want one original event", publisher.payloads)
+	}
+	original, ok := publisher.payloads[0].(*readyPayload)
+	if !ok || original.BindAddress != "127.0.0.1:4312" {
+		t.Fatalf("host publisher payload = %#v, want unchanged typed payload", publisher.payloads[0])
+	}
+	steps := journal.recordedSteps()
+	if !slices.Contains(steps, "flow|pipeline-event.nflow|main") {
+		t.Fatalf("journal steps = %#v; want the ordinary top-level Flow step", steps)
+	}
+	if !slices.ContainsFunc(steps, func(step string) bool {
+		return strings.Contains(step, "pipeline.handle_listener_ready") && strings.Contains(step, "pipeline_test.mutate")
+	}) {
+		t.Fatalf("journal steps = %#v; want normal pipeline-body action journaling", steps)
+	}
+	for _, step := range steps {
+		if strings.Contains(step, "<events ") {
+			t.Fatalf("journal steps = %#v; event routing must not add a synthetic delivery record", steps)
+		}
+	}
+}
+
+func TestPipelineRouteRequiresDeclaredTypedPipeline(t *testing.T) {
+	cfg := testConfig(t)
+	source := `@pipeline untyped_handler
+  console.stderr(message: "handled")
+@end
+@events {
+  observe edge.events.ready -> pipeline.untyped_handler
+}
+`
+	_, err := runner.Compile(t.Context(), cfg, source, "untyped-event-handler.nflow")
+	if err == nil || !strings.Contains(err.Error(), "must declare a typed request schema") {
+		t.Fatalf("compile error = %v, want typed pipeline request-schema requirement", err)
+	}
+}
+
+func TestPipelineRouteValidatesProjectedPayloadAgainstRequestSchema(t *testing.T) {
+	cfg := testConfig(t)
+	source := `@schema RequiredValue {
+  value! string
+}
+@pipeline validate_ready(ready: RequiredValue)
+  console.stderr(message: ready.value)
+@end
+@events {
+  observe edge.events.ready -> pipeline.validate_ready
+}
+`
+	compiled, err := runner.Compile(t.Context(), cfg, source, "invalid-pipeline-event-payload.nflow")
+	if err != nil {
+		t.Fatalf("compile schema-checking route: %v", err)
+	}
+	ctx := events.InstallPublisher(t.Context(), compiled.Meta)
+	err = events.PublishFromBundle(ctx, "sample", "events.ready", &readyPayload{BindAddress: "127.0.0.1:4312"})
+	if xerr.KindFrom(err) != xerr.KindValidation {
+		t.Fatalf("publish error = %v (kind %v), want request-schema validation error", err, xerr.KindFrom(err))
+	}
+}
+
+func TestPipelineRouteDispatchesSynchronouslyAndPropagatesClassifiedError(t *testing.T) {
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	marker := xctx.NewKey[string]("events.pipeline.test_marker")
+	block := action.New("pipeline_sync.block", func(ctx context.Context, _ map[string]any) (any, error) {
+		if got, ok := marker.From(ctx); !ok || got != "preserved" {
+			return nil, xerr.Internal("pipeline event context marker was not preserved")
+		}
+		close(entered)
+		select {
+		case <-release:
+			return nil, xerr.Timeout("pipeline event handler failed")
+		case <-ctx.Done():
+			return nil, xerr.Timeout("pipeline event handler canceled", ctx.Err())
+		}
+	}).Build()
+	capability := compiler.Bundle{
+		ID:        "pipeline_sync",
+		Libraries: []action.Library{{Name: "pipeline_sync", Actions: []action.AnyAction{block}}},
+	}
+	cfg := testConfig(t, capability)
+	source := `@schema ListenerReady {
+  bind_address! string
+}
+@pipeline block_ready(ready: !ListenerReady)
+  pipeline_sync.block(ready: ready)
+@end
+@events {
+  observe edge.events.ready -> pipeline.block_ready
+}
+`
+	compiled, err := runner.Compile(t.Context(), cfg, source, "synchronous-pipeline-event.nflow")
+	if err != nil {
+		t.Fatalf("compile synchronous handler route: %v", err)
+	}
+	ctx := marker.With(t.Context(), "preserved")
+	ctx = events.InstallPublisher(ctx, compiled.Meta)
+	published := make(chan error, 1)
+	go func() {
+		published <- events.PublishFromBundle(ctx, "sample", "events.ready", &readyPayload{BindAddress: "127.0.0.1:4312"})
+	}()
+	select {
+	case <-entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("pipeline handler was not invoked")
+	}
+	select {
+	case err := <-published:
+		t.Fatalf("PublishFromBundle returned before the pipeline completed: %v", err)
+	default:
+	}
+	close(release)
+	if err := <-published; xerr.KindFrom(err) != xerr.KindTimeout {
+		t.Fatalf("publish error = %v (kind %v), want propagated timeout", err, xerr.KindFrom(err))
 	}
 }
 

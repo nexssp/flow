@@ -1,7 +1,13 @@
-@description "Typed event route payload reaches its declared sink"
+@description "A typed host event is emitted and handled by a custom NFlow pipeline"
 @require selftestkit
+@schema FixtureReady {
+  message! string
+}
+@pipeline handle_fixture_ready(fixture_ready: !FixtureReady)
+  {message: fixture_ready.message} -> cov.assert_fixture_event
+@end
 @events {
-  observe selftestkit.events.fixture_ready -> cov.assert_fixture_event
+  observe selftestkit.events.fixture_ready -> pipeline.handle_fixture_ready
 }
 @assert: result == "published"
 {} -> cov.publish_fixture_event

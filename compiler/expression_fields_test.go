@@ -166,7 +166,8 @@ func TestExpressionProjectorHandlesNilPointersAndStringLikeMapKeys(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload := pointerProjectionPayload{Names: map[expressionProjectionMapKey]expressionProjectionNested{
+	value := 42
+	payload := pointerProjectionPayload{Value: &value, Names: map[expressionProjectionMapKey]expressionProjectionNested{
 		"primary": {Label: "named key"},
 	}}
 	binding, err := projector.Project(payload)
@@ -176,8 +177,12 @@ func TestExpressionProjectorHandlesNilPointersAndStringLikeMapKeys(t *testing.T)
 	if got, exists := binding["maybe"]; !exists || got != nil {
 		t.Fatalf("maybe = %#v, want explicit null", got)
 	}
-	if got, exists := binding["value"]; !exists || got != nil {
-		t.Fatalf("value = %#v, want explicit null", got)
+	if got, exists := binding["value"]; !exists || got != 42 {
+		t.Fatalf("value = %#v, want copied int(42)", got)
+	}
+	value = 99
+	if got := binding["value"]; got != 42 {
+		t.Fatalf("projected value changed with source pointer: %#v", got)
 	}
 	names, ok := binding["names"].(map[string]any)
 	if !ok {

@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
+	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xctx"
 	"github.com/nexssp/kernel/xerr"
 
@@ -20,6 +22,8 @@ type compiledRoute struct {
 	BundleID    string
 	PayloadType reflect.Type
 	Sink        NonRetainingEventSink
+	Pipeline    action.AnyAction
+	Projector   *compiler.ExpressionProjector
 }
 
 type compiledRouteSet struct {
@@ -46,9 +50,9 @@ func IsRouteInvocation(ctx context.Context) bool {
 	return marked
 }
 
-// MaterializeRoutes resolves explicit event sources and direct typed sinks from
-// the mounted Catalog resolver. Routed sinks must implement the non-retaining
-// contract; arbitrary expressions and dynamically coerced actions are rejected.
+// MaterializeRoutes resolves explicit event sources and either direct typed
+// sinks or declared, typed NFlow pipeline handlers from the mounted resolver.
+// Arbitrary expressions and dynamically coerced actions are rejected.
 func MaterializeRoutes(req compiler.MaterializeReq) error {
 	routes := RoutesFromMeta(req.Meta)
 	if len(routes) == 0 {
@@ -67,65 +71,122 @@ func MaterializeRoutes(req compiler.MaterializeReq) error {
 	}
 	routeSet := &compiledRouteSet{bySubject: make(map[string]compiledRoute, len(routes))}
 	for _, declaration := range routes {
-		spec, ok := specs[declaration.EventName]
-		if !ok {
+		route, err := materializeRoute(req, declaration, specs)
+		if err != nil {
+			return err
+		}
+		if _, duplicate := routeSet.bySubject[route.Subject]; duplicate {
 			return compiler.SourceError(declaration.Position,
-				"@events: unknown event source %q", declaration.EventName)
+				"@events: publisher subject %q is already routed", route.Subject)
 		}
-		if spec.PayloadType == nil {
-			return compiler.SourceError(declaration.Position,
-				"@events: event %q has no payload type", declaration.EventName)
-		}
-		payloadType := spec.PayloadType
-		for payloadType.Kind() == reflect.Pointer {
-			payloadType = payloadType.Elem()
-		}
-		if payloadType.Kind() != reflect.Struct {
-			return compiler.SourceError(declaration.Position,
-				"@events: event %q payload must be a struct", declaration.EventName)
-		}
-
-		actionSink, exists := req.Resolver.Action(declaration.SinkName)
-		if !exists || actionSink == nil {
-			return compiler.SourceError(declaration.SinkPosition,
-				"@events: unknown event sink %q", declaration.SinkName)
-		}
-		var sink NonRetainingEventSink
-		for depth := 0; depth < 8 && actionSink != nil; depth++ {
-			if typedSink, ok := actionSink.(NonRetainingEventSink); ok {
-				sink = typedSink
-				break
-			}
-			wrapper, ok := actionSink.(compiler.ActionWrapper)
-			if !ok {
-				break
-			}
-			actionSink = wrapper.WrappedAction()
-		}
-		if sink == nil {
-			return compiler.SourceError(declaration.SinkPosition,
-				"@events: sink %q must implement the typed non-retaining event-sink contract", declaration.SinkName)
-		}
-		expectedPayloadType := reflect.PointerTo(payloadType)
-		if sink.EventPayloadType() != expectedPayloadType {
-			return compiler.SourceError(declaration.SinkPosition,
-				"@events: sink %q accepts %s; event %q publishes %s",
-				declaration.SinkName, sink.EventPayloadType(), declaration.EventName, expectedPayloadType)
-		}
-		if _, duplicate := routeSet.bySubject[spec.Subject]; duplicate {
-			return compiler.SourceError(declaration.Position,
-				"@events: publisher subject %q is already routed", spec.Subject)
-		}
-		routeSet.bySubject[spec.Subject] = compiledRoute{
-			EventName:   spec.Name,
-			Subject:     spec.Subject,
-			BundleID:    spec.BundleID,
-			PayloadType: expectedPayloadType,
-			Sink:        sink,
-		}
+		routeSet.bySubject[route.Subject] = route
 	}
 	req.Meta[compiledRoutesMetadataKey] = routeSet
 	return nil
+}
+
+func materializeRoute(req compiler.MaterializeReq, declaration Route, specs map[string]compiler.MountedEventSpec) (compiledRoute, error) {
+	spec, ok := specs[declaration.EventName]
+	if !ok {
+		return compiledRoute{}, compiler.SourceError(declaration.Position,
+			"@events: unknown event source %q", declaration.EventName)
+	}
+	if spec.PayloadType == nil {
+		return compiledRoute{}, compiler.SourceError(declaration.Position,
+			"@events: event %q has no payload type", declaration.EventName)
+	}
+	payloadType := spec.PayloadType
+	for payloadType.Kind() == reflect.Pointer {
+		payloadType = payloadType.Elem()
+	}
+	if payloadType.Kind() != reflect.Struct {
+		return compiledRoute{}, compiler.SourceError(declaration.Position,
+			"@events: event %q payload must be a struct", declaration.EventName)
+	}
+
+	compiled := compiledRoute{
+		EventName:   spec.Name,
+		Subject:     spec.Subject,
+		BundleID:    spec.BundleID,
+		PayloadType: reflect.PointerTo(payloadType),
+	}
+	if pipelineName, isPipeline := strings.CutPrefix(declaration.SinkName, "pipeline."); isPipeline {
+		return materializePipelineRoute(req, declaration, spec, pipelineName, compiled)
+	}
+	return materializeTypedSinkRoute(req, declaration, compiled)
+}
+
+func materializePipelineRoute(req compiler.MaterializeReq, declaration Route, spec compiler.MountedEventSpec, pipelineName string, compiled compiledRoute) (compiledRoute, error) {
+	pipelines, _ := req.Meta["pipelines"].(map[string]string)
+	if _, declared := pipelines[pipelineName]; !declared {
+		return compiledRoute{}, compiler.SourceError(declaration.SinkPosition,
+			"@events: pipeline handler %q must be declared in this source", declaration.SinkName)
+	}
+	canonicalName := pipelineName
+	if !strings.Contains(canonicalName, ".") {
+		canonicalName = "pipeline." + canonicalName
+	}
+	pipeline, exists := req.Resolver.Action(canonicalName)
+	if !exists || pipeline == nil {
+		return compiledRoute{}, compiler.SourceError(declaration.SinkPosition,
+			"@events: unknown pipeline handler %q", declaration.SinkName)
+	}
+	if !hasRequestSchema(pipeline) {
+		return compiledRoute{}, compiler.SourceError(declaration.SinkPosition,
+			"@events: pipeline handler %q must declare a typed request schema", declaration.SinkName)
+	}
+	projector, err := compiler.NewExpressionProjector(spec.PayloadType)
+	if err != nil {
+		return compiledRoute{}, compiler.SourceError(declaration.SinkPosition,
+			"@events: event %q payload cannot be projected to pipeline input: %v", declaration.EventName, err)
+	}
+	compiled.Pipeline = pipeline
+	compiled.Projector = projector
+	return compiled, nil
+}
+
+func materializeTypedSinkRoute(req compiler.MaterializeReq, declaration Route, compiled compiledRoute) (compiledRoute, error) {
+	actionSink, exists := req.Resolver.Action(declaration.SinkName)
+	if !exists || actionSink == nil {
+		return compiledRoute{}, compiler.SourceError(declaration.SinkPosition,
+			"@events: unknown event sink %q", declaration.SinkName)
+	}
+	var sink NonRetainingEventSink
+	for depth := 0; depth < 8 && actionSink != nil; depth++ {
+		if typedSink, ok := actionSink.(NonRetainingEventSink); ok {
+			sink = typedSink
+			break
+		}
+		wrapper, ok := actionSink.(compiler.ActionWrapper)
+		if !ok {
+			break
+		}
+		actionSink = wrapper.WrappedAction()
+	}
+	if sink == nil {
+		return compiledRoute{}, compiler.SourceError(declaration.SinkPosition,
+			"@events: sink %q must implement the typed non-retaining event-sink contract", declaration.SinkName)
+	}
+	if sink.EventPayloadType() != compiled.PayloadType {
+		return compiledRoute{}, compiler.SourceError(declaration.SinkPosition,
+			"@events: sink %q accepts %s; event %q publishes %s",
+			declaration.SinkName, sink.EventPayloadType(), declaration.EventName, compiled.PayloadType)
+	}
+	compiled.Sink = sink
+	return compiled, nil
+}
+
+func hasRequestSchema(handler action.AnyAction) bool {
+	description := handler.Describe()
+	if description == nil {
+		return false
+	}
+	for _, tag := range description.Tags {
+		if strings.HasPrefix(tag, "request-schema:") {
+			return true
+		}
+	}
+	return false
 }
 
 // InstallPublisher composes the source's explicit routes with any publisher
@@ -151,7 +212,8 @@ func InstallPublisher(ctx context.Context, meta map[string]any) context.Context 
 // PublishFromBundle publishes a caller-owned typed event through the publisher
 // injected with Kernel's xctx.EventPublisher seam. Payload must point to an
 // immutable event value that the caller will not mutate or reuse; host delegates
-// may retain it. The local route sink is synchronous and must not retain it.
+// may retain it. Direct local sinks are synchronous and must not retain it.
+// Pipeline handlers run synchronously against a detached projected input map.
 func PublishFromBundle[T any](ctx context.Context, bundleID, subject string, payload *T) error {
 	if payload == nil {
 		return xerr.BadRequest(fmt.Sprintf("event %s: payload is nil", subject))
@@ -204,7 +266,19 @@ func (publisher routedPublisher) publishEventFromBundle(ctx context.Context, bun
 			return xerr.Validation(fmt.Sprintf("event route %s (bundle %s): payload type is %T, want %s",
 				route.EventName, route.BundleID, payload, route.PayloadType))
 		}
-		routeErr = route.Sink.HandleEvent(ctx, payload)
+		if route.Pipeline != nil {
+			binding, err := payloadExpressionBinding(payload, route.Projector)
+			if err != nil {
+				routeErr = err
+			} else {
+				// Invoke in the publisher's execution context so pipeline-body
+				// actions retain their normal hooks and journal behavior; this
+				// does not create a second runner root or event-delivery record.
+				_, routeErr = action.InvokeAny(ctx, route.Pipeline, binding)
+			}
+		} else {
+			routeErr = route.Sink.HandleEvent(ctx, payload)
+		}
 	} else if publisher.delegate == nil && !routeHandled {
 		return xerr.NotFound(fmt.Sprintf("no NFlow route or host publisher for event subject %q", subject))
 	}
@@ -232,8 +306,8 @@ func publishToDelegate(ctx context.Context, delegate xctx.EventPublisher, bundle
 	return delegate.PublishEvent(ctx, subject, payload)
 }
 
-// payloadExpressionBinding remains available to isolated compiler benchmarks;
-// the production event route no longer creates expression maps.
+// payloadExpressionBinding creates the detached NFlow input used by pipeline
+// routes. Direct typed-sink routes do not pay this projection cost.
 func payloadExpressionBinding(payload any, projector *compiler.ExpressionProjector) (map[string]any, error) {
 	if projector == nil {
 		return nil, xerr.Internal("event payload projector is unavailable")

@@ -21,6 +21,17 @@ const compiledRouteBenchmarkSource = `@events {
 }
 `
 
+const compiledPipelineRouteBenchmarkSource = `@schema EventReady {
+  bind_address! string
+}
+@pipeline consume_ready(payload: !EventReady)
+  eventperf.discard(bind_address: payload.bind_address)
+@end
+@events {
+  observe eventperf.events.ready -> pipeline.consume_ready
+}
+`
+
 const compiledRouteBenchmarkSinkMessage = "127.0.0.1:4312"
 
 var errUnexpectedCompiledRouteBenchmarkMessage = errors.New("unexpected compiled route benchmark payload")
@@ -87,6 +98,44 @@ func newCompiledRoutePublishBenchmark(b *testing.B, withDelegate bool) (context.
 
 func BenchmarkCompiledRoutedPublishEvent(b *testing.B) {
 	ctx, payload := newCompiledRoutePublishBenchmark(b, false)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		if err := events.PublishFromBundle(ctx, "eventperf", "events.perf_ready", payload); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "events/s")
+}
+
+func BenchmarkCompiledRoutedPublishEventPipeline(b *testing.B) {
+	discard := action.New("eventperf.discard", func(context.Context, map[string]any) (any, error) {
+		return nil, nil
+	}).Build()
+	bundle := compiler.Bundle{
+		ID:    "eventperf",
+		Alias: "eventperf",
+		Libraries: []action.Library{{
+			Name:    "eventperf",
+			Actions: []action.AnyAction{discard},
+		}},
+		Events: []compiler.EventSpec{{
+			Name:        "eventperf.events.ready",
+			Subject:     "events.perf_ready",
+			Description: "benchmark listener-ready event",
+			PayloadType: reflect.TypeFor[compiledRouteBenchmarkPayload](),
+		}},
+	}
+	cfg, err := runner.BuildConfig(append(native.Bundles(), bundle))
+	if err != nil {
+		b.Fatal(err)
+	}
+	compiled, err := runner.Compile(context.Background(), cfg, compiledPipelineRouteBenchmarkSource, "compiled-pipeline-route-benchmark.nflow")
+	if err != nil {
+		b.Fatal(err)
+	}
+	ctx := events.InstallPublisher(context.Background(), compiled.Meta)
+	payload := &compiledRouteBenchmarkPayload{BindAddress: compiledRouteBenchmarkSinkMessage}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
