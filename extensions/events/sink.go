@@ -58,7 +58,7 @@ func (sink *typedEventSinkAction[T]) HandleEvent(ctx context.Context, payload an
 	if !ok || typed == nil {
 		return xerr.Validation(fmt.Sprintf("event sink %s: payload type is %T, want %s", sink.Describe().Name, payload, reflect.TypeFor[*T]()))
 	}
-	return sink.handle(ctx, typed)
+	return classifyEventError(sink.handle(ctx, typed), "event sink handler failed", xerr.KindInternal)
 }
 
 // CloneWithHooks preserves the typed sink contract when the runner clones its

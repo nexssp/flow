@@ -3,9 +3,12 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/kernel/xerr"
 
 	"github.com/nexssp/flow/compiler"
@@ -193,6 +196,102 @@ func TestNonRetainingEventSinkClassifiesPayloadErrors(t *testing.T) {
 	}
 	if err := sink.HandleEvent(context.Background(), (*projectionPayload)(nil)); xerr.KindFrom(err) != xerr.KindValidation {
 		t.Fatalf("nil payload error = %v, want Validation", err)
+	}
+}
+
+type failingProjectionPublisher struct {
+	err error
+}
+
+func (publisher failingProjectionPublisher) PublishEvent(context.Context, string, any) error {
+	return publisher.err
+}
+
+func TestEventHandlerErrorsAreClassifiedAndSanitized(t *testing.T) {
+	t.Parallel()
+
+	const secret = "database password=do-not-return"
+	payload := &projectionPayload{}
+	sink := NewNonRetainingEventSink[projectionPayload]("test.sink", func(context.Context, *projectionPayload) error {
+		return errors.New(secret)
+	})
+	assertSanitizedEventError(t, sink.HandleEvent(context.Background(), payload), xerr.KindInternal, secret)
+
+	route := compiledRoute{
+		EventName:   "test.events.projection",
+		Subject:     "events.projection",
+		BundleID:    "test",
+		PayloadType: reflect.TypeFor[*projectionPayload](),
+		Sink:        sink,
+	}
+	routed := routedPublisher{routes: &compiledRouteSet{bySubject: map[string]compiledRoute{route.Subject: route}}}
+	assertSanitizedEventError(t, routed.PublishEventFromBundle(context.Background(), "test", route.Subject, payload), xerr.KindInternal, secret)
+
+	projector, err := compiler.NewExpressionProjector(reflect.TypeFor[projectionPayload]())
+	if err != nil {
+		t.Fatalf("create payload projector: %v", err)
+	}
+	pipeline := action.New("test.pipeline", func(context.Context, map[string]any) (any, error) {
+		return nil, errors.New(secret)
+	}).Build()
+	route.Sink = nil
+	route.Pipeline = pipeline
+	route.Projector = projector
+	pipelinePublisher := routedPublisher{routes: &compiledRouteSet{bySubject: map[string]compiledRoute{route.Subject: route}}}
+	assertSanitizedEventError(t, pipelinePublisher.PublishEventFromBundle(context.Background(), "test", route.Subject, payload), xerr.KindInternal, secret)
+
+	hostPublisher := failingProjectionPublisher{err: errors.New(secret)}
+	delegateOnly := routedPublisher{
+		routes:   &compiledRouteSet{bySubject: map[string]compiledRoute{}},
+		delegate: hostPublisher,
+	}
+	assertSanitizedEventError(t, delegateOnly.PublishEventFromBundle(context.Background(), "test", route.Subject, payload), xerr.KindUnavailable, secret)
+
+	route.Sink = sink
+	route.Pipeline = nil
+	route.Projector = nil
+	joined := routedPublisher{
+		routes:   &compiledRouteSet{bySubject: map[string]compiledRoute{route.Subject: route}},
+		delegate: hostPublisher,
+	}
+	assertSanitizedEventError(t, joined.PublishEventFromBundle(context.Background(), "test", route.Subject, payload), xerr.KindInternal, secret)
+}
+
+func TestClassifyEventErrorPreservesExistingKindsAndContext(t *testing.T) {
+	t.Parallel()
+
+	existing := xerr.Timeout("already classified")
+	if got := classifyEventError(existing, "event failed", xerr.KindInternal); !errors.Is(got, existing) {
+		t.Fatalf("classified error = %v, want original error %v", got, existing)
+	}
+
+	for _, test := range []struct {
+		cause error
+		want  xerr.Kind
+	}{
+		{cause: context.Canceled, want: xerr.KindCanceled},
+		{cause: context.DeadlineExceeded, want: xerr.KindTimeout},
+	} {
+		err := classifyEventError(test.cause, "event handler stopped", xerr.KindInternal)
+		if got := xerr.KindFrom(err); got != test.want {
+			t.Errorf("error kind = %q, want %q: %v", got, test.want, err)
+		}
+		if !errors.Is(err, test.cause) {
+			t.Errorf("error %v does not preserve cause %v", err, test.cause)
+		}
+	}
+}
+
+func assertSanitizedEventError(t *testing.T, err error, want xerr.Kind, secret string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected event error")
+	}
+	if got := xerr.KindFrom(err); got != want {
+		t.Fatalf("error kind = %q, want %q: %v", got, want, err)
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatalf("event error exposed handler details: %v", err)
 	}
 }
 

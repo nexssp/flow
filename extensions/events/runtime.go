@@ -291,13 +291,18 @@ func (publisher routedPublisher) publishEventFromBundle(ctx context.Context, bun
 		} else {
 			routeErr = route.Sink.HandleEvent(ctx, payload)
 		}
+		routeErr = classifyEventError(routeErr, "event route handler failed", xerr.KindInternal)
 	} else if publisher.delegate == nil && !routeHandled {
 		return xerr.NotFound(fmt.Sprintf("no NFlow route or host publisher for event subject %q", subject))
 	}
 
 	var delegateErr error
 	if publisher.delegate != nil {
-		delegateErr = publishToDelegate(ctx, publisher.delegate, bundleID, subject, payload, routeHandled || hasRoute)
+		delegateErr = classifyEventError(
+			publishToDelegate(ctx, publisher.delegate, bundleID, subject, payload, routeHandled || hasRoute),
+			"host event publisher failed",
+			xerr.KindUnavailable,
+		)
 	}
 	if routeErr == nil {
 		return delegateErr
@@ -306,6 +311,25 @@ func (publisher routedPublisher) publishEventFromBundle(ctx context.Context, bun
 		return routeErr
 	}
 	return errors.Join(routeErr, delegateErr)
+}
+
+func classifyEventError(err error, message string, fallbackKind xerr.Kind) error {
+	if err == nil {
+		return nil
+	}
+	if appErr, ok := errors.AsType[*xerr.AppError](err); ok && appErr != nil {
+		return err
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return xerr.Timeout(message, context.DeadlineExceeded)
+	}
+	if errors.Is(err, context.Canceled) {
+		return xerr.Canceled(message, context.Canceled)
+	}
+	if fallbackKind == xerr.KindUnavailable {
+		return xerr.Unavailable(message)
+	}
+	return xerr.Internal(message)
 }
 
 func publishToDelegate(ctx context.Context, delegate xctx.EventPublisher, bundleID, subject string, payload any, routeHandled bool) error {
