@@ -35,3 +35,16 @@ func TestBuildHelpMatchesSupportedOptions(t *testing.T) {
 		t.Fatalf("build help advertises an unsupported or incorrect contract:\n%s", text)
 	}
 }
+
+func TestRunHelpIncludesJSONOutput(t *testing.T) {
+	var output bytes.Buffer
+	if !PrintCommandHelp(&output, "run") {
+		t.Fatal("run help is not registered")
+	}
+	text := output.String()
+	for _, want := range []string{"--json", "result as JSON on stdout", "--json > result.json"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("run help is missing %q:\n%s", want, text)
+		}
+	}
+}

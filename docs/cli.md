@@ -18,6 +18,7 @@ The examples below use `nflow` directly. From a source checkout, use
 nflow run flow.nflow
 nflow run flow.nflow '{"user_id": 42}'
 nflow run flow.nflow --assert='result.ok == true'
+nflow run flow.nflow --json > result.json
 nflow run -vv flow.nflow
 ```
 
@@ -29,6 +30,7 @@ following flags:
 |---|---|
 | `-v`, `-vv`, `-vvv` | Increasing verbosity: `-v` adds timing and a final trace; `-vv` prints live action names; `-vvv` adds explicit placeholders for omitted intermediate payloads. Verbose traces never show intermediate payload values. |
 | `--assert=EXPR` | Evaluated after the run; exits 1 on failure. |
+| `--json` | Emit the run result (or `--info` output) as JSON on stdout. Execution errors remain human-readable on stderr with a nonzero exit code; `--assert` may fail after the result has been emitted. |
 | `--info` | Describe the pipeline instead of executing it. |
 | `--journal-dir DIR` | Persist completed capability results (and idempotency responses) below `DIR`. Prints the execution ID to stderr for later replay. |
 | `--execution-id ID` | Replay/resume using an existing journal identity; requires `--journal-dir`. |

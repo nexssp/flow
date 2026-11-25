@@ -124,6 +124,22 @@ func TestRequireSourceExecutionIgnoresSidecars(t *testing.T) {
 	}
 }
 
+func TestRequirePreprocessErrorIncludesSourceSnippet(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "broken.nflow")
+	source := "# context\n@include\nruntime.noop\n"
+	ktest.RequireNoError(t, os.WriteFile(path, []byte(source), 0o600))
+
+	var code int
+	stdout, stderr := captureIO(t, func() {
+		code = RunContext(t.Context(), []string{"require", path})
+	})
+	ktest.RequireCondition(t, code != 0, "require unexpectedly succeeded")
+	ktest.RequireEqual(t, stdout, "")
+	for _, want := range []string{"preprocess:", path + ":2", "2 │ @include", "^"} {
+		ktest.RequireStringContains(t, stderr, want)
+	}
+}
+
 func TestRequireSourceBatchLintIgnoresSidecarsWithExternalRequirements(t *testing.T) {
 	// Exercise batch dispatch without downloading an external module. An existing
 	// harness must report the missing bundle, not reject obsolete sidecars.

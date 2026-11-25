@@ -3,7 +3,9 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -94,6 +96,84 @@ func TestRunPreparedSourceInjectsConsoleStderrWriter(t *testing.T) {
 	if !strings.Contains(stderr, "cli stderr") {
 		t.Fatalf("stderr = %q, want console.stderr output", stderr)
 	}
+}
+
+func TestRunReportsPositionedPreprocessAndInfoErrors(t *testing.T) {
+	t.Setenv(harnessEnv, "")
+	for _, test := range []struct {
+		name    string
+		source  string
+		flags   []string
+		context string
+	}{
+		{name: "preprocess", source: "# context\n@include\nruntime.noop\n", context: "preprocess/config"},
+		{name: "info parse", source: "# context\nruntime.noop ( value: )\n", flags: []string{"--info"}, context: "parse"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "broken.nflow")
+			if err := os.WriteFile(path, []byte(test.source), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			args := append([]string{"run", path}, test.flags...)
+			var code int
+			stdout, stderr := captureIO(t, func() {
+				code = RunWithBundles(args, nil)
+			})
+			if code == 0 {
+				t.Fatalf("run returned success; stdout=%q stderr=%q", stdout, stderr)
+			}
+			if stdout != "" {
+				t.Fatalf("diagnostic leaked to stdout: %q", stdout)
+			}
+			for _, want := range []string{test.context, path + ":2", "2 │", "^"} {
+				if !strings.Contains(stderr, want) {
+					t.Errorf("diagnostic missing %q: %s", want, stderr)
+				}
+			}
+		})
+	}
+}
+
+func TestRunSourceInProcess_PreprocessErrorIncludesSourceSnippet(t *testing.T) {
+	var code int
+	stdout, stderr := captureIO(t, func() {
+		code = runSourceInProcess(context.Background(), "# context\n@include\nruntime.noop\n", "inline.nflow", nil)
+	})
+	if code == 0 {
+		t.Fatalf("run returned success; stdout=%q stderr=%q", stdout, stderr)
+	}
+	for _, want := range []string{"preprocess/config", "inline.nflow:2", "2 │ @include", "^"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("diagnostic missing %q: %s", want, stderr)
+		}
+	}
+}
+
+func TestRunEmbeddedInfoParseErrorIncludesSourceSnippet(t *testing.T) {
+	source := "# context\nruntime.noop ( value: )\n"
+	var code int
+	stdout, stderr := captureIO(t, func() {
+		code = RunEmbeddedWithBundles(context.Background(), source, []string{"info"}, nil)
+	})
+	if code == 0 {
+		t.Fatalf("embedded info returned success; stdout=%q stderr=%q", stdout, stderr)
+	}
+	for _, want := range []string{"parse", "<embedded>:2", "2 │ runtime.noop ( value: )", "^"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("diagnostic missing %q: %s", want, stderr)
+		}
+	}
+}
+
+func TestFatalSourceErrorKeepsUnpositionedErrorConcise(t *testing.T) {
+	var code int
+	_, stderr := captureIO(t, func() {
+		code = fatalSourceError("preprocess", errors.New("opaque error"), "source", "test.nflow")
+	})
+	ktest.RequireEqual(t, code, 2)
+	ktest.RequireStringContains(t, stderr, "❌ preprocess: opaque error")
+	ktest.RequireCondition(t, !strings.Contains(stderr, "test.nflow:") && !strings.Contains(stderr, "1 │"), "unpositioned error should not include a source excerpt: %s", stderr)
 }
 
 func TestEmitJSONOutputQuotesStrings(t *testing.T) {

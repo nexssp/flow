@@ -48,7 +48,7 @@ func runRequire(ctx context.Context, inv *invocation, args []string) int {
 	}
 	_, meta, err := compiler.Preprocess(ctx, dt, string(src), path)
 	if err != nil {
-		return fatalf("preprocess: %v", err)
+		return fatalSourceError("preprocess", err, string(src), path)
 	}
 
 	reqs, reqErr := require.SourceRequirements(meta)

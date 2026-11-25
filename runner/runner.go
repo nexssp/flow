@@ -253,17 +253,24 @@ func configureRunSourceJournal(cfg *Config, journalDir string, stderr io.Writer)
 func printSourceInfo(ctx context.Context, cfg Config, src, name string, stdout, stderr io.Writer) int {
 	clean, meta, err := compiler.Preprocess(ctx, cfg.Directives, src, name)
 	if err != nil {
-		fmt.Fprintf(stderr, "❌ preprocess: %v\n", err)
+		fmt.Fprintf(stderr, "❌ preprocess: %s\n", formatSourceInfoError(err, src, name))
 		return 1
 	}
 	ast, parseErr := compiler.NewParserWithFileOffset(
 		ctx, cfg.Operators, cfg.PrimariesFor(meta), clean, name, 0,
 	).Parse()
 	if parseErr != nil {
-		fmt.Fprintf(stderr, "❌ parse: %v\n", parseErr)
+		fmt.Fprintf(stderr, "❌ parse: %s\n", formatSourceInfoError(parseErr, src, name))
 		return 1
 	}
 	return PrintInfo(stdout, name, src, meta, ast)
+}
+
+func formatSourceInfoError(err error, src, name string) string {
+	if _, ok := compiler.PositionOf(err); !ok {
+		return err.Error()
+	}
+	return FormatErrorDetail(err, src, name, false)
 }
 
 // CollectAsserts combines source assertions with caller-supplied assertions and positions.

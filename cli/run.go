@@ -83,7 +83,11 @@ func withHarness(ctx context.Context, inv *invocation, subcommand, flowPath stri
 	}
 	reqs, err := inv.requirementsForHarness(ctx, flowPath)
 	if err != nil {
-		return fatalf("%v", err)
+		source, readErr := readSourceFile(flowPath)
+		if readErr != nil {
+			return fatalf("%v", err)
+		}
+		return fatalSourceError("preprocess/config", err, string(source), flowPath)
 	}
 	return withHarnessRequirements(ctx, inv, subcommand, flowPath, reqs, args, inProcess)
 }
@@ -198,6 +202,15 @@ func runFlowInInvocation(ctx context.Context, inv *invocation, args []string) in
 		}
 		return runFlowInProcess(runCtx, runInv, runArgs)
 	})
+}
+
+func fatalSourceError(stage string, err error, source, name string) int {
+	if _, ok := compiler.PositionOf(err); !ok {
+		return fatalf("%s: %v", stage, err)
+	}
+	detail := runner.FormatErrorDetail(err, source, name, colorEnabled(os.Stderr))
+	fmt.Fprintf(os.Stderr, "❌ %s: %s\n", stage, detail)
+	return 2
 }
 
 func withoutTestModeFlag(args []string) []string {
@@ -339,14 +352,14 @@ func runEmbeddedInfo(ctx context.Context, inv *invocation, source string, args [
 
 	clean, meta, cfg, err := inv.prepareRequiredSource(ctx, source, "<embedded>")
 	if err != nil {
-		return fatalf("preprocess/config: %v", err)
+		return fatalSourceError("preprocess/config", err, source, "<embedded>")
 	}
 
 	ast, err := compiler.NewParserWithFileOffset(
 		ctx, cfg.Operators, cfg.PrimariesFor(meta), clean, "<embedded>", 0,
 	).Parse()
 	if err != nil {
-		return fatalf("parse: %v", err)
+		return fatalSourceError("parse", err, source, "<embedded>")
 	}
 
 	if wantJSON {
@@ -454,7 +467,7 @@ func runSourceInInvocation(ctx context.Context, inv *invocation, src, name strin
 
 	clean, meta, cfg, err := inv.prepareRequiredSource(ctx, src, name)
 	if err != nil {
-		return fatalf("preprocess/config: %v", err)
+		return fatalSourceError("preprocess/config", err, src, name)
 	}
 
 	payload, flags, err = readRunInput(payload, clean, flags)
@@ -475,7 +488,7 @@ func printSourceInfo(ctx context.Context, cfg runner.Config, src, name, clean st
 		ctx, cfg.Operators, cfg.PrimariesFor(meta), clean, name, 0,
 	).Parse()
 	if err != nil {
-		return fatalf("parse: %v", err)
+		return fatalSourceError("parse", err, src, name)
 	}
 	if wantJSON {
 		if printErr := runner.PrintInfoJSON(os.Stdout, name, meta, ast); printErr != nil {
