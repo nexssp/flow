@@ -31,11 +31,11 @@ func buildProgramSourceWithVisibleNames(raw string, visibleNames map[string]stru
 	if err != nil {
 		return "", err
 	}
-	if err := validateProjectionLetReferences(bindings); err != nil {
-		return "", err
+	if referenceErr := validateProjectionLetReferences(bindings); referenceErr != nil {
+		return "", referenceErr
 	}
-	if err := validateProjectionInputSpreadSpacing(body); err != nil {
-		return "", err
+	if spacingErr := validateProjectionInputSpreadSpacing(body); spacingErr != nil {
+		return "", spacingErr
 	}
 	localNames := make(map[string]struct{}, len(bindings))
 	for _, binding := range bindings {
@@ -45,19 +45,8 @@ func buildProgramSourceWithVisibleNames(raw string, visibleNames map[string]stru
 		localNames[binding.name] = struct{}{}
 	}
 
-	var object string
-	state, rest, hasSpread := splitSpread(body)
-	switch {
-	case !hasSpread:
-		body = rewriteProjectionDataValues(body, localNames, visibleNames)
-		object = "{ " + expandProjectionShorthand(body, typedNames) + " }"
-	case strings.TrimSpace(rest) == "":
-		object = state
-	default:
-		rest = rewriteProjectionDataValues(rest, localNames, visibleNames)
-		object = "__spread__(" + state + ", { " + expandProjectionShorthand(rest, typedNames) + " })"
-	}
-	if err := validateProjectionObjectKeys(object); err != nil {
+	object, _, _, err := buildProjectionObjectBody(body, localNames, visibleNames, typedNames)
+	if err != nil {
 		return "", err
 	}
 	return compiler.PreprocessDotsWithRoots(letPrefix+object, typedNames), nil
@@ -90,11 +79,11 @@ func validateProjectionBareValuesInScope(raw string, visibleNames map[string]str
 	for _, binding := range bindings {
 		localNames[binding.name] = struct{}{}
 	}
-	_, rest, hasSpread := splitSpread(body)
-	if hasSpread {
-		body = rest
+	entries, err := projectionNonSpreadEntries(body)
+	if err != nil {
+		return err
 	}
-	return validateProjectionBareValues(body, localNames, visibleNames)
+	return validateProjectionBareValues(strings.Join(entries, ", "), localNames, visibleNames)
 }
 
 func rejectUnavailableProjectionBindings(raw string, unavailableNames []string, environment map[string]any) error {
@@ -119,15 +108,15 @@ func rejectUnavailableProjectionBindings(raw string, unavailableNames []string, 
 		localNames[binding.name] = struct{}{}
 	}
 	for _, binding := range bindings {
-		if err := rejectUnavailableProjectionValues(binding.value, localNames, unavailable); err != nil {
-			return err
+		if unavailableErr := rejectUnavailableProjectionValues(binding.value, localNames, unavailable); unavailableErr != nil {
+			return unavailableErr
 		}
 	}
-	_, rest, hasSpread := splitSpread(body)
-	if hasSpread {
-		body = rest
+	entries, err := projectionNonSpreadEntries(body)
+	if err != nil {
+		return err
 	}
-	return rejectUnavailableProjectionValues(body, localNames, unavailable)
+	return rejectUnavailableProjectionValues(strings.Join(entries, ", "), localNames, unavailable)
 }
 
 func rejectUnavailableProjectionValues(raw string, localNames, unavailable map[string]struct{}) error {
@@ -224,6 +213,299 @@ func splitProjectionEntrySpans(raw string) []projectionEntrySpan {
 		i++
 	}
 	return append(spans, projectionEntrySpan{start: start, end: len(raw)})
+}
+
+type projectionSourceEntry struct {
+	raw    string
+	source string
+	fields string
+	spread bool
+}
+
+// buildProjectionObjectBody lowers each spread and explicit field in source
+// order. A later map overrides keys already accumulated, matching ordinary
+// object-spread behavior; repeated explicit keys remain compile-time errors.
+func buildProjectionObjectBody(raw string, localNames, visibleNames, typedNames map[string]struct{}) (generatedSource string, spreadFound bool, explicitEntries []string, resultErr error) {
+	spans := splitProjectionEntrySpans(raw)
+	entries := make([]projectionSourceEntry, 0, len(spans))
+	topLevelSpread := false
+	for _, span := range spans {
+		entry := raw[span.start:span.end]
+		if projectionEntryIsTrivia(entry) {
+			continue
+		}
+		source, fields, spread, err := parseProjectionSpreadEntry(entry)
+		if err != nil {
+			return "", false, nil, err
+		}
+		entries = append(entries, projectionSourceEntry{raw: entry, source: source, fields: fields, spread: spread})
+		topLevelSpread = topLevelSpread || spread
+	}
+
+	if !topLevelSpread {
+		nested, hasSpread, err := rewriteNestedProjectionSpreads(raw, localNames, visibleNames, typedNames)
+		if err != nil {
+			return "", false, nil, err
+		}
+		body := rewriteProjectionDataValues(nested, localNames, visibleNames)
+		object := "{ " + expandProjectionShorthand(body, typedNames) + " }"
+		if err := validateProjectionObjectKeys(object); err != nil {
+			return "", false, nil, err
+		}
+		return object, hasSpread, projectionObjectEntries(body), nil
+	}
+
+	var parts []string
+	var pendingFields []string
+	var explicitFields []string
+	flushFields := func() {
+		if len(pendingFields) == 0 {
+			return
+		}
+		parts = append(parts, "{ "+strings.Join(pendingFields, ", ")+" }")
+		pendingFields = nil
+	}
+
+	for _, entry := range entries {
+		if !entry.spread {
+			nested, _, err := rewriteNestedProjectionSpreads(entry.raw, localNames, visibleNames, typedNames)
+			if err != nil {
+				return "", false, nil, err
+			}
+			field := strings.TrimSpace(expandProjectionShorthand(rewriteProjectionDataValues(nested, localNames, visibleNames), typedNames))
+			pendingFields = append(pendingFields, field)
+			explicitFields = append(explicitFields, field)
+			continue
+		}
+
+		flushFields()
+		parts = append(parts, entry.source)
+		if projectionEntryIsTrivia(entry.fields) {
+			continue
+		}
+		fieldObject, _, fields, err := buildProjectionObjectBody(entry.fields, localNames, visibleNames, typedNames)
+		if err != nil {
+			return "", false, nil, err
+		}
+		parts = append(parts, fieldObject)
+		explicitFields = append(explicitFields, fields...)
+	}
+	flushFields()
+
+	if len(explicitFields) > 0 {
+		if err := validateProjectionObjectKeys("{ " + strings.Join(explicitFields, ", ") + " }"); err != nil {
+			return "", false, nil, err
+		}
+	}
+	if len(parts) == 0 {
+		return "{  }", false, explicitFields, nil
+	}
+	object := parts[0]
+	for _, part := range parts[1:] {
+		object = "__spread__(" + object + ", " + part + ")"
+	}
+	return object, true, explicitFields, nil
+}
+
+func projectionObjectEntries(body string) []string {
+	spans := splitProjectionEntrySpans(body)
+	entries := make([]string, 0, len(spans))
+	for _, span := range spans {
+		entry := body[span.start:span.end]
+		if !projectionEntryIsTrivia(entry) {
+			entries = append(entries, entry)
+		}
+	}
+	return entries
+}
+
+func projectionEntryIsTrivia(raw string) bool {
+	return projectionTailIsTrivia(raw, 0)
+}
+
+// projectionNonSpreadEntries returns fields that need ordinary projection
+// validation, preserving source order while omitting spread sources.
+func projectionNonSpreadEntries(raw string) ([]string, error) {
+	var entries []string
+	for _, span := range splitProjectionEntrySpans(raw) {
+		entry := raw[span.start:span.end]
+		if projectionEntryIsTrivia(entry) {
+			continue
+		}
+		_, fields, spread, err := parseProjectionSpreadEntry(entry)
+		if err != nil {
+			return nil, err
+		}
+		if spread {
+			if !projectionEntryIsTrivia(fields) {
+				entries = append(entries, fields)
+			}
+			continue
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
+}
+
+// rewriteNestedProjectionSpreads replaces only nested object literals that
+// actually contain a spread, leaving ordinary object source untouched.
+func rewriteNestedProjectionSpreads(raw string, localNames, visibleNames, typedNames map[string]struct{}) (rewrittenSource string, containsSpread bool, resultErr error) {
+	var out strings.Builder
+	out.Grow(len(raw))
+	var quote byte
+	parenDepth := 0
+	changed := false
+	for index := 0; index < len(raw); {
+		if quote != 0 {
+			next, nextQuote := advanceProjectionQuote(raw, index, quote)
+			out.WriteString(raw[index:next])
+			index, quote = next, nextQuote
+			continue
+		}
+		if next, handled, err := skipBalancedBraceTrivia(raw, index, parenDepth); handled {
+			if err != nil {
+				return "", false, err
+			}
+			out.WriteString(raw[index:next])
+			index = next
+			continue
+		}
+		switch raw[index] {
+		case '"', '\'', '`':
+			quote = raw[index]
+			out.WriteByte(raw[index])
+			index++
+		case '(':
+			parenDepth++
+			out.WriteByte(raw[index])
+			index++
+		case ')':
+			if parenDepth > 0 {
+				parenDepth--
+			}
+			out.WriteByte(raw[index])
+			index++
+		case '{':
+			closeIndex, err := scanBalancedBraces(raw, index)
+			if err != nil {
+				return "", false, err
+			}
+			if projectionFlowBlockBefore(raw, index) {
+				body, hasSpread, err := rewriteNestedProjectionSpreads(raw[index+1:closeIndex], localNames, visibleNames, typedNames)
+				if err != nil {
+					return "", false, err
+				}
+				if hasSpread {
+					out.WriteByte('{')
+					out.WriteString(body)
+					out.WriteByte('}')
+					changed = true
+				} else {
+					out.WriteString(raw[index : closeIndex+1])
+				}
+			} else {
+				object, hasSpread, _, err := buildProjectionObjectBody(raw[index+1:closeIndex], localNames, visibleNames, typedNames)
+				if err != nil {
+					return "", false, err
+				}
+				if hasSpread {
+					out.WriteString(object)
+					changed = true
+				} else {
+					out.WriteString(raw[index : closeIndex+1])
+				}
+			}
+			index = closeIndex + 1
+		default:
+			out.WriteByte(raw[index])
+			index++
+		}
+	}
+	if !changed {
+		return raw, false, nil
+	}
+	return out.String(), true, nil
+}
+
+// projectionFlowBlockBefore keeps braces owned by Flow keywords as blocks,
+// while still allowing nested object literals inside those blocks to rewrite.
+func projectionFlowBlockBefore(raw string, brace int) bool {
+	position := brace
+	for position > 0 && isProjectionWhitespace(raw[position-1]) {
+		position--
+	}
+	if position == 0 {
+		return false
+	}
+
+	if isProjectionIdentifierContinue(raw[position-1]) {
+		return projectionFlowBlockIdentifierBefore(raw, position)
+	}
+	if raw[position-1] != ')' {
+		return false
+	}
+
+	var parenHeads []string
+	var quote byte
+	for index := 0; index < position; {
+		if quote != 0 {
+			index, quote = advanceProjectionQuote(raw, index, quote)
+			continue
+		}
+		if isProjectionQuote(raw[index]) {
+			quote = raw[index]
+			index++
+			continue
+		}
+		if next, handled, err := skipBalancedBraceTrivia(raw, index, len(parenHeads)); handled {
+			if err != nil {
+				return false
+			}
+			index = next
+			continue
+		}
+		switch raw[index] {
+		case '(':
+			parenHeads = append(parenHeads, projectionWordBefore(raw, index))
+		case ')':
+			if len(parenHeads) > 0 {
+				head := parenHeads[len(parenHeads)-1]
+				parenHeads = parenHeads[:len(parenHeads)-1]
+				if index == position-1 {
+					return head == "if" || head == "match" || head == "each"
+				}
+			}
+		}
+		index++
+	}
+	return false
+}
+
+func projectionFlowBlockIdentifierBefore(raw string, position int) bool {
+	start := position - 1
+	for start > 0 && isProjectionIdentifierContinue(raw[start-1]) {
+		start--
+	}
+	if start > 0 && raw[start-1] == '.' {
+		return false
+	}
+	switch raw[start:position] {
+	case "race", "parallel", "match", "each", "else":
+		return true
+	default:
+		return false
+	}
+}
+
+func projectionWordBefore(raw string, position int) string {
+	for position > 0 && isProjectionWhitespace(raw[position-1]) {
+		position--
+	}
+	end := position
+	for position > 0 && isProjectionIdentifierContinue(raw[position-1]) {
+		position--
+	}
+	return raw[position:end]
 }
 
 func rewriteProjectionDataEntry(entry string, localNames, visibleNames map[string]struct{}) string {
@@ -888,9 +1170,11 @@ func projectionHasPotentialTypedInputPath(raw string) bool {
 	if err != nil {
 		return false
 	}
-	if _, rest, hasSpread := splitSpread(body); hasSpread {
-		body = rest
+	entries, err := projectionNonSpreadEntries(body)
+	if err != nil {
+		return false
 	}
+	body = strings.Join(entries, ", ")
 	if strings.TrimSpace(body) == "" {
 		return false
 	}
@@ -909,20 +1193,64 @@ func projectionSpreadRefEndsAt(raw string, end int) bool {
 }
 
 func validateProjectionInputSpreadSpacing(raw string) error {
-	trimmed := strings.TrimSpace(raw)
-	if !strings.HasPrefix(trimmed, "...") {
-		return nil
-	}
-	after := trimmed[3:]
-	if after == "" || !isProjectionWhitespace(after[0]) {
-		return nil
-	}
-	after = strings.TrimLeft(after, " \t\n\r")
-	end, ok := projectionInputPathAt(after)
-	if ok && projectionSpreadRefEndsAt(after, end) {
-		return errors.New(`projection: original-input spreads must use "...input.path" with no whitespace after "..."`)
+	for _, span := range splitProjectionEntrySpans(raw) {
+		entry := raw[span.start:span.end]
+		if projectionEntryIsTrivia(entry) {
+			continue
+		}
+		if _, _, _, err := parseProjectionSpreadEntry(entry); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func parseProjectionSpreadEntry(entry string) (source, fields string, spread bool, err error) {
+	trimmed := strings.TrimSpace(entry)
+	if !strings.HasPrefix(trimmed, "...") {
+		return "", "", false, nil
+	}
+
+	after := trimmed[3:]
+	if after != "" && isProjectionWhitespace(after[0]) {
+		path := strings.TrimLeft(after, " \t\n\r")
+		if end, ok := projectionInputPathAt(path); ok && projectionSpreadRefEndsAt(path, end) {
+			return "", "", true, errors.New(`projection: original-input spreads must use "...input.path" with no whitespace after "..."`)
+		}
+	}
+
+	if end, ok := projectionInputPathAt(after); ok && projectionSpreadRefEndsAt(after, end) {
+		source = after[:end]
+		after = after[end:]
+	} else {
+		if after != "" && !isProjectionWhitespace(after[0]) && after[0] != '{' {
+			return "", "", false, nil
+		}
+		after = strings.TrimLeft(after, " \t\n\r")
+		if end, _, ok := projectionPathAt(after, 0); ok && projectionSpreadRefEndsAt(after, end) {
+			source = after[:end]
+			after = after[end:]
+		} else {
+			source = expressionRootName
+		}
+	}
+
+	after = strings.TrimLeft(after, " \t\n\r")
+	if projectionEntryIsTrivia(after) {
+		return source, "", true, nil
+	}
+	if strings.HasPrefix(after, "{") {
+		closeIndex, scanErr := scanBalancedBraces(after, 0)
+		if scanErr != nil {
+			return "", "", true, fmt.Errorf("projection: invalid spread fields: %w", scanErr)
+		}
+		if projectionTailIsTrivia(after, closeIndex+1) {
+			return source, strings.TrimSpace(after[1:closeIndex]), true, nil
+		}
+	}
+	// Preserve the legacy `... field: value` shorthand as a spread followed
+	// by ordinary projection fields.
+	return source, strings.TrimSpace(after), true, nil
 }
 
 // validateProjectionObjectKeys rejects duplicates after path shorthand has

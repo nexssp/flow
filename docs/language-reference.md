@@ -92,7 +92,7 @@ Atoms can also carry extension-consumed annotations: `#target1,target2`, `~exclu
 
 ## Expressions, projections, and symbols
 
-A projection transforms the current value into a new object. Inside it, `.field` means a field on the current input; `...` spreads the current object, while `... .state` (with a space) spreads a nested path from that current value:
+A projection transforms the current value into a new object. Inside it, `.field` means a field on the current input; `...` spreads the current object, while `... .state` (with a space) spreads a nested path from that current value. A spread may appear before, between, or after explicit fields, including inside a nested object:
 
 ```nflow
 { name, email }
@@ -101,9 +101,11 @@ A projection transforms the current value into a new object. Inside it, `.field`
 { ..., status: "ready" }
 { ... .state, .current.attempt.attempt_id, status: "ready" }
 { ...input.state, status: "ready" }
+{ status: "starting", ... .state, status_note: "copied", ...input.metadata }
+{ profile: { ... .profile, display: .name } }
 ```
 
-`...input.state` (with no space after `...`) instead spreads that path from the original pipeline input, even after earlier pipeline steps have changed the current projection value. The roots are distinct: `... input.state` is rejected, and `... .state` keeps its existing current-value meaning. Typed pipeline input names are not supported as spread prefixes; use a `request.path` projection entry to copy selected fields instead. Explicit fields after either spread override matching copied fields. See the runnable [input-rooted spread fixture](../extensions/projection/nflows/input_path_spread.nflow) and the existing [current-value spread fixture](../extensions/projection/nflows/path_shorthand_spread.nflow).
+`...input.state` (with no space after `...`) instead spreads that path from the original pipeline input, even after earlier pipeline steps have changed the current projection value. The roots are distinct: `... input.state` is rejected, and `... .state` keeps its existing current-value meaning. Typed pipeline input names are not supported as spread prefixes; use a `request.path` projection entry to copy selected fields instead. Entries merge from left to right: a later spread or explicit field overrides an earlier value with the same key, while repeating an explicit key is still a compile-time error. See the runnable [spread-position fixture](../extensions/projection/nflows/spread_positions.nflow), the [input-rooted spread fixture](../extensions/projection/nflows/input_path_spread.nflow), and the [current-value spread fixture](../extensions/projection/nflows/path_shorthand_spread.nflow).
 
 In projection object-entry position, a bare field name is shorthand for the same key copied from the current input: `{ name }` is equivalent to `{ name: .name }`. A path entry such as `.profile.city` derives the final key `city` and copies that nested path. `input.profile.city` derives the same final key from the original request, while `request.profile.city` does so only when `request` is the named input declared by a typed pipeline signature. The last path segment is always the inferred output key. Shorthand entries can be mixed with explicit `key: value` entries; duplicate output keys are rejected after key inference. Action calls also accept their existing current-input path shorthand, such as `action(.user.id)` for `action(id: .user.id)`; typed-input path shorthand is projection-only. Duplicate action-argument keys are rejected too.
 
@@ -152,6 +154,8 @@ The core parser obtains operators from the active table. In the shipped standard
 | `if (condition) { expr } else { expr }` | Evaluate a canonical `bool` condition and run only the selected Flow expression. `else if` is supported; without a matching condition and no `else`, the current input passes through unchanged. |
 | `list -> each :concurrency=N { expr }` | Run the block for each list item and return its results in input order. |
 | `condition ? yes : no` | Conditional expression; the else arm is optional. |
+
+`if` branches are Flow expressions, not inline expression-language calculations. In a projection, `condition ? yes : no` chooses between values by a condition, while `value ?? fallback` uses the fallback only when `value` is null; these are distinct operators.
 
 `->` is the only sequential pipeline operator; `left | right` is rejected. Use
 `->` instead. This applies only to Flow steps: `|` inside expressions is

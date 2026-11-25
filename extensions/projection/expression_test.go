@@ -31,6 +31,11 @@ func TestBuildProgramSource(t *testing.T) {
 		{"spread with braced fields", `... { payload: [1] }`, `__spread__(__root__, { payload: [1] })`},
 		{"spread braced expression values", `...{ label: status }`, `__spread__(__root__, { label: status })`},
 		{"spread with shorthand", `..., name, email: .email`, `__spread__(__root__, { name: name, email: email })`},
+		{"spread between fields", `before: "x", ... .state, after: "y"`, `__spread__(__spread__({ before: "x" }, state), { after: "y" })`},
+		{"original-input spread after fields", `before: "x", ...input.state`, `__spread__({ before: "x" }, input.state)`},
+		{"multiple source-ordered spreads", `... .first, middle: "x", ...input.second, after: true`, `__spread__(__spread__(__spread__(__root__.first, { middle: "x" }), input.second), { after: true })`},
+		{"nested spread", `nested: { before: "x", ... .state, after: true }`, `{ nested: __spread__(__spread__({ before: "x" }, state), { after: true }) }`},
+		{"spread inside a Flow block object", `value: race { { ..., extra: true } }`, `{ value: race { __spread__(__root__, { extra: true }) } }`},
 		{"bare spread", `...`, `__root__`},
 		{"single local binding", `let profile = .user.profile; first: profile.name, display: profile.name`, `let profile = user.profile; { first: profile.name, display: profile.name }`},
 		{"multiple local bindings", `let profile = .user.profile; let display = profile.name; first: display, second: profile.name`, `let profile = user.profile; let display = profile.name; { first: display, second: profile.name }`},
@@ -42,6 +47,26 @@ func TestBuildProgramSource(t *testing.T) {
 			got, err := buildProgramSource(c.raw)
 			ktest.RequireNoError(t, err)
 			ktest.RequireEqual(t, got, c.want)
+		})
+	}
+}
+
+func TestBuildProgramSourceSpreadDiagnostics(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "spaced original-input spread after a field", raw: `status: "ready", ... input.state`, want: `original-input spreads must use "...input.path"`},
+		{name: "spaced original-input spread in a nested object", raw: `nested: { ... input.state }`, want: `original-input spreads must use "...input.path"`},
+		{name: "duplicate explicit fields around a spread", raw: `status: "first", ... .state, status: "last"`, want: `duplicate key "status"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := buildProgramSource(tc.raw)
+			ktest.RequireCondition(t, err != nil, "expected projection error for %q", tc.raw)
+			ktest.RequireStringContains(t, err.Error(), tc.want)
 		})
 	}
 }
@@ -102,7 +127,7 @@ func TestProjectionTypedPathCandidateAfterLetsAndSpread(t *testing.T) {
 		want bool
 	}{
 		{raw: `let prefix = "v1"; request.current`, want: true},
-		{raw: `... .state, request.current`, want: true},
+		{raw: `status: "ready", ... .state, request.current`, want: true},
 		{raw: `let prefix = "v1"; ordinary`, want: false},
 		{raw: `let prefix = "request.current"; value: 1`, want: false},
 	} {

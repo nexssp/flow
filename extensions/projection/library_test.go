@@ -61,6 +61,7 @@ func TestFixtures_Discoverable(t *testing.T) {
 		"nflows/local_let_single.nflow",
 		"nflows/local_let_multiple.nflow",
 		"nflows/local_let_spread.nflow",
+		"nflows/spread_positions.nflow",
 		"nflows/static_output_schema.nflow",
 		"nflows/typed_input_path_roots.nflow",
 	} {

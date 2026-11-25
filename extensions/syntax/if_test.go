@@ -34,16 +34,23 @@ func TestIfKeywordParsesElseIfInOrder(t *testing.T) {
 	}
 }
 
-func TestIfBranchArithmeticOffersProjectionTernaryHint(t *testing.T) {
+func TestIfBranchCalculationsOfferProjectionHints(t *testing.T) {
 	t.Parallel()
 
-	_, err := newStructuredKeywordParser(
-		`if (.out != null) { .out } else { .mod + ".mp4" }`, false,
-	).Parse()
-	if err == nil ||
-		!strings.Contains(err.Error(), `unexpected character "+" in else branch`) ||
-		!strings.Contains(err.Error(), `out: .out ?? (.mod + ".mp4")`) {
-		t.Fatalf("parse error = %v, want actionable projection ternary hint", err)
+	for _, operator := range []string{"+", "-", "*", "/", "%", "<", ">", "^"} {
+		t.Run(operator, func(t *testing.T) {
+			t.Parallel()
+			_, err := newStructuredKeywordParser(
+				`if (true) { "then" } else { 1 `+operator+` 2 }`, false,
+			).Parse()
+			if err == nil ||
+				!strings.Contains(err.Error(), `unexpected character "`+operator+`" in else branch`) ||
+				!strings.Contains(err.Error(), `value: condition ? yes : no`) ||
+				!strings.Contains(err.Error(), "`??` for a null fallback") ||
+				!strings.Contains(err.Error(), `value: .out ?? (.mod + ".mp4")`) {
+				t.Fatalf("parse error = %v, want accurate conditional and null-fallback hints", err)
+			}
+		})
 	}
 }
 

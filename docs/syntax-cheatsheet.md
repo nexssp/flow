@@ -87,7 +87,7 @@ condition ? yes : no
 - `parallel` gathers concurrent branches under explicit labels.
 - `race` returns the first successful candidate.
 - `each` maps over up to 100,000 list items, returning results in source order; concurrency defaults to 4 and is capped at 256.
-- The ternary else arm is optional.
+- The ternary else arm is optional; `condition ? yes : no` selects by condition, while `value ?? fallback` is null coalescing.
 
 Name a step's output with a postfix `as name`. The following action still receives the ordinary output of the previous step; the name is an additional immutable lexical binding for later steps:
 
@@ -123,6 +123,8 @@ parallel {
 { ..., status: "ready" }
 { ... .state, status: "ready" }
 { ...input.state, status: "ready" }
+{ status: "starting", ... .state, status_note: "copied", ...input.metadata }
+{ profile: { ... .profile, display: .name } }
 { let total = .price * .quantity; ..., total: total }
 pick(field: "user.id")
 wrap(key: "data")
@@ -130,7 +132,9 @@ wrap(key: "data")
 `... .state` reads from the current projection value; `...input.state` reads
 from the original pipeline request. These roots have different meanings, so
 keep the space in the former and omit it in the latter; `... input.state` is
-rejected. Fields after either spread override copied fields with the same key.
+rejected. Spreads may appear anywhere in an object, including nested objects.
+Entries merge left to right: later spreads or explicit fields override earlier
+values, while duplicate explicit keys remain compile-time errors.
 
 ## Match and loops
 

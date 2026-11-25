@@ -1,0 +1,39 @@
+# @syntax-only
+# TestProjectionSpreadPositionsFixture runs this fixture with explicit input values.
+@description "Projection: spread current and original inputs at any object-entry position"
+noop
+-> {
+  first: .first,
+  third: .third,
+  nested_first: .nested_first
+}
+-> {
+  ... .first,
+  middle: "between-spreads",
+  ...input.second,
+  after: "before-last-spread",
+  ... .third,
+  explicit_winner: "explicit-last",
+  final: "after-last-spread",
+  nested: {
+    ... .nested_first,
+    before_second: "between-nested-spreads",
+    ...input.nested_second
+  }
+}
+
+@assert {
+  spread_winner == "third"
+  first_only == true
+  second_only == true
+  third_only == true
+  middle == "between-spreads"
+  after == "before-last-spread"
+  explicit_winner == "explicit-last"
+  final == "after-last-spread"
+  nested.nested_winner == "nested-second"
+  nested.nested_first_only == true
+  nested.nested_second_only == true
+  nested.nested_after == "second"
+  nested.before_second == "between-nested-spreads"
+}
