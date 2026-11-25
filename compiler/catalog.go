@@ -15,11 +15,12 @@ import (
 // `nflow show`, and the linter. Regenerated on every build — no manual
 // maintenance.
 type Catalog struct {
-	Atoms      []AtomSpec      `json:"atoms"`
-	Sources    []SourceSpec    `json:"sources"`
-	Operators  []OperatorSpec  `json:"operators"`
-	Modifiers  []ModifierSpec  `json:"modifiers"`
-	Directives []DirectiveSpec `json:"directives"`
+	Atoms      []AtomSpec         `json:"atoms"`
+	Sources    []SourceSpec       `json:"sources"`
+	Operators  []OperatorSpec     `json:"operators"`
+	Modifiers  []ModifierSpec     `json:"modifiers"`
+	Directives []DirectiveSpec    `json:"directives"`
+	Events     []EventCatalogSpec `json:"events"`
 }
 
 type AtomSpec struct {
@@ -60,6 +61,14 @@ type DirectiveSpec struct {
 	Example string `json:"example,omitempty"`
 }
 
+// EventCatalogSpec describes one mounted, alias-aware bundle event.
+type EventCatalogSpec struct {
+	Name        string      `json:"name"`
+	Subject     string      `json:"subject"`
+	Description string      `json:"description,omitempty"`
+	Payload     []FieldSpec `json:"payload,omitempty"`
+}
+
 type FieldSpec struct {
 	Name     string `json:"name"`
 	Type     string `json:"type"`
@@ -75,6 +84,7 @@ func BuildCatalog(
 	mt *ModifierTable,
 	dt *DirectiveTable,
 	ot *OperatorTable,
+	eventSpecs ...MountedEventSpec,
 ) Catalog {
 	cat := Catalog{}
 
@@ -83,8 +93,27 @@ func BuildCatalog(
 	cat.Operators = collectOperators(resolver, ot)
 	cat.Modifiers = collectModifiers(mt)
 	cat.Directives = collectDirectives(dt)
+	cat.Events = collectEvents(eventSpecs)
 
 	return cat
+}
+
+func collectEvents(events []MountedEventSpec) []EventCatalogSpec {
+	if len(events) == 0 {
+		return nil
+	}
+	out := make([]EventCatalogSpec, 0, len(events))
+	for _, event := range events {
+		var payload any
+		if event.PayloadType != nil {
+			payload = reflect.New(event.PayloadType).Interface()
+		}
+		out = append(out, EventCatalogSpec{
+			Name: event.Name, Subject: event.Subject, Description: event.Description, Payload: fieldsOf(payload),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 func collectAtoms(resolver CapabilityResolver) []AtomSpec {

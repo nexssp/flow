@@ -1,0 +1,2 @@
+@description "console.stderr writes through the injected writer"
+console.stderr(message: "fixture")

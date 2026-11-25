@@ -15,6 +15,7 @@ import (
 	"github.com/nexssp/flow/compiler/contracts"
 	"github.com/nexssp/flow/compiler/secret"
 	flowapproval "github.com/nexssp/flow/extensions/approval"
+	flowevents "github.com/nexssp/flow/extensions/events"
 )
 
 type Execution struct {
@@ -54,6 +55,7 @@ var defaultRunAction = compiler.RunAction()
 
 func withExecutionContext(ctx context.Context, cfg Config, resolver compiler.CapabilityResolver, meta map[string]any) context.Context {
 	cfg.Resolver = resolver
+	ctx = flowevents.InstallPublisher(ctx, meta)
 	if cfg.secretScrubber != nil {
 		ctx = secretScrubberContextKey.With(ctx, cfg.secretScrubber)
 	}
@@ -310,6 +312,8 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 		return compileSubValues(subName, subSource, values)
 	}
 
+	eventSpecs := eventSpecsForConfig(cfg)
+
 	for _, m := range cfg.Materializers {
 		if m == nil {
 			continue
@@ -322,6 +326,7 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 			CompileValues:               compileSubValues,
 			CompileWithAnalysisInput:    compileSubValuesWithInput,
 			CompileWithAnalysisBindings: compileSubValuesWithInputAndBindings,
+			EventSpecs:                  eventSpecs,
 			Introspection:               prepared.ActionIntrospectionEnabled(),
 		}); matErr != nil {
 			return Compilation{Meta: meta, Resolver: resolver}, fmt.Errorf("materialize: %w", matErr)
@@ -334,7 +339,6 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 		resolver, cfg.Directives, cfg.Modifiers,
 		cfg.Operators, cfg.Primaries, cfg.CompileOpts...,
 	)
-
 	compiledRes, err := compileAct.Do(ctx, compiler.CompileReq{
 		Prepared:          prepared,
 		TypeAnalysisInput: compiler.TypeDescriptor{RuntimeInput: runtimeEntryInput},
@@ -350,6 +354,13 @@ func compileSource(ctx context.Context, cfg Config, prepared *compiler.PreparedS
 		sourceName: sourceName,
 		sourceHash: sourceHash,
 	}, nil
+}
+
+func eventSpecsForConfig(cfg Config) []compiler.MountedEventSpec {
+	if len(cfg.EventSpecs) > 0 {
+		return cfg.EventSpecs
+	}
+	return compiler.EventSpecsFromOptions(cfg.CompileOpts)
 }
 
 func Execute(ctx context.Context, cfg Config, src, name string, payload map[string]any) (Execution, error) {

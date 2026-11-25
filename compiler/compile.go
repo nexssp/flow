@@ -337,6 +337,9 @@ func applyConfigToCtx(ctx context.Context, cfg *compileConfig) context.Context {
 	if cfg.bundleSources != nil {
 		ctx = WithSourceLoader(ctx, cfg.bundleSources.withFallback(sourceLoaderFrom(ctx)))
 	}
+	if len(cfg.eventSpecs) > 0 {
+		ctx = eventSpecsContextKey.With(ctx, cfg.eventSpecs)
+	}
 	if len(cfg.config) == 0 && len(cfg.cliArgs) == 0 {
 		return ctx
 	}

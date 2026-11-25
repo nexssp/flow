@@ -14,13 +14,20 @@ import (
 )
 
 type expressionScope struct {
-	parent                *expressionScope
-	input                 any
-	bindings              map[string]any
+	parent   *expressionScope
+	input    any
+	bindings map[string]any
+	// Keep the common one-binding case inline; promote to bindings on the next bind.
+	singleBindingName     string
+	singleBindingValue    any
+	hasSingleBinding      bool
 	pipelineInputBindings map[string]struct{}
-	unavailable           map[string]struct{}
-	inputViewsMu          sync.Mutex
-	inputViews            map[string]any
+	// Keep the common one-pipeline-input case inline as well.
+	singlePipelineInput    string
+	hasSinglePipelineInput bool
+	unavailable            map[string]struct{}
+	inputViewsMu           sync.Mutex
+	inputViews             map[string]any
 }
 
 var expressionScopeKey = xctx.NewKey[*expressionScope]("flow.expression.scope")
@@ -56,8 +63,7 @@ func isExpressionIdentContinue(char byte) bool {
 // separate from the payload flowing between actions.
 func WithExpressionScope(ctx context.Context, input any) context.Context {
 	return expressionScopeKey.With(ctx, &expressionScope{
-		input:    input,
-		bindings: make(map[string]any),
+		input: input,
 	})
 }
 
@@ -65,7 +71,7 @@ func WithExpressionScope(ctx context.Context, input any) context.Context {
 // original request and names from its parent but does not export new bindings.
 func WithChildExpressionScope(ctx context.Context) context.Context {
 	parent, _ := expressionScopeKey.From(ctx)
-	child := &expressionScope{parent: parent, bindings: make(map[string]any)}
+	child := &expressionScope{parent: parent}
 	if parent != nil {
 		child.input = parent.input
 	}
@@ -167,6 +173,9 @@ func ExpressionBindingNames(ctx context.Context) []string {
 	}
 	names := make(map[string]struct{})
 	for current := scope; current != nil; current = current.parent {
+		if current.hasSingleBinding {
+			names[current.singleBindingName] = struct{}{}
+		}
 		for name := range current.bindings {
 			names[name] = struct{}{}
 		}
@@ -186,8 +195,26 @@ func BindExpressionValue(ctx context.Context, name string, value any) error {
 	if !ok || scope == nil {
 		return fmt.Errorf("pipeline binding %q has no expression scope", name)
 	}
+	if scope.hasSingleBinding {
+		if scope.singleBindingName == name {
+			return fmt.Errorf("pipeline binding %q is immutable and already bound", name)
+		}
+		scope.bindings = make(map[string]any, 2)
+		scope.bindings[scope.singleBindingName] = scope.singleBindingValue
+		scope.bindings[name] = value
+		scope.singleBindingName = ""
+		scope.singleBindingValue = nil
+		scope.hasSingleBinding = false
+		return nil
+	}
 	if _, exists := scope.bindings[name]; exists {
 		return fmt.Errorf("pipeline binding %q is immutable and already bound", name)
+	}
+	if len(scope.bindings) == 0 {
+		scope.singleBindingName = name
+		scope.singleBindingValue = value
+		scope.hasSingleBinding = true
+		return nil
 	}
 	scope.bindings[name] = value
 	return nil
@@ -200,8 +227,16 @@ func BindPipelineInputValue(ctx context.Context, name string, value any) error {
 		return err
 	}
 	scope, _ := expressionScopeKey.From(ctx)
-	if scope.pipelineInputBindings == nil {
-		scope.pipelineInputBindings = make(map[string]struct{})
+	if !scope.hasSinglePipelineInput && len(scope.pipelineInputBindings) == 0 {
+		scope.singlePipelineInput = name
+		scope.hasSinglePipelineInput = true
+		return nil
+	}
+	if scope.hasSinglePipelineInput {
+		scope.pipelineInputBindings = make(map[string]struct{}, 2)
+		scope.pipelineInputBindings[scope.singlePipelineInput] = struct{}{}
+		scope.singlePipelineInput = ""
+		scope.hasSinglePipelineInput = false
 	}
 	scope.pipelineInputBindings[name] = struct{}{}
 	return nil
@@ -217,12 +252,23 @@ func ExpressionPipelineInputBindingNames(ctx context.Context) map[string]struct{
 	names := make(map[string]struct{})
 	seen := make(map[string]struct{})
 	for current := scope; current != nil; current = current.parent {
+		if current.hasSingleBinding {
+			name := current.singleBindingName
+			if _, alreadySeen := seen[name]; !alreadySeen {
+				seen[name] = struct{}{}
+				if current.hasSinglePipelineInput && current.singlePipelineInput == name {
+					names[name] = struct{}{}
+				}
+			}
+		}
 		for name := range current.bindings {
 			if _, alreadySeen := seen[name]; alreadySeen {
 				continue
 			}
 			seen[name] = struct{}{}
-			if _, isPipelineInput := current.pipelineInputBindings[name]; isPipelineInput {
+			if current.hasSinglePipelineInput && current.singlePipelineInput == name {
+				names[name] = struct{}{}
+			} else if _, isPipelineInput := current.pipelineInputBindings[name]; isPipelineInput {
 				names[name] = struct{}{}
 			}
 		}
@@ -296,20 +342,34 @@ func WithChildExpressionScopeAction(inner action.AnyAction) action.AnyAction {
 	}).Build()
 }
 
+// mergeExpressionScope adds lexical bindings to the fresh environment owned by
+// MergeSymbolNamespaces. Mutating that private map avoids a second copy.
 func mergeExpressionScope(ctx context.Context, env map[string]any) map[string]any {
 	scope, _ := expressionScopeKey.From(ctx)
 	if scope == nil {
+		return env
+	}
+	if env == nil {
+		env = make(map[string]any)
+	}
+	if scope.parent == nil {
+		mergeExpressionFrame(env, scope)
 		return env
 	}
 	var frames []*expressionScope
 	for current := scope; current != nil; current = current.parent {
 		frames = append(frames, current)
 	}
-	out := make(map[string]any, len(env)+len(frames)*2)
-	maps.Copy(out, env)
 	for _, frame := range slices.Backward(frames) {
-		out["input"] = frame.input
-		maps.Copy(out, frame.bindings)
+		mergeExpressionFrame(env, frame)
 	}
-	return out
+	return env
+}
+
+func mergeExpressionFrame(env map[string]any, frame *expressionScope) {
+	env["input"] = frame.input
+	maps.Copy(env, frame.bindings)
+	if frame.hasSingleBinding {
+		env[frame.singleBindingName] = frame.singleBindingValue
+	}
 }

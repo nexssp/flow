@@ -1263,7 +1263,7 @@ func buildNamedPipelinePayload(ctx context.Context, in any, a *Atom) (map[string
 
 func resolveArgumentSpreads(ctx context.Context, state map[string]any, a *Atom) (map[string]any, error) {
 	if len(a.ArgSpreads) == 0 {
-		return map[string]any{}, nil
+		return nil, nil //nolint:nilnil // Empty spreads are represented by a nil map for maps.Copy callers.
 	}
 	spreadValues := make(map[string]any)
 	seen := make(map[string]struct{})

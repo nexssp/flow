@@ -48,6 +48,7 @@ func BuildConfig(bundles []compiler.Bundle) (Config, error) {
 		Materializers: materializers,
 		CompileOpts:   compileOpts,
 		ArgSchemas:    collected.argSchemas,
+		EventSpecs:    collected.eventSpecs,
 		Hooks:         contributions.hooks,
 	}, nil
 }
@@ -56,6 +57,7 @@ type uniqueBundleSet struct {
 	bundles       []compiler.Bundle
 	fileResolvers map[xfile.Provider][]xfile.Resolver
 	argSchemas    map[string][]compiler.ArgFieldSpec
+	eventSpecs    []compiler.MountedEventSpec
 }
 
 func collectUniqueBundles(bundles []compiler.Bundle) (uniqueBundleSet, error) {
@@ -101,6 +103,11 @@ func collectUniqueBundles(bundles []compiler.Bundle) (uniqueBundleSet, error) {
 		return uniqueBundleSet{}, err
 	}
 	collected.argSchemas = argSchemas
+	eventSpecs, err := compiler.BundleEventSpecs(collected.bundles...)
+	if err != nil {
+		return uniqueBundleSet{}, err
+	}
+	collected.eventSpecs = eventSpecs
 	return collected, nil
 }
 

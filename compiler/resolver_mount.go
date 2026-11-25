@@ -129,7 +129,10 @@ func stageActions(lib action.Library, alias, owner string, staged *stagedLibrary
 		}
 		act := raw
 		if name != meta.Name {
-			act = action.Dynamic(raw).Name(name).Build()
+			act = &qualifiedAction{
+				AnyAction: action.Dynamic(raw).Name(name).Build(),
+				wrapped:   raw,
+			}
 		}
 		staged.actions = append(staged.actions, act.CloneWithHooks(lib.Hooks...))
 	}
@@ -254,6 +257,24 @@ func (o qualifiedOperator) Apply(up action.AnyStream) (action.AnyStream, error) 
 type qualifiedStream struct {
 	inner action.AnyStreamAction
 	name  string
+}
+
+// ActionWrapper exposes an action wrapped for namespace qualification. It lets
+// extension materializers inspect optional contracts on the original Catalog
+// action without maintaining a second registry.
+type ActionWrapper interface {
+	WrappedAction() action.AnyAction
+}
+
+type qualifiedAction struct {
+	action.AnyAction
+	wrapped action.AnyAction
+}
+
+func (a *qualifiedAction) WrappedAction() action.AnyAction { return a.wrapped }
+
+func (a *qualifiedAction) CloneWithHooks(hooks ...action.AnyHook) action.AnyAction {
+	return &qualifiedAction{AnyAction: a.AnyAction.CloneWithHooks(hooks...), wrapped: a.wrapped}
 }
 
 func (s *qualifiedStream) Describe() *action.Meta {

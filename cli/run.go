@@ -16,6 +16,7 @@ import (
 
 	"github.com/nexssp/flow/builder"
 	"github.com/nexssp/flow/compiler"
+	flowconsole "github.com/nexssp/flow/extensions/console"
 	"github.com/nexssp/flow/extensions/require"
 	testext "github.com/nexssp/flow/extensions/test"
 	"github.com/nexssp/flow/internal/terminal"
@@ -503,6 +504,7 @@ func runPreparedSource(ctx context.Context, cfg runner.Config, src, name string,
 	observer := runner.NewObserver(os.Stderr, verbosity)
 	cfg.Hooks = append(cfg.Hooks, observer.Hook())
 
+	ctx = flowconsole.WithStderrWriter(ctx, os.Stderr)
 	ex, execErr := runner.Execute(ctx, cfg, src, name, payload)
 	total := ex.CompileDuration + ex.RunDuration
 	if cfg.Journal != nil && ex.ExecutionID != "" {

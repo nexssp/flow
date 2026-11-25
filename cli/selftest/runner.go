@@ -14,6 +14,7 @@ import (
 	"github.com/nexssp/kernel/xctx"
 
 	"github.com/nexssp/flow/compiler"
+	flowconsole "github.com/nexssp/flow/extensions/console"
 	flowrunner "github.com/nexssp/flow/runner"
 )
 
@@ -208,7 +209,8 @@ func runFeature(ctx context.Context, cfg flowrunner.Config, feature compiler.Sel
 	}
 
 	capture := captureExecution(func() (any, error) {
-		ex, err := flowrunner.Execute(execCtx, cfg, feature.DSL, feature.Name, map[string]any{})
+		runCtx := flowconsole.WithStderrWriter(execCtx, os.Stderr)
+		ex, err := flowrunner.Execute(runCtx, cfg, feature.DSL, feature.Name, map[string]any{})
 		if err != nil {
 			return nil, err
 		}

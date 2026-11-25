@@ -419,6 +419,7 @@ type coercionTypePair struct {
 type jsonTypeField struct {
 	name        string
 	typeOf      reflect.Type
+	index       []int
 	depth       int
 	tagged      bool
 	caseStrict  bool
@@ -713,7 +714,7 @@ func inspectSequenceCoercion(produced, consumed reflect.Type, seen map[coercionT
 
 func jsonTypeFields(structType reflect.Type) ([]jsonTypeField, error) {
 	candidates := make([]jsonTypeField, 0, structType.NumField())
-	if err := appendJSONTypeFields(structType, 0, &candidates, make(map[reflect.Type]bool)); err != nil {
+	if err := appendJSONTypeFields(structType, 0, nil, &candidates, make(map[reflect.Type]bool)); err != nil {
 		return nil, err
 	}
 	groups := make(map[string]jsonTypeFieldGroup, len(candidates))
@@ -752,14 +753,15 @@ func jsonTypeFields(structType reflect.Type) ([]jsonTypeField, error) {
 	return fields, nil
 }
 
-func appendJSONTypeFields(structType reflect.Type, depth int, fields *[]jsonTypeField, seen map[reflect.Type]bool) error {
+func appendJSONTypeFields(structType reflect.Type, depth int, index []int, fields *[]jsonTypeField, seen map[reflect.Type]bool) error {
 	if seen[structType] {
 		return nil
 	}
 	seen[structType] = true
 	defer delete(seen, structType)
 
-	for field := range structType.Fields() {
+	for fieldIndex := range structType.NumField() {
+		field := structType.Field(fieldIndex)
 		candidate, include, err := jsonTypeFieldFor(field, depth)
 		if err != nil {
 			return err
@@ -767,9 +769,10 @@ func appendJSONTypeFields(structType reflect.Type, depth int, fields *[]jsonType
 		if !include {
 			continue
 		}
+		candidate.index = append(append([]int(nil), index...), fieldIndex)
 		if field.Anonymous && !candidate.tagged {
 			if embeddedType := jsonEmbeddedStructType(field.Type); embeddedType != nil {
-				if err := appendJSONTypeFields(embeddedType, depth+1, fields, seen); err != nil {
+				if err := appendJSONTypeFields(embeddedType, depth+1, candidate.index, fields, seen); err != nil {
 					return err
 				}
 				continue

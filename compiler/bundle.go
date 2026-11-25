@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -66,6 +67,25 @@ type BuildExtension struct {
 	Sources   func(meta map[string]any) []string
 }
 
+// EventSpec describes one bundle-owned runtime fact. Name is the canonical
+// source symbol; Subject is the canonical EventPublisher subject. Bundle
+// aliases affect only the source/catalog name.
+type EventSpec struct {
+	Name        string
+	Subject     string
+	Description string
+	PayloadType reflect.Type
+}
+
+// MountedEventSpec is the alias-aware compiler view of a bundle event.
+type MountedEventSpec struct {
+	Name        string // source symbol and Catalog name
+	Subject     string // canonical EventPublisher subject
+	BundleID    string
+	Description string
+	PayloadType reflect.Type
+}
+
 // Bundle is one extension distribution.
 type Bundle struct {
 	ID          string
@@ -91,6 +111,7 @@ type Bundle struct {
 	FileResolvers []FileResolverBinding
 
 	ArgSchemas map[string][]ArgFieldSpec
+	Events     []EventSpec
 
 	AcceptedOptions []string
 	Symbols         []SymbolNamespace
@@ -145,6 +166,9 @@ func ValidateBundle(b Bundle) error {
 		}
 		seen[name] = struct{}{}
 	}
+	if err := validateBundleEvents(b.ID, b.Events); err != nil {
+		return err
+	}
 	for i, binding := range b.FileResolvers {
 		provider := string(binding.Provider)
 		if provider == "" || strings.TrimSpace(provider) != provider {
@@ -168,6 +192,35 @@ func ValidateBundle(b Bundle) error {
 			return fmt.Errorf("bundle %q: duplicate symbol namespace %q", b.ID, ns.Name)
 		}
 		seenNamespaces[ns.Name] = struct{}{}
+	}
+	return nil
+}
+
+func validateBundleEvents(bundleID string, events []EventSpec) error {
+	seenEvents := make(map[string]struct{}, len(events))
+	seenSubjects := make(map[string]struct{}, len(events))
+	for i, event := range events {
+		if !validQualifiedCapabilityName(event.Name) {
+			return fmt.Errorf("bundle %q: event %d name %q must be a canonical qualified source symbol", bundleID, i, event.Name)
+		}
+		if _, duplicate := seenEvents[event.Name]; duplicate {
+			return fmt.Errorf("bundle %q: duplicate event source symbol %q", bundleID, event.Name)
+		}
+		seenEvents[event.Name] = struct{}{}
+		if !validQualifiedCapabilityName(event.Subject) {
+			return fmt.Errorf("bundle %q: event %q subject %q must be a canonical qualified subject", bundleID, event.Name, event.Subject)
+		}
+		if _, duplicate := seenSubjects[event.Subject]; duplicate {
+			return fmt.Errorf("bundle %q: duplicate event publisher subject %q", bundleID, event.Subject)
+		}
+		seenSubjects[event.Subject] = struct{}{}
+		payloadType := event.PayloadType
+		for payloadType != nil && payloadType.Kind() == reflect.Pointer {
+			payloadType = payloadType.Elem()
+		}
+		if payloadType == nil || payloadType.Kind() != reflect.Struct {
+			return fmt.Errorf("bundle %q: event %q payload type must be a struct", bundleID, event.Name)
+		}
 	}
 	return nil
 }

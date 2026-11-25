@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/nexssp/kernel/xtest/ktest"
+
+	"github.com/nexssp/flow/native"
+	"github.com/nexssp/flow/runner"
 )
 
 // captureStdout swaps os.Stdout for a pipe during fn and returns what
@@ -73,6 +77,23 @@ pipeline.p
 		rc := runSourceInProcess(context.Background(), src, "test.nflow", []string{"--info"})
 		ktest.RequireEqual(t, rc, 0)
 	})
+}
+
+func TestRunPreparedSourceInjectsConsoleStderrWriter(t *testing.T) {
+	cfg, err := runner.BuildConfig(native.Bundles())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var code int
+	_, stderr := captureIO(t, func() {
+		code = runPreparedSource(t.Context(), cfg, `console.stderr(message: "cli stderr")`, "stderr.nflow", nil, nil, runner.DurabilityOptions{}, false)
+	})
+	if code != 0 {
+		t.Fatalf("runPreparedSource exit code = %d; stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stderr, "cli stderr") {
+		t.Fatalf("stderr = %q, want console.stderr output", stderr)
+	}
 }
 
 func TestEmitJSONOutputQuotesStrings(t *testing.T) {

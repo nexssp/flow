@@ -54,7 +54,7 @@ func runShowInProcess(ctx context.Context, inv *invocation, args []string) int {
 		return fatalf("config: %v", err)
 	}
 
-	cat := compiler.BuildCatalog(cfg.Resolver, cfg.Modifiers, cfg.Directives, cfg.Operators)
+	cat := compiler.BuildCatalog(cfg.Resolver, cfg.Modifiers, cfg.Directives, cfg.Operators, cfg.EventSpecs...)
 	useColor := !*noColor && colorEnabled(os.Stdout)
 
 	switch {
@@ -66,8 +66,10 @@ func runShowInProcess(ctx context.Context, inv *invocation, args []string) int {
 		return 0
 	case showOperator(cat.Operators, target, useColor):
 		return 0
+	case showEvent(cat.Events, target, useColor):
+		return 0
 	default:
-		return fatalf("no atom, modifier, directive or operator named %q", target)
+		return fatalf("no atom, modifier, directive, operator or event named %q", target)
 	}
 }
 
@@ -190,6 +192,26 @@ func showOperator(ops []compiler.OperatorSpec, name string, useColor bool) bool 
 		if o.Example != "" {
 			fmt.Fprintf(os.Stdout, "  Example: %s\n", o.Example)
 		}
+		fmt.Fprintln(os.Stdout)
+		return true
+	}
+	return false
+}
+
+func showEvent(events []compiler.EventCatalogSpec, name string, useColor bool) bool {
+	for _, event := range events {
+		if event.Name != name {
+			continue
+		}
+		fmt.Fprintf(os.Stdout, "\n  %s  %s\n  %s\n\n",
+			cyan(event.Name, useColor), dim("(event)", useColor), strings.Repeat("─", 70))
+		if event.Description != "" {
+			fmt.Fprintf(os.Stdout, "  %s\n", event.Description)
+		}
+		if event.Subject != "" {
+			fmt.Fprintf(os.Stdout, "  Subject: %s\n", event.Subject)
+		}
+		renderFieldSection("Payload", event.Payload, useColor)
 		fmt.Fprintln(os.Stdout)
 		return true
 	}

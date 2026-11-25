@@ -110,7 +110,7 @@ func TestShowDoesNotScanFlowOptionAfterDoubleDash(t *testing.T) {
 	if code == 0 {
 		t.Fatal("show with a missing target unexpectedly succeeded")
 	}
-	if !strings.Contains(stderr, `no atom, modifier, directive or operator named "--flow=missing.nflow"`) {
+	if !strings.Contains(stderr, `no atom, modifier, directive, operator or event named "--flow=missing.nflow"`) {
 		t.Fatalf("show after -- stderr = %q; want normal target-not-found diagnostic", stderr)
 	}
 	if strings.Contains(stderr, "read missing.nflow") {

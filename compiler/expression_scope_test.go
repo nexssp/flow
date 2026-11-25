@@ -118,24 +118,47 @@ func TestExpressionBindingNamesIncludesVisibleParentAndChildBindings(t *testing.
 	}
 }
 
+func TestExpressionBindingIsImmutableBeforeAndAfterPromotion(t *testing.T) {
+	ctx := compiler.WithExpressionScope(t.Context(), nil)
+	if err := compiler.BindExpressionValue(ctx, "first", 1); err != nil {
+		t.Fatalf("bind first value: %v", err)
+	}
+	if err := compiler.BindExpressionValue(ctx, "first", 2); err == nil {
+		t.Fatal("rebound inline expression value successfully")
+	}
+	if err := compiler.BindExpressionValue(ctx, "second", 2); err != nil {
+		t.Fatalf("bind second value: %v", err)
+	}
+	if err := compiler.BindExpressionValue(ctx, "first", 3); err == nil {
+		t.Fatal("rebound map-backed expression value successfully")
+	}
+	if got, want := compiler.ExpressionBindingNames(ctx), []string{"first", "second"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("expression binding names = %#v, want %#v", got, want)
+	}
+}
+
 func TestExpressionPipelineInputBindingNamesRespectShadowing(t *testing.T) {
 	parent := compiler.WithExpressionScope(t.Context(), nil)
 	if err := compiler.BindPipelineInputValue(parent, "request", map[string]any{"value": "typed"}); err != nil {
 		t.Fatalf("bind typed pipeline input: %v", err)
 	}
-	if got := compiler.ExpressionPipelineInputBindingNames(parent); !reflect.DeepEqual(got, map[string]struct{}{"request": {}}) {
-		t.Fatalf("typed pipeline input names = %#v, want request", got)
+	if err := compiler.BindPipelineInputValue(parent, "request2", map[string]any{"value": "typed2"}); err != nil {
+		t.Fatalf("bind second typed pipeline input: %v", err)
+	}
+	want := map[string]struct{}{"request": {}, "request2": {}}
+	if got := compiler.ExpressionPipelineInputBindingNames(parent); !reflect.DeepEqual(got, want) {
+		t.Fatalf("typed pipeline input names = %#v, want %#v", got, want)
 	}
 
 	child := compiler.WithChildExpressionScope(parent)
-	if got := compiler.ExpressionPipelineInputBindingNames(child); !reflect.DeepEqual(got, map[string]struct{}{"request": {}}) {
-		t.Fatalf("inherited typed pipeline input names = %#v, want request", got)
+	if got := compiler.ExpressionPipelineInputBindingNames(child); !reflect.DeepEqual(got, want) {
+		t.Fatalf("inherited typed pipeline input names = %#v, want %#v", got, want)
 	}
 	if err := compiler.BindExpressionValue(child, "request", map[string]any{"value": "as-output"}); err != nil {
 		t.Fatalf("bind shadowing as output: %v", err)
 	}
-	if got := compiler.ExpressionPipelineInputBindingNames(child); len(got) != 0 {
-		t.Fatalf("typed pipeline input names after ordinary binding shadows it = %#v, want empty", got)
+	if got := compiler.ExpressionPipelineInputBindingNames(child); !reflect.DeepEqual(got, map[string]struct{}{"request2": {}}) {
+		t.Fatalf("typed pipeline input names after ordinary binding shadows request = %#v, want request2", got)
 	}
 }
 
@@ -146,5 +169,32 @@ func TestValidateExpressionBindingNameRejectsParserLiterals(t *testing.T) {
 				t.Fatalf("ValidateExpressionBindingName(%q) succeeded; want reserved-name error", name)
 			}
 		})
+	}
+}
+
+func TestMergeSymbolNamespacesKeepsCallerEnvironmentIsolated(t *testing.T) {
+	input := map[string]any{"root": "typed-input"}
+	ctx := compiler.WithExpressionScope(t.Context(), input)
+	if err := compiler.BindExpressionValue(ctx, "shadow", "scope-value"); err != nil {
+		t.Fatalf("bind expression value: %v", err)
+	}
+	env := map[string]any{"input": "caller-input", "shadow": "caller-value"}
+
+	merged := compiler.MergeSymbolNamespaces(ctx, env)
+	if got := merged["input"]; !reflect.DeepEqual(got, input) {
+		t.Fatalf("merged input = %#v, want typed input %#v", got, input)
+	}
+	if got := merged["shadow"]; got != "scope-value" {
+		t.Fatalf("merged shadow = %#v, want lexical scope value", got)
+	}
+	if got := env["input"]; got != "caller-input" {
+		t.Fatalf("caller input was mutated: %#v", env)
+	}
+	if got := env["shadow"]; got != "caller-value" {
+		t.Fatalf("caller binding was mutated: %#v", env)
+	}
+	merged["new"] = "expression-only"
+	if _, exists := env["new"]; exists {
+		t.Fatal("merged environment aliases the caller's map")
 	}
 }

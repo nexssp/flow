@@ -1,0 +1,7 @@
+@description "Typed event route payload reaches its declared sink"
+@require selftestkit
+@events {
+  observe selftestkit.events.fixture_ready -> cov.assert_fixture_event
+}
+@assert: result == "published"
+{} -> cov.publish_fixture_event

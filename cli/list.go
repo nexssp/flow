@@ -115,13 +115,13 @@ func runListInProcess(ctx context.Context, inv *invocation, args []string) int {
 		if err != nil {
 			return fatalf("config: %v", err)
 		}
-		cfg = compiler.BuildCatalog(runnerCfg.Resolver, runnerCfg.Modifiers, runnerCfg.Directives, runnerCfg.Operators)
+		cfg = compiler.BuildCatalog(runnerCfg.Resolver, runnerCfg.Modifiers, runnerCfg.Directives, runnerCfg.Operators, runnerCfg.EventSpecs...)
 	} else {
 		runnerCfg, err := inv.buildConfig(nil)
 		if err != nil {
 			return fatalf("config: %v", err)
 		}
-		cfg = compiler.BuildCatalog(runnerCfg.Resolver, runnerCfg.Modifiers, runnerCfg.Directives, runnerCfg.Operators)
+		cfg = compiler.BuildCatalog(runnerCfg.Resolver, runnerCfg.Modifiers, runnerCfg.Directives, runnerCfg.Operators, runnerCfg.EventSpecs...)
 	}
 
 	if *jsonOut {
@@ -202,7 +202,39 @@ func renderList(cat compiler.Catalog, pattern string, useColor bool) {
 		}
 	}
 
+	if matchesEvents(cat.Events, pattern) {
+		fmt.Fprintf(os.Stdout, "\n%s\n\n", bold("EVENTS", useColor))
+		for _, event := range cat.Events {
+			if !eventMatches(event, pattern) {
+				continue
+			}
+			fmt.Fprintf(os.Stdout, "  %-32s %s  %s\n",
+				cyan(event.Name, useColor),
+				dim(padRight("event", 8), useColor),
+				event.Description,
+			)
+		}
+	}
+
 	fmt.Fprintln(os.Stdout)
+}
+
+func eventMatches(event compiler.EventCatalogSpec, pattern string) bool {
+	if pattern == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(event.Name), pattern) ||
+		strings.Contains(strings.ToLower(event.Subject), pattern) ||
+		strings.Contains(strings.ToLower(event.Description), pattern)
+}
+
+func matchesEvents(events []compiler.EventCatalogSpec, pattern string) bool {
+	for _, event := range events {
+		if eventMatches(event, pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 func atomMatches(a compiler.AtomSpec, pattern string) bool {

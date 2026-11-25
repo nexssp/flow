@@ -32,7 +32,10 @@ type MaterializeReq struct {
 	CompileWithAnalysisInput func(name, source string, modifiers []ModifierValue, input TypeDescriptor) (action.AnyAction, error)
 	// CompileWithAnalysisBindings seeds named typed pipeline input bindings for that body.
 	CompileWithAnalysisBindings func(name, source string, modifiers []ModifierValue, input TypeDescriptor, bindings map[string]TypeDescriptor) (action.AnyAction, error)
-	Alias                       string
+	// EventSpecs are the alias-aware, bundle-owned event descriptors available
+	// to this source during materialization.
+	EventSpecs []MountedEventSpec
+	Alias      string
 	// Introspection enables retaining child-action relationships on materialized actions.
 	Introspection bool
 }

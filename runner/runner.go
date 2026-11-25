@@ -16,6 +16,7 @@ import (
 
 	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/compiler/secret"
+	flowconsole "github.com/nexssp/flow/extensions/console"
 	"github.com/nexssp/flow/internal/terminal"
 )
 
@@ -64,10 +65,12 @@ type Config struct {
 
 	// ArgSchemas is the merged per-action argument schema published by
 	// every mounted bundle. It is exposed so diagnostics (nflow lint
-	// today) can validate named capability references without building
-	// the action graph. Build-time advisors are the runtime counterpart;
+	// today) can validate named capability references without building the
+	// action graph. Build-time advisors are the runtime counterpart;
 	// this field makes the same checks reachable from a pure parse.
 	ArgSchemas map[string][]compiler.ArgFieldSpec
+	// EventSpecs are bundle-owned descriptors mounted under their source aliases.
+	EventSpecs []compiler.MountedEventSpec
 }
 
 // Opts controls execution options for a single runner invocation.
@@ -131,6 +134,7 @@ func RunSource(ctx context.Context, cfg Config, src, name string, payload map[st
 	if opts.ApprovalToken != "" {
 		ctx = xctx.WithApprovalToken(ctx, opts.ApprovalToken)
 	}
+	ctx = flowconsole.WithStderrWriter(ctx, stderr)
 
 	if opts.Info {
 		return printSourceInfo(ctx, cfg, src, name, stdout, stderr)

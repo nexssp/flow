@@ -23,10 +23,12 @@ import (
 	bytesext "github.com/nexssp/flow/extensions/bytes"
 	"github.com/nexssp/flow/extensions/config"
 	"github.com/nexssp/flow/extensions/config_yaml"
+	"github.com/nexssp/flow/extensions/console"
 	"github.com/nexssp/flow/extensions/constants"
 	"github.com/nexssp/flow/extensions/data"
 	"github.com/nexssp/flow/extensions/decide"
 	"github.com/nexssp/flow/extensions/description"
+	"github.com/nexssp/flow/extensions/events"
 	"github.com/nexssp/flow/extensions/external"
 	"github.com/nexssp/flow/extensions/flow_version"
 	"github.com/nexssp/flow/extensions/fs"
@@ -111,6 +113,8 @@ func bundles(retryBundle compiler.Bundle) []compiler.Bundle {
 		fs.Bundle(nil),
 		data.Bundle(nil),
 		bytesext.Bundle(nil),
+		console.Bundle(nil),
+		events.Bundle(nil),
 		io.Bundle(nil),
 		render.Bundle(nil),
 		on_error.Bundle(nil),

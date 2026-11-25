@@ -13,6 +13,7 @@ import (
 
 	"github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/compiler/secret"
+	flowevents "github.com/nexssp/flow/extensions/events"
 )
 
 var (
@@ -128,6 +129,9 @@ func runnerStepMiddleware(journal action.Journal, staticStepName string) action.
 			handlers = make(map[uint64]action.Fn[any, any])
 		)
 		return func(ctx context.Context, req any) (any, error) {
+			if flowevents.IsRouteInvocation(ctx) {
+				return next(ctx, req)
+			}
 			counters, _ := durableCountersContextKey.From(ctx)
 			if counters == nil {
 				counters = &durableStepCounters{}

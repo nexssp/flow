@@ -10,6 +10,7 @@ import (
 	"encoding/json/jsontext"
 	"iter"
 	"maps"
+	"reflect"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -20,6 +21,7 @@ import (
 
 	compiler "github.com/nexssp/flow/compiler"
 	"github.com/nexssp/flow/compiler/contracts"
+	flowevents "github.com/nexssp/flow/extensions/events"
 )
 
 const ID = "selftestkit"
@@ -33,8 +35,14 @@ func init() {
 
 func Bundle(_ map[string]string) compiler.Bundle {
 	return compiler.Bundle{
-		ID:              ID,
-		Libraries:       []action.Library{library()},
+		ID:        ID,
+		Libraries: []action.Library{library()},
+		Events: []compiler.EventSpec{{
+			Name:        "selftestkit.events.fixture_ready",
+			Subject:     "events.fixture_ready",
+			Description: "Self-test event for typed route fixtures",
+			PayloadType: reflect.TypeFor[fixtureReadyEvent](),
+		}},
 		Fixtures:        fixturesFS,
 		SourceModules:   fixturesFS,
 		ExportedModules: []string{"nflows/bundle_source--module.nflow"},
@@ -75,9 +83,32 @@ func library() action.Library {
 			covBoom(), covRecoverable(), covFailTimeout(), covFailUnavailable(),
 			covStubAction(), covReset(), covIncrement(), covCount(), covTypedProjection(),
 			covJSONValue(), covIntegerArray(), covFloat32(), covUint64Field(), covStringField(),
+			covPublishFixtureEvent(), covAssertFixtureEvent(),
 		},
 		Sources: []action.AnyStreamAction{covItems()},
 	}
+}
+
+type fixtureReadyEvent struct {
+	Message string `json:"message"`
+}
+
+func covPublishFixtureEvent() action.AnyAction {
+	return action.New("cov.publish_fixture_event", func(ctx context.Context, _ struct{}) (string, error) {
+		if err := flowevents.PublishFromBundle(ctx, ID, "events.fixture_ready", &fixtureReadyEvent{Message: "fixture-ready"}); err != nil {
+			return "", err
+		}
+		return "published", nil
+	}).Description("Publish the test-only event used by typed route fixtures").Build()
+}
+
+func covAssertFixtureEvent() action.AnyAction {
+	return flowevents.NewNonRetainingEventSink[fixtureReadyEvent]("cov.assert_fixture_event", func(_ context.Context, event *fixtureReadyEvent) error {
+		if event.Message != "fixture-ready" {
+			return xerr.Validation("typed event route received an unexpected payload")
+		}
+		return nil
+	})
 }
 
 type covProjectionNested struct {

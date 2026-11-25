@@ -50,7 +50,7 @@ func runCatalogInProcess(ctx context.Context, inv *invocation, args []string) in
 		return fatalf("config: %v", err)
 	}
 
-	cat := compiler.BuildCatalog(cfg.Resolver, cfg.Modifiers, cfg.Directives, cfg.Operators)
+	cat := compiler.BuildCatalog(cfg.Resolver, cfg.Modifiers, cfg.Directives, cfg.Operators, cfg.EventSpecs...)
 
 	if err := writeJSON(os.Stdout, cat, *pretty); err != nil {
 		return fatalf("encode: %v", err)

@@ -42,6 +42,7 @@ type compileConfig struct {
 	config                 map[string]string
 	cliArgs                []string
 	argSchemas             map[string][]ArgFieldSpec
+	eventSpecs             []MountedEventSpec
 	lineMods               []LineLookup
 	bundleSources          *bundleSourceLoader
 	actionGraph            bool
@@ -100,6 +101,14 @@ func WithArgSchemas(schemas map[string][]ArgFieldSpec) CompileOption {
 			c.argSchemas = make(map[string][]ArgFieldSpec, len(schemas))
 		}
 		maps.Copy(c.argSchemas, schemas)
+	}
+}
+
+// WithEventSpecs installs mounted event descriptors for source directives and
+// materializers during compilation.
+func WithEventSpecs(specs []MountedEventSpec) CompileOption {
+	return func(c *compileConfig) {
+		c.eventSpecs = append([]MountedEventSpec(nil), specs...)
 	}
 }
 
@@ -215,6 +224,10 @@ func BundleConfigChecked(bundles ...Bundle) ([]CompileOption, error) {
 	if err != nil {
 		return nil, err
 	}
+	eventSpecs, err := BundleEventSpecs(bundles...)
+	if err != nil {
+		return nil, err
+	}
 	var (
 		advisors   []AtomAdviseFunc
 		wrappers   []PipelineWrapFunc
@@ -256,10 +269,46 @@ func BundleConfigChecked(bundles ...Bundle) ([]CompileOption, error) {
 	if len(schemas) > 0 {
 		opts = append(opts, WithArgSchemas(schemas))
 	}
+	if len(eventSpecs) > 0 {
+		opts = append(opts, WithEventSpecs(eventSpecs))
+	}
 	if sourceLoader := newBundleSourceLoader(bundles); sourceLoader != nil {
 		opts = append(opts, withBundleSources(sourceLoader))
 	}
 	return opts, nil
+}
+
+// BundleEventSpecs returns bundle-owned event descriptors under their mounted
+// source names while retaining each canonical publisher subject.
+func BundleEventSpecs(bundles ...Bundle) ([]MountedEventSpec, error) {
+	mounted := make([]MountedEventSpec, 0)
+	owners := make(map[string]string)
+	subjectOwners := make(map[string]string)
+	for i := range bundles {
+		bundle := &bundles[i]
+		if err := validateBundleEvents(bundle.ID, bundle.Events); err != nil {
+			return nil, err
+		}
+		if bundle.Alias != "" && !IsValidNamespaceQualifier(bundle.Alias) {
+			return nil, fmt.Errorf("bundle %q: invalid @require namespace qualifier %q", bundle.ID, bundle.Alias)
+		}
+		for _, event := range bundle.Events {
+			if previous, exists := subjectOwners[event.Subject]; exists {
+				return nil, fmt.Errorf("duplicate event publisher subject %q in bundles %q and %q", event.Subject, previous, bundle.ID)
+			}
+			subjectOwners[event.Subject] = bundle.ID
+			name := mountedCapabilityName(event.Name, bundle.Alias)
+			if previous, exists := owners[name]; exists {
+				return nil, fmt.Errorf("duplicate mounted event %q in bundles %q and %q", name, previous, bundle.ID)
+			}
+			owners[name] = bundle.ID
+			mounted = append(mounted, MountedEventSpec{
+				Name: name, Subject: event.Subject, BundleID: bundle.ID,
+				Description: event.Description, PayloadType: event.PayloadType,
+			})
+		}
+	}
+	return mounted, nil
 }
 
 // BundleArgumentSchemas merges bundle schemas using the same namespace alias
@@ -290,6 +339,22 @@ func BundleArgumentSchemas(bundles ...Bundle) (map[string][]ArgFieldSpec, error)
 type compileConfigValue struct {
 	config  map[string]string
 	cliArgs []string
+}
+
+var eventSpecsContextKey = xctx.NewKey[[]MountedEventSpec]("flow.event.specs")
+
+// EventSpecsFromContext returns the mounted event descriptors installed during
+// compilation. Callers must treat the returned slice as read-only.
+func EventSpecsFromContext(ctx context.Context) []MountedEventSpec {
+	specs, _ := eventSpecsContextKey.From(ctx)
+	return specs
+}
+
+// EventSpecsFromOptions returns a copy of the mounted event descriptors carried
+// by compile options, including those produced by BundleConfigChecked.
+func EventSpecsFromOptions(opts []CompileOption) []MountedEventSpec {
+	specs := applyCompileOptions(opts).eventSpecs
+	return append([]MountedEventSpec(nil), specs...)
 }
 
 var compileConfigKey = xctx.NewKey[compileConfigValue]("flow.compile.config")
