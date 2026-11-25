@@ -27,12 +27,12 @@ nflow_<version>_<os>_<arch>.tar.gz
 nflow_<version>_checksums.txt
 ```
 
-Windows archives use `.zip` instead of `.tar.gz`. For example, release `v1.2.3` has `nflow_1.2.3_linux_amd64.tar.gz`; the exact available versions and assets are listed on the Releases page.
+Windows archives use `.zip` instead of `.tar.gz`. For a release tagged `v<version>`, the expected Linux amd64 archive is `nflow_<version>_linux_amd64.tar.gz`; confirm that the tag and assets are published on the Releases page before downloading.
 
-The checksum file contains SHA-256 digests. Download it alongside the archive and verify before installing:
+The checksum file contains SHA-256 digests. Download it alongside the archive and verify before installing. Replace `<version>` in the filename below with the release version, without the leading `v`:
 
 ```sh
-sha256sum --ignore-missing --check nflow_1.2.3_checksums.txt
+sha256sum --ignore-missing --check 'nflow_<version>_checksums.txt'
 ```
 
 With GNU `sha256sum`, `--ignore-missing` skips archives for other platforms that you did not download. Confirm that your downloaded archive is explicitly reported as `OK`. Checksums detect content mismatches; they are not signatures or independent proof of publisher identity. This release configuration does not generate signed checksums or provenance attestations.
@@ -55,27 +55,27 @@ On Linux or macOS, install the latest stable release into `$HOME/.local/bin`:
 curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh
 ```
 
-To install a specific tag, pass it to the script. The `v1.2.3` tag below is an illustrative version-format example; use a tag listed on the Releases page. Set `NFLOW_INSTALL_DIR` or pass a second argument to choose a different destination:
+To install a specific tag, pass it to the script. Use the published release tag in the form `v<version>`. Set `NFLOW_INSTALL_DIR` or pass a second argument to choose a different destination:
 
 Specific versions must be full SemVer values (`MAJOR.MINOR.PATCH`); optional prerelease or build metadata is supported, and a leading `v` or `V` is optional.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh -s -- v1.2.3
-# Or: curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh -s -- v1.2.3 "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh -s -- 'v<version>'
+# Or: curl -fsSL https://raw.githubusercontent.com/nexssp/flow/main/install.sh | sh -s -- 'v<version>' "$HOME/bin"
 ```
 
-On Windows, download the script and run it from PowerShell. The default destination is `%LOCALAPPDATA%\Programs\nflow`; the installer adds that directory to the current user's `PATH` unless `-NoPathUpdate` is specified.
+On Windows, download the script and run it from PowerShell. The default destination is `%LOCALAPPDATA%\Programs\nflow`; the installer attempts to add it to the current user's persistent `PATH` and to the current PowerShell session. If the persistent update fails, installation succeeds with a warning. `-NoPathUpdate` disables both PATH updates.
 
 ```powershell
 Invoke-WebRequest https://raw.githubusercontent.com/nexssp/flow/main/install.ps1 -OutFile install.ps1
 powershell -ExecutionPolicy Bypass -File .\install.ps1
-# Illustrative version tag and custom destination:
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -Version v1.2.3 -InstallDir "$HOME\bin"
+# Specific version tag and custom destination:
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Version 'v<version>' -InstallDir "$HOME\bin"
 ```
 
 Open a new terminal after installation to use `nflow` from `PATH`. Checksums catch archive corruption or mismatches; they are not signatures or independent proof of publisher identity.
 
-Alternatively, install the latest tagged version with Go as described in the [README](../README.md#install):
+Alternatively, install the version selected by Go's module version resolution as described in the [README](../README.md#install). Go's `@latest` may differ from GitHub's latest stable release; see [version-check details](cli.md#version):
 
 ```sh
 go install github.com/nexssp/flow/cmd/nflow@latest
@@ -83,6 +83,18 @@ go install github.com/nexssp/flow/cmd/nflow@latest
 
 ## Release process
 
-A push of a `v*` tag starts the GitHub Actions release workflow. It validates the tag and waits for successful `main` CI on the exact tagged commit, rather than repeating the Go tests and NFlow checks already run by CI. It then invokes GoReleaser on the tagged source to build versioned archives, generate SHA-256 checksums, and publish the GitHub release. A manually dispatched release still runs `go test ./...`, `nflow lint ./spec`, and `nflow test ./spec` before building.
+A push of a `v*` tag starts the GitHub Actions release workflow. It validates the tag and waits for successful `main` CI on the exact tagged commit, rather than repeating the Go tests and NFlow checks already run by CI. It then invokes GoReleaser on the tagged source to build versioned archives, generate SHA-256 checksums, and publish the GitHub release. A manually dispatched release still runs `go test ./...`, `nflow lint ./spec`, and `nflow test ./spec` before building. Stable release tags follow the `v<version>` format.
+
+### Post-publication check
+
+After the `v<version>` workflow succeeds, confirm the release page contains `nflow_<version>_checksums.txt` and all six platform archives:
+
+| Target | amd64 | arm64 |
+|---|---|---|
+| Linux | `nflow_<version>_linux_amd64.tar.gz` | `nflow_<version>_linux_arm64.tar.gz` |
+| macOS | `nflow_<version>_darwin_amd64.tar.gz` | `nflow_<version>_darwin_arm64.tar.gz` |
+| Windows | `nflow_<version>_windows_amd64.zip` | `nflow_<version>_windows_arm64.zip` |
+
+Check that each archive has exactly one matching checksum entry, verify downloaded archives against the checksum file, and smoke-test the pinned installer on Linux/macOS and Windows. The installed binary should report `version: v<version>` when you run `nflow version`.
 
 The authoritative packaging and workflow details are [`.goreleaser.yaml`](../.goreleaser.yaml) and [`.github/workflows/release.yml`](../.github/workflows/release.yml). Release assets are generated by CI; this guide does not describe a separate local signing or publishing process.
