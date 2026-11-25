@@ -27,7 +27,7 @@ following flags:
 
 | Flag | Effect |
 |---|---|
-| `-v`, `-vv`, `-vvv` | Increasing verbosity. `-vv` prints live action names; `-vvv` prints payloads. |
+| `-v`, `-vv`, `-vvv` | Increasing verbosity: `-v` adds timing and a final trace; `-vv` prints live action names; `-vvv` adds explicit placeholders for omitted intermediate payloads. Verbose traces never show intermediate payload values. |
 | `--assert=EXPR` | Evaluated after the run; exits 1 on failure. |
 | `--info` | Describe the pipeline instead of executing it. |
 | `--journal-dir DIR` | Persist completed capability results (and idempotency responses) below `DIR`. Prints the execution ID to stderr for later replay. |
@@ -80,21 +80,29 @@ CLI does not isolate filesystem or network access per flow. Run only trusted
 flow files and review their `@require` modules; use operating-system isolation
 and least-privilege credentials when executing untrusted workflows.
 
-A successful run prints the flow's output. A failed run prints the
-error and, at verbosity ≥ 1, compile timing plus an execution trace if
-runtime actions started. Compile-time failures explicitly say when no runtime
-events are expected:
+A successful run writes its result to `stdout` (`--json` selects JSON). A
+failed run writes a human-readable diagnostic to `stderr`, even with `--json`.
+At verbosity ≥ 1, Flow adds compile timing and payload-free call frames. If
+runtime actions started, the execution summary also shows their status, names,
+and durations; compile-time failures say that no runtime action events are
+expected. Example runtime-failure output (durations vary; some frames omitted):
 
 ```
 ✗ Pipeline Execution Failed
-  Error: [NotFound] capability http.request not registered
-
-─── EXECUTION TRACE ──────────────────────────────────────────
-  STATUS ACTION                          DURATION   ERROR
-  ✓      runtime.noop                    < 1µs      -
-  ✗      http.request                    < 1µs      capability not registered
-──────────────────────────────────────────────────────────────
-         TOTAL                           < 1µs
+  NotFound: record missing (stage: run)
+  at flow.nflow:1:1
+     1 │ runtime.fail(kind: "NotFound", message: "record missing")
+       │ ^
+  debug: code=NotFound stage=run
+  call frames:
+    1. run (execution failed) at flow.nflow:1:1
+    …
+  debug: compile finished in <duration>
+─── EXECUTION TRACE ───────────────────────────────────────────────────────────
+  STATUS ACTION                                DURATION   ERROR
+  ✗      runtime.fail                         <duration> FLOW_ERROR: action failed; details om...
+───────────────────────────────────────────────────────────────────────────────
+         TOTAL                                <duration>
 ```
 
 ---

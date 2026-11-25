@@ -602,7 +602,7 @@ Every named hook must exist in the active Kernel registry.
 
 1. Run `nflow catalog --flow FILE` and confirm every action, source, operator, directive, and modifier is mounted.
 2. Run `nflow lint FILE` before debugging runtime behavior.
-3. Use `nflow run -vv FILE` for action names and `-vvv` for payload-level tracing.
+3. Use `nflow run -vv FILE` for live action names and `-vvv` for progress with explicit placeholders where intermediate payloads were omitted. For an intentional value dump, use `runtime.debug`; it writes JSON to stderr and passes the input through, so avoid placing it around sensitive data.
 4. Use `nflow info FILE` for pipeline shape or `nflow explain FILE` for effective policies.
 5. If a flow uses `@require`, verify the module/version and harness build output.
 6. If an approval or idempotent flow behaves unexpectedly, use a fresh execution ID when the source or callsite layout changed.

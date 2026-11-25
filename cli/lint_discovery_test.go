@@ -221,6 +221,32 @@ func TestRunLintRejectsSinglePipeSequentialOperator(t *testing.T) {
 	}
 }
 
+func TestRunLintReportsPositionedCompileErrorInJSON(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "positioned.nflow")
+	source := "# context\nruntime.noop -> )\n"
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := captureLintOutput(t, func() int {
+		return runLint([]string{path})
+	})
+	if code == 0 || stderr != "" {
+		t.Fatalf("positioned lint error returned code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var issues []LintIssue
+	if err := json.Unmarshal([]byte(stdout), &issues); err != nil {
+		t.Fatalf("decode positioned diagnostic: %v\nstdout: %s", err, stdout)
+	}
+	if len(issues) != 1 {
+		t.Fatalf("lint returned %d issues, want one: %#v", len(issues), issues)
+	}
+	issue := issues[0]
+	if issue.File != path || issue.Line != 2 || issue.Column != 17 {
+		t.Fatalf("positioned diagnostic = %#v, want %s:2:17", issue, path)
+	}
+}
+
 func TestRunLintBatchContinuesWhenExternalHarnessIsUnavailable(t *testing.T) {
 	root := t.TempDir()
 	good := filepath.Join(root, "good.nflow")

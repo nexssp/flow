@@ -23,6 +23,22 @@ type LintIssue struct {
 	Message string `json:"message"`
 }
 
+func lintIssueFromError(path, kind string, err error) LintIssue {
+	issue := LintIssue{File: path, Kind: kind}
+	if err == nil {
+		return issue
+	}
+	issue.Message = err.Error()
+	if position, ok := compiler.PositionOf(err); ok {
+		if position.File != "" {
+			issue.File = position.File
+		}
+		issue.Line = position.Line
+		issue.Column = position.Col
+	}
+	return issue
+}
+
 const (
 	lintIssueCompile = "compile"
 	lintIssueWarning = "warning"
@@ -320,11 +336,7 @@ func lintFile(path, src string, cfg runner.Config) []LintIssue {
 
 func lintFileWithContext(ctx context.Context, path, src string, cfg runner.Config) []LintIssue {
 	if _, err := runner.Compile(ctx, cfg, src, path); err != nil {
-		return []LintIssue{{
-			File:    path,
-			Kind:    lintIssueCompile,
-			Message: err.Error(),
-		}}
+		return []LintIssue{lintIssueFromError(path, lintIssueCompile, err)}
 	}
 	return nil
 }
