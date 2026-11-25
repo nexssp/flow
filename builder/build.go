@@ -76,12 +76,6 @@ func RunBuild(ctx context.Context, args []string, sourceRequires func(context.Co
 		return buildFail("stage", err)
 	}
 	defer func() { _ = os.RemoveAll(buildDir) }()
-	tidyStart := time.Now()
-	fmt.Fprintf(os.Stderr, "⚙️  nflow: resolving dependencies (go mod tidy)  — first run may download modules\n")
-	if err = runGoContext(ctx, buildDir, "mod", "tidy"); err != nil {
-		return buildFail("go mod tidy", err)
-	}
-	fmt.Fprintf(os.Stderr, "   ✓ dependencies resolved in %s\n", time.Since(tidyStart).Round(time.Millisecond))
 	buildStart := time.Now()
 	if err = linkBinary(ctx, buildDir, nflowPath, binName, opts); err != nil {
 		return buildFail("build", err)
@@ -373,7 +367,10 @@ func linkBinary(ctx context.Context, buildDir, nflowPath, binName string, opts b
 }
 
 func buildArgs(binName string, opts buildOptions, ldflags string) []string {
-	args := []string{"build", "-mod=readonly"}
+	// The generated module intentionally has no precomputed go.sum. Resolve
+	// modules as part of the final build so Go follows only the generated
+	// program's import graph instead of tidying the driver's full graph.
+	args := []string{"build", "-mod=mod"}
 
 	if !opts.noTrimpath {
 		args = append(args, "-trimpath")
