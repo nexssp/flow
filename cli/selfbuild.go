@@ -13,7 +13,7 @@ import (
 	"github.com/nexssp/flow/builder"
 )
 
-// SelfBuild rebuilds the running nexssflow binary in place, injecting
+// SelfBuild rebuilds the running nflow binary in place, injecting
 // VCS metadata from the source directory. It replaces the manual
 // `go install` step for developers who want consistent version output.
 func SelfBuild(ctx context.Context) error {
@@ -22,18 +22,15 @@ func SelfBuild(ctx context.Context) error {
 		return err
 	}
 
-	output := goInstallTarget(ctx, "nexssflow")
+	output := goInstallTarget(ctx, "nflow")
 
 	version := builder.GitDescribe(ctx, dir)
 	commit := builder.GitCommit(ctx, dir)
 	builtAt := time.Now().UTC().Format(time.RFC3339)
 
-	ldflags := fmt.Sprintf(
-		"-s -w -X nexssflow/cli.Version=%s -X nexssflow/cli.Commit=%s -X nexssflow/cli.BuiltAt=%s -X nexssflow/builder.Version=%s -X nexssflow/builder.Commit=%s -X nexssflow/builder.BuiltAt=%s",
-		version, commit, builtAt, version, commit, builtAt,
-	)
+	ldflags := selfBuildLinkerFlags(version, commit, builtAt)
 
-	fmt.Fprintf(os.Stderr, "building nexssflow\n")
+	fmt.Fprintf(os.Stderr, "building nflow\n")
 	fmt.Fprintf(os.Stderr, "  source:   %s\n", dir)
 	fmt.Fprintf(os.Stderr, "  output:   %s\n", output)
 	fmt.Fprintf(os.Stderr, "  version:  %s\n", version)
@@ -52,6 +49,13 @@ func SelfBuild(ctx context.Context) error {
 
 	fmt.Fprintf(os.Stderr, "✓ installed %s\n", output)
 	return nil
+}
+
+func selfBuildLinkerFlags(version, commit, builtAt string) string {
+	return fmt.Sprintf(
+		"-s -w -X github.com/nexssp/flow/cli.Version=%s -X github.com/nexssp/flow/cli.Commit=%s -X github.com/nexssp/flow/cli.BuiltAt=%s -X github.com/nexssp/flow/builder.Version=%s -X github.com/nexssp/flow/builder.Commit=%s -X github.com/nexssp/flow/builder.BuiltAt=%s",
+		version, commit, builtAt, version, commit, builtAt,
+	)
 }
 
 // goInstallTarget returns the path Go uses for `go install` on the

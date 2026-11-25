@@ -3,6 +3,7 @@ package builder
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -39,6 +40,33 @@ func TestParseBuildArgsOutputValidation(t *testing.T) {
 func TestRunBuildHelpExitsSuccessfully(t *testing.T) {
 	if code := RunBuild(t.Context(), []string{"--help"}, nil); code != 0 {
 		t.Fatalf("RunBuild --help exit code = %d, want 0", code)
+	}
+}
+
+func TestBuildArgsPreserveMetadataForDebugAndRelease(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		opts buildOptions
+	}{
+		{name: "debug", opts: buildOptions{debug: true}},
+		{name: "release", opts: buildOptions{}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ldflags := linkerFlags(test.opts, "v1.0.0", "abc123", "2026-11-25T00:00:00Z")
+			args := buildArgs("nflow", test.opts, ldflags)
+			joined := strings.Join(args, " ")
+			if !strings.Contains(joined, "-ldflags="+ldflags) {
+				t.Fatalf("%s build args omitted metadata linker flags: %v", test.name, args)
+			}
+			wantBuildVCS := !test.opts.debug
+			if gotBuildVCS := strings.Contains(joined, "-buildvcs=false"); gotBuildVCS != wantBuildVCS {
+				t.Fatalf("%s build args include -buildvcs=false = %t, want %t: %v", test.name, gotBuildVCS, wantBuildVCS, args)
+			}
+			wantStripped := !test.opts.debug
+			if gotStripped := strings.Contains(ldflags, "-s -w"); gotStripped != wantStripped {
+				t.Fatalf("%s linker flags contain symbol stripping = %t, want %t: %q", test.name, gotStripped, wantStripped, ldflags)
+			}
+		})
 	}
 }
 

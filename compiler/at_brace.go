@@ -114,6 +114,9 @@ func (b *braceScanner) parseEntries(dst map[string]*Value, spreads *[]*Value) er
 		if b.eof() {
 			return nil
 		}
+		if b.peek() == '}' {
+			return b.errf("unexpected '}' in argument map")
+		}
 		if strings.HasPrefix(b.src[b.pos:], "...") {
 			b.pos += 3
 			value, err := b.readValue()

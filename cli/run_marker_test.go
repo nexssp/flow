@@ -21,7 +21,6 @@ func TestSmoke_HarnessMarkerDoesNotSuppressHarnessBuild(t *testing.T) {
 	if testing.Short() {
 		t.Skip("smoke test; skipped in short mode")
 	}
-	isolateHarnessCache(t)
 	goBin := requireTool(t, "go")
 	flowRoot := flowModuleRoot(t)
 	kernelRoot := kernelModuleRoot(t, flowRoot)
@@ -36,7 +35,7 @@ mylib.hello
 
 	cmd := exec.CommandContext(t.Context(), goBin, "run", "./cmd/nflow", "run", filepath.Join(workDir, "test.nflow"))
 	cmd.Dir = flowRoot
-	cmd.Env = append(cmd.Environ(), "NFLOW_HARNESS=1")
+	cmd.Env = append(cmd.Environ(), isolatedHarnessCacheEnv(t), "NFLOW_HARNESS=1")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

@@ -38,7 +38,7 @@ This repository is one Go module with package boundaries, not nested release mod
 - `builder/` owns standalone binary builds, external-module harness builds, and build metadata.
 - `cli/` and `cmd/nflow/` provide the thin CLI frontend and dispatch to `builder/`.
 - `native/` defines the shipped default bundle catalog/preset while preserving package discovery and tree-shaking.
-- `integration/` owns assembled app-level tests that cross package boundaries.
+- The root [`spec/`](spec/README.md) tree owns assembled app-level acceptance scenarios that cross package boundaries.
 - `compiler/contracts/` owns execution-context bridges shared by runner and extensions.
 - `nexssp/ai`, `nexssp/cost`, and other sibling packages own their domain logic.
 

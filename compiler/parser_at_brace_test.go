@@ -339,6 +339,14 @@ func TestParseAtBrace_RejectsMalformed(t *testing.T) {
 	}
 }
 
+func TestParseAtBrace_RejectsStrayClosingBrace(t *testing.T) {
+	t.Parallel()
+	_, err := newTestParser(t, `wrap(})`).Parse()
+	if err == nil || !strings.Contains(err.Error(), "unexpected '}'") {
+		t.Fatalf("Parse() error = %v, want stray closing brace diagnostic", err)
+	}
+}
+
 func TestParseAtBrace_MultilineNestedErrorPosition(t *testing.T) {
 	t.Parallel()
 	source := "wrap (\n  outer: {\n    key 1\n  }\n)"

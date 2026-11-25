@@ -1066,15 +1066,21 @@ type bundleImport struct {
 }
 
 func prepareBundleImports(directory string, requirements []require.Requirement) ([]bundleImport, error) {
-	seen := make(map[string]bool)
+	seen := make(map[string]require.Requirement, len(requirements))
 	imports := make([]bundleImport, 0, len(requirements))
 	for i := range requirements {
 		r := &requirements[i]
 		importPath := bundleImportPath(*r)
-		if importPath == "" || seen[importPath] {
+		if importPath == "" {
 			continue
 		}
-		seen[importPath] = true
+		if previous, exists := seen[importPath]; exists {
+			return nil, fmt.Errorf(
+				"bundle package %q is required by multiple selectors: %q (alias %q) and %q (alias %q)",
+				importPath, previous.Import, previous.Alias, r.Import, r.Alias,
+			)
+		}
+		seen[importPath] = *r
 
 		if r.IsLoose {
 			targetDir := filepath.Join(directory, "loose", r.LooseID)

@@ -23,10 +23,6 @@ func TestSmoke_ForkExtension(t *testing.T) {
 	if testing.Short() {
 		t.Skip("smoke test; skipped in short mode")
 	}
-	// Isolate harness cache: this test never touches the developer's
-	// real cache, and a stale entry from a previous run can never
-	// leak into the test.
-	isolateHarnessCache(t)
 	goBin := requireTool(t, "go")
 	flowRoot := flowModuleRoot(t)
 	kernelRoot := kernelModuleRoot(t, flowRoot)
@@ -239,6 +235,7 @@ func runNflow(t *testing.T, goBin, flowRoot string, args ...string) string {
 	//nolint:gosec // G204: args are controlled by the test, not user input.
 	cmd := exec.CommandContext(t.Context(), goBin, append([]string{"run", "./cmd/nflow"}, args...)...)
 	cmd.Dir = flowRoot
+	cmd.Env = append(cmd.Environ(), isolatedHarnessCacheEnv(t))
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -292,30 +289,11 @@ func toolExecutes(path, name string) bool {
 	return exec.CommandContext(context.Background(), path, flag).Run() == nil
 }
 
-// isolateHarnessCache points NFLOW_HARNESS_CACHE at a fresh temp dir
-// for the duration of the test. It is intentionally not t.Setenv:
-// t.Setenv conflicts with t.Parallel because it mutates process state.
-// Two smoke tests running in parallel would race on the same env var;
-// we accept that because each smoke test is slow enough that they
-// rarely overlap, and a shared temp dir is still better than the
-// shared user cache.
-func isolateHarnessCache(t *testing.T) {
+// isolatedHarnessCacheEnv returns a private cache path for one child
+// process without mutating the environment of parallel tests.
+func isolatedHarnessCacheEnv(t *testing.T) string {
 	t.Helper()
-	previous, hadPrevious := os.LookupEnv("NFLOW_HARNESS_CACHE")
-	dir := t.TempDir()
-
-	//nolint:usetesting // t.Setenv is unavailable after t.Parallel
-	if err := os.Setenv("NFLOW_HARNESS_CACHE", dir); err != nil {
-		t.Fatalf("setenv: %v", err)
-	}
-	t.Cleanup(func() {
-		//nolint:usetesting // restoring process env, not a t.Setenv scope
-		if hadPrevious {
-			_ = os.Setenv("NFLOW_HARNESS_CACHE", previous)
-		} else {
-			_ = os.Unsetenv("NFLOW_HARNESS_CACHE")
-		}
-	})
+	return "NFLOW_HARNESS_CACHE=" + t.TempDir()
 }
 
 func flowModuleRoot(t *testing.T) string {

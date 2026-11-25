@@ -378,11 +378,10 @@ func buildArgs(binName string, opts buildOptions, ldflags string) []string {
 	if !opts.noTrimpath {
 		args = append(args, "-trimpath")
 	}
-	if !opts.debug {
-		args = append(args,
-			"-buildvcs=false",
-			"-ldflags="+ldflags,
-		)
+	if opts.debug {
+		args = append(args, "-ldflags="+ldflags)
+	} else {
+		args = append(args, "-buildvcs=false", "-ldflags="+ldflags)
 	}
 
 	args = append(args, "-o", binName, ".")
