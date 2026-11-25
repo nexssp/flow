@@ -34,6 +34,14 @@ type unsupportedEventPayload struct {
 	Values map[int]string `json:"values"`
 }
 
+type opaqueMutableEventLeaf struct {
+	Values []string `json:"-"`
+}
+
+type opaqueMutableEventPayload struct {
+	Hidden opaqueMutableEventLeaf `json:"hidden"`
+}
+
 type recordingPublisher struct {
 	mu              sync.Mutex
 	subjects        []string
@@ -389,6 +397,87 @@ func TestPipelineRouteRequiresDeclaredTypedPipeline(t *testing.T) {
 	_, err := runner.Compile(t.Context(), cfg, source, "untyped-event-handler.nflow")
 	if err == nil || !strings.Contains(err.Error(), "must declare a typed request schema") {
 		t.Fatalf("compile error = %v, want typed pipeline request-schema requirement", err)
+	}
+}
+
+func TestPipelineRouteSuggestsMissingPrefixForLocalPipeline(t *testing.T) {
+	cfg := testConfig(t)
+	source := `@schema Ready {
+  bind_address string
+}
+@pipeline handle_ready(ready: Ready)
+  runtime.noop
+@end
+@events {
+  observe edge.events.ready -> handle_ready
+}
+`
+	_, err := runner.Compile(t.Context(), cfg, source, "missing-pipeline-prefix.nflow")
+	if err == nil || !strings.Contains(err.Error(), "did you mean pipeline.handle_ready?") {
+		t.Fatalf("compile error = %v, want local-pipeline prefix suggestion", err)
+	}
+}
+
+func TestPipelineRouteRejectsArrayRequestSchema(t *testing.T) {
+	cfg := testConfig(t)
+	source := `@schema Ready {
+  bind_address string
+}
+@pipeline handle_ready(ready: []Ready)
+  runtime.noop
+@end
+@events {
+  observe edge.events.ready -> pipeline.handle_ready
+}
+`
+	_, err := runner.Compile(t.Context(), cfg, source, "array-pipeline-event-schema.nflow")
+	if err == nil || !strings.Contains(err.Error(), "array-shaped") || !strings.Contains(err.Error(), "object map") {
+		t.Fatalf("compile error = %v, want array-shaped request-schema diagnostic", err)
+	}
+}
+
+func TestPipelineRouteRejectsStrictArrayRequestSchema(t *testing.T) {
+	cfg := testConfig(t)
+	source := `@schema Ready {
+  bind_address string
+}
+@pipeline handle_ready(ready: ![]Ready)
+  runtime.noop
+@end
+@events {
+  observe edge.events.ready -> pipeline.handle_ready
+}
+`
+	_, err := runner.Compile(t.Context(), cfg, source, "strict-array-pipeline-event-schema.nflow")
+	if err == nil || !strings.Contains(err.Error(), "array-shaped") || !strings.Contains(err.Error(), "object map") {
+		t.Fatalf("compile error = %v, want array-shaped request-schema diagnostic", err)
+	}
+}
+
+func TestPipelineRouteRejectsOpaquePayloadLeafWithMutableReferences(t *testing.T) {
+	eventBundle := compiler.Bundle{
+		ID:    "opaque_event",
+		Alias: "opaque",
+		Events: []compiler.EventSpec{{
+			Name:        "opaque_event.events.ready",
+			Subject:     "events.opaque_ready",
+			PayloadType: reflect.TypeFor[opaqueMutableEventPayload](),
+		}},
+	}
+	cfg := testConfig(t, eventBundle)
+	source := `@schema EventInput {
+  hidden string
+}
+@pipeline handle_opaque_ready(payload: EventInput)
+  runtime.noop
+@end
+@events {
+  observe opaque.events.ready -> pipeline.handle_opaque_ready
+}
+`
+	_, err := runner.Compile(t.Context(), cfg, source, "opaque-event-payload.nflow")
+	if err == nil || !strings.Contains(err.Error(), "cannot be safely detached") || !strings.Contains(err.Error(), "Values") {
+		t.Fatalf("compile error = %v, want mutable opaque-leaf diagnostic", err)
 	}
 }
 

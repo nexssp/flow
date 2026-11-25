@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 type expressionProjectionNested struct {
@@ -191,6 +192,94 @@ func TestExpressionProjectorHandlesNilPointersAndStringLikeMapKeys(t *testing.T)
 	primary, ok := names["primary"].(map[string]any)
 	if !ok || primary["label"] != "named key" {
 		t.Fatalf("names.primary = %#v, want projected nested value", names["primary"])
+	}
+}
+
+type scalarContainerProjectionPayload struct {
+	Values []int          `json:"values"`
+	Lookup map[string]int `json:"lookup"`
+}
+
+func TestExpressionProjectorDetachesScalarContainers(t *testing.T) {
+	projector, err := NewExpressionProjector(reflect.TypeFor[scalarContainerProjectionPayload]())
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := scalarContainerProjectionPayload{
+		Values: []int{1, 2},
+		Lookup: map[string]int{"original": 3},
+	}
+	binding, err := projector.Project(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload.Values[0] = 9
+	payload.Lookup["original"] = 10
+	values, ok := binding["values"].([]any)
+	if !ok || len(values) != 2 || values[0] != 1 {
+		t.Fatalf("values = %#v, want a detached []any{1, 2}", binding["values"])
+	}
+	lookup, ok := binding["lookup"].(map[string]any)
+	if !ok || lookup["original"] != 3 {
+		t.Fatalf("lookup = %#v, want a detached map retaining the original value", binding["lookup"])
+	}
+}
+
+type eventWithTimestampPayload struct {
+	ID        string    `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func TestExpressionProjectorAcceptsTimeLeaves(t *testing.T) {
+	projector, err := NewExpressionProjector(reflect.TypeFor[eventWithTimestampPayload]())
+	if err != nil {
+		t.Fatalf("expected time.Time to be accepted, got error: %v", err)
+	}
+	now := time.Now()
+	binding, err := projector.Project(eventWithTimestampPayload{ID: "evt-1", CreatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := binding["created_at"].(time.Time); !ok || !got.Equal(now) {
+		t.Fatalf("created_at = %#v, want %v", binding["created_at"], now)
+	}
+}
+
+type opaqueMutableProjectionLeaf struct {
+	Values []string `json:"-"`
+}
+
+type opaqueMutableProjectionPayload struct {
+	Leaf opaqueMutableProjectionLeaf `json:"leaf"`
+}
+
+type safeOpaqueProjectionLeaf struct {
+	Count int `json:"-"`
+}
+
+type safeOpaqueProjectionPayload struct {
+	Leaf safeOpaqueProjectionLeaf `json:"leaf"`
+}
+
+func TestExpressionProjectorRejectsMutableOpaqueLeavesButKeepsSafeValues(t *testing.T) {
+	_, err := NewExpressionProjector(reflect.TypeFor[opaqueMutableProjectionPayload]())
+	if err == nil || !strings.Contains(err.Error(), "mutable reference field") || !strings.Contains(err.Error(), "cannot be safely detached") {
+		t.Fatalf("error = %v, want clear mutable-reference opaque-leaf diagnostic", err)
+	}
+	if !strings.Contains(err.Error(), "Values") {
+		t.Fatalf("error = %v, want the offending field name", err)
+	}
+
+	projector, err := NewExpressionProjector(reflect.TypeFor[safeOpaqueProjectionPayload]())
+	if err != nil {
+		t.Fatalf("safe scalar/value leaf rejected: %v", err)
+	}
+	binding, err := projector.Project(safeOpaqueProjectionPayload{Leaf: safeOpaqueProjectionLeaf{Count: 7}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := binding["leaf"].(safeOpaqueProjectionLeaf); !ok || got.Count != 7 {
+		t.Fatalf("leaf = %#v, want copied safe value leaf", binding["leaf"])
 	}
 }
 

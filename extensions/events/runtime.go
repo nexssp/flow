@@ -113,6 +113,12 @@ func materializeRoute(req compiler.MaterializeReq, declaration Route, specs map[
 	if pipelineName, isPipeline := strings.CutPrefix(declaration.SinkName, "pipeline."); isPipeline {
 		return materializePipelineRoute(req, declaration, spec, pipelineName, compiled)
 	}
+	if pipelines, ok := req.Meta["pipelines"].(map[string]string); ok {
+		if _, declared := pipelines[declaration.SinkName]; declared {
+			return compiledRoute{}, compiler.SourceError(declaration.SinkPosition,
+				"@events: %q names a locally declared pipeline; did you mean pipeline.%s?", declaration.SinkName, declaration.SinkName)
+		}
+	}
 	return materializeTypedSinkRoute(req, declaration, compiled)
 }
 
@@ -131,9 +137,15 @@ func materializePipelineRoute(req compiler.MaterializeReq, declaration Route, sp
 		return compiledRoute{}, compiler.SourceError(declaration.SinkPosition,
 			"@events: unknown pipeline handler %q", declaration.SinkName)
 	}
-	if !hasRequestSchema(pipeline) {
+	requestSchema, hasRequest := requestSchemaSelector(pipeline)
+	if !hasRequest {
 		return compiledRoute{}, compiler.SourceError(declaration.SinkPosition,
 			"@events: pipeline handler %q must declare a typed request schema", declaration.SinkName)
+	}
+	if strings.HasPrefix(strings.TrimPrefix(requestSchema, "!"), "[]") {
+		return compiledRoute{}, compiler.SourceError(declaration.SinkPosition,
+			"@events: pipeline handler %q request schema %q is array-shaped; event payload projection produces an object map",
+			declaration.SinkName, requestSchema)
 	}
 	projector, err := compiler.NewExpressionProjector(spec.PayloadType)
 	if err != nil {
@@ -176,17 +188,17 @@ func materializeTypedSinkRoute(req compiler.MaterializeReq, declaration Route, c
 	return compiled, nil
 }
 
-func hasRequestSchema(handler action.AnyAction) bool {
+func requestSchemaSelector(handler action.AnyAction) (string, bool) {
 	description := handler.Describe()
 	if description == nil {
-		return false
+		return "", false
 	}
 	for _, tag := range description.Tags {
-		if strings.HasPrefix(tag, "request-schema:") {
-			return true
+		if selector, ok := strings.CutPrefix(tag, "request-schema:"); ok {
+			return selector, true
 		}
 	}
-	return false
+	return "", false
 }
 
 // InstallPublisher composes the source's explicit routes with any publisher

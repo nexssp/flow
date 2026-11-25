@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"time"
 )
 
 const maxExpressionProjectionDepth = 256
@@ -113,6 +114,11 @@ func buildExpressionProjectionPlan(valueType reflect.Type, plans map[reflect.Typ
 			return nil, err
 		}
 		plan.projectable = len(fields) > 0
+		if !plan.projectable {
+			if fieldPath, containsReference := expressionMutableReferencePath(valueType, valueType.String(), make(map[reflect.Type]bool)); containsReference {
+				return nil, fmt.Errorf("opaque expression leaf type %s contains mutable reference field %q and cannot be safely detached", valueType, fieldPath)
+			}
+		}
 		for _, field := range fields {
 			if !expressionFieldPathExported(valueType, field.index) {
 				return nil, fmt.Errorf("expression field %q is reached through an unexported embedded field", field.name)
@@ -137,6 +143,30 @@ func buildExpressionProjectionPlan(valueType reflect.Type, plans map[reflect.Typ
 		return nil, fmt.Errorf("type %s is not supported in an expression payload", valueType)
 	}
 	return plan, nil
+}
+
+func expressionMutableReferencePath(valueType reflect.Type, path string, seen map[reflect.Type]bool) (string, bool) {
+	if valueType == reflect.TypeFor[time.Time]() {
+		return "", false
+	}
+	//nolint:exhaustive // Other kinds are scalar values with no reference graph to detach.
+	switch valueType.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Interface, reflect.Func, reflect.Chan, reflect.UnsafePointer:
+		return path, true
+	case reflect.Array:
+		return expressionMutableReferencePath(valueType.Elem(), path+"[]", seen)
+	case reflect.Struct:
+		if seen[valueType] {
+			return "", false
+		}
+		seen[valueType] = true
+		for field := range valueType.Fields() {
+			if fieldPath, found := expressionMutableReferencePath(field.Type, path+"."+field.Name, seen); found {
+				return fieldPath, true
+			}
+		}
+	}
+	return "", false
 }
 
 func expressionFieldPathExported(valueType reflect.Type, index []int) bool {
@@ -167,10 +197,18 @@ func projectExpressionValue(value reflect.Value, plan *expressionProjectionPlan,
 	if (plan.kind == reflect.Pointer || plan.kind == reflect.Map || plan.kind == reflect.Slice) && value.IsNil() {
 		return nil, nil
 	}
-	if !plan.projectable {
+	if plan.kind == reflect.Struct && !plan.projectable {
 		return projectExpressionLeaf(value)
 	}
-	return projectExpressionContainer(value, plan, depth)
+	// Maps, slices, and arrays must always be traversed—even when their leaves
+	// are scalar—so the expression binding never shares mutable containers.
+	//nolint:exhaustive // Only reference-bearing/container kinds need special traversal; scalar leaves fall through.
+	switch plan.kind {
+	case reflect.Pointer, reflect.Struct, reflect.Array, reflect.Slice, reflect.Map:
+		return projectExpressionContainer(value, plan, depth)
+	default:
+		return projectExpressionLeaf(value)
+	}
 }
 
 //nolint:nilnil // A nil projected value is the expression view's explicit JSON-like null.
