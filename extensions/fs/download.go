@@ -36,6 +36,7 @@ type DownloadRequest struct {
 	URL           string            `json:"url,omitempty"`
 	Path          string            `json:"path,omitempty"`
 	ExpectedBytes int64             `json:"expected_bytes,omitempty"`
+	Force         bool              `json:"force,omitempty"`
 	Headers       map[string]string `json:"headers,omitempty"`
 	OutputDir     string            `json:"output_dir,omitempty"`
 	Files         []DownloadFile    `json:"files,omitempty"`
@@ -70,7 +71,7 @@ const downloadProgressInterval int64 = 1 << 20
 // Kernel's supported xctx.ReportProgress API. It accepts either url/path fields
 // for one file or a files array for a generic manifest.
 var Download = action.New[DownloadRequest, DownloadResult]("fs.download", downloadHTTP).
-	Description("Stream HTTP response bodies to safe relative file paths with byte progress and resumable Range requests").
+	Description("Stream HTTP downloads with byte progress, resumable Range requests, and conditional cache validation").
 	Tag("fs", "network").
 	Build()
 
@@ -99,7 +100,7 @@ func downloadHTTP(ctx context.Context, req DownloadRequest) (DownloadResult, err
 	if !totalKnown {
 		progressTotal = 0
 	}
-	result, err := downloadFiles(ctx, files, root, total, progressTotal)
+	result, err := downloadFiles(ctx, files, root, total, progressTotal, req.Force)
 	if err != nil {
 		return result, err
 	}
@@ -158,7 +159,7 @@ func expectedDownloadBytes(files []DownloadFile) (total int64, totalKnown bool, 
 	return total, totalKnown, nil
 }
 
-func downloadFiles(ctx context.Context, files []DownloadFile, root string, total, progressTotal int64) (DownloadResult, error) {
+func downloadFiles(ctx context.Context, files []DownloadFile, root string, total, progressTotal int64, force bool) (DownloadResult, error) {
 	result := DownloadResult{Files: make([]DownloadFileResult, 0, len(files)), TotalBytes: total}
 	var completedBefore int64
 	reportDownloadProgress(ctx, 0, progressTotal, "Starting HTTP download manifest", "")
@@ -170,7 +171,7 @@ func downloadFiles(ctx context.Context, files []DownloadFile, root string, total
 		if err != nil {
 			return result, xerr.Validation("fs.download: " + err.Error())
 		}
-		fileResult, err := downloadOne(ctx, file, target, completedBefore, progressTotal)
+		fileResult, err := downloadOne(ctx, file, target, completedBefore, progressTotal, force)
 		if err != nil {
 			return result, fmt.Errorf("fs.download: %s: %w", file.Path, err)
 		}
@@ -244,13 +245,42 @@ func safeDownloadTarget(root, relative string) (string, error) {
 	return filepath.Join(parent, components[len(components)-1]), nil
 }
 
-func downloadOne(ctx context.Context, file DownloadFile, target string, completedBefore, total int64) (DownloadFileResult, error) {
-	if result, complete := completeDownloadTarget(file, target); complete {
-		reportDownloadProgress(ctx, completedBefore+result.Bytes, total, "Already complete: "+file.Path, file.Path)
-		return result, nil
+func downloadOne(ctx context.Context, file DownloadFile, target string, completedBefore, total int64, force bool) (DownloadFileResult, error) {
+	partial := target + ".part"
+	if force {
+		if err := discardPartialDownload(partial); err != nil {
+			return DownloadFileResult{Path: target}, err
+		}
 	}
 
-	partial := target + ".part"
+	if !force {
+		if cached := readDownloadCache(file, target); cached != nil {
+			request, err := newDownloadRequest(ctx, file, 0, cached)
+			if err != nil {
+				return DownloadFileResult{Path: target}, err
+			}
+			response, err := downloadHTTPClient.Do(request)
+			if err != nil {
+				return DownloadFileResult{Path: target}, fmt.Errorf("request failed: %w", err)
+			}
+			if response.StatusCode == http.StatusNotModified {
+				_ = response.Body.Close()
+				if result, ok := cachedDownloadResult(file, target, *cached); ok {
+					reportDownloadProgress(ctx, completedBefore+result.Bytes, total, "Cache validated: "+file.Path, file.Path)
+					return result, nil
+				}
+				// The server confirms its representation is unchanged, but the local
+				// file no longer matches the saved metadata. Fetch it unconditionally.
+				if err := discardPartialDownload(partial); err != nil {
+					return DownloadFileResult{Path: target}, err
+				}
+			} else {
+				defer response.Body.Close()
+				return streamAndCacheDownload(ctx, response, file, target, partial, 0, completedBefore, total)
+			}
+		}
+	}
+
 	result, offset, recovered, err := preparePartialDownload(file, target, partial)
 	if err != nil {
 		return result, err
@@ -260,7 +290,7 @@ func downloadOne(ctx context.Context, file DownloadFile, target string, complete
 		return result, nil
 	}
 
-	request, err := newDownloadRequest(ctx, file, offset)
+	request, err := newDownloadRequest(ctx, file, offset, nil)
 	if err != nil {
 		return result, err
 	}
@@ -269,26 +299,72 @@ func downloadOne(ctx context.Context, file DownloadFile, target string, complete
 		return result, fmt.Errorf("request failed: %w", err)
 	}
 	defer response.Body.Close()
-
-	details, err := inspectDownloadResponse(response, file, offset)
-	if err != nil {
-		return result, err
-	}
-	return streamDownloadResponse(ctx, response, file, target, partial, details, completedBefore, total)
+	return streamAndCacheDownload(ctx, response, file, target, partial, offset, completedBefore, total)
 }
 
-func completeDownloadTarget(file DownloadFile, target string) (DownloadFileResult, bool) {
-	result := DownloadFileResult{Path: target}
-	if file.ExpectedBytes <= 0 {
-		return result, false
+type downloadCacheMetadata struct {
+	URL          string `json:"url"`
+	ETag         string `json:"etag,omitempty"`
+	LastModified string `json:"last_modified,omitempty"`
+	Bytes        int64  `json:"bytes"`
+}
+
+func downloadCachePath(target string) string {
+	return target + ".http-cache.json"
+}
+
+func readDownloadCache(file DownloadFile, target string) *downloadCacheMetadata {
+	if len(file.Headers) > 0 {
+		return nil
 	}
-	info, err := os.Lstat(target)
-	if err != nil || !info.Mode().IsRegular() || info.Size() != file.ExpectedBytes {
-		return result, false
+	targetInfo, err := os.Lstat(target)
+	if err != nil || !targetInfo.Mode().IsRegular() {
+		return nil
 	}
-	result.Bytes = info.Size()
-	result.Skipped = true
-	return result, true
+	cachePath := downloadCachePath(target)
+	cacheInfo, err := os.Lstat(cachePath)
+	if err != nil || !cacheInfo.Mode().IsRegular() {
+		return nil
+	}
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		return nil
+	}
+	var metadata downloadCacheMetadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return nil
+	}
+	if metadata.URL != file.URL || metadata.Bytes != targetInfo.Size() || metadata.Bytes < 0 ||
+		(file.ExpectedBytes > 0 && metadata.Bytes != file.ExpectedBytes) ||
+		(metadata.ETag == "" && metadata.LastModified == "") {
+		return nil
+	}
+	return &metadata
+}
+
+func cachedDownloadResult(file DownloadFile, target string, previous downloadCacheMetadata) (DownloadFileResult, bool) {
+	current := readDownloadCache(file, target)
+	if current == nil || *current != previous {
+		return DownloadFileResult{Path: target}, false
+	}
+	return DownloadFileResult{Path: target, Bytes: current.Bytes, Skipped: true}, true
+}
+
+func discardPartialDownload(partial string) error {
+	info, err := os.Lstat(partial)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect temporary file: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return fmt.Errorf("temporary path %q is not a regular file", partial)
+	}
+	if err := os.Remove(partial); err != nil {
+		return fmt.Errorf("remove temporary file for forced download: %w", err)
+	}
+	return nil
 }
 
 func preparePartialDownload(file DownloadFile, target, partial string) (result DownloadFileResult, offset int64, recovered bool, err error) {
@@ -319,7 +395,7 @@ func preparePartialDownload(file DownloadFile, target, partial string) (result D
 	return result, 0, false, nil
 }
 
-func newDownloadRequest(ctx context.Context, file DownloadFile, offset int64) (*http.Request, error) {
+func newDownloadRequest(ctx context.Context, file DownloadFile, offset int64, cached *downloadCacheMetadata) (*http.Request, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, file.URL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -327,10 +403,77 @@ func newDownloadRequest(ctx context.Context, file DownloadFile, offset int64) (*
 	for key, value := range file.Headers {
 		request.Header.Set(key, value)
 	}
+	if cached != nil {
+		if cached.ETag != "" {
+			request.Header.Set("If-None-Match", cached.ETag)
+		}
+		if cached.LastModified != "" {
+			request.Header.Set("If-Modified-Since", cached.LastModified)
+		}
+	}
 	if offset > 0 {
 		request.Header.Set("Range", "bytes="+strconv.FormatInt(offset, 10)+"-")
 	}
 	return request, nil
+}
+
+func streamAndCacheDownload(ctx context.Context, response *http.Response, file DownloadFile, target, partial string, offset, completedBefore, total int64) (DownloadFileResult, error) {
+	result := DownloadFileResult{Path: target}
+	details, err := inspectDownloadResponse(response, file, offset)
+	if err != nil {
+		return result, err
+	}
+	result, err = streamDownloadResponse(ctx, response, file, target, partial, details, completedBefore, total)
+	if err != nil {
+		return result, err
+	}
+	if err := writeDownloadCache(file, target, response.Header, result.Bytes); err != nil {
+		return result, fmt.Errorf("save HTTP cache metadata: %w", err)
+	}
+	return result, nil
+}
+
+func writeDownloadCache(file DownloadFile, target string, headers http.Header, bytes int64) error {
+	cachePath := downloadCachePath(target)
+	removeCache := func() error {
+		if err := os.Remove(cachePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	if len(file.Headers) > 0 || strings.TrimSpace(headers.Get("Vary")) == "*" {
+		return removeCache()
+	}
+	metadata := downloadCacheMetadata{
+		URL:          file.URL,
+		ETag:         strings.TrimSpace(headers.Get("ETag")),
+		LastModified: strings.TrimSpace(headers.Get("Last-Modified")),
+		Bytes:        bytes,
+	}
+	if metadata.ETag == "" && metadata.LastModified == "" {
+		return removeCache()
+	}
+	data, err := json.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(cachePath), ".download-cache-*")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if _, err := temporary.Write(append(data, '\n')); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := removeCache(); err != nil {
+		return err
+	}
+	return os.Rename(temporaryPath, cachePath)
 }
 
 type downloadResponseDetails struct {

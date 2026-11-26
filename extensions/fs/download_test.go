@@ -91,6 +91,149 @@ func TestDownloadStreamsAndReportsByteProgress(t *testing.T) {
 	}
 }
 
+func TestDownloadRevalidatesExistingFileWithETag(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) == 1 {
+			if got := r.Header.Get("If-None-Match"); got != "" {
+				t.Errorf("first If-None-Match = %q, want empty", got)
+			}
+			w.Header().Set("ETag", `"v1"`)
+			_, _ = io.WriteString(w, "stable")
+			return
+		}
+		if got := r.Header.Get("If-None-Match"); got != `"v1"` {
+			t.Errorf("second If-None-Match = %q, want %q", got, `"v1"`)
+		}
+		w.Header().Set("ETag", `"v1"`)
+		w.WriteHeader(http.StatusNotModified)
+	}))
+	defer server.Close()
+	outputDir := t.TempDir()
+	input := map[string]any{"url": server.URL, "path": "asset.bin", "output_dir": outputDir}
+
+	first, err := invokeDownload(t.Context(), input)
+	if err != nil {
+		t.Fatalf("initial download failed: %v", err)
+	}
+	if first.Files[0].Skipped || first.Files[0].TransferredBytes != int64(len("stable")) {
+		t.Fatalf("initial result = %#v, want downloaded bytes", first.Files[0])
+	}
+	second, err := invokeDownload(t.Context(), input)
+	if err != nil {
+		t.Fatalf("conditional request failed: %v", err)
+	}
+	if !second.Files[0].Skipped || second.Files[0].Bytes != int64(len("stable")) || second.TransferredBytes != 0 {
+		t.Fatalf("revalidated result = %#v, want cached 6-byte file", second)
+	}
+	if requests.Load() != 2 {
+		t.Fatalf("request count = %d, want 2", requests.Load())
+	}
+	got, err := os.ReadFile(filepath.Join(outputDir, "asset.bin"))
+	if err != nil || string(got) != "stable" {
+		t.Fatalf("cached file = %q, err = %v; want stable", got, err)
+	}
+}
+
+func TestDownloadDoesNotTrustMatchingSizeWithoutValidator(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		_, _ = io.WriteString(w, "new")
+	}))
+	defer server.Close()
+	outputDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outputDir, "asset.bin"), []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := invokeDownload(t.Context(), map[string]any{
+		"url":            server.URL,
+		"path":           "asset.bin",
+		"output_dir":     outputDir,
+		"expected_bytes": int64(3),
+	})
+	if err != nil {
+		t.Fatalf("download failed: %v", err)
+	}
+	if result.Files[0].Skipped || requests.Load() != 1 {
+		t.Fatalf("result = %#v, requests = %d; want download despite matching size", result.Files[0], requests.Load())
+	}
+	got, err := os.ReadFile(filepath.Join(outputDir, "asset.bin"))
+	if err != nil || string(got) != "new" {
+		t.Fatalf("downloaded file = %q, err = %v; want new", got, err)
+	}
+}
+
+func TestDownloadRefreshesWhenETagChanges(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) == 1 {
+			w.Header().Set("ETag", `"v1"`)
+			_, _ = io.WriteString(w, "old")
+			return
+		}
+		if got := r.Header.Get("If-None-Match"); got != `"v1"` {
+			t.Errorf("If-None-Match = %q, want %q", got, `"v1"`)
+		}
+		w.Header().Set("ETag", `"v2"`)
+		_, _ = io.WriteString(w, "new")
+	}))
+	defer server.Close()
+	outputDir := t.TempDir()
+	input := map[string]any{"url": server.URL, "path": "asset.bin", "output_dir": outputDir}
+	if _, err := invokeDownload(t.Context(), input); err != nil {
+		t.Fatalf("initial download failed: %v", err)
+	}
+	result, err := invokeDownload(t.Context(), input)
+	if err != nil {
+		t.Fatalf("changed-resource download failed: %v", err)
+	}
+	if result.Files[0].Skipped || result.Files[0].TransferredBytes != 3 {
+		t.Fatalf("changed-resource result = %#v, want newly downloaded 3-byte file", result.Files[0])
+	}
+	got, err := os.ReadFile(filepath.Join(outputDir, "asset.bin"))
+	if err != nil || string(got) != "new" {
+		t.Fatalf("downloaded file = %q, err = %v; want new", got, err)
+	}
+}
+
+func TestDownloadForceBypassesCacheAndPartialFile(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if got := r.Header.Get("If-None-Match"); got != "" {
+			t.Errorf("forced If-None-Match = %q, want empty", got)
+		}
+		if got := r.Header.Get("Range"); got != "" {
+			t.Errorf("forced Range = %q, want empty", got)
+		}
+		w.Header().Set("ETag", `"v2"`)
+		_, _ = io.WriteString(w, "fresh")
+	}))
+	defer server.Close()
+	outputDir := t.TempDir()
+	input := map[string]any{"url": server.URL, "path": "asset.bin", "output_dir": outputDir}
+	if _, err := invokeDownload(t.Context(), input); err != nil {
+		t.Fatalf("initial download failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, "asset.bin.part"), []byte("stale partial"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	input["force"] = true
+	result, err := invokeDownload(t.Context(), input)
+	if err != nil {
+		t.Fatalf("forced download failed: %v", err)
+	}
+	if result.Files[0].Skipped || result.Files[0].TransferredBytes != int64(len("fresh")) || requests.Load() != 2 {
+		t.Fatalf("forced result = %#v, requests = %d; want a fresh download", result.Files[0], requests.Load())
+	}
+	got, err := os.ReadFile(filepath.Join(outputDir, "asset.bin"))
+	if err != nil || string(got) != "fresh" {
+		t.Fatalf("downloaded file = %q, err = %v; want fresh", got, err)
+	}
+}
+
 func TestDownloadResumesWithRange(t *testing.T) {
 	outputDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(outputDir, "model.bin.part"), []byte("abc"), 0o600); err != nil {

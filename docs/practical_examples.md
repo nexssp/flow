@@ -905,9 +905,14 @@ fs.walk ( root: "./incoming" )
 
 `fs.download` streams response bodies directly to disk instead of buffering them
 in memory. Give it a single `url`/`path` pair or a `files` manifest; each path
-must be relative to `output_dir`. It verifies `expected_bytes` when supplied,
-retains an interrupted `.part` file, resumes with HTTP Range, and can write a
-JSON receipt with caller-provided provenance.
+must be relative to `output_dir`. After downloading, it saves ETag or
+Last-Modified metadata beside the file and conditionally revalidates a matching
+local file on later runs. It redownloads when the remote resource changed; set
+`force: true` to bypass the cache and start a fresh transfer. `expected_bytes`
+is optional and, when supplied, validates the completed size rather than serving
+as a cache key. Interrupted `.part` files are retained and resumed with HTTP
+Range; an optional JSON receipt can include caller-provided provenance. Requests
+with custom headers are not cached.
 
 ```nflow
 fs.download (
