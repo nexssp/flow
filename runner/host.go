@@ -126,9 +126,7 @@ func (h *Host) Run(ctx context.Context, fn func(context.Context) error) (result 
 	returned := false
 	defer func() {
 		panicValue := recover()
-		h.mu.Lock()
-		h.running = false
-		h.mu.Unlock()
+		h.finishRun()
 		if !returned {
 			shutdownErr := h.Shutdown(ctx)
 			if shutdownErr != nil {
@@ -149,6 +147,13 @@ func (h *Host) Run(ctx context.Context, fn func(context.Context) error) (result 
 	result = fn(ctx)
 	returned = true
 	return result
+}
+
+func (h *Host) finishRun() {
+	h.mu.Lock()
+	h.running = false
+	h.shuttingDown = true
+	h.mu.Unlock()
 }
 
 // Shutdown invokes every owned callback exactly once in reverse ownership
