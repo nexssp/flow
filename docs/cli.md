@@ -308,6 +308,11 @@ launched and accepts JSON-object payloads plus the core runtime options
 below. Successful run output is clean JSON; unlike the regular CLI, the
 standalone binary does not render a terminal-specific pretty view.
 
+The generated program includes Flow's compiler and runner and compiles the
+embedded source at startup. By default, the builder links only native bundles
+used by the workflow; `--all-bundles` includes the full native set. Binary size
+varies with the workflow, bundles, target platform, and Go toolchain.
+
 Runtime options:
 
 | Flag | Effect |
@@ -345,18 +350,17 @@ Build options:
 | `-o FILE` | Output path. Defaults to the source filename without extension. |
 | `--debug`, `-d` | Keep debug symbols. |
 | `--no-trimpath` | Keep full source paths in the built executable. |
-| `--all-bundles` | Link all native bundles rather than the planned subset. |
+| `--all-bundles` | Link all native bundles, not only those selected for the workflow. |
 
 Build flags may precede or follow the input path. `--output FILE` and
 `--output=FILE` are also accepted; an empty or missing output value is an
 error. The output must not refer to the source workflow, including via a
 symlink or hard link.
-
-The build runs `go mod tidy` and `go build` in a temporary directory
-with the source and a generated `main.go`. Dependency-resolution errors
-stop the build. It defaults to the host platform; for cross-compilation,
-set `GOOS` and `GOARCH` when invoking `nflow build`. The temporary build
-directory is removed when the command returns.
+The build runs `go build -mod=mod` in a temporary directory containing the
+embedded source and a generated `main.go`. Go resolves modules during this
+build; dependency-resolution errors stop it. It defaults to the host platform;
+for cross-compilation, set `GOOS` and `GOARCH` when invoking `nflow build`.
+The temporary build directory is removed when the command returns.
 
 For reproducible release-mode binaries, set `SOURCE_DATE_EPOCH` to the same
 non-negative Unix timestamp (whole seconds) for each build. This overrides

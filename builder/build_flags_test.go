@@ -70,6 +70,43 @@ func TestBuildArgsPreserveMetadataForDebugAndRelease(t *testing.T) {
 	}
 }
 
+func TestBuildHelpDescribesStandaloneContentsAndVariableSize(t *testing.T) {
+	for _, want := range []string{
+		"includes Flow's compiler and runner",
+		"compiles the embedded workflow",
+		"Binary size varies with the workflow, bundles, target platform, and",
+		"Link all native bundles, not only those selected for",
+	} {
+		if !strings.Contains(buildHelpText, want) {
+			t.Errorf("build help is missing %q", want)
+		}
+	}
+	for _, misleading := range []string{"~2MB", "zero compiler/CLI runtime baggage", "~18MB"} {
+		if strings.Contains(buildHelpText, misleading) {
+			t.Errorf("build help still contains misleading claim %q", misleading)
+		}
+	}
+}
+
+func TestBuildModeDescriptionReflectsAllBundles(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		opts buildOptions
+		want string
+	}{
+		{name: "default", want: "  (release, tree-shaken, symbols stripped)"},
+		{name: "all bundles", opts: buildOptions{allBundles: true}, want: "  (all native bundles linked)"},
+		{name: "all bundles with debug", opts: buildOptions{allBundles: true, debug: true}, want: "  (all native bundles linked)"},
+		{name: "all bundles without trimpath", opts: buildOptions{allBundles: true, noTrimpath: true}, want: "  (all native bundles linked)"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := buildModeDescription(test.opts); got != test.want {
+				t.Fatalf("buildModeDescription(%+v) = %q, want %q", test.opts, got, test.want)
+			}
+		})
+	}
+}
+
 func TestResolveBuildOutputPathRejectsInputOverwrite(t *testing.T) {
 	root := t.TempDir()
 	flow := filepath.Join(root, "workflow.nflow")

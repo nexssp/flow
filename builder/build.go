@@ -398,6 +398,9 @@ func linkerFlags(opts buildOptions, version, commit, builtAt string) string {
 }
 
 func buildModeDescription(opts buildOptions) string {
+	if opts.allBundles {
+		return "  (all native bundles linked)"
+	}
 	switch {
 	case opts.debug:
 		return "  (debug — symbols kept)"
@@ -533,12 +536,13 @@ func parseBuildArgs(args []string) (opts buildOptions, rc int) {
 	return opts, 0
 }
 
-func printBuildHelp() {
-	fmt.Fprint(os.Stderr, `Usage: nflow build <file.nflow> [-o <output>] [--debug] [--no-trimpath] [--all-bundles]
+const buildHelpText = `Usage: nflow build <file.nflow> [-o <output>] [--debug] [--no-trimpath] [--all-bundles]
 
-Compile a .nflow file into a standalone, tree-shaken executable. The binary
-embeds the workflow and links only the required native and @require modules.
-It executes with zero compiler/CLI runtime baggage (~2MB binary size).
+Build a standalone executable with the workflow source embedded. The generated
+program includes Flow's compiler and runner and compiles the embedded workflow
+at startup. By default, the builder links only native bundles used by the
+workflow. Binary size varies with the workflow, bundles, target platform, and
+Go toolchain.
 
 Flags:
   -o, --output <path>   Output binary path. Defaults to the source
@@ -552,12 +556,15 @@ Flags:
                         default; useful when the binary and its source
                         tree live on the same machine.
 
-  --all-bundles         Link all native extensions instead of tree-shaking
-                        (increases binary size by ~18MB).
+  --all-bundles         Link all native bundles, not only those selected for
+                        the workflow.
 
-Defaults favor lean distribution: dead-code elimination enabled, symbols
-stripped (-s -w), trimpath on, and buildvcs off.
-`)
+Release builds strip symbols (-s -w), use trimpath, and disable buildvcs
+metadata. Go's linker removes unreachable code.
+`
+
+func printBuildHelp() {
+	fmt.Fprint(os.Stderr, buildHelpText)
 }
 
 func buildFail(step string, err error) int {
