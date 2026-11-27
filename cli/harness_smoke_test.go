@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -38,6 +39,30 @@ mylib.hello
 	output := runNflow(t, goBin, flowRoot, "run", filepath.Join(workDir, "test.nflow"))
 	if !strings.Contains(output, "hello from fork") {
 		t.Fatalf("expected greeting in output; got:\n%s", output)
+	}
+}
+
+// TestSmoke_EmbedExtension verifies that a flow outside the repository can
+// require embed through its conventional nexssflow adapter.
+func TestSmoke_EmbedExtension(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("smoke test; skipped in short mode")
+	}
+	goBin := requireTool(t, "go")
+	flowRoot := flowModuleRoot(t)
+	workDir := t.TempDir()
+	writeFile(t, filepath.Join(workDir, "logo.svg"), "logo-bytes\n")
+
+	source := fmt.Sprintf(`@require github.com/nexssp/flow/extensions/embed { root: %q }
+@embed logo "logo.svg"
+noop ( value: embed.logo )
+`, workDir)
+	writeFile(t, filepath.Join(workDir, "test.nflow"), source)
+
+	output := runNflow(t, goBin, flowRoot, "run", filepath.Join(workDir, "test.nflow"))
+	if !strings.Contains(output, `"Provider":"flow.static"`) {
+		t.Fatalf("expected embedded file reference in output; got:\n%s", output)
 	}
 }
 

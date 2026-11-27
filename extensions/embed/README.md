@@ -8,6 +8,8 @@
 @embed web "web/dist"
 ```
 
+These unversioned examples apply when Flow is available from the active Go module or workspace. A separate consuming module should select a Flow version through `@require` as part of that project's dependency policy; this extension and its source code do not choose a release version.
+
 A single file remains a typed `xfile.Ref`. It is opened through the registered resolver, which requires caller and tenant scope and rechecks the digest and size. Passing it to actions still uses the normal typed `( ... )` argument form.
 
 A directory becomes an `embed.web` map of slash-separated paths relative to the selected directory to `[]byte` contents. This is intended for explicit public build output, such as a frontend folder; do not point it at a source tree, repository root, or directory containing secrets. Directory bytes are included in compile metadata and are available to ordinary actions such as `thttp.static`; they do not pass through the scoped file resolver.
