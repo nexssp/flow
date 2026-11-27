@@ -147,9 +147,10 @@ func bundleWithFileResolver(fsys fs.FS, provider string, maxBytes, maxTotalBytes
 
 func newBundle(fsys fs.FS, provider string, maxBytes, maxTotalBytes int64, maxFiles int, rootErr error, resolver *Resolver) compiler.Bundle {
 	bundle := compiler.Bundle{
-		ID:           ID,
-		Directives:   []compiler.Directive{directive(fsys, provider, maxBytes, maxTotalBytes, maxFiles, rootErr, resolver)},
-		InheritScope: inheritScope,
+		ID:              ID,
+		AcceptedOptions: []string{"root", "provider", "max_size", "max_total_size", "max_files"},
+		Directives:      []compiler.Directive{directive(fsys, provider, maxBytes, maxTotalBytes, maxFiles, rootErr, resolver)},
+		InheritScope:    inheritScope,
 		OnPreprocess: func(_ map[string]any) compiler.PreprocessContributions {
 			return compiler.PreprocessContributions{CompileOpts: []compiler.CompileOption{
 				compiler.WithASTValidators(validateRefs),
